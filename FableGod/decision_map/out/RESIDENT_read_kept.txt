@@ -1,0 +1,9 @@
+Both top-2 experts resident at a check's start (LRU per layer, two-pass top-2 theta 0.99 replay; loads: kept)
+| domain | C | (row, layer) pairs both resident | layers per row with both resident (mean) | rows with all 48 layers | rows with >= 40 layers | certified rows: all 48 layers |
+|---|---|---|---|---|---|---|
+| code | 51 | 50.5 % | 24.2 | 0.2 % | 4.8 % | 0.0 % (1/3549) |
+| code | 160 | 81.5 % | 39.1 | 5.3 % | 55.8 % | 1.9 % (69/3549) |
+| ifeval | 51 | 51.6 % | 24.7 | 0.4 % | 6.9 % | 0.0 % (1/2932) |
+| ifeval | 160 | 87.8 % | 42.1 | 14.0 % | 75.7 % | 6.1 % (180/2932) |
+| multi | 51 | 62.6 % | 30.1 | 0.4 % | 16.2 % | 0.2 % (6/2678) |
+| multi | 160 | 89.2 % | 42.8 | 12.6 % | 79.2 % | 7.5 % (201/2678) |

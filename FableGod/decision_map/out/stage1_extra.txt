@@ -1,0 +1,6 @@
+moe_reuse_chain_L12_35: flip % on SKIPPED rows (baseline-sure) by staleness = rows since the last computed row (flips / rows)
+| domain | skip share | 1-1 | 2-4 | 5-16 | 17-64 | 65-inf | computed rows: tie / mid flip % |
+|---|---|---|---|---|---|---|---|
+| code | 86.8 % | 1.41 (3/213) | 5.80 (17/293) | 10.26 (43/419) | 5.17 (35/677) | 10.53 (139/1320) | 48.0 / 21.8 |
+| ifeval | 31.7 % | 0.52 (3/573) | 2.96 (12/405) | 3.06 (3/98) | - | - | 44.5 / 10.0 |
+| multi | 40.5 % | 0.13 (1/793) | 1.22 (7/572) | 2.70 (2/74) | - | - | 45.0 / 8.6 |

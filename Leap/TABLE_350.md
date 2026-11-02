@@ -1,0 +1,4942 @@
+# 350 tok/s on the 125B: the assumptions behind today's caps, and the bets that break them (Leap, Sat 2026-10-24 13:45)
+Kamen (13:1x, via the orchestrator): 350 must be on the 125B, through a genuine breakthrough. The earlier table's caps
+(~260 bit-exact, ~305 with v3 tiers, ~430 with an expert budget) are not verdicts. Each rests on an assumption of
+today's methods. This page lists those assumptions, the bets that would break each one, and their prior art. The old
+numbers are kept at the end as the baseline every bet must move.
+
+## The arithmetic every bet must move
+**tok/s = tokens accepted per pass / pass time**, and **pass time >= bytes read per pass / 280 GB/s / kernel efficiency**.
+- Code today: ~65 tok/s exact on the 125B (v3 tiers, half the experts resident, MTP). At the bytes floor, with every
+  method we have, it caps at 196-305.
+- **350 needs <= ~5.5 GB per pass** at today's drafter: 9.9 tokens per 16-row pass is <= 28.2 ms per pass. Take off
+  3.5 ms of drafting, and at 80 % kernel efficiency that leaves 19.8 ms at the floor.
+  - Today's design reads 13.2 GB per 16-row pass at 4 bits: 3.44 GB dense + 73 experts / layer x 48 x 2.77 MB.
+  - So 350 needs ~2.4x fewer bytes per pass, or ~2.4x more tokens per pass, or a mix (e.g. 1.6x each). All of it must
+    also be resident.
+
+## Assumptions -> bets
+Tags: **published** = shown elsewhere, untested here; **here** = measured on this Mac; **new** = no prior art found.
+
+| # | assumption today | what it costs | bets that would break it | tag / prior art | owner |
+|---|---|---|---|---|---|
+| A1 | Experts are stored at ~4 bits per weight (68 GB), so the 125B cannot be resident under the 45 GB rule and experts stream from the SSD | stalls; 2.77 MB per expert read per use | (a) ~2-2.25-bit data-aware expert codes (GPTQ / VQ / trellis) | published: GPTQ, AQLM, QuIP#; MoE: MoQE (3-bit plain, 2-bit with QAT), BitsMoE (2-bit Qwen3-30B), TriS-MoE (sub-2-bit with binarized residuals). Here: C1 / Q1, scalar 2-bit weight error 4.4-5.1x MSB-3's | Fit12 (Q2, 13:2x) |
+| | | | (b) **structure shared across a layer's 512 experts**: a shared base + small per-expert parts, a shared input / output subspace + low-bit coefficients | published at 16 bits and mild ratios: MoE-SVD (ICML 2025: one V shared by all experts, 60 % compression, minimal loss on Mixtral / DeepSeek / Qwen2 MoE), MoLAE (shared latent projection), D2-MoE (shared base + SVD deltas), MoBE (shared basis, -24-30 % at 1-2 points on Qwen3-235B / DeepSeek-V3 / Kimi-K2), MC-SMoE / HC-SMoE (merging). **Untested anywhere we found: sharing combined with low-bit codes at <= 1.5 bits/param** | **Leap (L1-16, below)** |
+| | | | (c) pruned experts (fewer experts, same routing quality) | published: REAP (ICLR 2026): 50 % of experts pruned, near-lossless code on Qwen3-Coder-480B / Kimi-K2 | open |
+| | | | (d) sub-1-bit entropy-coded experts with an in-kernel decoder | published: QMoE, 0.8 bits/param (SwitchTransformer, an older, more redundant MoE) | open |
+| A2 | Every routed expert's FULL weights are read for every pass that touches it | 9.7 GB per 16-row pass at 4 bits | (a) A1's codes (fewer bytes per weight) | as A1 | |
+| | | | (b) read only the expert neurons a row needs (activation sparsity inside experts) | published for dense models: Deja Vu, TEAL (training-free 40-50 % activation sparsity), CATS; untested on MoE experts | open |
+| | | | (c) shared expert parts read once per pass, not per expert (follows from A1-b) | new | Leap (with L1-16) |
+| A3 | Each verify accepts 6.9 (block 8) to 9.9 (block 16, fine-tuned) tokens on code | the tokens-per-pass term | (a) a better drafter on the 125B's own outputs | here: L5 block-16 FT x1.44 under a budget; L4 (agentic) killed | |
+| | | | (b) lossless verification of more paths (trees, block verification) | published: SpecInfer, EAGLE-2 trees, block verification (+5-10 %); here: trees +5 %, parked | |
+| | | | (c) cost-aware drafts on MoE (verify the cheap prefix) | published: EVICT, ECOSPEC (2026); here: L1-14 truncation +8.4 % on the 35B | port to the 125B |
+| | | | (d) near-tie acceptance (non-exact; Kamen's call) | published: lossy / typical acceptance | |
+| A4 | Every verify row runs all 48 layers | no shortcut per row | early exit / layer skipping | here: L1-09 killed (layer 40 agrees 0.057) | closed |
+| A5 | The dense part (3.44 GB: hyper-connections 1.28, GDN 1.18, LM head 0.36, attention 0.36) is read in full every pass | ~12 ms of the floor per pass | dense diet (2.1 GB, Chat1000, non-exact); screened-argmax LM head; A1-style codes for dense layers | here / proposed (MoonShots) | open |
+| A6 | Kernels run at ~40-50 % of the bytes floor at 8-16 rows | ~2x pass time | kernel programs | here: GDN16 (35B pass 44 -> 37 ms, loop +12.9 %); MMA-tile experts (L1-07) | Fit12 (GDN port), MoonShots |
+| A7 | Drafting, rollback and the pass run serially | 4-8 ms per pass | overlap; submit the rollback on its own | here: the 35B loop +12.9 % once the GDN rollback replay was submitted on its own | port to the 125B |
+| A8 | Union of experts grows as ~r^0.72 with rows | wide passes amortize weakly (32 rows: 121 experts / layer) | routing-aware drafts (prefer drafts whose experts are already in the union) | published-adjacent: ECOSPEC (cost-aware drafting) | open |
+
+## Update 15:40: what the bytes bets measured today (Fit12 Q2 / Q3, Leap L1-16 / L1-17; same inputs and metric)
+- **Expert codes are near their rate-distortion bound.** Every code tried reaches MSB-3's output error only at ~3.1-3.2
+  bits per weight:
+  - per-expert GPTQ-2 at 2.5 b: 3.65x MSB-3's error;
+  - GPTQ-3 at 3.5 b: 0.61x;
+  - transform coding in the input eigenbasis with eigenvalue-sorted bits: 1.52x at 3.0 b;
+  - shared input subspace: 1.75x at 2.7 b;
+  - structure shared across experts: none.
+  So codes alone buy ~10-15 % bytes at equal quality.
+- **Fewer experts per token is the other byte lever.** Top-8 costs less error than MSB-3 (0.78x) and reads 16 % fewer
+  experts; adaptive p 0.8 reads 24 % fewer at 1.43x. Both are non-exact and need an Eval-suite verdict.
+- **Stacked estimate (all non-exact, quality unverified), code, 16-row pass:**
+  - ~3-3.5-bit experts everywhere (the 125B resident, ~44-52 GB) + adaptive p 0.8 + the dense diet = ~7-8 GB per pass;
+  - that is ~240-280 tok/s at 80 % kernel efficiency with today's 9.9 tokens per pass.
+- **So 350 also needs ~1.3-1.45x more tokens per pass on code** (A3: ~13-14 per pass). That makes the drafter / verify
+  side the binding lever now.
+
+## Which bet is strongest, and why
+- **Bytes per expert (A1 / A2) is the only lever that is both necessary and close to sufficient.**
+  - It is the precondition for everything else: the 125B has to be resident, and only fewer bytes per weight get it under
+    45 GB at ~4-bit quality.
+  - Arithmetic: experts at ~1.3 bits/param effective (0.80 MB each) plus the dense diet make a 16-row pass ~4.9 GB. With
+    today's drafter that is ~390 tok/s at 80 % kernel efficiency (3.5 ms drafting included), and the whole model is
+    ~26 GB.
+  - At ~2.25 bits incl. scales (Fit12's line) the pass is ~7.0 GB, ~285 tok/s: needed, but not enough alone.
+- Fit12 is testing per-expert ~2-bit codes. **I take the part below 2 bits: structure shared across experts (A1-b),
+  which can stack with Fit12's codes.**
+- **Tokens per pass (A3) is the second lever.** It is multiplicative, but the published methods give +5-15 %, not 2x.
+
+## L1-16 (Leap, pre-registered 13:45): is there enough structure shared across a layer's experts to go below 2 bits?
+- **Hypothesis:** a layer's 512 experts share a large part of their weights' useful content, judged on real inputs.
+  Candidates:
+  - a common base, the activation-weighted mean expert;
+  - a common input subspace: all experts read the same hidden state, whose covariance is strongly anisotropic;
+  - a common output subspace.
+  If so, the shared parts are stored once per layer and each expert keeps only small low-bit coefficients.
+- **Cheapest decisive test (no training; on the Mac).** On layers 12 / 24 / 36:
+  1. Weight space: the share of each expert's energy captured by (i) the mean expert and (ii) the top-r shared input /
+     output singular subspaces of the stacked experts, vs one expert's own top-r.
+  2. Output error on real routed inputs, at equal bytes per expert (shared parts amortized over 512), relative to the
+     4-bit expert. Methods compared:
+     - MSB-3 (the 3-bit tier that keeps quality);
+     - per-expert RTN-2 g64;
+     - shared input subspace at rank r + 4-bit per-expert coefficients;
+     - shared base + 2-bit residual.
+     Inputs: Fit12's Q2 capture (layers 2 / 12 / 24 / 36 / 46) once it saves, or my own.
+- **Kill:** at <= 1.5 bits/param effective, no shared representation beats per-expert RTN-2 g64 (2.5 bits incl. bf16
+  scale + bias) on output error. Same metric, layers and experts as Fit12's Q2. That would mean no exploitable cross-expert structure; the bet folds into
+  Fit12's per-expert codes.
+- **Pass (go to learned shared codes + layer-wise distillation, free cloud compute if needed):** at <= 1.5 bits/param, the
+  output error is <= MSB-3's.
+- **Step 1 result (14:10, data/wspace16.txt; layers 12 / 24 / 36): no shared structure in WEIGHT space.**
+  - The mean expert holds 0.20-0.36 % of the energy (1/512 = 0.20 %), so the experts are not aligned copies and a
+    shared base is useless.
+  - Shared input subspace (gate / up), share of energy captured: top-512 of 2560 directions 0.28-0.30, top-1024 0.50-0.51.
+    An isotropic spread would give 0.20 and 0.40. The shared output subspace of down: the same.
+  - One expert alone: r 128 captures 0.39-0.42, r 512 0.93. The spectra are flat.
+  - Not yet a kill: the line is on OUTPUT error, where the input covariance H weights the directions (step 2).
+- **Step 2 result (15:06, data/act16.txt): KILLED by its lines.**
+  - Setup: Fit12's Q2 metric and inputs; 5 layers x 8 experts; output error relative to the 4-bit expert.
+  - Results:
+
+    | format (bits / param) | gate | up | down | vs MSB-3 |
+    |---|---|---|---|---|
+    | MSB-3 (3.5) | 0.017 | 0.022 | 0.026 | 1.0x |
+    | RTN-2 g64 (2.5) | 0.130 | 0.171 | 0.203 | 7.7x |
+    | shared subspace r 768, 4-bit coefficients (1.35) | 0.084 | 0.112 | 0.539 | 10.1x |
+    | shared subspace r 1024 (1.80) | 0.059 | 0.078 | 0.439 | 7.9x |
+    | shared subspace r 1536 (2.70) | 0.029 | 0.038 | 0.268 | 4.5x |
+    | per-expert activation-aware low rank 256 (2.25) | 0.105 | 0.133 | 0.188 | 6.4x |
+
+  - At <= 1.5 bits no shared form beats RTN-2 over the whole expert. **Down has no usable shared output subspace**
+    (0.44-0.65), and the pass line (MSB-3's error) is far away.
+  - **Partial positive, the input side:** gate / up projected onto the layer's activation-weighted input subspace beat
+    RTN-2 at about half the bits (r 768 at 1.35 b: 0.084 / 0.112 vs 0.130 / 0.171).
+    - The layer inputs are anisotropic: H's top-512 of 2560 directions hold 78-88 % of the energy, top-1024 90-95 %.
+    - This is a component for Fit12's codes: project, then GPTQ / VQ the coefficients. It is not a sub-2-bit expert by
+      itself.
+- **Prediction (before data):** a small shared part. Modern MoE experts are trained to specialize, and published sharing
+  saves 24-30 %, not 4x. I expect the weight-space check to show the mean expert carries < 10 % of energy, but the shared
+  INPUT subspace (activation-weighted) carries much more. So the input side may compress ~2x, the output side little.
+  Roughly 50 / 50 on the pass line.
+
+## L1-17 (Leap, pre-registered 15:10): fewer experts per token (top-k below 10, or an adaptive k)
+- **Why:** bytes per 16-row pass scale with the union of experts it touches (73 / layer at top-10).
+  - With Fit12's ~2-bit codes, a ~30 % smaller union gives a ~5.4 GB pass, the ~350 zone.
+  - Non-exact: adopting it is Kamen's call. Testing is free.
+- **Prior art (published, untested here):**
+  - dynamic expert skipping (Lu et al. 2024, Mixtral);
+  - top-p routing (Huang et al. 2024, "Harder tasks need more experts");
+  - Ada-K routing (2024).
+  - For fine-grained MoEs (hundreds of experts, top-8 / top-10) the router weights are known to be flat, so the risk is
+    real.
+- **Cheapest decisive test (no training, ~3 min GPU):**
+  - Setup: Fit12's captured MoE inputs (5 layers x 8,336 tokens) through the real router and the real 4-bit experts.
+  - Measure: the MoE-block output error (shared expert included) of
+    - top-8 / 6 / 4 (renormalized, as the model does);
+    - adaptive k: the smallest set holding >= p of the top-10 weight, p = 0.8 / 0.9;
+    against MSB-3 on all routed experts, plus the 16-token union for each.
+- **Kill:** top-8's output error > 3x MSB-3's. Then the routing is too flat to drop even 20 % of experts cheaply.
+- **Pass (to an Eval-suite run):** some setting cuts the 16-token union by >= 25 % at <= 1.5x MSB-3's output error.
+- **Prediction:** top-8 ~1-2x MSB-3's error (union -15 %), top-6 ~3-5x (union -30 %). The adaptive p 0.9 setting is the
+  borderline case.
+- **Result (15:31, data/topk17.txt; 5 layers x 8,336 tokens): NOT killed. The pass line is missed by one point.**
+
+  | variant | MoE-block output error | vs MSB-3 on all 10 | 16-token union | vs top-10 |
+  |---|---|---|---|---|
+  | MSB-3 on all 10 (reference) | 0.0334 | 1.00x | 74.8 | 1.00 |
+  | **top-8** | 0.0261 | **0.78x** | 62.4 | **0.84** |
+  | adaptive p 0.9 | 0.0127 | 0.38x | 67.1 | 0.90 |
+  | **adaptive p 0.8** | 0.0478 | **1.43x** | 57.2 | **0.76** |
+  | top-6 | 0.0996 | 2.98x | 49.5 | 0.66 |
+  | top-4 | 0.3245 | 9.70x | 35.6 | 0.48 |
+
+  - **Top-8 costs less error than MSB-3 does**, and reads 16 % fewer experts per 16-row pass.
+  - Adaptive p 0.8 reads 24 % fewer at 1.43x MSB-3's error. The pass line was -25 % at <= 1.5x.
+  - The router is flat: of the top-10 weight, top-1 holds ~21 %, top-4 ~58 %, top-6 ~75 %, top-8 ~88 %.
+  - The gated shared expert carries 15-56 % of the block's output energy, so routed-expert cuts cost less than the
+    router weights suggest.
+  - Next: a full-model quality verdict (Eval suite) on top-8 / adaptive p 0.8. The engine needs a routing flag (BigMoE /
+    Breakthrough own the engine), so it goes through the orchestrator.
+  - Stacked with ~2.5-bit expert codes (Fit12's Q3, if it lands), a 16-row pass is ~6.2 GB, ~320 tok/s at 80 % kernels.
+
+## 24 GB: what 350 needs at C_m 192 (Leap 20:16; Kamen ~20:00: 350 on the 125B in <= 24 GB, 45 GB a waypoint)
+- **Frame:** C_m 192 holds 192 of each layer's 512 experts in RAM at 3.0 bits (Fit12's 24 GB setting, 25.8 GB peak).
+  The rest stream from the SSD on a miss, at ~10.6 GB/s.
+  - Measured today (Fit12 RES1, exact): code 35.8 tok/s with MTP (4-row checks, ~3.4 tokens). Verify 63-82 ms, of
+    which 31-49 ms is stall; 155-283 SSD reads per check.
+- **Model** (scripts/calc24.py), one check of R rows:
+  - Experts read per layer: U = 73.6 x (R / 16)^0.72.
+  - Misses: (155-283) x (R / 4)^x, with x = 0.72 (like the union) or 1.0 (tail experts grow per row).
+  - RAM time = (dense 2.1 GB + hits) / (280 GB/s x kernel efficiency).
+  - SSD time = misses x 1.845 MB / 10.6 GB/s. Today it is exposed in full (Fit12's stall is about its read time). With
+    perfect prefetch it would hide behind compute.
+  - Plus drafting, 3.5 ms.
+  - Calibration: on today's 4-row MTP frame the model gives 40-53 tok/s at 45 % kernels, against 35.8 measured, so it is
+    15-50 % optimistic.
+- **16-row checks at 24 GB** (misses from 155 / 283 per 4-row check, x 0.72; kernels 95 %):
+
+  | tokens per check | prefetch | tok/s | SSD-bytes cut needed for 350 |
+  |---|---|---|---|
+  | 9.5 (today's best drafter, L1-20) | none / perfect | 89 / 58 ; 124 / 69 | impossible: the RAM side alone caps at ~290 |
+  | 12.4 | perfect | 162 / 90 | impossible: RAM cap 345 |
+  | **15 (Kamen)** | none | 141 / 91 | x10-18 |
+  | **15** | **perfect** | 196 / 109 | **x1.9-3.4** (x2.7-5.0 if misses grow per row) |
+  | 20 at 32 rows (block 32, oracle-picker level) | perfect | 161 / 89 | x2.2-4.1 |
+
+- **So 350 at 24 GB needs all three at once:**
+  1. **Tokens per check >= 12.6 at 16 rows, even with zero SSD reads.** That is the RAM floor at 95 % kernels, 3.0-bit,
+     top-10 (11.3 with top-8; 14.7 at 80 % kernels).
+     - Today's best is 9.5-10.2 (L1-20), and a picker adds +1 % (L1-21).
+     - A perfect pick within the drafter's top-64 gives 14.1. Kamen's 15 is 96 % of the block-16 cap (15.6), so it
+       means block 32 and its extra rows.
+  2. **SSD bytes per check cut ~2-3.4x**, to <= ~0.42 GB per 16-row check (<= ~16 misses per generated token, against
+     28-81 today), **and** reads fully overlapped with compute. Without the overlap, the cut is 10-18x.
+  3. **Kernels at ~95 %** of 280 GB/s (today ~45 %).
+- **SSD-side levers** (they multiply; each is uncertain):
+
+  | lever | effect | status |
+  |---|---|---|
+  | top-8 routing | union -16 %, misses ~-20 % | passed the Eval suite 5/5 |
+  | truncated rows | 16 -> 11 rows at -3 % tokens: misses -24 % | |
+  | cold experts at 2.0-2.5 bits, misses only | -17-33 % | published as HOBBIT; needs an Eval verdict |
+  | residency per layer by routing skew | ? | untested |
+  | faster read path, 10.6 -> ~13 GB/s | -18 % | |
+  | prefetch that works at 16-row width | hides the reads | Fit12: JIT prefetch dead at 12 GB |
+  | skip / substitute missed experts (non-exact) | removes misses | Fit12's budget: b16 failed the suite; b20 being judged |
+
+  - Product, if all the exact-side ones hold: ~2.5-3x.
+- **45 GB waypoint (C_m 378; RES1: 76-135 misses per 4-row check):**
+  - 15 tokens per check, 95 % kernels, perfect prefetch: 223-381 tok/s (SSD cut x1.0-1.6).
+  - Without prefetch: 154-213 (cut x5-9).
+  - At 9.5 tokens: <= 241.
+- **L1-21's pass line, re-derived:** 13.1 tokens per 16-row check resident (top-8 stack). At 24 GB, no tokens-per-check
+  value reaches 350 alone. It needs >= ~15 together with the SSD cut and the overlap above.
+- **A pruned 125B (22:38; orchestrator: ISTA-DASLab GSQ-RCO-Coder keeps 256 of 512 experts per layer, 3.5 bpw;
+  scripts/prune26.py on Breakthrough's routing traces, CPU, no download):**
+  - RCO stand-in: keep each layer's 256 experts with the most top-10 gate mass.
+  - Simulator check: unpruned 512 at C 192 gives 38-51 misses per token, against Fit12's measured ~46-83 (optimistic
+    up to ~1.7x).
+  - **Code at 16-row checks, misses per token:**
+
+    | setup | misses per token |
+    |---|---|
+    | unpruned 512 @ C 192 | 46-48 |
+    | 256 @ C 192 (75 % resident) | 13.3-19.3 |
+    | 256 + top-8 @ C 192 | 10.5-14.1 |
+    | 256 @ C 224 (fits 24 GB at ~3.0 b) | 5.7-8.1 |
+    | 256 @ C 240 | 2.8-3.9 |
+
+    - **Under the ~16 line with top-8 or C 224.**
+  - Quality proxy (kept share of the top-10 gate mass): code 0.86-0.95. With a code-only keep-set, chat 0.40 and
+    Bulgarian 0.36 (non-code collapses, as the card says); with a mixed calibration, 0.83-0.89 everywhere.
+  - Pruning barely shrinks a check's bytes (distinct experts per layer, 16 rows: 72 -> 63-68; 54-57 with top-8). Its
+    value is residency.
+  - At 45 GB the whole 256-pool at 3.5 b (~30 GB) is resident: zero misses.
+> (a quote from the project owner, kept private)
+    experts per layer stay; no pruning or merging. The residency lesson carries over to all-expert methods below.
+- **All 512 experts at 24 GB (22:41; scripts/resid27.py; same traces and replay):**
+  - Misses per token, code, 16-row checks:
+
+    | routing | C 192 | 224 | 256 | 288 | 320 | 352 | 384 |
+    |---|---|---|---|---|---|---|---|
+    | top-10 | 49 | 37 | 28 | 22 | 16 | 11 | 8 |
+    | top-8 | 34 | 26 | 20 | 15 | 11 | 8 | 5 |
+
+    - Truncated 11-row checks and 4-row MTP checks give the same per-token misses.
+  - **<= 16 needs ~320 (top-10) or ~288 (top-8) of 512 resident** (~350 / ~320 if the replay is 1.7x optimistic).
+  - What 24 GB holds (dense diet + 1.5 GB runtime): C <= 197 at 3.5 b, 230 at 3.0 b, 276 at 2.5 b, 345 at 2.0 b.
+  - Cold experts stored at 2.0 b relax the SSD allowance: 350 allows 24.6 misses per token at 10.6 GB/s, 32.5 at 14
+    GB/s (16.4 / 21.7 at 3.0 b).
+  - The top-192 experts by usage carry 72-80 % of the routed mass, ranks 192-319 15-19 %, ranks 320-511 5-9 %.
+  - Mass-weighted output error relative to MSB-3, using Fit12 Q3's codes:
+
+    | setup (top-8) | misses per token | weighted error |
+    |---|---|---|
+    | 276 resident at 2.5 b, cold at 2 b | ~17 (29 at 1.7x) | ~4.4x |
+    | 192 at 3 b + 57 at 2 b, cold at 2 b | ~20 | ~2.9x |
+    | 3 b everywhere, C 230 | ~25 (SSD-bound 180-300 tok/s at 14 GB/s) | 1.5x |
+    | B12LL (passed the Eval suite), for reference | - | ~0.5-0.6x |
+
+  - **So exact routing at 24 GB needs 2-2.5-bit codes ~2-3x better than ours. Otherwise it stays at ~25 misses per
+    token.**
+  - **Non-exact, all 512 kept: frugal wait-top-2** (Breakthrough D1). My replay: 5.5 rank-0-1 misses per token on code
+    at C 192 (9.3 at C 128; math 6.6, chat 5.5).
+    - **CORRECTED (00:5x): the measurement does not support it.** The Eval suite's b12c192 is D1 on the v3 tiered store
+      (4433333333, C_m 192, C_l 77, MTP). Run 1 measured **27.8 SSD reads per generated token (22.9 waited), 40 MB
+      per token**, flat over the run, at 30.9 tok/s core.
+    - It also **fails quality: 4/5, IFEval 82 vs 90** (-8.0, p 0.01; -5.0 vs B12LL); math 86 = ref; HumanEval+ 90.0.
+    - Likely cause of the ~5x gap: my replay had one pool of whole experts. The real store waits for ranks 0-1 at 4
+      bits = an MSB-3 base part (pool C_m 192) **plus an LSB-1 sidecar (pool C_l 77)**, and the small sidecar pool
+      misses most of the time.
+    - **Reconciled (01:40, scripts/b12rec29.py, data/b12rec29.txt):** with both pools (MSB C_m 192 + LSB C_l 77), the
+      replay gives code 5.4 MSB + 15.5 LSB = **20.9 reads per token**, chat 21.8, math 23.7 (MTP or 16-row checks
+      alike). That matches the measured **22.9 waited** reads per token. The measurement's other ~5 reads are
+      unwaited, and its 40 MB per token is above my assumed part sizes (24-28 MB).
+      - **The 77-slot sidecar pool causes ~3/4 of the reads.**
+      - C_l 192 would give 11-13 reads per token (16-19 MB, +4.3 GB RAM); all sidecars resident, 5.4-6.6 (12-14 MB).
+    - Quality: the Eval suite's pooled verdict on D1 at C_m 192 is **IFEval -6.0, fails**.
+    - **So the 24 GB SSD wall is NOT solved by frugal.** Its reads are fixable (sidecar residency), its quality is not
+      (yet).
+  - Eval suite (22:4x): top-8 passes on U1 and U2. Adaptive p 0.8 fails (token-0 floods, likely a NaN).
+
+## One number for Kamen (15:40), reconciling Leap's ~250-290 with Fit12's ~450-500
+
+| setting (code, 16-row pass, 9.88 tokens / pass) | GB / pass | tok/s |
+|---|---|---|
+| Fit12's frame: 3.0-bit experts only (union 69), no dense, perfect kernels, no drafting | 6.1 | 453 |
+| + the dense diet (2.1 GB per pass) | 8.2 | 337 |
+| + drafting (3.5 ms per pass) | 8.2 | 301 |
+| + 80 % kernel efficiency | 8.2 | 246 |
+| **3.0-bit experts + adaptive k p 0.8 (L1-17) + dense diet + drafting + 80 % kernels** | **7.2** | **~280** |
+| today's design, resident: 4-bit, top-10, full dense, 80 % | 13.4 | 156 |
+
+- **The one number: ~280 tok/s on code.** Everything non-exact must pass the Eval suite. 350 needs **12.4 tokens per pass**
+  (x1.26 over today's 9.88): the A3 bet below.
+
+## L1-18 (Leap, pre-registered 15:42): how much drafting headroom does the 125B leave on code?
+- **Hypothesis:** most of DFlash2's misses on code fall where the 125B itself is confident, so a stronger drafter has room.
+  A drafter that matched the target wherever it is confident would accept >= 16 tokens per 32-row pass: 1.3x the 12.4
+  needed.
+  - If instead the misses sit at the target's own near-ties, no drafter can do much better. Exact tokens per pass would
+    then be capped by the target's uncertainty, and only non-exact acceptance remains.
+- **Prior art:**
+  - acceptance-aware drafter training (TV objective, 2026); DistillSpec (on-policy distillation, alternative
+    divergences); EAGLE-3 (training-time test); EAGLE 3.1 (up to 2x acceptance on long-context production);
+  - acceptance vs drafter-target divergence (theory).
+  - No measurement found of how much headroom a target's own uncertainty leaves. That measurement for this target is
+    ours.
+- **Cheapest decisive test (no training).**
+  - Data: the 24 public HumanEval samples already extracted (data/dfl2d_code, 11,119 tokens of the 125B's own code).
+  - Step A: one streamed 125B prefill adds its top-32 log-probs per position (dfl2c_extract.py).
+  - Step B: replay DFlash2 (incoai weights) at block 16, as the official loop runs. Measure:
+    - its agreement by target-confidence bin (top-1 p >= 0.99 / 0.9-0.99 / 0.5-0.9 / < 0.5) and by depth;
+    - an oracle drafter's accepted length at block 16 / 32. The oracle is always right where the target's top-1 p >= t
+      (t = 0.9, 0.99) and has DFlash2's observed agreement elsewhere.
+- **Kill:** the oracle at block 32 (t = 0.9) accepts < 12.4 tokens per pass. A3-exact is then capped by the target's
+  uncertainty.
+- **Pass (go to a stronger drafter: bigger, on-policy distilled on the 125B's code, block 32):** oracle tau32 >= 16, and
+  DFlash2's tau16 <= 0.7 x oracle tau16.
+- **Prediction:** the 125B is very confident on most code tokens (p >= 0.9 on ~85-90 %), and DFlash2 misses a fair number
+  of those. My guess: oracle tau32 ~15-20, so a pass, with headroom ~1.5x.
+- **Result (15:51, data/headroom18.txt; 6,375 completion tokens, 715 blocks): between the lines, with a strong finding.**
+  - **The 125B is nearly deterministic on code.** Of its completion tokens, 88.9 % have top-1 p >= 0.99; 4.0 % 0.9-0.99;
+    5.6 % 0.5-0.9; 1.5 % < 0.5.
+  - **DFlash2 is the bottleneck.** 63 % of its first misses fall on tokens the target is >= 99 % sure of.
+    - Its agreement on those confident tokens decays with depth: 1.00 0.99 0.95 0.92 0.88 0.85 0.81 0.73 0.67 0.57 0.43
+      0.30 0.22 0.16 0.12. It was trained at block 8.
+  - Tokens per pass:
+
+    | drafter | block 16 | block 32 | block 64 |
+    |---|---|---|---|
+    | DFlash2 (incoai), measured | 8.88 | - | - |
+    | oracle: right where target p >= 0.9, DFlash2 elsewhere | 10.86 | 15.01 | 18.07 |
+    | oracle, t = 0.99 | 9.86 | 12.84 | 14.71 |
+    | perfect drafter (the target's argmax) | 15.59 | 30.50 | - |
+
+  - Lines: the oracle tau32 is 15.01, so NOT killed (>= 12.4) but short of the pass line (16). DFlash2's 8.88 is above
+    0.7x the oracle's 10.86.
+  - **The headroom is real:** exact greedy on code allows ~30 tokens per 32-row pass with a perfect drafter. The loss is
+    the drafter's depth decay on tokens the target finds obvious.
+  - **Cheapest next lever, no training:** DFlash2 is a one-step block-diffusion drafter. Try a second, refining step that
+    re-masks its low-confidence positions and predicts them again (MaskGIT-style). It costs one more drafter forward
+    (~3.5 ms per pass), so it must add > ~10 % to tokens per pass.
+
+## L1-19 (Leap, pre-registered 15:52): a 2-step refining DFlash2 drafter, no training
+- **Idea:** DFlash2 drafts a block in one denoising step, and its deep positions are weak (L1-18). Step 2 feeds the block
+  again with the confident step-1 tokens kept and the rest masked, and predicts again (MaskGIT-style iterative decoding).
+  - The drafter's cache holds only target-context rows, so step 2 is one extra drafter forward over the block: ~3.5 ms per
+    pass on the 125B.
+- **Prior art:** iterative masked decoding (MaskGIT 2022; diffusion LMs: MDLM, LLaDA) is published. Untested here for
+  DFlash2's one-step drafting. If DFlash was trained only on all-masked blocks, step 2 is out of distribution; the test
+  shows it.
+- **Cheapest decisive test:** a teacher-forced replay of the official loop on the 24 public HumanEval samples (~2 min GPU).
+  Variants: re-mask conf < 0.5 / < 0.9 (kept tokens forced); re-mask the tail after the first unsure position; no masks.
+- **Kill:** no variant adds >= 10 % tokens per pass at block 16. The extra forward costs ~10 % of a ~35 ms pass.
+- **Pass:** >= +15 % (tau16 >= 10.2 from 8.88). Then measure it in the real loop and with the block-16 fine-tune.
+- **Prediction:** 40 % chance of a pass. Likely the drafter was trained on all-masked blocks, and kept tokens confuse it.
+- **Result (16:06, data/refine19.txt): KILLED.**
+  - The reuse path reproduces step 1 exactly, so the test is valid. Every refining variant is worse:
+
+    | variant | tokens / pass, block 16 |
+    |---|---|
+    | 1-step (as shipped) | 8.88 |
+    | re-mask conf < 0.5 | 8.62 |
+    | re-mask conf < 0.9 | 7.81 |
+    | re-mask the tail | 8.25 |
+    | no masks | 1.81 |
+
+  - At block 32 the shipped drafter gets 8.56: its agreement collapses past depth ~10 (0.18 at depth 13).
+  - DFlash2 was trained on all-masked blocks only, so filled-in tokens are out of distribution.
+  - Any depth or refinement gain needs TRAINING the drafter. That is the next bet: a depth-robust block-32 retrain, with
+    random partial masking so refinement becomes possible.
+
+## L1-20 (Leap, pre-registered 16:42): a depth-robust block-32 DFlash2, trained with partial masking
+- **Why:** L1-18 found ~2x headroom (perfect drafter 30.5 per 32-row pass), and the loss is DFlash2's depth decay.
+  L1-19 showed it cannot refine untrained.
+- **Training** (local: the drafter is < 1B parameters; the 1-2 h rule):
+  - Starting point: the incoai weights, fine-tuned at block 32 on the 125B's own greedy outputs. Prompts: the 200 public
+    L5 prompts (80 HumanEval+ problems the evals never use + 120 GSM8K), ~50K generated tokens.
+  - Same loss as L5: on-path soft cross-entropy to the 125B's top-32 + the selector's loss.
+  - New: random partial masking. Half the blocks reveal a random 10-60 % of their positions as the true tokens, and
+    those positions get no loss. A step-2 refinement then becomes in-distribution.
+- **Test:** a teacher-forced replay of the official loop on the 24 held-out HumanEval samples (data/dfl2d_code). Score
+  tokens per pass, best of block 16 / 32 x 1-step / 2-step.
+- **Kill:** < 10.0, i.e. no real gain over L5's block-16 fine-tune (9.88).
+- **Pass:** >= 13.0, i.e. 12.4 with the real loop's 0.93-0.98 factor. Then confirm in the real loop, then scale the data:
+  the 125B's self-generated coding problems, on-policy.
+- **Prior art:** DFlash's own training; L5 here (block 16, +11 %); MaskGIT / masked-diffusion training; acceptance-aware
+  drafter training. New here: block 32 with partial masking for a refining DFlash2.
+- **Prediction:** ~11 tokens per pass: alive, not a pass on 50K tokens of data. 25 % pass, 20 % kill.
+- **Result (19:13, data/refine19_l120.txt, data/cand21_l120.txt): BETWEEN THE LINES by its letter (10.51); +7 % once
+  rows are priced. Its pass line was mis-set: it ignored that a 32-row verify costs more.**
+  - Training: 109 windows (80 HumanEval+ + 29 GSM8K prompts; 99 train / 10 val by prompt; 25.2K generated tokens, 22.6K
+    in train; corrected Mon 03:33, it said '42K'), 201 steps, 28 min,
+    peak 33.7 GB, swap -0.2 GB. Held-out selector agreement at depth 16: 0.22 -> 0.63; depths 1-5 unchanged.
+  - Tokens per pass on the 24 held-out HumanEval samples:
+
+    | drafter | block 16, 1 step | block 16, 2 steps (best) | block 32, 1 step | block 32, 2 steps (best) |
+    |---|---|---|---|---|
+    | incoai (original) | 8.88 | 8.88 (L1-19: all worse) | 8.56 | 8.13 |
+    | L5 fine-tune (block 16, Sat 05:47) | 9.88 | - | - | - |
+    | **L1-20 (block 32 + partial masking)** | 9.54 | 9.58 | 10.23 | **10.51** (tail 0.9) |
+
+    - Partial masking made step 2 safe (L1-19: -3 to -12 %), but it adds only +0.3 (+3 %).
+  - **Priced at the stack** (scripts/cand21.py: pass = (2.1 + 5.06 x (rows / 16)^0.72) GB / 224 GB/s + drafting; rows =
+    1 + drafts kept by L1-14's running-confidence truncation):
+
+    | drafter | block 16, best t | block 32, best t |
+    |---|---|---|
+    | incoai | 292 tok/s (t 0.5, 8.22 at 9.7 rows) | 280 (t 0.5) |
+    | L1-20 | 311 (t 0.3, 9.22 at 11.0 rows) | 313 (t 0.3, 9.73 at 12.0 rows) |
+
+    - With top-8 instead of adaptive p 0.8 (Fit12 TK1: p 0.8 collapses acceptance on code; top-8 passed the Eval suite
+      5/5), every figure is ~5 % lower: L1-20 best 298 tok/s. 350 then needs 13.1 tokens per 16-row pass.
+  - **So block 32 buys nothing once rows are priced**, and the fine-tune is worth +7 %, as published (DBloom 2608.30427:
+    block 16 -> 24 post-training, +0.8-1.4 tokens).
+  - **The new finding is in the lattice.** The drafter's top-K candidates usually contain the 125B's token. Only its
+    first-order selector picks wrong. An oracle that picks the true token whenever it is among each depth's top-K:
+
+    | drafter | selector, block 16 | oracle top-16 | oracle top-64 | selector, block 32 | oracle top-64, 32 rows |
+    |---|---|---|---|---|---|
+    | incoai | 8.88 | 11.74 | 13.01 | 8.56 | 14.02 |
+    | L1-20 | 9.54 | 12.83 (362 tok/s) | **14.11 (398 tok/s)** | 10.23 | **20.29** (401 untruncated) |
+
+    - L1-20's top-64 recall stays >= 0.91 at every depth of block 16 and >= 0.79 to depth 31 of block 32.
+    - A picker that conditions on the tokens it has already chosen could close much of that gap. That is L1-21.
+
+## L1-21 (Leap, pre-registered 19:17): an autoregressive picker over the drafter's top-64 lattice
+- **Why:** L1-20's lattice oracle. The 125B's token sits in the drafter's top-64 at >= 91 % of depths. A perfect pick
+  gives 14.11 tokens per 16-row pass, but DFlash2's first-order selector gets 9.54. The selector scores a candidate
+  only against the one token before it. A picker that conditions on every token it has already chosen, and on the
+  drafter's hidden state at each depth, could close much of that gap.
+- **Prior art:**
+  - LiLiCorr (2608.20530, NVIDIA): a lattice scorer co-trained with DFlash, +7-19 % over vanilla DFlash.
+  - Kim et al. (2404.09221, NeurIPS 2024): top-k lattice rescoring of blockwise-parallel drafts with n-gram / neural
+    LMs, +5-25 %.
+  - Sequential draft heads: Hydra, ReDrafter, Clover. Block-iterative drafting: SpecBlock. Causal parallel tree head:
+    JetSpec.
+  - DFlash2's own first-order selector (predecessor x hidden x successor codebooks).
+  - Ours: the headroom measured on a near-deterministic MoE target (+48 % at block 16, +98 % at block 32). Untested
+    here.
+- **Picker** (~5 M parameters, local training): a 3-layer causal transformer over depths (d 512).
+  - Input at depth j: the drafter's hidden state at j, plus the 125B's embedding of the token chosen at j-1.
+  - Each of the 64 candidates is scored from the selector's successor codebook, its rank and its drafter logit.
+  - Trained with teacher forcing on the 125B's own tokens from L1-20's 109 windows. It chooses greedily (exact
+    left-to-right, run as Jacobi iterations).
+  - Drafters: L1-20 (main), and incoai as a clean control (it never saw these windows).
+- **Test:** the held-out HumanEval replay (24 samples), as L1-20, at blocks 16 and 32. Score tokens per pass, and tok/s at
+  the stack with running-confidence truncation (cand21.py's pricing).
+- **Kill:** < 10.5 tokens per 16-row pass (< +10 % over the selector's 9.54), and no priced gain >= +10 % at block 32.
+- **Pass:** >= 13.1 tokens per 16-row pass, or >= 350 tok/s priced at the top-8 stack. Then measure the picker's cost
+  per pass (budget <= 1 ms, as one fused kernel), and train the drafter and picker together on more on-policy data.
+- **Prediction:** ~11.0-11.5 at block 16 (captures ~1/3 of the oracle gap): alive, not a pass. 20 % pass, 25 % kill.
+- **Prior-art note added 19:22, before the run:** LiLiCorr's own table (Qwen3-8B, greedy, K 8, block 16) puts DFlash2's first-order
+  selector level with LiLiCorr on HumanEval (7.08 / 7.08). The per-slot autoregressive correctors Domino and DSpark get 6.86 /
+  7.16 (+1 % at best). So a small picker has published evidence against a big gain. I now expect ~10.0-10.5 (a
+  kill or near it). The run still measures how much of a 64-wide lattice a picker captures. If it is little, the gap
+  needs the target's own knowledge: verify several candidates in the pass (a tree), priced by rows.
+- **Result (20:20, data/pick21_ft.txt, pick21_orig.txt): KILLED.** The picker adds +1 %, as the published per-slot
+  correctors do.
+
+  | drafter, block | selector | picker | oracle top-64 | best priced, selector -> picker |
+  |---|---|---|---|---|
+  | L1-20, 16 | 9.54 | 9.65 (+1.2 %) | 14.11 | 311 -> 312 tok/s (t 0.3) |
+  | L1-20, 32 | 10.23 | 10.33 (+1.0 %) | 20.29 | 313 -> 315 |
+  | incoai, 16 (control) | 8.88 | 9.00 (+1.4 %) | 13.01 | 292 -> 292 |
+
+  - Training (11.3K blocks from L1-20's windows; 12.3 M parameters) plateaued almost at once: the loss went 0.34 -> 0.28
+    and stayed there.
+  - The true token is in the lattice (top-64 recall 0.98 on held-out windows), but nothing in the drafter's hidden
+    states plus the chosen prefix tells a small model which candidate it is.
+
+## L1-22 screen (Leap, pre-registered 19:24): let the target pick, with a token tree over the lattice, priced by rows
+- **Why:** if a small picker cannot choose within the lattice (L1-21, and the published per-slot correctors), the
+  125B can. It verifies a tree of candidates in one pass, but every extra row costs expert bytes.
+- **Tree:** best-first over the selector's 16 candidates per depth, scored by the selector's own conditional scores, so
+  the greedy chain is the tree's top path. N nodes + the anchor = N + 1 rows. Blocks 16 (N 15-63) and 32 (N 31-95).
+- **Prior art:** token trees are published (SpecInfer, Medusa, EAGLE-2 dynamic trees, Sequoia, JetSpec for parallel
+  drafters). Here they were parked at block 8 (L1-11: the block cap). Untested at block 16 / 32 on this MoE with rows
+  priced; GDN layers would need tree states (TreeWY-style).
+- **Kill:** no tree beats the best truncated chain (311 tok/s at the p0.8 stack, 296 at top-8) by >= +10 %.
+- **Pass:** >= 350 tok/s at the top-8 stack. Then: tree-aware GDN verify cost on the real engine.
+- **Prediction:** rows^0.72 makes wide trees costly. Best ~ +0-5 % at N ~23-31: a kill.
+- **Result (20:20, data/tree22.txt): KILLED by its line.** Trees raise tokens per check at equal rows, but rows^0.72
+  eats the gain:
+
+  | tree | tokens per check | rows | tok/s at the stack (top-8) |
+  |---|---|---|---|
+  | chain, block 16 (selector) | 9.54 | 16 | 269 (254) |
+  | chain, block 16, truncated t 0.3 | 9.22 | 11 | **311 (296)** |
+  | tree N 15, block 16 | **10.43** (+9 % at the same 16 rows) | 16 | 294 (278) |
+  | tree N 23 / 31 / 63, block 16 | 11.01 / 11.30 / 11.67 | 24 / 32 / 64 | 255 / 226 / 157 |
+  | tree N 31 / 95, block 32 | 12.14 / 13.09 | 32 / 96 | 240 / 137 |
+
+  - A tree of ~10 nodes (11 rows) was not run. My estimate is ~9.6-9.8 tokens, +4-6 % over the truncated chain: still
+    under the +10 % line.
+  - Exact tokens per check is stuck near 9.5-10.5 at <= 16 rows across every drafting lever tried today: retraining,
+    refinement, a picker, trees. The information is in the drafter's lattice (an oracle reaches 14.1), but neither a
+    small model nor an affordable tree extracts it.
+
+## L1-23 (Leap, pre-registered 20:26; MoonShots' L1-01b): bit-exact 16-row kernels for the 125B's dense layers
+> (a quote from the project owner, kept private)
+  shapes (data/b8mr/denseinv.txt). A bit-exact 16-row check today chunks its rows (12 + 4 for the 4-bit shapes, 5s for
+  the bf16 hyper-connection mixers), because MLX's kernels change numerics with the row count. Its dense layers take
+  ~57 ms (4-bit ~37.5, bf16 ~17.5, 8-bit ~1.7), against a ~12 ms floor and ~16 ms for 1-row decode. Exactness costs
+  ~40 ms per 16-row check, at any RAM budget.
+- **Bet:** one batch-invariant kernel per shape, called with 16 rows every time (decode pads), so each row's bits never
+  depend on how many rows run.
+  - 4-bit: qmm16c (L1-15's NAX code-MMA kernel), or MLX's own 16-row call where it is faster and padding-independent.
+  - bf16: MLX's 16-row call, which has a fixed tile configuration, if padding-independent.
+- **Prior art:** batch-invariant kernels (Thinking Machines, "Defeating Nondeterminism in LLM Inference", 2025; SGLang
+  deterministic mode); "exact under its own numerics" for speculative decoding (here: L1-15, MoonShots L1-01).
+  - New here: the 125B's whole dense set at 16 rows on the M5's neural accelerators.
+- **Test** (scripts/kern23.py, ~5 min on the GPU): random weights with the 125B's dense shapes and per-check counts
+  (3.4 GB, cold cache).
+  - Per shape: MLX at 1 row, MLX at 16 rows, MLX chunked as today, qmm16c configurations, and the floor at 280 GB/s.
+  - Bitwise: every real row equal across row counts 1-16 and across padding contents.
+- **Kill:** the best exact 4-bit set takes > 25 ms per 16-row check (today ~37.5).
+- **Pass:** <= 15 ms (floor ~9). Then it goes to Fit12 / BigMoE as an exact verify path, and the bf16 mixers come next.
+- **Prediction:** 4-bit ~12-16 ms (qmm16c at ~70-85 % of the floor on the big shapes; launch-bound small shapes);
+  bf16 ~8-12 ms. A pass, narrowly.
+- **Result (20:58, data/kern23.txt): PASS.**
+  - The 4-bit set takes 14.0 ms per 16-row check, against 35.2 today, chunked (floor 7.1).
+  - The whole dense part falls from 56.8 to 27.4 ms (floor 11.9; 1-row decode 15.6): **-29 ms per 16-row check**, exact.
+  - **MLX's own 16-row call is padding-independent for every shape** (rows 1/2/5/8/12 padded with zeros or random rows
+    equal the all-real call, bitwise). So "always call with 16 rows" is exact even without a new kernel.
+  - qmm16c wins where MLX is slow at 16 rows, and is as accurate or more (max error vs fp32 0.010 vs 0.023 on o_proj):
+
+    | shape (count per check) | exact today | MLX 16 | qmm16c (ks, nt) | floor |
+    |---|---|---|---|---|
+    | o_proj + GDN out_proj (48) | 6.87 | 7.51 | **2.39** (2, 2) | 1.52 |
+    | in_proj_z (36) | 5.18 | 5.65 | **1.79** (1, 1) | 1.14 |
+    | in_proj_qkv (36) | 9.23 | 3.31 | **2.53** (2, 2) | 1.90 |
+    | lm_head (1) | 5.69 | 2.21 | **1.53** (4, 1) | 1.28 |
+    | q_proj (12) | 3.45 | 1.44 | **1.29** (2, 2) | 0.76 |
+    | shared down (48) | 1.41 | 1.39 | **1.12** (1, 2) | 0.16 |
+    | small 4-bit: shared gate/up, k/v, in_proj_a/b, expert gate | 3.4 | **3.3** | 3.7 | 0.4 |
+    | bf16 HC mixers up / down (97 each) | 9.64 / 6.73 | **2.85 / 5.83** | - | 2.27 / 2.27 |
+    | bf16 block_inject 4 x 10240 (96) | 4.07 | 4.06 | - | 0.03 |
+
+  - The new outputs differ from today's engine by rounding (new reference outputs); speculative == plain decode holds
+    bitwise when both use these kernels.
+  - Left on the table: block_inject (4 ms for an 82 KB matrix, launch-bound), HC mix down (2.6x its floor), the small
+    shapes (launch-bound, ~3 ms; fuse gate + up). Then the routed experts, the biggest byte block (~10 GB at 4-bit,
+    ~35 ms at the floor per 16-row check).
+- **Follow-ups (21:45, data/bf23.txt, data/exp24.txt):**
+  - bf16 shapes: other MLX forms are bitwise equal to x @ W.T and also padding-independent. Picking the fastest per
+    shape takes bf16 from 13.4 to 9.0 ms. block_inject as (W @ x.T).T: 3.48 -> 0.38 ms. HC mix up with W.T made
+    contiguous: 2.66. HC mix down as (W @ x.T).T: 5.32.
+  - **The dense part of an exact 16-row check is ~23 ms** (+ ~1.7 ms of 8-bit router / indexer), from 56.8.
+  - **Routed experts (L1-24 screen,** real 4-bit weights of 4 layers, synthetic routing with the measured union):
+
+    | rows | distinct experts per layer | floor per check | best path | share of the floor |
+    |---|---|---|---|---|
+    | 4 | 25 | 11.8 ms | 18.9 ms | 63 % |
+    | 8 | 42 | 19.9 ms | 33.4 ms | 60 % |
+    | 16 | 72 | 34.1 ms | 60.7 ms | 56 % |
+
+    - The three paths the engine has (unsorted per-pair gather, MLX's sorted tensor-unit gather, BigMoE's row-map
+      kernel) are bitwise identical to each other, and rows alone equal rows inside a 16-row call. **The experts are
+      already exact at any row count; they need no chunking.**
+    - Their inefficiency is probably wasted compute: MLX's sorted kernel tiles 32 / 64 rows per expert for ~2 real
+      rows. A few-rows expert kernel (weights read once, only real rows computed) could recover ~20-25 ms per
+      16-row check at 4-bit.
+  - **A full exact 16-row check today** (resident, 4-bit, top-10) is ~100 ms: dense ~25, experts ~61, attention / GDN
+    core / routing / glue ~10-20 (not measured here), drafting ~3.5.
+    - Its byte floor is ~46 ms; with 3.0-bit + top-8 + dense diet, ~27 ms.
+    - So 350 at ~10 tokens per check needs all three: those byte levers, ~90 % kernels, and more tokens per check
+      (~12).
+
+## L1-24 (Leap, pre-registered 21:51): read each distinct expert once, with MLX's own per-row arithmetic
+- **Why:** the L1-24 screen above. A 16-row check's routed experts take 60.7 ms (4-bit), against a 34.1 ms floor
+  (56 %).
+  - MLX's per-pair path streams at near-peak bandwidth but re-reads an expert for each row it serves.
+  - The sorted path reads each expert once, but slowly.
+  - All of the engine's expert paths are bitwise equal to MLX's per-pair single-row arithmetic.
+- **Bet:** scripts/gmr24.py, two kernels per layer.
+  - One threadgroup per (distinct expert, 8 output rows). Each 512 / 256-value weight block is loaded once and then
+    applied to every row routed to that expert, with MLX 0.32.2's load_vector / qdot (and the qmv tail for K 640).
+  - MLX's silu(gate) * up between the two kernels; segments built on the GPU (no host sync).
+  - Bit-identical outputs, so no reference change.
+- **Prior art:** MoonShots' qmv_mr (L1-01: the same idea for dense layers, bitwise, but slower than MLX's 16-row qmm
+  there); Breakthrough's tier_glu (per-pair fused expert GLU, bitwise); grouped / sorted MoE GEMMs (MegaBlocks,
+  MLX's own sorted gather). New here: reading each expert once with the single-row arithmetic, for few-rows verify
+  checks on the M5.
+- **Test** (scripts/test_gmr24.py; real 4-bit weights of 4 layers): bitwise vs the engine's path at 1 / 4 / 8 / 16 rows,
+  plus one expert in all 16 rows; ms per layer at 4 / 8 / 16 rows vs the sorted path and the floor.
+- **Kill:** not bitwise equal, or >= 1.10 ms per layer at 16 rows (< 13 % faster than the sorted path's 1.264).
+- **Pass:** bitwise equal and <= 0.90 ms per layer at 16 rows (>= 79 % of the floor): -17 ms or more per 16-row check.
+- **Prediction:** bitwise equal; ~0.85-1.0 ms per layer at 16 rows (70-84 % of the floor).
+- **Result (22:30, data/gmr24.txt): KILLED by its line, with the cause found.**
+  - **Bitwise equal** to the engine's path at 1 / 4 / 8 / 16 rows, and with one expert in all 16 rows.
+  - But only 6 % faster: at 16 rows (58 distinct experts), gmr 1.132 ms per layer vs sorted 1.209 vs a floor of 0.575
+    (51 %). At 8 rows 0.651 vs 0.663; at 4 rows 0.398 vs 0.380.
+  - **Cause: the expert path is ALU-bound, not bandwidth-bound.** Time grows with routed pairs (~7 us each: 40 / 80 /
+    160 pairs = 0.40 / 0.65 / 1.13 ms), not with distinct experts. Exp24's sorted path barely moved between 72 and 58
+    distinct experts.
+    - MLX's single-row arithmetic (pre-scaled x, masked nibbles, scalar FMAs) costs ~4.9 M MACs per pair on the
+      SIMD ALUs. Reading each expert once cannot fix that.
+  - **The fix is the tensor units.** Run each expert's rows through a 16-row NAX tile (qmm16c-style). Compute then
+    becomes nearly free and the check bandwidth-bound: ~0.6-0.75 ms per layer at 16 rows, i.e. -20 to -25 ms per
+    check.
+    - Cost: new rounding, a one-time reference change, as with L1-23's qmm16c. Batch-invariant by construction
+      (padding-independent tiles), with decode on the same kernel.
+
+## L1-25 (Leap, pre-registered 22:32): the routed experts on the tensor units (one 16-row NAX tile per expert)
+- **Why:** L1-24. The expert path is ALU-bound on MLX's single-row arithmetic (~7 us per routed pair). On the matrix
+  units the compute is nearly free, so it becomes bandwidth-bound.
+- **Bet:** scripts/qmmg25.py = qmm16c's code-MMA kernel with a segment prologue and masked stores.
+  - The prologue picks the expert's weights and gathers the expert's token rows; rows past the count copy row 0 and
+    are never stored.
+  - One threadgroup per (distinct expert, 32 output columns), for gate / up and for down; MLX's silu(gate) * up between.
+  - Batch-invariant by construction. New rounding (fp32-exact dequant, as qmm16c), so the reference outputs change
+    once, for decode and verify together.
+- **Prior art:** grouped / sorted MoE GEMMs on tensor cores (MegaBlocks, vLLM / SGLang fused MoE, MLX's sorted
+  tensor-unit gather); batch-invariant kernels. New here: one fixed 16-row tile per expert for exact few-rows verify
+  checks on the M5.
+- **Test** (scripts/test_qmmg25.py, real 4-bit weights of 4 layers):
+  - bitwise row-independence (rows alone vs inside the 16-row call);
+  - max error vs an fp32 reference, against MLX's path;
+  - ms per layer at 4 / 8 / 16 rows over (ks, nt) configurations, vs MLX's sorted path and the floor.
+- **Kill:** not batch-invariant, error worse than MLX's path, or > 0.95 ms per layer at 16 rows (sorted 1.21-1.26).
+- **Pass:** <= 0.75 ms per layer at 16 rows (-22 ms or more per 16-row check), invariant, error <= MLX's.
+- **Prediction:** invariant, error ~0.5-1x MLX's, ~0.65-0.8 ms per layer at 16 rows.
+- **Result (22:38, data/qmmg25.txt): BETWEEN THE LINES**, 3 % short of the pass line.
+  - Batch-invariant: rows 1 / 2 / 4 / 7 / 8 / 12 alone equal the same rows inside the 16-row call, bitwise.
+  - 2.3x more accurate than MLX's path vs fp32 (max error 0.00061 vs 0.00139).
+  - Speed per layer, vs MLX's sorted path:
+
+    | rows (distinct experts) | NAX | MLX sorted | share of the floor (NAX) | per check, NAX vs sorted |
+    |---|---|---|---|---|
+    | 16 (59) | **0.776 ms** | 1.242 | 75 % | **37.2 vs 59.6 ms (-22 ms)** |
+    | 8 (34) | 0.496 | 0.664 | 69 % | 23.8 vs 31.9 |
+    | 4 (22) | 0.351 | 0.383 | 63 % | 16.9 vs 18.4 |
+
+    - Best configurations: gate / up ks 4, nt 1; down ks 1-5.
+  - **With L1-23:** an exact resident 16-row check's dense + experts go from ~116 to ~60 ms (4-bit). The remaining
+    parts (attention, GDN core, routing, glue) are not measured here.
+  - Rounding changes once, for decode and verify together.
+
+> (a quote from the project owner, kept private)
+- **Why:** L1-24 / L1-25. The 16-row paths are ALU-bound on unpacking.
+  - qmm16c's lane reads 8-byte pieces of 4 weight rows per 64-value group.
+  - It spends 3 ops (shift, mask, or 0x4300) per 4-bit value to make a bf16 operand.
+- **Bet:** scripts/qmm26.py stores the weights in the order the tensor-unit fragments consume them.
+  - Per (32-column tile, group, lane): the lane's 8 words are contiguous (the simdgroup reads one 1 KB block, as two
+    uint4 per lane).
+  - Each word pairs the same 4 codes of the lane's rows fm and fm + 8, so one (shift, mask 0x000F000F, or
+    0x43004300) makes two bf16 operands: half the unpacking ops.
+  - Scales / biases are stored per (tile, group) as 32 contiguous columns.
+  - The MMA gets the same values in the same order, so it should be bit-identical to qmm16c / experts_nax (no new
+    reference beyond L1-23 / L1-25's). The store is repacked once at load.
+- **Prior art:** Marlin and FasterTransformer (interleaved int4 layouts, multi-value conversion per op); FLUTE
+  (offline restructuring to cut unpacking); BitBLAS / Ladder (layout transforms); Apple WWDC26 session 330 (dequant
+  into a cooperative tensor fed to matmul2d; native int4 / int8 operands from a macOS 26 update). New here: a
+  fragment-native layout for the M5's matmul2d 16x32x16 in exact few-row checks.
+- **Test** (scripts/test_qmm26.py): bitwise vs qmm16c on 3 dense shapes and vs experts_nax on real experts (4 / 8 / 16
+  rows); ms per check vs qmm16c / experts_nax and the floor.
+- **Kill:** not bitwise equal, or < +10 % on the 16-row experts (experts_nax 0.776 ms per layer).
+- **Pass:** >= 85 % of the floor on the 16-row experts (~0.68 ms per layer, -4.6 ms per check) and bitwise equal.
+- **Prediction:** bitwise equal; 16-row experts ~0.66-0.72 ms per layer (80-88 %); dense shapes +10-25 %.
+- **Result (23:31, data/qmm26.txt): KILLED by its letter on the experts; a clear gain on the dense layers.** Bitwise equal
+  everywhere.
+  - A first run looked 2.5x slower on the experts: a fixed ~1.5 ms per layer. The cause was strided scale / bias arrays
+    (numpy moveaxis views), which metal_kernel copies on every call. Made contiguous, then rerun.
+  - **Experts** (real weights), native vs experts_nax:
+
+    | rows | native | experts_nax | gain | share of the floor (native) |
+    |---|---|---|---|---|
+    | 16 | 0.709 ms per layer | 0.762 | +7.5 % | 82 % |
+    | 8 | 0.461 | 0.505 | +9.5 % | |
+    | 4 | 0.323 | 0.346 | +7 % | |
+
+    - At 16 rows that is 34.0 vs 36.6 ms per check: under the +10 % kill line and the 85 % pass line.
+  - **Dense 4-bit shapes, same run:**
+
+    | shape | native | qmm16c | gain | share of the floor (native) |
+    |---|---|---|---|---|
+    | in_proj_qkv | 2.21 ms | 2.57 | +16 % | 86 % |
+    | o_proj + out_proj | 1.92 | 2.82 | +47 % | 79 % |
+    | in_proj_z | 1.48 | 2.33 | +57 % | 77 % |
+
+    - qmm16c's own times vary +-15-25 % between runs; the comparison within one run is what counts.
+  - So adopt the layout for the dense 4-bit set (L1-23's 14.0 ms -> ~11 ms est.). On the experts it is a small extra
+    (+7.5 %).
+  - **An exact resident 16-row check, 4-bit, top-10, measured kernels:** dense ~20-21 ms (floor 11.9) + experts ~34-41
+    ms (floor 28-34) = ~55-62 ms of matmuls, ~75-80 % of their floor.
+
+## Mend item (c), measured (23:30; scripts/ovh27.py, data/ovh27.txt): is a native per-check loop worth it?
+- MLX's CPU-side cost per op, on a chain of small ops (GPU work negligible):
+  - eager graph build + eval 3.1-3.4 us per op (building alone 0.4-0.5 us);
+  - through mx.compile 0.4-0.7 us per op;
+  - a small matmul ([16, 2560] x [2560, 256]) 16-25 us.
+- A 125B verify check runs ~2,000-3,000 kernels (48 layers x ~40-60). The overhead per check is ~6-9 ms eager
+  (10-15 % of a ~60 ms kernel-optimised check) and ~1-2 ms compiled (1.5-3.5 %).
+- Fit12 measured "pass edges" at ~5 % of a check in the engine.
+- So a native loop pays only where the verify path still builds eager graphs. First check which parts of BigMoE's
+  verify path are compiled (MTPLX_COMPILED_VERIFY / QWEN4EXP_COMPILE); compiling the rest gets most of the gain
+  without a rewrite.
+- It becomes worth doing once the kernels bring the check under ~30 ms: 2-9 ms would then be 7-30 %.
+- Item (b), the drafter on the Neural Engine, is KILLED on arithmetic. Drafting is 3-8 % of a check and has to wait for
+  the check's result (prior art: Mirror-SD 2510.13161).
+
+> (a quote from the project owner, kept private)
+- **Why:** L1-24 / L1-26. The few-row paths are ALU-bound on unpacking: experts reach 82 % of the floor with the
+  native layout, the dense shapes 77-86 %.
+  - The installed SDK (26.5; MPPTensorOpsMatMul2d.h) lists **bfloat x uint4b_format -> float** for matmul2d.
+  - MLX's affine codes are unsigned 0..15, two per byte, so the packed buffer can be the right operand as is (a
+    tensor_inline over the raw pointer). The probe compiled with xcrun metal -std=metal4.0
+    (scripts/metal/t27.metal).
+- **Bet:** scripts/qmm27.py. Per 64-value group: one matmul2d(16 x 32 x 64) of the x rows (bf16 tensor_inline) with the
+  codes (uint4b_format tensor_inline) into a float cooperative tensor; then acc += scale[n] * part + bias[n] *
+  rowsum[m] per element (get_multidimensional_index).
+  - No software unpacking.
+  - New rounding (the tensor unit's own accumulation), batch-invariant by construction (fixed tiles).
+- **Prior art:** Apple WWDC26 session 330 ("feed your quantized data straight into TensorOps"); BaseRT (2607.19438,
+  Metal 4 tensor kernels on M5, formats not public); Rigel (2606.12765, reverse-engineering the Metal 4.1 tensor path
+  on M4 Max). New here: native int4 operands for exact few-row 4-bit checks of a 125B MoE.
+- **Test** (scripts/test_qmm27.py):
+  - error vs fp32 (vs MLX and qmm16c), and bitwise row-independence;
+  - ms on 3 dense shapes and on real experts at 4 / 8 / 16 rows, vs qmm16c / qmm16n (L1-26) / experts_nax / the
+    native layout.
+- **Kill:** error > MLX's, not batch-invariant, or 16-row experts not faster than the native layout (0.709 ms per
+  layer).
+- **Pass:** >= 90 % of the floor on the 16-row experts (<= ~0.64 ms per layer) or on the dense shapes.
+- **Prediction:** the K-loop of 64-wide ops with per-element coordinate epilogues costs some ALU, so ~85-92 % of the
+  floor. 40 % pass, 25 % kill (the API may load the operands less efficiently than hand-fed fragments).
+- **Result (23:40, data/qmm27.txt): KILLED. It works but is slower.**
+  - The first run failed to compile. The runtime compiler rejects `#pragma unroll full`, and the element mask is
+    `is_valid_element(i)`, not the header comment's `get_mask`.
+  - Error vs fp32 is identical to qmm16c's (better than MLX's on o_proj / in_proj_z), and batch-invariant (bitwise).
+  - **Slower:**
+
+    | shape | int4 operands | qmm16c (same run) | share of the floor (int4) |
+    |---|---|---|---|
+    | 16-row experts | 0.992 ms per layer | 0.757 (native layout 0.709) | 58 % |
+    | in_proj_qkv | 3.05 ms | 2.60 | 62 % |
+    | o_proj | 3.41 | 2.31 | 45 % |
+    | in_proj_z | 2.26 | 2.07 | 50 % |
+
+  - Letting the tensor op load its operands through tensor_inline (one op per 64-value group) is less efficient than
+    hand-fed fragments.
+  - **Correction to L1-26:** in this run, at equal (ks, nt), the native layout was slower than qmm16c on the dense
+    shapes (2.78 / 2.68 / 2.56 vs 2.60 / 2.31 / 2.07 ms). L1-26's "+16-57 %" compared native's best of 5
+    configurations against qmm16c's one, so the selection was partly noise. A fair interleaved A/B is queued
+    (scripts/ab28.py). Until it lands, the dense gain is unconfirmed.
+- **Fair A/B (23:41-, data/ab28.txt; equal (ks, nt), 12 shuffled interleaved rounds x median of 7, paired ratios): the
+  native layout's dense gain is REAL, at its honest size.**
+
+  | shape | qmm16c | native layout | int4 operands |
+  |---|---|---|---|
+  | in_proj_qkv | 2.571 ms (74 %) | **2.244 (84 %), x1.15** (IQR 1.14-1.15) | 3.114 (61 %), x0.82 |
+  | o_proj + out_proj | 2.364 (64 %) | **1.949 (78 %), x1.22** (IQR 1.21-1.23) | 3.484 (44 %), x0.68 |
+  | in_proj_z | 1.798 (63 %) | **1.505 (76 %), x1.20** (IQR 1.19-1.20) | 2.074 (55 %), x0.87 |
+  | experts, 8 rows (vs experts_nax 2.060 ms, 68 %) | | **1.925 (73 %), x1.06** (IQR 1.06-1.08) | 2.570 (55 %), x0.80 |
+
+  - The single sequential run in L1-27 that showed native slower was the noisy one.
+  - L1-26's original +16-57 % (best of 5 configurations) was inflated. The honest gain is +15-22 % on the dense
+    shapes and +6-8 % on the experts. Adopt the layout for the dense set.
+  - 16-row experts (finished 00:42, after the quiet window): native 2.751 ms (81 %) vs experts_nax 2.990 (74 %),
+    **x1.08** (IQR 1.08-1.09); int4 x0.77.
+  - **Where an exact resident 16-row check stands (4-bit, top-10):**
+
+    | part | today, chunked | now | floor |
+    |---|---|---|---|
+    | dense layers | 56.8 ms | ~21 ms | 11.9 |
+    | routed experts | ~60 ms (MLX sorted) | ~34 ms | ~28-34 |
+
+    - Not yet measured: attention, the GDN core (Fit12's port), routing and glue.
+
+## L1-28 (Leap, pre-registered 01:43): the native-layout kernel with two 32-column tiles per simdgroup
+- **Why:** with the native layout, the 16-row experts are at 81 % of the floor and the dense shapes at 76-84 %.
+  Per 64-value group each tile re-loads its 16 x rows (2 KB from cache per 1 KB of weights) and re-sums them.
+- **Bet:** scripts/qmm28.py. Two tiles share the x fragments, the row sums and the K loop; each keeps its own B
+  fragments, accumulator and epilogue. The arithmetic per output is unchanged, so it should be bit-identical to
+  qmm16n.
+- **Test** (scripts/ab29.py): fair A/B at equal ks, interleaved 12 rounds, paired ratios; 3 dense shapes and 16-row
+  experts (real weights); bitwise check.
+- **Kill:** < +5 % on both the 16-row experts and the dense shapes, or not bitwise.
+- **Pass:** >= +10 % or >= 88 % of the floor on the 16-row experts.
+- **Prediction:** +5-12 %.
+- **Result (01:44, data/ab29.txt): KILLED.** Bitwise equal to qmm16n everywhere, but slower at equal ks:
+  - 16-row experts x0.94 (IQR 0.94-0.95; 77 % vs 82 % of the floor);
+  - in_proj_qkv x0.99, o_proj x0.96, in_proj_z x0.99.
+  - Sharing the x loads costs more than it saves; the doubled accumulators and fragments are the likely cause
+    (register pressure, lower occupancy).
+  - The native layout at 75-85 % of the floor looks near this design's practical limit.
+  - The rest of a 16-row check's gap is elsewhere: the bf16 HC mixers (~8.5 vs 4.5 ms), the GDN core (Fit12's 4-row
+    map: ~5.4 ms over a ~1 ms floor; more at 16 rows), and check edges / sync (~9-15 ms).
+
+## L1-29 (Leap, pre-registered 01:46): a bf16 16-row tensor-unit matmul for the hyper-connection mixers
+- **Why:** the HC mixers take ~8.5 ms per 16-row check, about 2x their floor (mix down 5.32 ms vs 2.27, x97).
+- **Bet:** scripts/bmm30.py, qmm16c's MMA skeleton with bf16 weights read directly; K split over KS simdgroups;
+  batch-invariant by construction; new rounding.
+- **Test** (scripts/test_bmm30.py): config sweep, then a fair interleaved A/B vs MLX's best invariant form;
+  invariance; error vs fp32.
+- **Kill:** < +15 % on HC mix down.
+- **Pass:** >= 80 % of its floor (<= 2.85 ms).
+- **Prediction:** ~3.0 ms (x1.75).
+- **Result (01:47, data/bmm30.txt): PASS.**
+  - HC mix down: **2.59 ms per check (88 % of the floor)** vs MLX's best invariant form 5.11 (44 %), paired **x1.97**
+    (IQR 1.97-1.98), at ks 10 / nt 1. Batch-invariant (bitwise); max error vs fp32 = MLX's.
+  - HC mix up: no gain (x0.97); keep MLX's x @ contiguous(W.T) at 2.63 (86 %).
+  - ple key: x1.18.
+  - **The dense part of an exact 16-row check is now ~18 ms** (was ~21; 56.8 before Sat night).
+
+## L1-30 (Leap, pre-registered Sun 02:55): do fewer bits buy time in RAM? 3-bit and 2-bit experts on the tensor units
+- **Why:** the ~72-77 ms check assumes the ~3.5-bit tier experts run at the 4-bit kernel's 82 % of floor, and the 350
+  recipe needs ~2-bit experts at both budgets. But the few-row expert path is limited by unpacking arithmetic (L1-24 / L1-26):
+  4-bit native = 3 ALU ops per two bf16 operands. 2-bit costs the same per operand on half the bytes; 3-bit (a 2-bit plane
+  + a 1-bit plane) costs ~6. If unpacking is the limit, fewer bits buy less than their bytes.
+- **Prior art:** low-bit GEMM kernels with fast dequant are published (BitBLAS / Ladder, FLUTE, LUT Tensor Core, QuIP# /
+  AQLM kernels, MLX qmm at 2-8 bits, llama.cpp Q2_K / Q3_K Metal). Tag: published style, untested on the M5's tensor units
+  at 16 rows.
+- **Test** (test_low30.py, GPU ~5 min): one native-layout kernel at 4 / 3 / 2 bits (the 4-bit build must be bitwise equal
+  to experts_native); real codes from 4 layers (3-bit = q >> 1 as the v3 tier stores it, 2-bit = q >> 2, for timing);
+  synthetic routing as in ab28 at 8 / 16 rows; fair interleaved A/B (12 rounds x median of 7) against MLX's sorted
+  gather_qmm at 4 / 3 / 2 bits; error vs fp32; row invariance.
+- **Ideal speedups from bytes** (g64 codes + bf16 scale and bias): 3-bit x1.29, 2-bit x1.80 vs 4-bit.
+- **Prediction:** 3-bit x1.0-1.15, 2-bit x1.4-1.6 at 16 rows.
+- **Kill line** (for "fewer bits convert to RAM time"): 2-bit < x1.4 vs 4-bit native at 16 rows. Then the recipe's
+  low-bit term needs a new kernel idea. Pass: 2-bit >= x1.6 and 3-bit >= x1.2. Between the two: partial.
+
+- **Result (Sun 03:00): KILLED by its line.** 2-bit is x1.22 faster than 4-bit native at 16 rows (line x1.4; bytes
+  would allow x1.80). 3-bit is x1.08 (bytes allow x1.29). All three builds are row-invariant (bitwise), at the same error
+  vs fp32 (rel 0.004-0.005), and the 4-bit build is bitwise equal to experts_native. data/low30.txt.
+
+| 4 layers, real codes | 8 rows (35 distinct) | 16 rows (56 distinct) | % of own floor at 16 rows | per expert at 16 rows |
+|---|---|---|---|---|
+| native 4-bit (L1-26) | 1.857 ms | 2.715 ms | 81 % | 12.1 us |
+| native 3-bit (2+1 planes) | 1.785 (x1.04) | 2.497 (x1.08) | 68 % | 11.1 us |
+| native 2-bit | 1.562 (x1.19) | 2.217 (x1.22) | 55 % | 9.9 us (floor 5.5) |
+| MLX sorted 4 / 3 / 2-bit | 2.62 / 2.44 / 2.82 | 4.75 / 4.53 / 5.36 | 46 / 38 / 23 % | |
+
+- **What it means:** at 16 rows each expert costs ~10 us of work that does not shrink with bits (MMA on a 16-row tile
+  that holds ~3 real rows, x loads and row sums, unpacking). 4-bit sits where that cost meets its byte floor (9.9 us);
+  below 4 bits the bytes stop mattering. MLX's own path is worse: its 2-bit is slower than its 4-bit.
+- **Correction to the check:** the expert row assumed ~3.5-bit at 82 % of floor (~28 ms). Measured 3-bit at 16 rows:
+  11.1 us x 62 experts x 48 layers = ~33 ms. The exact resident 16-row check is ~77-82 ms (~115-125 tok/s at 9.5
+  tokens), not 72-77.
+- **For the 350 recipe:** it needs ~2-bit experts near their byte floor (~5.5 us per expert at 16 rows). Today's
+  kernel takes 9.9 us. So the bytes term needs a kernel that halves the per-expert non-byte cost. Next (L1-30b): profile
+  that ~10 us (MMA issue vs unpack vs x work). Candidate fixes: pair codes along K so two operands fill one register
+  (no half-split moves), row sums computed once per group instead of per tile, and 8-row tiles if the tensor unit runs
+  them at half the cost.
+
+## L1-30b (Leap, pre-registered Sun 03:08): where the ~10 us per expert goes, and one fix
+- **Profile** (2-bit, 16 rows, same routing as L1-30): the kernel with one part removed at a time: no tensor-unit
+  multiply, no unpacking (operands fixed once), no activation work (x loads, row sums), and weight reads only. A
+  measurement, no kill line. Prior: the ALU side (unpack, operand moves, row sums) is ~60 % and the multiply ~30 %.
+- **Fix candidate:** pair codes along K (the two halves of one unpacked word are adjacent operand slots, k and k + 1 of
+  one row) instead of across rows (slots i and i + 4), so the compiler can move both operands as one register. The MMA
+  gets the same values in the same slots, so the output must be bitwise equal to L1-30's kernel.
+- **Kill line (fix):** < +5 % on 2-bit at 16 rows, or not bitwise -> drop. Pass: >= +15 %.
+
+- **Profile result (Sun 03:08, data/low30b.log), per expert at 16 rows:**
+
+| mode | 2-bit | 4-bit |
+|---|---|---|
+| full kernel | 9.8 us (56 % of floor) | 11.9 us (83 %) |
+| no tensor-unit multiply | 7.3 | 11.4 |
+| no unpacking | 8.2 | 11.7 |
+| no activation work | 9.2 | 11.7 |
+| weight / scale reads only | 7.0 (78 %) | 11.5 (86 %) |
+
+  - 4-bit is memory-bound: the reads alone take 11.5 of 11.9 us.
+  - At 2 bits the reads alone already miss the floor (7.0 vs 5.5 us), and multiply + unpack add ~2.8 us that do not
+    overlap with memory. So the levers are the read pattern and the overlap, not the arithmetic.
+  - The K-pair A/B did not run (a dict-key bug in the harness); it moves to L1-30c.
+- **L1-30c (pre-registered 03:12):** two read-side suspects, same kernel, bitwise-equal outputs.
+  - Empty workgroups: the grid launches one row per routed pair (160 at 16 rows), but only ~59 rows hold an expert; the
+    rest exit at once. Test: launch exactly the distinct count (host-known here; in the engine this needs a bound or a
+    loop over segments).
+  - One load in flight per lane: prefetch the next group's words during this group's work (register double buffer).
+  - Plus the K-pair A/B. All at 4 / 3 / 2 bits, 8 and 16 rows, fair interleaved.
+  - Prediction: exact grid +5-10 % and prefetch +5-15 % at 2-bit; K-pair 0-5 %.
+  - Kill line (read-side fixes): all combined < +15 % at 2-bit, 16 rows. Pass: >= +30 % (2-bit >= x1.6 vs today's 4-bit).
+
+- **L1-30c result (Sun 03:13, data/low30c.log): KILLED by its letter, the best subset between the lines.** All
+  variants are bitwise equal to the base.
+
+| 16 rows, 60 distinct, 4 layers | 4-bit | 3-bit | 2-bit |
+|---|---|---|---|
+| base (L1-30 kernel) | 2.829 ms (83 %) | 2.659 (69 %) | 2.373 (55 %) |
+| K-paired codes | x1.00 | x0.97 | **x1.157** -> 2.051 ms (64 %) |
+| launch exactly the distinct count | x1.01 | x1.03 | x1.03 |
+| prefetch next group | x0.98 | x0.94 | x0.95 |
+| all three | x1.00 | x0.96 | x1.13 |
+
+  - All combined = +13 % at 2-bit, under the +15 % kill line, because prefetch hurts everywhere (register pressure).
+    K-pairing alone is +15.7 %: 2-bit is now x1.38 vs 4-bit at 16 rows (x1.34 at 8 rows), 8.5 us per expert vs a
+    5.5 us floor. Exact grid sizing adds ~3 % (in the engine it needs a loop over segments, no host sync).
+  - The cap is the read pattern itself: at 2 bits, reads alone already take 7.0 us per expert (78 % of floor).
+- **Where that leaves experts in a 16-row check** (62 per layer x 48): 4-bit ~35 ms, 3-bit ~33 ms, 2-bit (K-paired)
+  ~25 ms. The 350 recipe assumed 2-bit at ~95 % of floor (~16 ms). Kernels on this design top out ~9 ms short of that.
+
+## L1-31 screen (Leap, pre-registered Sun 03:13 EET; DST ended, clocks went 04:00 EEST -> 03:00 EET): the GDN core at 16 rows
+- **Why:** the check's "GDN core, attention core, HC elementwise, routing, misc ~12-15 ms" is an estimate scaled from
+  Fit12's 4-row map. At 16 rows the engine runs the stock chain for the 36 GDN layers: concat + conv1d + silu + split +
+  fp32 l2norm, mlx_lm's recurrence kernel, the sigmoid-gated RMS norm (MTPLX's fused conv+norm only covers 2-6 rows, its
+  fused gate 32+ rows), and capture-commit replays the recurrence over the accepted rows.
+- **Bytes floor:** ~7.5 MB per layer (mostly the fp32 state read + write, 2 x 3.1 MB) -> ~1.0 ms per check.
+- **Test** (gdn31.py, GPU ~2 min): each piece over 36 layers in one eval, random inputs of the real shapes, S = 16
+  (and the replay at T = 10), median of 15; MTPLX's fused rows kernel at S = 16 if it runs.
+- **Kill line (for "the GDN core is a lever"):** stock GDN core < 4 ms per 16-row check (then <= 5 % of the check).
+  Pass: >= 8 ms (a kernel program pays).
+
+- **Result (Sun 03:15 EET, data/gdn31.txt): BETWEEN THE LINES.** Per 16-row check, 36 layers (floor 0.97 ms):
+
+| piece | ms |
+|---|---|
+| prework: concat, conv1d, silu, split, fp32 l2norm | 1.51 (MTPLX's fused rows kernel runs at S 16: 1.09, not bitwise: max diff 0.0078) |
+| recurrence (mlx_lm gated_delta_update), T 16 | 2.58 (T 1: 1.33, so ~37 us per layer is state traffic + launch) |
+| gated norm (rms_norm + fp32 sigmoid gate) | 0.61 |
+| **chained core** | **4.07** (kill line 4, pass 8) |
+| + capture-commit replay of the recurrence, T 10 | 2.10 -> **6.2 ms in all** |
+
+  - The GDN core is ~8 % of the ~77-82 ms check. A fused exact program (prework + recurrence + norm, replay folded in or
+    overlapped) could reach ~2-3 ms: ~3-4 ms saved, ~4-5 %. A modest lever, not a breakthrough. Fit12 owns the GDN port.
+  - The check's "GDN core, attention core, HC elementwise, routing, misc ~12-15 ms" row: GDN measured 6.2; the rest
+    (attention core over the KV cache and indexer, HC elementwise, routing, misc) ~6-9 ms, still estimated.
+
+## L1-32 screen (Leap, Sun 03:17 EET, CPU): intra-request parallelism, k streams of one answer in one check
+- **Idea:** one chat decodes k independent parts of its answer at once. Each part gets its own 16-row speculative
+  check, and all k share one pass. In a batch-1 MoE the cost is the expert union over all rows, and parts of one answer
+  share experts.
+- **Prior art:** parallel decoding of one answer is published: Skeleton-of-Thought (2023), APAR (2024), Hogwild!
+  inference, PASTA, Multiverse (2025); typical gains 1.2-2x, with the model planning the parts. The expert-union
+  economics for this MoE (k streams vs one longer chain or tree) is ours, untested.
+- **Pre-registered:** experts read per accepted token at 4 x 16 vs one 16-row chain: kill > 0.75x, pass <= 0.55x.
+  Prediction 0.5x.
+- **Result (data/par32.txt, Breakthrough routing traces, 200 draws):** **between the lines, near pass.**
+
+| per layer, top-10 (top-8) | rows | distinct experts | expert reads per accepted token |
+|---|---|---|---|
+| one chain, 16 rows | 16 | 66.1 (54.6) | 6.96 (5.75) at 9.5 tokens |
+| one chain, 32 rows (block 32) | 32 | 100.5 | 9.57 at 10.5 tokens |
+| one 64-row tree | 64 | 142.6 | 12.22 at 11.67 tokens |
+| 2 streams of one answer x 16 | 32 | 105.4 | 5.55 (0.80x) |
+| **4 streams of one answer x 16** | 64 | 155.5 (131.5) | **4.09 (3.46): 0.59x (0.60x)** |
+| 4 unrelated sequences x 16 | 64 | 208.1 | 5.48 (0.79x) |
+
+- **Rough check arithmetic, resident, 4 streams:**
+  - Experts: 2.35x the union, ~78 ms.
+  - Dense at 64 rows: about 1.7x, ~30 ms, because the tensor units become the limit.
+  - GDN for 4 states: ~16 ms. Attention, edges and drafting: ~20 ms.
+  - Total ~145 ms for ~38 tokens, about 2.1x one stream (~260 vs ~120 tok/s).
+  - At 24 GB I predicted SSD reads per token would fall by a similar ~0.6x. The replay below says the opposite.
+- **Open:** whether the parts are really parallel. How much of an agentic or code answer the 125B can write as
+  independent parts at equal quality is a model question. It's not exact (outputs change), so adopting it is Kamen's
+  call, and whether a parallel answer counts for "350 for one chat" is his call too.
+- **L1-32b replay at 24 GB (Sun 03:19 EET, data/par32b.txt; resid27's LRU pools, warm-started from the other sequences):
+  KILLED for the 24 GB budget.** 4 lockstep streams (the 4 quarters of one answer) RAISE misses per generated token:
+
+| misses per token, 1 -> 4 streams | C 192 | C 288 |
+|---|---|---|
+| top-10, parts of one answer | 1.68-1.94x more (code 44.9 -> 87.0) | 1.05-1.18x more |
+| top-8, parts of one answer | 1.25-1.44x more | 1.03-1.05x more |
+| top-10, 4 unrelated sequences | 5.2x more | 3.1x more |
+
+  - The SSD regime is set by the working set vs the pool, and 4 streams make the working set 2.35x larger. The pool
+    thrashes. One stream's temporal locality is what the pool lives on.
+  - So intra-request parallelism is a RESIDENT-only lever: ~0.59x DRAM reads per token, ~2x end to end estimated. With all
+    512 experts resident, it fits the 45 GB waypoint only at <= ~2.65 bits per weight on average (2-bit codes + g64
+    scales = 2.5 bits: 37.7 GB of experts + dense + runtime ~42.6 GB). Not a lever for the 24 GB goal.
+- **If NewIdeas wants the resident branch:** a quality probe (skeleton-style parallel answers on a few Eval-suite tasks,
+  scored against sequential) and 2-bit quality are the gates. Both are non-exact, so Kamen's call.
+
+## B1 (NewIdeas' bet order Sun 04:12; Leap, pre-registered 04:16 EET): neuron-sparse expert reads, gate-first
+- **Bet:** for a cold (SSD) expert, read its gate rows first (1/3 of the expert), compute silu(x Wg), keep the
+  intermediate neurons that carry the output, then read only those neurons' up rows + down columns (stored bundled).
+  It breaks "each expert use reads the whole expert". Non-exact (skipped neurons are small, not zero), so Kamen's call.
+- **Prior art (Sun 04:15):**
+  - FloE (ICML 2025): the same two-phase idea for PCIe-offloaded MoE experts on Mixtral. A cheap ultra-low-bit up
+    projection is computed first, then low-magnitude channels are dropped from gate and down. 9.3x fewer bytes per
+    expert at 4.4-7.6 % average quality loss.
+  - "Uncovering Intra-expert Activation Sparsity" (arXiv 2605.08575, 2026): a fused sparse up-down kernel; notes the
+    dense first projection caps the speedup at ~3x.
+  - DualSparse-MoE (2508.18376).
+  - CATS (2404.08763): SiLU-gate thresholding, 50 % sparsity within 1-2 % on dense 7B.
+  - TEAL, Deja Vu, WINA (activation x weight-norm selection).
+  - LLM in a flash (row-column bundling of each neuron's up row + down column; flash reads need >= ~32 KB chunks).
+  - PowerInfer-2 (neuron clusters on phones; ReLU-sparse models).
+  - SmallThinker (natively sparse experts for local SSD inference).
+  - Tag: published in pieces. Untested here: the 125B's 640-neuron SwiGLU experts, gate-first selection from the
+    4-bit gate, on this Mac's SSD.
+- **Physics the kill line leaves out:** one neuron's bundled up row + down column at 4-bit is ~2.9 KB. Small random SSD
+  reads are limited by reads per second, not GB/s, so the read pattern matters as much as the bytes. Hence step 2.
+- **Test:**
+  - Step 1, b1_energy.py (MLX, ~3 min): Fit12's captured MoE inputs (5 layers x 2,048 tokens), the real router + 4-bit
+    experts. Retained output energy per (token, expert) vs the fraction of neurons kept, under an oracle ranking
+    (|h_j| ||d_j||), a gate-only weight-informed ranking (|silu(g_j)| ||Wu_j|| ||d_j||, usable before the second read)
+    and plain gate magnitude (CATS). Also the MoE-block error at f 0.2 / 0.3 / 0.5 vs MSB-3 on all 10.
+  - Step 2, b1_ssd.c: random-read GB/s by chunk size (4 KB-2.9 MB) at 8 / 32 / 64 threads, page cache bypassed, plus
+    QD1 latency (the extra round trip).
+- **Kill line (NewIdeas'):** the top 30 % of neurons carry < 90 % of output energy at the median. I apply it to the
+  gate-only ranking (the one a gate-first read can use) and report the oracle beside it.
+- **Prediction:** SwiGLU experts aren't sparse. At 30 %: oracle ~0.85-0.92, gate-w ~0.75-0.85 -> a kill on the usable
+  ranking. On the SSD, 3-16 KB random reads reach well under the ~11-14 GB/s of whole-expert reads, so neuron-granular
+  reads need clustering into >= 32-64 KB chunks to pay at all.
+- **Result (Sun 05:44 EET; data/b1_energy.txt, b1_ssd.txt, b1_bundle.txt): KILLED on the line, and the SSD closes
+  every predictor variant too.**
+  - Output energy kept per (token, expert), median over 102,400 pairs (5 layers x 2,048 tokens x top-10):
+
+    | ranking | 10 % | 20 % | 30 % | 50 % | neurons for 90 / 95 / 99 % |
+    |---|---|---|---|---|---|
+    | oracle (needs the up projection) | 0.710 | 0.855 | 0.926 | 0.983 | 0.26 / 0.37 / 0.57 |
+    | gate-w (gate-first, usable) | 0.519 | 0.664 | **0.769** | 0.911 | 0.48 / 0.59 / 0.77 |
+    | gate (CATS) | 0.516 | 0.661 | 0.768 | 0.912 | 0.48 / 0.59 / 0.77 |
+
+    The gate alone can't find the neurons that matter. Weight norms add nothing (gate-w = gate); the up projection
+    decides.
+  - MoE-block error, every routed expert cut under gate-w, against MSB-3 on all 10 (0.0337, reading ~0.78 of the
+    expert's bytes): f 0.2 -> 0.188 (5.6x, reads 0.47); f 0.3 -> 0.145 (4.3x, reads 0.53); f 0.5 -> 0.077 (2.3x, reads
+    0.67). On error per byte read, that is worse than simply using fewer bits.
+  - SSD, random reads by size (64 threads, page cache bypassed): 4 KB 1.10 GB/s, 8 KB 2.18, 16 KB 4.28, 32 KB 7.10,
+    64 KB 10.15, 128 KB 12.72, 256 KB 13.55, 1 MB 13.68, whole expert (2.9 MB) 13.78. Reads of 16 KB or less hit a cap
+    of ~265k reads/s. QD1 latency: 16 KB 82 us, 1 MB 217 us, 2.9 MB 331 us. So a dependent second read costs >= ~0.1-0.2
+    ms per layer, ~5-10 ms per check unless hidden.
+  - With a perfect, free predictor (oracle scores, bundles chosen in-sample, so optimistic), cold-expert read time
+    against one whole-expert read:
+    - per neuron: 26 % of the neurons, but 3.07x slower (the reads-per-second cap)
+    - bundles of 16 neurons (68 KB): best order needs 62 % of bundles -> 0.83x
+    - 32 (135 KB): 66 % -> 0.71x
+    - 64 (270 KB): 68 % -> 0.69x
+
+    One token's important neurons are spread across most bundles under every order tried (stored, mean score,
+    co-activation). Best case: ~1.45x faster at only 90 % of the energy per expert. 2-bit codes alone read 0.556 of
+    the bytes (1.8x).
+  - Prediction: right. Oracle 0.926 was a little above my 0.85-0.92; gate-w 0.769 was in range; the SSD came out as
+    predicted.
+  - General lessons:
+    1. On this SSD, any sub-expert read scheme needs >= 128 KB units to keep >= 90 % of peak bandwidth.
+    2. In these SwiGLU experts, neuron sparsity is real per token (26 % for 90 %) but not clustered, and the gate alone
+       does not predict it. FloE's up-first preview hits the same bundle wall.
+
+## B5 (NewIdeas' order; Leap, pre-registered Sun 05:51 EET): no Python per check, for the 16-row check
+- **Bet:** in a 16-row check the CPU side leaves the GPU idle for >= 5 ms. The CPU side is the Python graph build
+  plus MLX's per-op encode. A compiled or native per-check loop (or simply overlapping the build with the GPU)
+  recovers that time. It is exact: same kernels, same graph.
+- **Prior art (Sun 05:50):**
+  - CUDA Graphs capture of decode / verify steps: standard in vLLM, SGLang, TensorRT-LLM.
+  - llama.cpp's Metal backend: native, with a few command buffers per graph, encoded on several threads.
+  - Metal indirect command buffers.
+  - mx.compile.
+  - In this engine (read only), MTPLX compiles runs of GDN layers for S <= 4 only (MTPLX_COMPILED_GDN). Its own note:
+    "the qL=1 decode step is CPU-dispatch-bound: ~20.8 ms of Python graph construction per token against <= 14 ms
+    of GPU work". It also has a compiled fixed-M4 verify lane (qwen4_fixed_verify.py, graphbank.py).
+  - At 16 rows, every layer runs eager and verify widths get no mid-loop eval: the whole 48-layer graph is built in
+    Python before the GPU starts.
+  - Tag: published (graph capture); untested here: GPU idle per 16-row check.
+- **Test (b5_slice.py):** a resident 12-layer slice of the real 125B (layers 0-11 = 9 GDN incl. PLE + 3 QSA; ~18.5
+  GB; lazy load, truncated before any weight is read), through MTPLX's own forward under the verify scopes (decode_verify,
+  target_verify, exact, capture). 16 real code tokens per check after a ~600-token prefill, 20 checks per variant:
+  - A, eager as the engine runs it: build ms (Python, GPU idle) and eval ms.
+  - B, the same forward with async_eval every 4 layers (build overlapped). Logits must match A bitwise.
+  - C, MTPLX's compiled GDN runs forced at S 16, if they trace.
+  - Then a Metal System Trace (xctrace) of A: GPU busy per forward against wall.
+  - Per check = 4 x the slice's idle (the head is one op, so its CPU cost is negligible).
+- **Kill line (NewIdeas'):** < 5 ms saved per check -> kill, i.e. 4 x (wall - GPU busy) of A < 5 ms.
+- **Prediction:** the build is ~0.3-0.45 ms per layer -> ~15-22 ms per check of pure GPU idle in A, plus 1-3 ms of
+  exposed encode. B hides most of it (idle ~2-5 ms per check) with no native code. C cuts the build to ~5-8 ms. So a
+  PASS, but the cheap overlap may take most of the gain before any native loop is written.
+
+### B5 result (Sun 06:55 EET; quiet lock, 31 s of GPU): PASS by the letter, but the cheap exact overlap takes it
+Data: data/b5_slice.txt (timings, 20 checks per variant), data/b5_gpu.txt (trace of A, scripts/b5_gpu.py).
+
+| per 12-layer 16-row check (resident, 4-bit) | build ms | eval ms | wall ms (min) | x4 per 48-layer check |
+|---|---|---|---|---|
+| A eager (the engine today) | 5.04 | 32.22 | 37.18 (34.20) | 148.7 |
+| B async_eval every 4 layers (bitwise = A) | 17.35 | 15.44 | 32.80 (31.01) | 131.2 (-17.5, -11.8 %) |
+| C compiled GDN runs at S 16 (bitwise = A) | 1.22 | 32.05 | 33.28 (31.36) | 133.1 (-15.6) |
+| Metal trace of A, checks 2-9 | - | - | 38.25 traced; GPU busy 31.94 | idle 25.2 traced, 21.0 untraced |
+
+- The build is 0.42 ms per layer. In A the GPU idles from t0 until the first commit (3.6-9 ms in the trace); once it
+  starts, the encoder keeps it fed (idle = first-work delay + ~0.35 ms).
+- **Kill line:** 4 x (wall - GPU busy) of A = 21.0 ms untraced (25.2 traced) >= 5 ms, so a PASS. The prediction held on
+  every count: idle 15-22 + 1-3 ms; B leaves ~2-5 (measured 3.4 = 4 x (32.80 - 31.94)); C's build 4.9 ms per check.
+- **But the native loop itself is not justified on the resident path.** B is a Python-level change: MTPLX already has
+  the mid-loop async_eval for prefills of 1,024+ rows; it would extend to verify widths. B is exact and recovers 17.5 of
+  the ~21 ms. A native loop's increment over B is ~3.4 ms per check, under the 5 ms line.
+  - Adopt-candidate (exact, ~10 lines): mid-loop async_eval every 4 layers in the 16-row verify, -11.8 % per check.
+- **Open (not measured):** the SSD-streamed engine. There each layer syncs for its routing before the expert fetch, so
+  the 0.42 ms per layer of build sits on the critical path every layer (~20 ms per check) unless BigMoE overlaps it.
+  That needs a trace of BigMoE's streamed 16-row check; it comes after B10.
+- Caveats:
+  - x4 counts the head and embedding four times, so the busy x4 (128 ms) is an upper bound. The idle is a per-layer
+    quantity, so its x4 holds.
+  - The trace's 1 s marker gap drops the GPU clock: checks 0-1 after it are slow (56 / 74 ms) and are excluded.
+
+## B10(b) (NewIdeas 06:24 + 06:57; Leap, pre-registered Sun 07:02 EET): trellis-decode cost inside the expert GLU
+- **Bet (B10, NewIdeas):** keep experts as ~2.1-bit bitshift-trellis codes (Fit12 B3: TRL-2 at 1.15x MSB-3's output
+  error, in-sample), 1.29 MB per expert instead of 2.16 MB. Then ~53-65 % of experts fit at 24 GB and all of them at
+  45 GB (MoonShots B10-c: -85 % SSD bytes per token at 24 GB).
+  - Spec 06:57: ranks 0-1 decode base + a residual trellis (two decodes, summed); ranks 2-9 decode the base only.
+  - My part: is the decode cheap enough on this GPU?
+- **Format (Fit12's B3 = Breakthrough's D2, read from fit_b3.py / trellis.py):**
+  - RHT on the input dimension: per-layer random signs + block Hadamard 512 for gate / up, so x' is computed once per
+    token per layer. Per-expert signs + block Hadamard 128 for down, so h' is computed once per (row, expert) pair.
+  - Per-row bf16 RMS scale.
+  - 16 x 16 tiles, row-major. L = 12 bit state, k = 2 new bits per weight, free 12-bit start state per tile.
+  - Reconstruction lut[state]: 4,096 Gaussian quantiles in a fixed random order (seed 0).
+  - Weight t of a tile reads the 12-bit window at bit 2t of the tile's stream, so any weight decodes independently.
+    With k = 2, tile row r's 16 weights sit in bits [32r, 32r + 42): two aligned 32-bit words.
+  - Layout here: tiles padded to 17 words (2.125 b + scales, vs 2.04 tight), interleaved so a simdgroup's loads are
+    contiguous. A chained trellis (no per-tile start state) would give 2.0 b with the same decode; that is Fit12's
+    call (encoder change).
+- **Prior art (Sun 07:00):**
+  - QTIP (Tseng et al., NeurIPS 2024): bitshift trellis + RHT, fused CUDA decode-matvec kernels for batch 1. It uses
+    computed codes (1MAD / 3INST) or a small 2^9 x 2 LUT (HYB) so that decode stays under the memory bound.
+  - ik_llama.cpp's integer trellis quants IQ1_KT..IQ4_KT: CUDA (PR 113), CPU, NEON and a Metal port (PR 475). So a
+    Metal trellis decode exists; I found no Metal speed numbers.
+  - Not found: a 4,096-entry LUT trellis code inside a routed MoE GLU on Apple GPUs, or a two-stage (base + residual)
+    trellis for the top ranks.
+  - Tag: published codes and kernels (CUDA, Metal port); untested here: their cost vs 3c inside the routed GLU.
+- **Baseline (MoonShots' microbench, 3 layers x 3 traces):** 3c costs ~5.6-6.7 us per (row, rank) pair at 3-bit
+  (plan 3333333333) and ~7.7 us per 4-bit pair. It is bound by per-pair work, not bytes (~820 G weights/s).
+- **Test (b10_trellis.py, one real layer L20, routing from MoEPrefetch's code trace, S = 4 / 16 natural top-10):**
+  - The same timed chain as MoonShots' microbench.
+  - 3c arms: plans 3333333333 and 4444444444 (per-pair 3-bit and 4-bit) and 4433333333 (today), on records3 pools.
+  - Trellis arms: base on all ranks, base + residual on all ranks, and the spec mix (residual on ranks 0-1). They use
+    pools of 512 random-stream experts (decode cost does not depend on the code values), x' / h' rotations and the
+    combine included.
+  - Correctness: kernel output vs a numpy decode of the same streams (fp32 reference, tolerance check).
+- **Kill (NewIdeas'):** base path per pair > 2x 3c's 3-bit, or base + residual per pair > 2x 3c's 4-bit.
+- **Prediction:** decode adds ~2-3 ALU ops per weight (window extract + LUT read) to 3c's ~3, and bytes drop 40 %.
+  - Base: 6-9 us per pair, 1.0-1.5x 3c-3: passes.
+  - Base + residual: 10-16 us, 1.3-2.1x 3c-4: at risk.
+  - If the residual path fails, the fallback is a decode-once kernel that serves every row of a distinct expert. At
+    S = 16 there are ~2.5 rows per distinct expert; that kernel is not built yet.
+
+### B10(b) result (Sun 10:33 EET; quiet lock, ~40 s of GPU, normal fan mode): the LUT code FAILS, QTIP's computed 3INST code PASSES
+- Correctness: the kernels match a numpy decode of the same streams (max error 2e-3 of max |y|, bf16 output), and the
+  output is bitwise the same across geometries.
+- us per (row, rank) pair, layer 24, natural routing (6 passes, chains of 30). Median of 7 interleaved rounds
+  (data/b10_bench2.txt; 3c-3 timed twice, 5.69 / 5.70); data/b10_bench.txt (3 rounds) agrees within 1-2 %.
+
+| arm | S = 4 | S = 16 | vs the kill baseline (S = 4 / 16) |
+|---|---|---|---|
+| 3c 3-bit (3333333333) | 6.58 | 5.69 | - |
+| 3c 4-bit (4444444444) | 8.94 | 7.77 | - |
+| 3c today (4433333333) | 7.16 | 6.14 | - |
+| trellis, LUT code, base (best of 18 geometries, LUT in device or threadgroup memory alike) | 17.23 | 16.40 | 2.62x / 2.88x 3c-3: **KILL** |
+| trellis, LUT code, base + residual | 31.45 | 30.39 | 3.5x / 3.9x 3c-4: **KILL** |
+| trellis, 3INST code, base | 7.59 | 6.88 | 1.15x / 1.21x 3c-3: pass |
+| trellis, 3INST code, base + residual | 14.10 | 13.28 | 1.58x / 1.71x 3c-4: pass |
+| trellis, 3INST code, spec (residual on ranks 0-1) | 10.10 | 9.21 | 1.41x / 1.50x today |
+
+- Read: the 4,096-entry LUT gather caps the decode at ~300 G weights / s, whether the LUT sits in device memory (L1)
+  or in threadgroup memory (random 2-byte reads conflict). QTIP's 3INST code computes the value from the state in
+  4 ALU ops (multiply-add, and / xor, two fp16 halves summed) and runs 2.4x faster.
+- The fix needs no format change. Tabulate 3INST into the encoder's 4,096-entry LUT and re-encode. The CPU check
+  (b10_codes.txt, exact Viterbi on synthetic data) puts its NMSE at 1.00x the LUT code at k = 2 on Gaussian data,
+  1.04x on Laplace, and at k = 3 1.01x / 1.20x. The real cost needs Fit12's held-out test with the 3INST table.
+- Published: QTIP designed its computed codes (1MAD / 3INST / HYB) to avoid exactly this gather.
+- Context: Fit12's B10a (10:2x) killed the 2-bit base on held-out quality (2.49x MSB-3; base + residual k = 2 at
+  0.66 E4, kill > 0.2). So this speed pass matters only for the remaining option, TRL-3 (3.07 b; down 0.69x MSB-3
+  held out). The k = 3 decode is not measured yet. Expected: about k = 2's cost with 3INST (the decode is ALU-bound;
+  the stream has 1.5x the bytes), so ~1.2-1.4x 3c-3. Measuring it needs the kernel generalised to k bits plus one
+  short lock.
+- The sweep's lone 3c arm read 6.73 us per pair among 54 trellis arms. bench and bench2 agree at 5.69-5.71, so that
+  value is an outlier from its context. The ratios use bench2.
+- Caveats:
+  - Random streams (the decode cost does not depend on the values).
+  - Per-pair kernels with no decode sharing across rows of the same expert (~2.3 rows per distinct expert at
+    S = 16). A grouped decode could cut the decode part by up to 2.3x, and the same holds for 3c.
+  - The test tiles are padded to 17 words (2.125 b, 1.313 MB per expert).
+
+## S11 estimate (NewIdeas 10:36; Leap, Sun 23:31 EET, CPU / analysis only): decode once per distinct expert in today's 3c
+- **Question:** how many ms per 16-row check would a decode shared by every row of a distinct expert save? The check
+  is truncated to 10.3 rows, top-10, 48 layers: P = 103 pairs and D = 53 distinct experts per layer (QUEUE base line),
+  so 1.94 pairs per expert. Compared against today's per-pair 3c and L1-30's per-expert kernel (11.1 us at 3-bit).
+- **Inputs** (layer 24, natural routing, B10(b) bench2): 3c-3 per pair 6.58 us at S = 4 (27.8 distinct) and 5.69 at
+  S = 16 (69.7 distinct).
+  - A linear fit gives 4.20 us per pair + 3.42 us per distinct expert, so 0.614 ms per layer at 10.3 rows. Today's
+    mix (4433333333) is ~0.66 ms.
+  - Memory: at S = 4, 3c reads its distinct bytes (60 MB) at 228 GB / s, already at the floor. At S = 16 it reads them
+    at only 165 GB / s, because it is ALU-bound on the pairs.
+- **3c's ALU split per weight** (tierglu_v3d.py kernel A): ~4.4 ops per weight per pair. About 3.2 of those are decode
+  (load, spread8 of 3-bit codes into nibbles, the qdot mask, the int-to-float conversion), which a group can share.
+  About 1.2 are per row (the FMA and the x handling).
+- **Grouped kernel, ALU:** 53 x 4.14 + 103 x 1.55 us = 0.38 ms per layer.
+- **Grouped kernel, memory floor:** 53 x 2.16 MB = 114.5 MB per layer. At 240 GB / s (L1-30b's measured read rate,
+  86 % of 280) that is 0.477 ms. So the grouped kernel is memory-bound at ~0.48-0.52 ms per layer.
+- **Estimate per 48-layer check at 10.3 rows:**
+
+| vs | today per layer | grouped per layer | saved per check |
+|---|---|---|---|
+| per-pair 3c, 3-bit | 0.614 ms | 0.48-0.52 | **4.5-6.4 ms (central ~5)** |
+| per-pair 3c, today's mix (+ LSB of ~17 rank-0/1 experts, +13 MB) | ~0.66 | 0.53-0.57 | 4.3-6.2 |
+| L1-30 per-expert MMA kernel (11.1-12 us x 53) | 0.59-0.64 | 0.48-0.52 | 3.4-7.7 |
+| bounds: L1-30-like 69 % of floor / 100 % of 280 GB / s | | 0.59 / 0.41 | ~1.2 / ~9.8 |
+
+  - At the full 16 rows (62 distinct, 160 pairs) the saving is larger: ~0.2-0.28 ms per layer, ~10-13 ms per check.
+  - At S = 4 the saving is ~0, because 3c already reads at the floor there.
+- **Verdict:** central ~5 ms per check, at NewIdeas' >= 5 line, so pre-register the kernel test (S11 below). The
+  estimate assumes the grouped kernel overlaps its ALU with memory; L1-30's MMA kernel did not at 3-bit (69 % of the
+  floor), so this is the risk.
+
+## S11 (Leap, pre-registered Sun 23:31 EET): grouped decode in 3c, bitwise equal to per-pair 3c
+- **Bet:** a copy of 3c's kernels A (gate + up + SwiGLU) and B (down + combine). One threadgroup serves one distinct
+  expert and all its pairs, up to RMAX rows per chunk.
+  - Each lane decodes its 16-value chunk once: integer spread, mask and int-to-float. It then runs 3c's exact per-pair
+    float sequence for each pair: qdot on the pre-scaled x, the same accumulation order, simd_sum, scale and bias.
+  - The grouping stays on the GPU with no host sync. Pairs are sorted by expert with a stable argsort. P threadgroups
+    launch; a threadgroup whose pair is not a chunk leader exits at once.
+- **Prior art:** grouped MoE GEMM is published (MegaBlocks; vLLM / SGLang fused_moe; MLX gather_qmm with sorted
+  indices; llama.cpp mul_mat_id). Untested here: a SIMD (non-MMA) grouped decode at ~2 rows per expert on Apple GPUs
+  that is bitwise equal to the per-pair kernel, so it is exact for spec decode with no reference change. Tag:
+  published, untested here.
+- **Test** (scripts/s11_grouped.py, one short lock):
+  - Bitwise check vs 3c for plans 3333333333, 4444444444 and 4433333333, at S = 4 / 8 / 16.
+  - Timing at layer 24, natural routing, S = 4, 8, 10, 11, 16, in interleaved paired rounds vs 3c.
+  - Report ms per layer, the read rate on distinct bytes, and saved ms per check = mean(S 10, 11) delta x 48.
+- **Kill:** not bitwise, or < 3 ms per check saved at 10.3 rows. **Pass:** >= 5 ms. Between: partial (NewIdeas' call).
+- **Prediction:** 3c ~0.61 ms per layer at 10-11 rows, grouped ~0.50, so ~5 ms per check (3.5-6). S = 16:
+  ~10-13 ms per check. S = 4: ~0.
+
+### S11 result (Sun 23:37 EET; quiet lock, ~30 s of GPU): KILLED. Bitwise exact, but the grouped decode is SLOWER
+- Bitwise: h, the per-rank y and the combined y are equal to per-pair 3c in every case (S = 1 / 4 / 8 / 16, 3 token
+  offsets, plans 3333333333 / 4444444444 / 4433333333, gm 2 / 4 / 8, both load paths). data/s11_test.txt.
+- Timing, layer 24, natural routing, interleaved rounds (data/s11_bench.txt, s11_diag.txt), ms per layer:
+
+| arm | S = 10 | S = 16 |
+|---|---|---|
+| 3c fused, 3333333333 | 0.597 | 0.911 |
+| 3c per-rank + a separate combine (grouped's tail) | 0.612 | 0.932 |
+| the sort kernel alone | 0.015 | 0.017 |
+| grouped, gm 1 (all the machinery, no sharing) | 0.673 | 1.023 |
+| grouped, gm 2 (best sharing arm) | 0.714 | 1.058 |
+| grouped, gm 4 / gm 8 | 0.955 / 1.848 | 1.346 / 2.666 |
+
+- Per 48-layer check at 10.3 rows, the best arm (gm 2) is 5.8 ms SLOWER on 3-bit and 6.5 ms slower on today's
+  4433333333. At 16 rows it is 7.4 / 8.2 ms slower. The kill is < 3 ms saved; this is a loss.
+- Why the estimate was wrong: it modelled 3c as ALU-bound on the decode (~73 % of 3.2 / 4.4 ops per weight). The
+  measurement says otherwise.
+  - Sharing the decode (gm 1 -> gm 2) ADDS 0.04 ms per layer, and every larger group costs more. The extra registers
+    per thread (one x chunk per member) cut occupancy, and 3c depends on occupancy to hide its code / scale read
+    latency. The ALU it saves does not pay for that.
+  - The machinery alone (sort, member scan, expert-sorted order, unfused combine) costs another +0.06-0.11 ms per
+    layer.
+- What it means for the 350 stack: 3c's ~5.7-6.6 us per pair is not reducible by sharing work between rows of one
+  expert in this design. Together with L1-30, this caps the expert term for a 16-row check at today's kernels, unless
+  a structurally different kernel appears; L1-30's per-expert MMA kernel ties per-pair 3c at 10.3 rows. Drop S11.
+
+## D32 (NewIdeas Sun 23:41; Leap, pre-registered Mon 03:09 EET): is the dense part of an exact check at 32 rows near its 16-row cost?
+- **Why:** block 32 at the oracle's 15.0 tokens per check cuts expert reads per token only ~4 % (par32: 100.5 vs 66.1
+  distinct experts per layer). Dense per token falls ~37 % IF the dense part at 32 rows costs about what it does at 16.
+  NewIdeas: this is the number that decides block 32 for 350.
+- **Test** (scripts/d32.py, ~3-5 min of GPU, one quiet lock after the silent night):
+  - All 17 dense shapes at their per-check counts (incl. the 8-bit router and indexer); random weights, cold.
+  - 16 rows: today's exact paths (qmm16n native layout, bmm16, MLX forms a / b / c).
+  - 32 rows:
+    - two 16-row calls;
+    - one launch with the two row tiles in adjacent threadgroups (weights read from DRAM once, unpacked twice);
+    - one simdgroup doing both row tiles of its 32 columns (weights read and unpacked once, two MMAs per step);
+    - MLX's own 32-row call.
+  - Bitwise: each 32-row path, per row, equals the 16-row path (same K split), and real rows are independent of the
+    padding. Paths that fail are timed for information only.
+  - Interleaved paired rounds (8 x median of 5), PAUSE-aware.
+- **Prior art:** batch-invariant kernels (Thinking Machines 2025; SGLang deterministic mode); multi-row register tiles
+  are standard GEMM practice. The measurement for this model's exact check at 32 rows is ours.
+- **Prediction:**
+  - 16 rows ~19-20 ms (with the 8-bit router / indexer).
+  - 32 rows ~25 ms: big 4-bit shapes x1.3-1.5 (one unpack, two MMAs and x loads), bf16 mixers x1.2-1.4, launch-bound
+    small shapes x1.0-1.2. So R = 32-row / 16-row ~1.3-1.4.
+  - Dense per token at the oracle's 15.0 tokens: -13 to -19 %. At L1-20's trained block-32 drafter (10.51): +16 to +25 %.
+- **Lines:** PASS (dense stays near its 16-row cost) R <= 1.25. KILL R >= 1.60 (no dense gain per token even at the
+  oracle's 15.0 tokens). Between: alive, and R goes into the stack pricing.
+- **Result (Mon 10:02; 41 s of GPU; data/d32.txt, d32.json): PASS by a hair, R = 1.24.** Dense per check: 16 rows 17.96
+  ms, 32 rows 22.19 ms (bandwidth floor 12.3; two 16-row calls would be 29.6 ms, R 1.65).
+  - Bitwise: both 32-row kernels (one simdgroup doing both row tiles 'mr2', adjacent threadgroups 'mg2') equal the
+    16-row path per row at every K split tried, padding-independent. MLX's own 32-row call equals 2 x 16 for bf16 and
+    for the big 4-bit shapes, but not for 4-bit with small N (shared expert, k/v, in_proj_a/b) or the 8-bit router /
+    indexer: those stay 2 x 16 MLX calls.
+  - Where the extra 4.23 ms goes:
+    - Big 4-bit projections (qkv, o/out, z, q, lm_head, shared gate/up): +2.84 ms. mr2 wins everywhere, at 56-67 % of
+      the floor vs 75-85 % for the 16-row kernels: one unpack, then two MMAs and two per-group epilogues makes it
+      ALU-bound.
+    - 8-bit router + indexer and the small MLX-only shapes: +1.04 ms (router 0.98 -> 1.66 ms) for want of an exact
+      32-row call.
+    - bf16 HC mixers, PLE, block_inject: +0.25 ms. They are bandwidth-bound, so the second row tile is almost free
+      (x1.01-1.06).
+  - Per token: block 16 at 9.38 tokens = 1.91 ms of dense per token. Block 32 breaks even on dense at 11.6 tokens per
+    check; at the oracle's 15.0 it is -23 %, at L1-20's 10.51 it is +10 %. Experts break even later: 100.5 vs 66.1
+    distinct experts per layer means ~14.3 tokens per check. So block 32 pays only with a drafter at ~12-14+ tokens
+    (L1-20: 10.5). That is DS's question.
+  - vs prediction: R 1.3-1.4 predicted, 1.24 measured. 16 rows came in at 17.96 ms, not 19-20 (the 8-bit router and
+    indexer are cheaper than I guessed). The 4-bit shapes were as predicted (x1.27-1.36). I was wrong on the bf16 mixers
+    (predicted x1.2-1.4, got x1.02-1.06).
+  - Untested levers that would lower R further:
+    - an exact 8-bit MMA kernel for the router + indexer (MLX runs them at 20-24 % of the floor): ~-1.3 ms at 32 rows,
+      ~-0.7 ms at 16 rows. The engine's 16-row decode path would have to use it too.
+    - a 32-row 4-bit kernel nearer the 16-row kernels' ~80 % of the floor: up to ~-2 ms.
+    - Together R ~1.05-1.10.
+
+## DS (NewIdeas Mon 03:27; Leap, pre-registered Mon 03:33 EET): is DFlash2's depth decay a data problem?
+- **Why:** NewIdeas' 350-at-45-GB arithmetic. With the non-exact stack (top-8, TRL 2.73 b, dense diet), 350 needs ~14
+  tokens per 16-row check or ~17-19 per 32-row check on code (cand21's bytes-only pricing: ~17.5 at 32 rows). L1-20
+  gets 10.2-10.5, its lattice oracle 20.3, a perfect drafter 30.5. L1-20's held-out-prompt validation was still rising
+  from step 100 to 200 (selector agreement d16 0.59 -> 0.66, d31 0.33 -> 0.38), with the loss still falling.
+- **Test** (ds_batch.sh under run_locked.sh; scripts/ds_report.py):
+  - Data: a stratified random half of L1-20's 99 train windows (36 / 72 code, 14 / 27 math, seed 50; 11.3K of 22.6K
+    train tokens; 201 of 401 groups), the same 10 val windows. data/ds50 holds symlinks, so the trainer is L1-20's code
+    unchanged (ada5b1f).
+  - Arm B = 50 % at 201 steps (4 epochs; L1-20's step count), ~28 min.
+  - Arm A = 50 % at 101 steps (2 epochs; L1-20's epoch count), ~14 min, run only if s_fix < 1.12.
+    - It separates data from compute: L1-20 was still improving with steps, so a flat s_fix alone could mean
+      compute-limited.
+  - Scoring: L1-20's replay on the 24 held-out HumanEval samples (disjoint from the training problems), per sample.
+    Modes: block 32 1-step and 2-step tail 0.9 (fixed, not re-tuned), block 16 1-step. L1-20 is re-scored the same
+    way.
+  - Primary T = the better block-32 mode per drafter.
+  - s_fix = T(L1-20) / T(B); s_prop = T(L1-20) / T(A); c50 = T(B) / T(A). 90 % paired bootstrap CIs over the samples
+    (sample noise only).
+  - Each arm's weights (1.1 GB) are deleted once scored (disk at the floor).
+- **Prior art:** drafter data / compute scaling (EAGLE-3's scaling with training data; DFlash's own training; DBloom
+  2608.30427 block-size post-training). Ours: the slope for a near-deterministic MoE target at block 32.
+- **Lines** (NewIdeas', plus the compute check):
+  - GO (4x on-policy windows, ~3 h of 125B time): s_fix >= 1.12.
+  - KILL (data-flat): s_fix < 1.05 AND c50 < 1.05.
+  - s_fix < 1.05 with c50 >= 1.05: compute-limited, so next is 100 % at 402 steps (~56 min, no new data).
+  - Between: one 2x-data point decides.
+- **Prediction:** s_fix 1.02-1.06 (B ~9.7-10.0 vs L1-20's 10.23 at block 32 1-step); s_prop 1.04-1.08. So the kill zone
+  or just between, unless compute moves. 25 % GO.
+- **Result (Mon 10:43-11:26; data/ds_report.txt, ds_l120 / ds_B / ds_A .json): data-flat; compute moves ~5 % per
+  doubling. By the lines that is 'compute-limited', so DS2 is next. No new 125B data (GO needed s_fix >= 1.12).**
+  - Tokens per pass on the 24 held-out samples (block 32 1-step / 2-step tail 0.9 / block 16 1-step):
+
+    | drafter | data | steps | b32 1-step | b32 tail 0.9 | b16 1-step |
+    |---|---|---|---|---|---|
+    | L1-20 | 100 % | 201 | 10.23 | 10.51 | 9.54 |
+    | B | 50 % | 201 | 10.13 | 10.38 | 9.67 |
+    | A | 50 % | 101 | 9.86 | 9.85 | 9.30 |
+
+  - s_fix = 1.013 (90 % CI 0.990-1.035): doubling the data at fixed steps buys ~1 %.
+  - c50 = 1.052 (CI 1.025-1.080; per mode 1-step 1.027, tail 1.054): doubling the steps at 50 % data buys ~5 %. This
+    is just over the 1.05 line.
+  - s_prop = 1.066 (CI 1.036-1.096): double data and steps together buy ~7 %, nearly all of it from the steps.
+  - Held-out-prompt val agrees (selector agreement at depth 16 / 31): L1-20 0.63 / 0.38, B 0.61 / 0.38, A 0.62 / 0.35.
+  - vs prediction: s_fix 1.02-1.06 predicted, got 1.013 (just below); s_prop 1.04-1.08 predicted, got 1.066.
+  - For 350: block 32 needs ~17-19 tokens per check, and more now that D32 put dense at 22.2 ms. That is +65-80 % over
+    10.5. More on-policy data is off the table. At ~5 % per doubling of steps, training this recipe harder is out of
+    reach (~10 doublings); only a much steeper compute slope at full data would reopen it (DS2).
+  - Run 1 (10:14) was stopped at step 85 because its own 10-minute checkpoint took the disk to 99 GB (health ACT). The
+    rerun trained from scratch, with weights on a RAM disk.
+
+## DS2 (Leap, pre-registered Mon 11:30 EET; DS's pre-registered next step): the compute slope at 100 % data
+- **Why:** DS found the drafter data-flat with a small compute slope at 50 % data (c50 1.052, at the line). Before
+  closing 'train the drafter harder' for 350, measure the slope where it would be used: on all the data.
+- **Test** (ds2_batch.sh under run_locked.sh; ds_report.py):
+  - Arm C = L1-20's recipe on 100 % of its windows (data/l120) at 401 steps (--epochs 4; L1-20 = 201 steps).
+  - Same trainer, weights on the RAM disk, scored like DS.
+  - c100 = T(C) / T(L1-20), primary modes, 90 % paired bootstrap CI.
+  - ~57 min of GPU, peak ~34 GB. Ticket marked [low] so it runs in a gap.
+- **Lines:** reaching ~17.5 tokens needs +67 % over 10.5.
+  - ALIVE (price a long run; at 1.12 per doubling that is ~4.5 more doublings, ~23x the steps): c100 >= 1.12.
+  - KILL (training this drafter harder cannot reach it: >= 7 doublings at < 1.07): c100 < 1.07.
+  - Between: one more doubling (801 steps, ~2 h) decides.
+- **Prediction:** c100 1.03-1.07 (T ~10.8-11.2). DS showed four passes over the data cost nothing vs two, so full data
+  should not steepen the slope much. 70 % KILL, 10 % ALIVE.
+- **Result (Mon 11:30-12:25; 52 min of training; data/ds_report.txt, ds_C.json, ds_C.state.json): KILL, c100 = 1.005
+  (90 % CI 0.980-1.035).**
+  - C (100 %, 401 steps): block 32 1-step 10.53, tail 0.9 10.57, block 16 1-step 9.62. L1-20 (201 steps): 10.23 /
+    10.51 / 9.54.
+  - Per mode: 1-step 1.030, tail 1.005, block 16 1.009.
+  - Held-out-prompt val plateaus after ~200 steps while the training loss keeps falling. Selector agreement d16 / d31:
+    step 200 0.62 / 0.38, step 300 0.65 / 0.39, step 400 0.64 / 0.38.
+  - vs prediction: 1.03-1.07 predicted, 1.005 measured (below the range).
+- **DS + DS2 together:** this drafter recipe (DFlash2 < 1B, block 32, partial masking) saturates at ~10.5 tokens per
+  32-row check on code.
+  - Twice the on-policy data: +1 %. Twice the steps: +0.5 % at full data, +5 % at half.
+  - Neither more data nor more training reaches the ~17-19 that 350 at 45 GB needs. The plateau looks structural (what
+    the drafter can see and how it drafts deep positions), not budget.
+  - So the drafter crux needs a different drafter or a different verify shape (NewIdeas' NT-1: the target's top-k at
+    the first misses; lattice oracle 20.3). The other route is a behavior change (L1-32 parallel streams, Kamen's call).
+
+## CA (NewIdeas Mon 13:46, QUEUE row CA; Leap, pre-registered Mon 14:05 EET): anatomy of one exact resident check
+- **Why:** NewIdeas' repricing (QUEUE '! REPRICED', data/price350.txt) puts 'other' (attention, GDN core, routing, glue)
+  at an assumed 10-20 ms of a 16-row check. Nobody has measured it. It sets the check's floor and ranks the check levers.
+- **Test** (ca_batch.sh -> scripts/ca_anat.py, ca_report.py; one quiet lock, ~10-15 min):
+  - A resident 12-layer slice of the 125B (layers 0-11: 9 GDN incl. the one PLE layer + 3 QSA; the model is GGGA x 12),
+    as B5, through MTPLX's own forward under the engine's verify scopes, exact mode.
+  - Each check does the engine's bookkeeping: a lazy pre-verify snapshot, the verify forward with capture, the greedy
+    acceptance read (argmax .tolist(), the engine's sync), and a capture-commit of a partial accept (keep 7 / 10 / 11 at
+    8 / 16 / 32 rows, ~ tokens per check). Its lazy replay lands in the next check, as in the engine.
+  - Real code tokens after a 1K or 8K-token prefill; 8 / 16 / 32 rows; 10 checks after 3 warm-up per config. The PLE
+    n-gram table stays file-backed (no 21.6 GB pre-read), as it would at 45 GB.
+  - time: A = eager, as the engine runs 16 rows; B = async_eval every 4 layers (B5). Wall per check. Plus the DFlash2
+    1-step draft at block 16 / 32.
+  - prof, under a Metal System Trace, with MLX's command buffers ending only where the script evaluates:
+    - B2 = B, for the end-to-end GPU busy.
+    - P = one command buffer per part, labelled in order. Parts: every quantized matmul, the MoE's routing sort /
+      expert kernels / unsort, the HC reads and writes, PLE, the head, the commit replay, the acceptance read, and the
+      ops between hooked calls in the attention / GDN / MoE modules (attention core incl. the indexer, GDN core,
+      routing, combine).
+    - The report matches the trace's buffers to the labels by order and count, and scales the slice to 48 layers (x4;
+      the PLE layer, embedding, head and acceptance read x1).
+- **Validity lines (a measurement, no kill line):**
+  - P's tokens must equal A's, and every commit must land (smoke).
+  - The parts must sum to B2's GPU busy within 5 %, after subtracting P's extra buffers at the marker-only floor.
+    Otherwise the parts are reported as shares of B2's busy time.
+- **Prior art:** command-buffer timing from Metal System Trace (standard); MTPLX's own roofline profiler (queued
+  per-component benches, another model family); B5 here (GPU idle of the eager check). The anatomy of this model's exact
+  check is ours.
+- **Prediction** (16 rows, 1K context, 48 layers, today's MTPLX kernels: 4-bit experts at top-10, MLX's quantized
+  matmuls):
+  - GPU busy ~115-130 ms (B5: 31.9 ms per slice, x4 with the head counted 4 times).
+  - Experts 45-55 ms; dense matmuls 20-25 ms; HC mixers 2-3 ms; head ~2.5 ms.
+  - 'other' on the GPU 15-25 ms: GDN core 8-14, attention core incl. indexer 3-6, routing + combine 3-6, commit replay
+    1-3.
+  - Glue: A's GPU idle ~20 ms (B5: 21), B's ~3-4.
+  - So NewIdeas' 'other 10-20 ms' is about right for the GPU side, and the eager engine adds ~20 ms of glue on top.
+  - 8K context: attention core +2-5 ms. 32 rows: 'other' x1.3-1.6 (the GDN recurrence runs row by row).
+  - Drafting 3.5-5 ms at block 16, 4-6 ms at block 32 (the selector's per-position loop is Python).
+- **Interim result (Mon 14:18; data/ca_time.txt, ca_draft.txt, ca_smoke.log): end-to-end and drafting measured; the
+  per-part split is NOT yet measured.**
+  - Smoke passed: P's tokens equal A's, every capture-commit landed, 404 parts per 12-layer check.
+  - Per 12-layer check (9 GDN + 3 QSA; exact; MTPLX's kernels, 4-bit experts at top-10), median of 10:
+
+    | context | rows | A eager (the engine) | B async every 4 layers |
+    |---|---|---|---|
+    | 1K | 8 | 25.40 | 22.91 |
+    | 1K | 16 | 38.87 | 36.27 |
+    | 1K | 32 | 49.65 | 51.27 |
+    | 8K | 8 | 25.70 | 23.65 |
+    | 8K | 16 | 40.28 | 39.02 |
+    | 8K | 32 | 52.80 | 56.74 |
+
+    - x4, less ~3 x 3-5 ms for the once-per-check parts (embedding, head, PLE, acceptance read): the engine's exact
+      resident 16-row check is ~141-147 ms eager and ~130-136 ms overlapped. That is twice price350's 'today's
+      kernels' 68.5 ms, which used D32's exact dense kernels and L1-30c's expert kernels (top-8, ~2.7 b), not MTPLX's.
+    - 8K context adds ~1.4-2.8 ms per slice at 16 rows (~0.5-0.9 ms per QSA layer). B is no faster than A at 32 rows.
+  - **Drafting costs ~3.6x what price350 assumed.** DFlash2's 1-step draft (L1-20 weights, bf16, refine19's path):
+
+    | block | drafter forward (5 layers) | head (4-bit, 248K vocab) + top-16 | selector chain | all, one sync |
+    |---|---|---|---|---|
+    | 16 | 7.46 ms | 4.46 ms | 0.83 ms | 12.52 ms |
+    | 32 | 7.33 ms | 6.84 ms | 1.63 ms | 15.45 ms |
+
+    - The forward reads ~1.1 GB of bf16 layers (~4.4 ms at 250 GB/s), and the head ~0.36 GB (~1.4 ms). An 8-bit
+      drafter plus a fused head top-k would be ~4-5 ms. At today's 12.5 ms, price350's 16-row floor (34.3 ms with
+      3.5 ms of drafting) becomes ~43 ms, so 350 would need ~15 tokens per check, about a perfect drafter.
+  - **Why the per-part split failed twice:** the Metal trace (run 1 14:07, run 2 14:16) was stopped both times by the
+    health monitor at ACT (disk < 100 GB). xctrace streams GPU counters to the per-user temp dir at ~120 MB/s (4.7-4.8
+    GB of xrgpu_aps files + a 1.5 GB kernel trace in 40 s), whatever --output says, even with only the GPU
+    instrument. My 3 s test missed it because xctrace deletes them on a normal exit. Deleted both times.
+- **Result, run 3 (Mon 19:04; 1 min of GPU, no trace; ca3_batch.sh -> ca_anat.py diff; data/ca_diff.txt, ca_diff.json,
+  ca_diff_report.txt): measured. 'Other' is ~45-65 ms at 16 rows, not 10-20, and hyper-connections (HC) alone cost
+  31-34 ms.**
+  - Method (knockouts, replacing the planned duplicates). One prefill per config, then rounds of checks cycling
+    through variants:
+    - A = the engine's eager path; D = my async-every-4-layers loop; one variant per part class; 'all' = every class
+      knocked out; L0 = no layers.
+    - A knocked-out call still builds its graph but returns its own output from an earlier check. Its GPU work is
+      pruned, and its inputs are kept alive.
+    - Class time = the paired wall D - D-class, 6 rounds after 1 warm-up. D is GPU-bound: with every class knocked
+      out, the same Python graph build runs in under 6 ms of a 35 ms check.
+    - Walls exclude each check's PLE n-gram staging, which is CPU time from the file-backed table before any GPU
+      work. Including it doubled the paired noise; it is reported as its own row.
+  - Per exact resident 16-row check, 48 layers (12-layer slice; per-layer parts x4; embedding / head / acceptance
+    read once). MTPLX's kernels, 4-bit experts at top-10. Paired sd per class: 0.6 ms (1K), 1.2 ms (8K) per 12 layers.
+
+    | part | 1K | 8K | note |
+    |---|---|---|---|
+    | routed experts (MLX sorted gather_qmm) | 58.7 | 56.8 | 1.22 ms / layer, as L1-24's microbench (1.21-1.26) |
+    | HC reads + writes | 31.0 | 33.9 | eager at 16 rows, ~11 kernels per read; bf16 mixer matmuls ~12.7 of it (kern23) |
+    | GDN projections | 16.8 | 19.1 | kern23's MLX 16-row shapes: ~15 |
+    | QSA module (projections, indexer, core, KV writes) | 7.3 | 19.2 | its projections 2.5-5.3; core ~2 at 1K, ~17 at 8K |
+    | router + shared expert | 4.3 | 1.2 | within noise (+-2.5) |
+    | GDN recurrence kernel | 3.5 | 4.2 | |
+    | expert sort / unsort | 3.2 | 0.7 | within noise |
+    | PLE layer | ~0 | ~0 | |
+    | once: embedding, head (1.4-2.1), acceptance read, sync | 2.8 | 2.7 | |
+    | residual: norms, GDN conv / gating, softmax / top-k, combine, gates | ~0 (0-9) | ~0 (0-9) | 'all' leaves ~7-9 ms |
+    | **verify forward, async (D)** | **127.1** | **134.7** | parts sum 127.0 / 137.9 (0.0 % / +2.4 %) |
+    | engine's eager forward (A) | 132.9 | 140.6 | eager glue +5.8 / +5.9 |
+    | commit replay, timed on its own | 9.7 | 9.1 | GDN recurrence over the kept rows + the PLE layer |
+    | PLE n-gram staging (CPU) | 0.75 | 0.72 | 3.1-3.5 at 8 rows |
+    | **check, engine path (A + commit + staging)** | **143.4** | **150.4** | **+ drafting 12.5 = 156-163 ms per ~10 tokens: ~64 tok/s, today's figure** |
+
+  - 8 rows: engine check 88.9 ms (1K), HC 13.2 (MTPLX's fused 3-kernel HC read serves 2-8 rows). 32 rows: 215 ms,
+    experts 103. At today's kernels, block 8 (~6.9 tokens) and block 16 (~10) give the same tok/s.
+  - Validity: every commit landed in every variant. The parts sum to D within 0.0 % / 2.4 % (lines: 5 %). Knocking out
+    everything leaves ~7-9 ms of small ops that the per-class knockouts give to their neighbours, so each class carries
+    up to ~1 ms of nearby small-op latency. The 32-row configs are noisier (sd 1.4 ms; 1K residual 16 ms).
+  - vs prediction:
+    - Total: GPU ~115-130 predicted, 127-135 measured. Experts 45-55 predicted, 57-59 measured.
+    - Wrong on HC: 2-3 ms predicted, 31-34 measured. I priced HC from the fused 1-8-row read; at 16 rows the engine
+      runs the eager chain.
+    - Wrong on the GDN core: 8-14 predicted, 3.5-4.2 measured (plus the commit replay, ~9).
+    - Attention at 8K: +2-5 predicted, +12 measured.
+    - Glue: ~20 predicted, 5.8 measured. Most of B5's 'idle' was GPU work on the HC chain.
+  - **For price350, today's 16-row check splits as follows (1K / 8K):**
+    - Matmuls in situ ~40 ms: GDN 16.8, QSA 5.3, router + shared 4.3, HC mixers ~12.7, head ~1.4. D32's exact kernels
+      did the same set in 18.0.
+    - Experts 58.7 (price350 used 26.2: L1-30c, top-8).
+    - Other ~45-50 / ~60-65: HC elementwise ~18, commit 9.7, attention core ~2 / ~17, glue 5.8, GDN recurrence ~4,
+      sort / unsort ~2, small ops 0-9, once ~1.4, staging 0.75.
+    - So price350's 'other 20' is ~2.5-3x short. NewIdeas' rule: >= 15 ms means glue / HC / attention come first.
+  - **Check levers, ranked (ms per 16-row check, 48 layers; exactness is each lever's own question):**
+    1. HC: 31 -> ~6-8 with a fused 16-row read and write. The bf16 mixer bytes are 1.27 GB per check (floor ~4.5 ms).
+       MTPLX already has a bit-exact 3-kernel read for 2-8 rows, but only in the compiled lane. A 16-row version is
+       bitwise only if it repeats MLX's 16-row bf16 GEMM arithmetic. **-23 to -25.**
+    2. Experts: 58.7 -> 33-37 with L1-25 / L1-27's NAX kernels. They are batch-invariant but not bitwise vs MLX, so
+       they change the reference (Kamen's call). **-22 to -26.**
+    3. Matmuls: ~40 -> ~18 (D32's qmm16c / mr2; MLX's 16-row call is padding-independent; the same reference
+       question). **~-22.**
+    4. Attention core at long context: ~17 at 8K. Context-dependent: **~-10 at 8K.**
+    5. Commit replay: 9.7. Most of it is a second pass of the GDN recurrence + the PLE layer over the kept rows.
+    6. Drafting: 12.5 (DR / FR-Spec screens, R-06 / R-07). **-7 to -9.**
+    7. Eager glue: 5.8 (async every 4 layers). **-6.**
+    - All together: ~156 -> ~55-60 ms, ~2.7x. 350 at 12-14 tokens needs ~34-40 ms, so the check stays ~1.5x short even
+      with every measured lever.
+
+## SD (NewIdeas Mon 12:30, QUEUE row SD; Leap, Mon 14:20 EET): structurally different drafters and verify shapes
+- **The need** (NewIdeas' repricing, 13:46): with the check near its floor, 350 needs 12.0-13.7 tokens per 16-row check
+  (+26-43 % over L1-20's 9.54; lattice oracle 14.1, perfect 15.6) or 15.5-17.6 per 32-row check. Block 16 wins at every
+  kernel level, and a design's own drafting ms counts against it.
+- **What our own data already says.** NT-1's replay of L1-20 (block 32) gives the hit rate at each depth, given hits
+  before it: 0.94 0.92 0.90 0.93 0.95 0.93 0.93 0.94 0.95 0.91 0.91 0.89 0.87 0.87 0.88 (depths 1-15).
+  - These rebuild L1-20's block-16 figure: 1 + the sum of the running products = 9.53 (measured 9.54).
+  - With no depth decay at all (the shallow rate ~0.93 held at every depth) block 16 gives (1 - 0.93^16) / 0.07 =
+    9.81, only +3 %.
+  - So at block 16 the gap is per-token quality, not depth. 12.0 needs a flat 0.96 per token, 13.7 a flat 0.98. The
+    near-copy (the 125B with 10 % of its experts, Chat1000) holds 0.983 and gives 13.4.
+  - Families whose gain is depth robustness (AR drafters, semi-AR, exposure-bias fixes) can add at most ~+3-5 % at
+    block 16. At block 32 depth matters more (a flat 0.93 gives 12.9, +26 %), but block 32 loses to block 16 anyway.
+- **Families** (code / HumanEval, temperature 0; published gains are over a parallel-block baseline):
+
+  | family | published | here | drafting cost per check | ceiling at block 16 | verdict |
+  |---|---|---|---|---|---|
+  | (i) AR drafters: EAGLE-3 training-time test, HASS, GRIFFIN | DFlash beats EAGLE-3 in tokens per check (2602.06036; AdaFlash 2607.19223 Table 4, Qwen3-4B HE: 4.59 vs 3.34). EAGLE-3 HE 6.52-6.74 with trees (~0.92-0.93 per token, inflated by the tree); EAGLE chained 0.76 per token on HE (Falcon's table); the 122B card's native MTP 7.68 at 15 steps (~0.89) | DFlash2 already holds ~0.93 at shallow depths | 15 sequential steps: native MTP 2.2 ms each (+33 ms); a 1-layer 4-bit drafter in a native loop >= ~0.3 ms (+4.5 ms) | 9.81 (+3 %) if it matched 0.93 flat | dead (our data + arithmetic) |
+  | (i) AR tails / causal correction in the block: Domino, DSpark's Markov head, xPress, DARTree, H-Spec | over vanilla DFlash on HE: Markov head +20 %, xPress +27 % (2608.02438: 6.44 -> 7.76 -> 8.15), i.e. +5 % over a Markov head; Domino +7 % (2608.13524) | DFlash2 has the first-order (Markov) selector already; L1-21's picker +1 % | ~0 (xPress: ~6 Jacobi passes of a low-rank mixer) | ~+5 % | dead for 350 (+1-5 %) |
+  | (i) semi-AR / PARD-style: Falcon, PARD, PARD-2, Gumiho | same class as DFlash: PARD-2 HE 9.19 at k 16 (Llama-3.1-8B, ~0.915 per token); Falcon HE 0.80 vs EAGLE 0.76 per token | re-drafting the tail after the drafter's confident prefix: +3 % at block 32, 0 at block 16 (L1-20) | +3.5 ms per extra drafter pass | ~+3 % | dead |
+  | (ii) selectors stronger than first order over the lattice | LiLiCorr level with DFlash2's selector on HE (2608.20530); Domino / DSpark +1 % at best; xPress +5 % | L1-21: +1 % (12 M picker, plateaued at once) | ~0-1 ms | ~+5 % | dead |
+  | (iii) exposure bias / on-policy | AdaFlash OPD: in-domain +26 % over off-the-shelf DFlash on code, cross-domain +4-5 %; acceptance-aware losses (2606.11552: position weights, a first-error focal loss and a chain loss) +21-76 % over a POSITION-UNIFORM baseline, no extra forward | a one-pass drafter never conditions on its own drafts, so on the accepted path there is no exposure bias; our fine-tunes on the 125B's own outputs took the domain gain (+7-11 %); DS: 2x on-policy data +1 %. Our trainer IS position-uniform: untested here | 0 | +3-8 % (moving accuracy to shallow depths: a +0.01 rise at depths 1-8 is worth +5 %) | the one free untested lever: SD1 below |
+  | (iv) capacity: bigger drafters | DFlash Table 6, 3 / 5 / 8 layers: Math500 5.64 / 5.99 / 6.33 tokens, speedup 4.69 / 4.71 / 4.64x (flat); MT-Bench 3.37 (5) vs 3.50 (8). Scylla (2505.07858): log-linear in draft capacity to 10 layers | the shrink test NewIdeas proposed is answered by prior art: 3 layers = 0.94x of 5, at the 0.95 line | ~linear in layers (3.5 ms at 5) | +6 % per 1.6x layers; a flat 0.96 needs ~4-5 doublings (~60-110 ms of drafting) | dead (net ~0) |
+  | (v) verify shapes: trees | DDTree (2604.12989, best-first over DFlash's marginals): HE 6.62 -> 9.44 (+43 %) at its best budget (256-512 nodes, datacenter GPUs), +33 % at 64 nodes; DARTree (Domino head + tree, 64 nodes): +51 % | L1-22: a 16-row tree (15 nodes) 10.43 vs the chain's 9.54 (+9 %); 32-row tree at block 32 12.14 | ~0; but every row costs expert bytes (union ~rows^0.6-0.72), and the 36 GDN layers need a tree-aware verify (unbuilt) | 10.43 at 16 rows: 304 tok/s at NewIdeas' floor vs the chain's 278 | best exact lever measured: +9 % |
+  | extra: retrieval / copy drafts merged into the tree | Draft Less, Retrieve More (2605.20104); SuffixDecoding 7.82 tokens per step on SWE-bench agent traces | NewIdeas' F lever covers agentic copying | ~0 | small on fresh code; large on agentic edits | not ranked here |
+
+- **Ranked for 350 at block 16:**
+  1. Trees at 16 rows: +9 %, measured (L1-22). Needs a tree-aware GDN verify.
+  2. An acceptance-aware loss: +3-8 % expected, free at inference, untested here (SD1).
+  3. NT-1's lossy acceptance (NewIdeas; non-exact, Kamen's call): +10-21 % (MOD) / +1-2 % (LB).
+  4. A causal refiner over the selector (xPress): <= +5 %; L1-21 says ~+1 %.
+  5. Capacity: net ~0. AR drafters and semi-AR: net negative at block 16.
+- **Stacked:** the exact levers (1 x 2 x 4) give ~+12-24 %, so 10.7-11.8 tokens per 16-row check. That is ~310-345
+  tok/s at NewIdeas' floor (2-11 % short of 12.0) and ~275-300 at 90 % kernels (14-22 % short of 13.7). With NT-1 on
+  top, 350 at the floor becomes reachable; at 90 % kernels it stays marginal.
+- **Conclusion:** no published drafter family delivers the +26-43 % at block 16. Below 1B parameters the per-token
+  quality sits at ~0.93; 13.7 needs ~0.98, which only target-class models reach (the near-copy). So the drafter half
+  cannot close 350 alone. The check half (CA) has to carry most of the rest, with NT-1 (non-exact) as the swing.
+
+## SD1 (Leap, pre-registered Mon 14:20 EET; SD's one test, waits for NewIdeas' GO): an acceptance-aware loss at block 16
+- **Bet:** the trainer weights every depth equally. Accepted length rewards shallow depths far more: at block 16 the
+  gradient of the expected length with respect to the log-probability at depth j is R_j = the sum of the running hit
+  products from j on (~8.5 at depth 1, ~3.3 at depth 8, ~0.3 at depth 15). Weighting each depth's loss by R_j (stop
+  gradient; the chain loss of 2606.11552) moves capacity to where it pays.
+- **Test** (~50 min of GPU, no new 125B data; the trainer gains one flag):
+  - Arm U: L1-20's recipe at block 16 (--bs 16, 2 epochs = 201 steps on data/l120, no partial masking), uniform weights.
+  - Arm W: the same, each depth's loss weighted by its R_j from the drafter's own probability of the true token.
+  - Both scored with the replay on the 24 held-out HumanEval samples at block 16 (1-step), per sample.
+- **Lines:** W / U >= 1.10 (90 % CI above 1.03): PASS, stack it (free at inference). W / U < 1.05: KILL, the plateau is
+  not a loss-weighting artifact. Between: keep it as a +5-10 % stackable lever.
+- **Prediction:** W / U 1.03-1.08 (U ~9.6-9.9). 60 % between or kill, 15 % pass.
+
+## L1-33 (NewIdeas' queue, MoonShots' idea; taken by Leap Sun 04:12 EET, PARKED 04:13 behind B1 and B5): screened argmax-only lm_head
+- **Idea:** a low-bit screen of the 4-bit head (248320 x 2560) plus a provable per-row bound. Read exact 4-bit rows only
+  for tokens the bound can't exclude, so the greedy argmax stays provably identical.
+- **Prize:** at most ~1.1 ms per check (the head's 16-row qmm is ~2.2 ms), ~1.4 %.
+- **Kill line (the queue's):** exact rows > 25 % of the vocab at the median position, or screen + exact reads > 50 % of
+  the head's 16-row time (1.1 ms).
+- **Prior:**
+  - MoonShots' 2B proxy (real hidden states, bf16 head) found that 2- and 3-bit screens with a provable bound rule out
+    nothing.
+  - Arithmetic: the group-L1 bound is ~err x ||h||_1, i.e. (L1/L2 of h) x 0.2 (3-bit) or 0.6 (2-bit) logit standard
+    deviations wide; L1/L2 is ~40 for a flat h. A 3-bit screen alone reads 78 % of the head's bytes (over the time
+    line). A 2-bit screen (56 %) would need >= ~80 % of the rows excluded.
+  - Prediction: dead unless the 125B's final hidden states are spiky (L1/L2 <~ 10).
+- **Cheapest decisive test:**
+  - (1) h33_extract.py: capture the 125B's real final hidden states (the head's input) on 4 public HumanEval windows,
+    one streamed prefill at C 96 (GPU ~3-5 min).
+  - (2) screen33.py, CPU: exact logits from the real 4-bit head; MSB-3 / MSB-2 screens with the group-L1 bound;
+    candidates per position (median / p90); L1/L2 of h.
+
+## Where an exact 16-row check stands (Leap, updated Sun 03:20 EET after L1-23..L1-32; measured where marked)
+| part (16 rows, resident, top-8) | ms | basis |
+|---|---|---|
+| routed experts, 62 distinct per layer x 48 | 4-bit ~35, 3-bit ~33, 2-bit ~25 | measured per expert at 16 rows: 11.9 / 11.1 / 8.5 us (L1-30, L1-30c K-paired) |
+| dense layers (full dense 3.44 GB; ~2/3 with the diet) | ~18 | measured: L1-23 + bf16 forms + native layout + L1-29 |
+| GDN core (prework, recurrence, gated norm) + capture-commit replay | 6.2 | measured (L1-31; floor 0.97) |
+| attention core + indexer, HC elementwise, routing, misc | ~6-9 | estimated |
+| check edges, sync, Python (pass edges 8.7 ms at 4 rows) | ~9-10 | Fit12; mend (c): ~3,000 ops x 3.1-3.4 us eager |
+| drafting (DFlash2) | ~3.5 | |
+| **total at 3-bit experts** | **~77-82** | **-> ~115-125 tok/s at 9.5 tokens per check** |
+
+- Today's real engine: 53.5 tok/s (RES3, MTP, C_m 448).
+- Kernel status: matmuls at 64-88 % of their byte floors. Below 4 bits the per-expert cost stops following bytes
+  (L1-30: 2-bit x1.38, 3-bit x1.08 vs 4-bit). Each remaining kernel item is <= ~5 % of the check (GDN fusion ~3-4 ms,
+  exact grid ~1 %). The exception is the per-check dispatch / Python (~7-8 ms), which needs engine work: a compiled or
+  native loop (MTPLX has a compiled fixed-4-row lane).
+- 350 at 9.5 tokens per check needs ~27 ms per check. With every byte-bound part at 100 % of its floor, the bytes
+  alone (experts 6.4 GB at 3-bit + dense 2.1-3.4 GB) are ~31-35 ms, and the non-matmul + edges (~21-25 ms) alone cap
+  9.5 tokens at ~400 tok/s. So 350 needs fewer bytes AND more tokens per check AND a leaner loop together.
+- Model-level levers measured tonight:
+  - top-8: union -17 % (L1-17: MoE error 0.78x MSB-3's; Eval-suite verdict pending).
+  - Parallel streams of one answer (L1-32): 0.59x DRAM reads per token, resident only. At 24 GB they raise SSD misses
+    1.7-1.9x.
+  - Frugal wait-top-2 at 24 GB: fails IFEval.
+  - Pruning: rejected by Kamen.
+- At 24 GB the SSD wall moves only with residency, bits per expert, top-k and routing. Misses per token don't depend on
+  drafting (resid27), and anything that widens the per-check working set costs misses (L1-32b).
+
+## Baseline (the earlier table, for reference): code tok/s at the bytes floor, 280 GB/s, everything resident
+| route | resident | tokens / pass | GB / pass | tok/s at floor |
+|---|---|---|---|---|
+| DFlash2 block 8, 4-bit | 71.7 GB (cannot fit) | 6.87 | 9.4 | 186 |
+| block 16 FT + truncation, 4-bit + dense diet | 71.7 GB | 9.38 @ 10.3 rows | 9.2 | 258 |
+| block 16 FT + truncation, v3 tiers + diet | ~56 GB | 9.38 @ 10.3 rows | 7.6 | 305 |
+| block 16 FT, v3 + diet + budget (32 experts / layer) | ~56 GB | 9.88 | 5.4 | 433 |
+- The 35B section is retired (Kamen: the 125B only). The 35B work is a tool now. The GDN kernel program and the rollback
+  finding port to the 125B: Fit12 has the port.
+
+## R-06 + R-07 (NewIdeas' rapid screens; Leap, pre-registered Mon 19:15 EET): drafting at the speed of its bytes
+- **Why:** DFlash2's 1-step draft costs 12.5 ms at block 16 (CA: forward 7.46 ms, head + top-16 4.46, selector 0.83).
+  That alone is ~1/3 of the 34-40 ms check that 350 needs.
+- **Screen** (scripts/dr_screen.py, one runner, <= 10 min; L1-20 weights):
+  - Drafter layers + fc in bf16 / 8-bit / 4-bit (group 64; selector, embedding and target head unchanged).
+  - x three ways to get the top-16 candidates:
+    - argp: argpartition over all 248K logits (today).
+    - 2s: exact two-stage (max per 128-token block -> top-16 blocks -> top-16 of their 2,048 logits). Same candidate
+      set, so the same tokens.
+    - v32k: FR-Spec 2502.14856. The head runs over 32K tokens only, ranked by counts on L1-20's training tokens, then
+      by id.
+  - Draft ms: one graph, one sync, median of 30 on a held-out sample.
+  - Tokens per check: refine19's teacher-forced replay on the 24 held-out HumanEval samples, blocks 16 and 32.
+- **Lines (NewIdeas' QUEUE):**
+  - R-06 PASS: an argp / 2s arm <= 5 ms at block 16 with tokens within 1 % at both blocks. KILL: the best arm within
+    1 % > 8 ms, or every arm <= 5 ms loses > 3 %.
+  - R-07 PASS: v32k head <= 1.5 ms at block 16 and tokens >= 99 % of the full head. KILL < 98 %.
+- **Prediction:**
+  - Head pieces at block 16: lm_head ~2.2 ms, argpartition ~2 ms, 2s ~0.3 ms.
+  - Arms: bf16 2s ~10.5 ms. 8-bit 2s 7.5-10.5 ms (MLX's 8-bit matmuls ran at 20-24 % of their floor in D32). 4-bit 2s
+    ~5.5-6.5 ms.
+  - Tokens: 8-bit within 0.5 %; 4-bit -1 to -4 %.
+  - R-06: BETWEEN, 60 %. PASS 15 %: only 4-bit at <= 5 ms if its tokens hold.
+  - R-07: head ~0.6-0.9 ms. The held-out code tokens are ~99.5 % inside the set, so tokens >= 99 %: PASS 70 %. This
+    is in-domain (HumanEval-like counts on HumanEval), so it is optimistic for chat.
+- **Result (Mon 19:16, 2 min of GPU; data/dr_screen.txt): R-06 KILL, R-07 KILL.**
+
+  | b16 draft (ms) / tokens vs bf16 argp | argp | 2s | v32k |
+  |---|---|---|---|
+  | bf16 | 12.91 / 1.000 | 10.92 / 1.000 | 9.13 / 0.960 |
+  | 8-bit | 12.02 / 1.009 | 9.98 / 1.009 | 8.10 / 0.965 |
+  | 4-bit | 11.68 / 0.996 | 9.64 / 0.996 | 7.79 / 0.953 |
+
+  - Two-stage top-16 is exact (tokens 1.0000 at both blocks) and saves 2.0 ms at b16, 4.2 ms at b32. Keep it.
+  - Bytes are not the drafter's cost: 4-bit saves only 1.3 ms. Its forward (~6-7 ms) is launch-bound.
+  - FR-Spec's 32K head runs in 0.85 ms but loses 4-6 % of tokens, although 99.2 % of the held-out tokens are inside
+    the set. The draft's other candidates matter, not only its top-1.
+  - vs prediction: head pieces right (lm_head 2.57, argp 2.23, 2s ~0). 8-bit / 4-bit far slower than predicted
+    (launch-bound, not byte-bound). v32k tokens wrong: I predicted PASS at 70 %.
+
+## R-09 HCF (NewIdeas GO Mon 19:12; Leap, pre-registered Mon 20:51 EET): the 16-row hyper-connection read, fused
+- **Why:** CA run 3: HC reads / writes = 31-34 ms of the 143-150 ms 16-row check. At 16 rows the engine runs the eager
+  chain, ~14 kernels per read. MTPLX's 3-kernel read serves 2-8 rows only, and it equals the *compiled* chain (wide
+  gemv sums), not the 16-row GEMM.
+- **Screen (scripts/r09_screen.py, ~1 min):** 96 reads (48 layers x 2 mixers, the model's own weights), each read's
+  pending write from the previous read, 16 rows, interleaved arms, median of 20.
+  - E: the engine's eager chain (GatedResidual itself, decode_verify phase).
+  - X: exact by construction, 6 kernels. MTPLX's norm kernel (write + grouped RMS norm) + MLX's own down / inject / up
+    matmuls (the same calls, so the same sums) + one gate kernel and one tail kernel. Both read tables of the stock
+    elementwise functions at every bf16 input.
+  - X5: X with down + inject as one matmul (5 kernels). F8 / F16: MTPLX's 3-kernel read as 2 x 8 rows / 1 x 16.
+  - Bitwise: all 96 (mixed, written, inject) vs E.
+- **Lines (QUEUE R-09):** PASS >= 15 ms saved per check AND bitwise = E. KILL < 8 ms. Fast but not bitwise = a
+  reference change, logged and priced like NAX.
+- **Prediction:** E isolated ~25 ms (20-32). X ~13 ms (9-17), so ~12 ms saved: BETWEEN 45 %, PASS 30 %, KILL 25 %. The
+  three matmuls (~13 ms per check in kern23) stay as they are. X bitwise = E: 75 %. X5 bitwise: 50 % (the GEMM may
+  tile N = 324 differently). F8 / F16: not bitwise (95 %), F16 saves ~18 ms.
+
+## R-10 DCOMP (NewIdeas Mon 20:40; Leap, pre-registered Mon 20:51 EET): the drafter compiled
+- **Why:** R-06: the draft costs 10.92 ms (bf16) / 9.64 ms (4-bit) at block 16 with the exact two-stage head. Weight
+  bytes are not its cost. ~125 small kernels per layer are: the grouped dynamic convolution is ~23 per call, 4 calls
+  per layer.
+- **Screen (scripts/r10_screen.py, ~4 min):** mx.compile of each layer's fixed-shape parts (norm + conv prepare +
+  q / proposal k, v; o_proj + conv finish + MLP part) and of the tail (norm, head, two-stage top-16, selector chain).
+  The attention core stays eager because its shapes and RoPE offsets change every check. Arms E / C / P (C with the
+  convolution as views of one padded copy) in bf16, E4 / P4 in 4-bit. Draft ms on one sample, tokens on the 24
+  HumanEval replays, blocks 16 and 32.
+- **Lines (QUEUE R-10):** PASS draft <= 6.5 ms at b16, tokens within 1 %. KILL > 8.5 ms.
+- **Prediction:** C bf16 ~8.5-9 ms, P4 ~7.5 ms (6.8-8.5): BETWEEN 55 %, KILL 35 %, PASS 10 %. Compiled drafts bitwise
+  = eager: 60 %. Tokens within 1 %: 95 %.
+- **R-09 result (Mon 20:52, 6 s of GPU; data/r09_screen.txt): BETWEEN.** Exact X5 saves 9.67 ms per check, bitwise.
+
+  | arm (96 reads, 16 rows) | ms | saved vs E | bitwise = E |
+  |---|---|---|---|
+  | E eager chain (~14 kernels / read) | 24.37 | - | - |
+  | X 6 kernels (norm, 3 MLX matmuls, gate, tail) | 22.55 | 1.81 | yes, all 96 reads |
+  | X5 5 kernels (down + inject as one matmul) | 14.70 | 9.67 | yes, all 96 reads |
+  | F8 MTPLX read, 2 x 8 rows | 10.51 | 13.85 | no (from read 0) |
+  | F16 MTPLX read, 16 rows | 11.79 | 12.58 | no |
+
+  - Fusing the elementwise ops is worth only 1.8 ms. The read is bound by its skinny matmuls, as MTPLX found at
+    prefill.
+  - The inject matmul (N = 4, K = 10,240) alone costs ~8 ms per check. Folding it into the down matmul (N = 324) is
+    free and bitwise: MLX's GEMM sums each output in the same K order whatever N is.
+  - The next exact step is that same K order with more threadgroups for the down projection (N = 324 runs on only ~11
+    output tiles over K = 10,240). That is the new idea R-09b.
+  - vs prediction: E 24.4 (pred ~25, right). X saved 1.8, not ~12 (wrong: the elementwise ops are not the cost). X5
+    bitwise (I gave it 50 %). F16 saved 12.6 (pred ~18).
+  - In the check, HC costs 31-34 ms (CA knockouts) vs 24.4 here, so the in-check gain may be larger (~x1.3).
+- **R-10 result (Tue 19:24-19:26, ~2 min of GPU; data/r10_screen.txt): KILL.** Compiling is exact but saves 0.7 ms.
+
+  | arm | b16 ms | b32 ms | graph build (b16) | tokens per check vs E |
+  |---|---|---|---|---|
+  | E eager, bf16 | 11.24 | 12.21 | 0.46 ms | 1.0000 |
+  | C compiled blocks + tail | 10.58 | 11.55 | 0.17 ms | 1.0000 (drafts bitwise = eager) |
+  | P C + conv as views of one padded copy | 10.50 | 11.54 | 0.18 ms | 1.0000 (bitwise) |
+  | E4 eager, 4-bit | 9.81 | 11.44 | 0.43 ms | 0.9940 |
+  | P4 compiled, 4-bit | 9.37 | 10.96 | 0.17 ms | 0.9940 (bitwise = E4) |
+
+  - Python builds the drafter's graph in 0.46 ms of 11.2. The drafter is GPU-bound: its ~500 small kernels cost GPU
+    time, not CPU time. Fusing elementwise ops removes 0.7 ms of that.
+  - vs prediction: C ~8.5-9 predicted, got 10.6 (wrong: I thought the CPU side was the cost). Bitwise (60 %): yes.
+  - It ran during soft_end's ramp (duty ~55 %), which SIGSTOPs new children of held runners too (Fit12). The medians
+    of ~30 drafts per arm hold: E4 9.81 vs R-06's 9.64 unramped (+1.8 %). Even 2 % off, P4 is ~9.2 > 8.5: KILL holds.
+    R-09b step 1 (19:18:59-19:19:05) was not stopped: a stop would have added ~15 s to its 6 s.
+
+## R-05 (SD1 resized; NewIdeas' rapid screen; Leap, pre-registered Mon 22:33 EET): acceptance-weighted depth loss
+- **Screen (r05_batch.sh, ~9 min):** arms U (L1-20's recipe: bs 32, pmask 0.5, micro 1, lr 2e-5) and W (each depth's
+  loss x R_j, the stop-gradient suffix sum of the running hit products of the drafter's own true-token probabilities,
+  scaled to keep each micro-batch's total weight; scripts/r05_train.py --wloss, checked by hand on CPU). Each runs 21
+  steps (~3 min, warm-up 3, cosine) from the L1-20 checkpoint. Scored by the 1-step replay on the 24 held-out
+  HumanEval samples at block 32 (primary) and 16. Weights go to a RAM disk.
+- **Lines (QUEUE R-05):** PASS W / U >= 1.05 at block 32 (then the 50-min run). KILL < 1.02.
+- **Prediction:** U ~10.2 (= L1-20, which has plateaued: DS2). W / U 1.00-1.03: KILL 55 %, BETWEEN 35 %, PASS 10 %. 21
+  steps is little time to move a plateaued drafter.
+- **Result (Tue 19:51-19:58, ~7 min; data/r05_report.txt): KILL.** W / U = 0.970 at block 32 (90 % CI 0.954-0.986).
+  At block 16 it is 0.976 (0.963-0.989).
+  - U 9.68 / W 9.40 tokens per pass at block 32. U 9.37 / W 9.14 at block 16.
+  - Both are below L1-20 itself (10.23 / 9.54 in R-10's replay), so 21 more steps of the same recipe already cost
+    ~5 %.
+  - W's printed loss is ~0.2 -> 0.03, against U's 3.3 -> 1.6. The R_j weights pile onto positions the drafter
+    already gets right, so W trains on the easy depths and loses the hard ones.
+  - vs prediction: KILL (55 %): yes, and W / U came in below 1, worse than the 1.00-1.03 I gave.
+
+## R-09b step 1 (NewIdeas GO Mon 20:56; Leap, pre-registered Mon 22:33 EET): is there room for a same-order GEMM?
+- **Doubt about my own premise:** MLX may already split K for M 16 x N 324 x K 10,240 (16 partitions x 11 tiles =
+  176 threadgroups). Then "more threadgroups" is not the lever.
+- **Screen (scripts/r09b_screen.py, ~30 s):**
+  - Part 1, bits: the merged GEMM at 16 rows vs the same rows inside a 32-row GEMM, a batch of two, and 2 x 8 rows.
+    This shows whether the 16-row path is the regular GEMM.
+  - Part 2: X5 knockouts per stage (norm, merged GEMM, gate, up GEMM, tail).
+- **Decision:** R-09b's ceiling = 9.67 + (merged GEMM in-chain cost - ~2.5 ms bytes floor). Below 11: KILL now.
+  At 15 or more: build the GEMM. Otherwise BETWEEN at best (parked behind R-12 / R-11).
+- **Prediction:** 16 rows = 32-row rows bitwise: 50 %. Merged GEMM in-chain ~5 ms, so the ceiling is ~12 (BETWEEN at
+  best): 55 %. Build it: 20 %. KILL now: 25 %.
+- **Result (Tue 19:19, 6 s of GPU; data/r09b_screen.txt): build it (17.0 by the rule; ~15 by a second estimate).**
+  - Bits: the merged GEMM (and the up GEMM) at 16 rows = the same rows of a 32-row GEMM and of a batch of two,
+    bitwise. Two 8-row calls differ. The 16-row path is MLX's regular GEMM.
+  - Per 96 reads: E 24.62 ms, X5 14.81 (R-09: 24.37 / 14.70). Knockouts (X5 minus X5 without the stage): norm 3.01,
+    merged GEMM 9.87, gate 9.98, up GEMM 4.01, tail 4.25.
+  - The knockouts sum to 31.1 against a 14.8 chain, so they are not additive. Removing a stage splits the dependent
+    chain into two halves that the GPU overlaps. The gate has almost no work yet "costs" 9.98.
+  - Rule: 9.67 + (9.87 - 2.5) = 17.0 >= 15, so build it. Second estimate: the merged GEMM walks K = 10,240 per output
+    tile like the N = 4 inject (~82 us per call, R-09) -> ~7.9 ms per 96 reads, floor ~2.5 -> <= 5.4 more -> ~15.1
+    vs E. Both say >= 15, the second only just.
+  - vs prediction: bitwise 16 = 32 rows (50 %): yes. Build it (20 %): yes. In-chain ~5 predicted, 9.87 measured, but
+    inflated by the overlap.
+  - Next (the build): find MLX's K order for this shape (plain or split-K, by bitwise candidates in a custom kernel),
+    then the same order on narrower output tiles (BN 8: ~41 threadgroups). Lines unchanged: PASS >= 15 ms vs E AND
+    bitwise, KILL < 11.
+
+## R-13 OCC (NewIdeas Mon ~22:30): occupancy audit of the skinny GEMMs, answered from data (Leap, Mon 22:35, no GPU)
+- **Source:** kern23 (L1-23: the 125B's dense shapes and per-check counts, 16 rows, cold) and CA run 3 (in the check).
+- **Excess over the bandwidth floor per 16-row check, HC excluded:**
+
+  | shape (count) | floor | shipped (chunked) | excess | MLX 16-row call | batch-invariant best |
+  |---|---|---|---|---|---|
+  | GDN in_proj_qkv (36) | 1.90 | 9.23 | 7.33 | 3.31 | 2.53 |
+  | o_proj + out_proj (48) | 1.52 | 6.87 | 5.35 | 7.51 | 2.39 |
+  | lm_head (1) | 1.28 | 5.69 | 4.41 | 2.21 | 1.53 |
+  | GDN in_proj_z (36) | 1.14 | 5.18 | 4.04 | 5.65 | 1.79 |
+  | QSA q_proj (12) | 0.76 | 3.45 | 2.69 | 1.44 | 1.29 |
+  | shared gate/up (96) | 0.32 | 1.84 | 1.52 | 1.82 | 1.82 |
+  | shared down (48) | 0.16 | 1.41 | 1.25 | 1.39 | 1.12 |
+  | k/v, a/b, shared gate, PLE (various) | 0.32 | 2.73 | 2.41 | 2.20 | 2.16 |
+  | **sum** | **7.4** | **36.4** | **29.0** | 25.5 | 14.6 |
+
+  - The 8-bit router / indexer (~1.7 ms) is not in kern23. In the check (CA run 3, 1K) the same matmuls cost ~25 ms
+    against ~7.4 of floors, so ~18 ms of excess remains after concurrent dispatch overlaps some of it.
+- **Verdict: LEVER (>= 10 ms per check).** But most of it is already priced:
+  - L1-23's batch-invariant set recovers ~21 ms. It is exact under its own numerics, but not bitwise vs the shipped
+    chunked path, so it is a reference change.
+  - The skinny shapes R-13 names (shared-expert gate, GDN a/b) are small: ~0.9 ms of excess together.
+  - The big excess is on the wide 4-bit shapes, under the chunked path.
+- **Bitwise-vs-shipped route:** keep each shipped kernel's per-output K order and give it more parallelism. That
+  needs the dispatch question R-09b step 1 answers first. Until then it is unpriced.
+
+## R-12 step 1 (NewIdeas Mon ~22:25; Leap, pre-registered Mon 22:38 EET): what the 9.7 ms commit is made of
+- **Why first:** the commit replays each pure-GDN layer's recurrence over the kept rows (gated_delta_update + the
+  conv tail, ~5-7 kernels per layer) and the PLE layer's whole forward. CA scaled the 12-layer commit (2.42 ms) x4,
+  which counts the one PLE layer four times, so 9.7 may be too high.
+- **Pricing NewIdeas' select variant from bytes:** a GDN state is 48 x 128 x 128 fp32 = 3.1 MB. Keeping all 16 rows'
+  states writes ~1.8 GB per check (~7 ms), more than it saves. Every 4th row writes ~0.45 GB (~1.8 ms) and still
+  needs a <= 3-row replay, which costs about what a 10-row one does if the replay is launch-bound.
+- **Screen (ca_anat.py commit, ~1 min):** after real 16-row checks at 1K, keeps 1 / 4 / 10 / 15. Each commit part is
+  evaluated alone: pure-GDN replays, the PLE layer, the rest. 48-layer estimate = GDN x 35/8 + PLE + rest x 4. Also
+  the state bytes per layer.
+- **Decision:** R-12's select variant is KILL by arithmetic if its added writes reach the replay's cost. A launch-bound
+  replay (GDN time at keep 1 >= 0.7 x keep 15) points instead to one fused / batched replay kernel, priced as GDN time
+  minus its bytes floor. If the true 48-layer commit is <= 5 ms there is no lever.
+- **Prediction:** 48-layer commit ~7 ms (5.5-8.5): GDN ~5.5 (0.16 per layer), PLE ~1, rest ~0.5. keep 1 / keep 15 ~0.8
+  (launch-bound). Select variant: KILL (75 %).
+- **Result (Tue 19:45, 11 s of GPU; data/ca_commit.txt): KILL for COMMIT-SELECT. The commit is ~4.7 ms, not 9.7.**
+
+  | keep | GDN replays (8 layers) | per layer | PLE layer | rest | 48 layers | CPU build (12 layers) |
+  |---|---|---|---|---|---|---|
+  | 1 | 0.57 | 0.072 | 0.99 | 0.09 | 3.87 | 0.47 |
+  | 4 | 0.59 | 0.074 | 0.99 | 0.09 | 3.93 | 0.50 |
+  | 10 | 0.74 | 0.093 | 1.09 | 0.09 | 4.72 | 0.57 |
+  | 15 | 0.90 | 0.112 | 1.16 | 0.09 | 5.44 | 0.62 |
+
+  - CA's 9.7 ms counted the PLE layer's full replay (~1.1 ms) four times. At L1-20's ~10 tokens per check the
+    48-layer commit is ~4.7 ms of GPU, already under R-12's 5 ms PASS line before any change.
+  - Select loses on bytes. Keeping all 16 rows' states writes 1.81 GB per check (7.2 ms), against a GDN replay of
+    3.3 ms. Every 4th row writes 0.45 GB (1.8 ms) and still needs a <= 3-row replay (~0.07 ms x 35 = 2.5 ms,
+    launch-bound): 4.3 ms > 3.3.
+  - The GDN replay is launch-bound: keep 1 / keep 15 = 0.64, with ~0.07 ms fixed per layer.
+  - Spin-off lever (exact, new): the 35 layers' replays are independent of each other. One batched kernel for all of
+    them, with the same per-layer arithmetic, would remove most of the ~2.5 ms of fixed cost, so ~-2.5 ms per check.
+  - The commit's CPU build is ~2.3 ms at 48 layers (0.57 x 4). That is part of R-11's idle.
+  - vs prediction: 48 layers ~7 predicted, 4.7 measured (my per-layer GDN guess was 0.16, it is 0.09). Launch-bound:
+    yes (0.64 vs 0.8). Select KILL: yes.
+
+## R-21 GDNB step 1 (NewIdeas' QUEUE row R-21, from R-12; Leap, pre-registered Thu 2026-10-29 17:35 EET): the floor of a batched replay
+- **Row's lines (NewIdeas):** PASS = commit -2 ms or more per check AND bitwise. KILL = < 1 ms.
+- **Prior art:** batching independent small recurrences into one launch is standard (fla's varlen / batched chunk
+  kernels; CUDA graphs and persistent kernels for launch-bound decode). Applied here to the 35 commit replays: untested.
+- **Why a bound first:** a batched replay needs its inputs in one place. mx.concatenate copies each input with its
+  own launch, and stacking the 35 fp32 states moves 110 MB, so the naive way may give the gain back. The real kernel
+  (grouped multi-pointer, <= 31 Metal buffers per launch) is only worth writing if even the ideal batch clears the
+  line.
+- **Screen (scripts/r21_screen.py, ~1-2 min GPU, synthetic values on the 125B's GDN shapes):**
+  - per-layer = MTPLX's own replay code for 35 layers (sigmoid, compute_g, the gated-delta kernel, conv concat +
+    contiguous);
+  - ideal = the same ops once on inputs already stacked [35, ...] (B = 35 in the same kernels): the floor of any
+    batched replay;
+  - stacked = ideal + the mx.stack of the 35 layers' inputs inside the timing.
+  - Measured: the lazy graph is built, then mx.eval is timed. 40 interleaved reps at keep 1 / 4 / 10 / 15. Each
+    layer's new state and conv state from ideal / stacked is compared bitwise with per-layer.
+- **Lines for this step:** ideal saves < 1 ms at keep 10 -> KILL R-21 (no batched kernel can pass). >= 2 ms AND
+  bitwise -> build the batched kernel. BETWEEN otherwise.
+- **Prediction:**
+  - per-layer at keep 10 ~3.3 ms (R-12: 0.093 x 35). Ideal ~1.0-1.3: the states' 217 MB read + write alone is ~0.8 ms.
+    Saves ~2.0-2.3.
+  - Stacked saves < 1 (the 110 MB state copy + per-input copies).
+  - Bitwise ideal 95 % (the kernel's arithmetic per (layer, head) does not depend on B).
+  - BUILD 50 %, BETWEEN 35 %, KILL 15 %.
+- **Result (Thu 18:16, runner 20, rc 0, seconds of GPU; data/r21_screen.txt): KILL. The replay is already at its bytes
+  floor, so batching has nothing to remove.**
+
+  | keep | per-layer (35 launches each) | ideal batched | naive stacked | ideal saves (GPU + CPU build) |
+  |---|---|---|---|---|
+  | 1 | 1.194 ms | 1.091 | 2.343 | 0.10 + 0.23 |
+  | 4 | 1.247 | 1.173 | 2.416 | 0.08 + 0.22 |
+  | 10 | 1.586 | 1.543 | 2.756 | 0.04 + 0.22 |
+  | 15 | 2.038 | 1.963 | 3.140 | 0.08 + 0.22 |
+
+  - The 35 replays move 220 MB of fp32 state (read + write) per commit: ~1.1 ms at ~200 GB/s. Per-layer already runs
+    there (keep 1: 185 GB/s).
+  - The ideal batch (one launch per op over pre-stacked inputs) saves <= 0.1 ms on the GPU and ~0.22 ms of graph
+    build. Stacking the inputs costs +1.1-1.2 ms. Every variant is bitwise equal to per-layer.
+  - R-12's "launch-bound, ~0.07 ms fixed per layer" was an 8-layer-slice artifact. Its keep1 / keep15 = 0.64 is the
+    state bytes, which don't depend on keep, not launch overhead. Its 0.072 ms per layer included the slice's
+    fixed per-eval costs.
+  - What would move the commit: fewer state bytes. One example is keeping the GDN states resident in a cheaper form,
+    but fp32 states are part of exactness. Not a kernel lever.
+  - vs prediction: per-layer 1.59 ms at keep 10, not 3.3 (R-12's slice scaling); KILL (15 %).
+
+## R-11 ONE-SUBMIT (NewIdeas Mon ~22:25; Leap, pre-registered Tue 19:33 EET): the GPU's idle time per cycle
+- **From data (CA diff run 3, 16 rows at 1K, 12 layers):** the engine's eager check builds its graph in 2.11 ms while
+  the GPU waits (PLE staging 0.76 of it). The draft build is ~0.46 ms (R-10's E). The commit's build is not yet
+  measured.
+- **Constraint:** PLE staging reads the check's tokens on the CPU (n-gram rows from the 29.8 GB file-backed table).
+  So the draft tokens must reach the CPU before the check graph is built. A GPU-side accept removes only the idle
+  after the acceptance read.
+- **Screen (scripts/r11_screen.py, ~1-2 min; CA's slice + the DFlash2 drafter):** keep fixed at 10, the text's own
+  tokens in every check, the drafter fed from the check's logits. Four arms, 5 rounds x 8 cycles, interleaved:
+  - S: the engine's order.
+  - SB: the check built async every 4 layers + the commit replay submitted on its own (the cheap exact variants).
+  - G1: GPU-side accept, one sync per cycle.
+  - O: no sync, the bound.
+  - S's idle is measured directly from the CPU spans with nothing queued: draft build, PLE + check build, accept +
+    commit build. It is cross-checked by S - O.
+- **48 layers:** after the acceptance read = draft build + 4 x commit build. After the draft read = PLE + 4 x (check
+  build - PLE). The second overcounts by up to ~0.9 ms (non-layer build x 3).
+- **Lines (QUEUE R-11):** lever if the 48-layer idle >= 8 ms per cycle; KILL < 3 ms.
+- **Prediction:** 12-layer idle ~3.4 ms (draft build 0.5, check build 2.1, commit build ~0.8). 48 layers ~10 ms
+  (7-11): LEVER 55 %, BETWEEN 40 %, KILL 5 %. Of that, ~3.7 is after the acceptance read and ~6.2 after the draft
+  read. S - SB ~2 ms at 12 layers. O's PLE staging hides a sync (it reads the PLE history back): 40 %.
+
+## R-09b build (Leap, pre-registered Tue 19:41 EET; step 1 said build it): MLX's own sums, loads prefetched
+- **What MLX runs (matmul.cpp at v0.32.2):** gemv_wide declines at 16 rows (4 passes > 3). This shape takes the NAX
+  split-K kernel: 64 x 64 tiles, 2 x 2 simdgroups, BK 256, K partitions of 4,096 (4,096 + 4,096 + 2,048), float
+  partials, then gemm_splitk_accum (out = 0, += each partition in order, cast).
+  - That is 18 threadgroups; half their simdgroups have no rows (M = 16 in a 64-row tile).
+  - Each simdgroup walks its partition in 32-wide k steps, loading A and B straight from device memory before the
+    fixed 16 x 32 x 16 NAX op. The loop is no-unroll with a volatile barrier per step, so every step waits on memory.
+- **Why tiling cannot help:** the working simdgroups are capped at 11 column tiles x 3 partitions = 33 (36 now).
+  The per-output order allows no K split, so the lever is latency hiding: the same op sequence, loads issued ahead.
+- **Screen (scripts/r09c_screen.py, ~1 min):** custom kernels with MLX's nax.h inlined.
+  - S1 = MLX's loop replicated. It must equal MLX bitwise, else BLOCKED.
+  - S2 / S4 / S8 = loads 1 / 3 / 7 steps ahead.
+  - F4 / F8 = one simdgroup walks all three partitions and adds them in MLX's order in registers: no accumulation
+    kernel.
+  - Bitwise: the 96 projections vs MLX's, and the X5 chain with each kernel vs X5 (all 96 reads). Timing: E, X5 and
+    every arm interleaved, 96-read chains.
+- **Lines (QUEUE R-09b):** PASS >= 15 ms saved per check vs E AND bitwise. KILL < 11. A compile failure (no Metal 4 /
+  MetalPerformancePrimitives in custom kernels) or a non-bitwise replica is BLOCKED, not a verdict.
+- **Prediction:** builds 60 %. S1 bitwise given a build 70 %. Prefetch brings the merged GEMM from ~80 us to ~40 us per
+  call: ~-4 ms per 96 reads, ~13.7 saved vs E. BETWEEN 55 %, PASS 25 %, KILL 20 %.
+- **Why it matters beyond HC:** if prefetching MLX's own NAX loop is bitwise and faster here, the same move applies to
+  the 16-row dense quantized GEMMs (R-13: 29 ms over their floors per check), exactly.
+- **Run 1 (Tue 20:16): BLOCKED by the harness, not the idea.**
+  - Metal said my integer template arguments NT and N were undeclared in a kernel with a header (K, PS, NP, PF and T
+    were fine).
+  - The inlined nax.h itself compiled. MetalPerformancePrimitives builds in a custom kernel, and nothing in that
+    header failed.
+  - Fix: integer constants as `constant constexpr int` in the header, as MTPLX's kernels do; only T stays a template
+    argument. R-13b had the same pattern and is fixed too. The re-run is queued in runner_r3.
+- Note, family 1 (NAX qmm) for R-13c: these shapes run qmm_t_nax, MLX's non-split NAX kernel. The gemm_loop is the
+  same, so this run's result prices R-13c's move directly.
+- **Result, run 2 (Tue 20:40, 10 s; data/r09c_screen.txt): BETWEEN by 0.32 ms. Every arm is bitwise. S4 saves 14.68 ms
+  per check vs E, 4.87 ms beyond X5.**
+
+  | arm (96 reads) | ms | saved vs E | projections bitwise = MLX | chain bitwise = X5 |
+  |---|---|---|---|---|
+  | E (engine) | 24.51 | - | - | - |
+  | X5 (MLX's NAX split-K) | 14.70 | 9.81 | - | (= E) |
+  | S1 MLX's loop, 33 one-simdgroup tiles | 12.28 | 12.22 | 96 / 96 | yes |
+  | S2 loads 1 step ahead | 10.22 | 14.28 | 96 / 96 | yes |
+  | **S4 loads 3 steps ahead** | **9.82** | **14.68** | 96 / 96 | yes |
+  | S8 loads 7 ahead (register pressure) | 15.09 | 9.41 | 96 / 96 | yes |
+  | F4 / F8 (all partitions per simdgroup, 11 tiles) | 15.93 / 25.69 | 8.57 / -1.18 | 96 / 96 | yes |
+
+  - MLX's NAX split-K arithmetic can be replicated in a custom kernel, bit for bit. Prefetching loads keeps the bits.
+    So R-13c's premise holds.
+  - The replica alone (S1, 33 one-simdgroup tiles instead of 18 x 4-simdgroup tiles with half of them idle) is
+    already 2.4 ms faster than MLX. The prefetch adds 2.5 more.
+  - Fusing the partitions (F) loses: 11 simdgroups are too few.
+  - In the check, HC costs 31-34 ms (CA) vs 24.5 here, so the in-check gain may be ~x1.3.
+  - vs prediction: builds (60 %) yes; S1 bitwise (70 %) yes; ~13.7 saved predicted, 14.68 measured; BETWEEN (55 %)
+    yes.
+  - Exact per-check savings for FOR_KAMEN decision 4: HC read X5 -9.81 -> S4 -14.68.
+
+## R-15 DSK step 1 (NewIdeas Tue ~19:35; Leap, pre-registered Tue 19:44 EET): the draft's GPU time by kernel class
+- **Why:** R-10 shows the drafter is GPU-bound (build 0.46 of 11.2 ms) and compiling its elementwise ops (the
+  convolution included) saves only 0.7 ms. So the ~460 convolution kernels are probably cheap.
+  - The bf16 drafter reads 1.21 GB per draft: ~115 GB/s at 10.5 ms. The 4-bit one reads 0.52 GB in 9.4 ms: ~55
+    GB/s. That points at the skinny 16-row projections, as in R-13.
+  - The drafter only proposes tokens, so any faster kernel is allowed (tokens within 1 %).
+- **Screen (scripts/r15_screen.py, ~2 min):** CA's knockout method on one block-16 draft.
+  - Classes: dense projections, convolution, attention core, norms, head, two-stage top-16, selector chain, all.
+  - 10 real context rows per draft, so shapes stay fixed. 30 interleaved rounds. bf16 and 4-bit.
+- **Lines (QUEUE R-15, for step 2):** PASS draft <= 6.5 ms at b16 with tokens within 1 %. KILL > 8.5 ms after the top
+  two classes are swapped.
+- **Prediction (4-bit, ~9.8 ms):** dense ~4.5 (top class, 70 %), head + top-16 ~2, attention ~0.8, convolution
+  ~0.8, selector ~0.8, norms ~0.5. Removing the top two leaves ~3.5 ms, so step 2 has room if the dense projections
+  can run near their bytes.
+- **Result (Tue 20:28, ~1 min; data/r15_screen.txt): dense + head = 63 % of the draft. The drafter is GPU-bound.**
+
+  | class (ms) | dense | head | attn | conv | select | norm | top-16 | rest (all out) | draft |
+  |---|---|---|---|---|---|---|---|---|---|
+  | 4-bit | 4.66 | 2.27 | 0.93 | 0.84 | 0.75 | 0.20 | 0.07 | 1.60 | 10.93 |
+  | bf16 | 5.99 | 2.31 | 0.88 | 0.73 | 0.76 | 0.53 | 0.10 | 1.65 | 12.15 |
+
+  - The draft's eval is 20-21 % main-thread CPU (2.2 of 10.5 ms). It is not encoding-bound, so R-10's reading holds:
+    its kernels cost GPU time.
+  - Why dense is slow, from MLX's dispatch at M = 16:
+    - q (4096 x 2560), k / v, o (2560 x 4096) and the conv kernel projections run qmv_wide with 4 vector groups, so
+      the weights are read 4 times.
+    - The MLP runs the non-NAX split-K kernel: gate / up 7680 x 2560 at split 2, down 2560 x 7680 at split 6. These
+      are R-13's two slow families, on the drafter.
+  - Step 2 candidates (any numerics allowed):
+    - NV16 qmv_wide for the qmv_wide shapes (R-13b's kernel).
+    - The MLP off split-K: gate + up merged (N = 15,360 makes 480 tiles, split 1, NAX qmm). Down via NV16, or a NAX
+      path.
+    - The head at its floor (~1.3 ms).
+    - At the floors, dense ~2 + head ~1.3 -> ~7.3 ms: still above 6.5. Passing also needs the small ops fused (attn +
+      conv + select + norms + rest = 4.4 ms).
+  - vs prediction: dense 4.66 vs ~4.5, head + top-16 2.34 vs ~2, attention 0.93 vs ~0.8, conv 0.84 vs ~0.8, selector
+    0.75 vs ~0.8: right. Norms 0.20 vs ~0.5.
+
+## R-13's exact half, by kernel family (Leap, Tue 20:05, no GPU; MLX 0.32.2 quantized.cpp at the tag + installed kernels)
+- The shipped 16-row check runs MLX's natural 16-row calls. MTPLX's exact_verify does nothing unless
+  MTPLX_EXACT_T0_GUARD=1. CA's ~25 ms in-check matches kern23's "MLX 16" column (25.5 ms), not the 12 + 4 chunked path.
+  So "exact" = bitwise vs those calls.
+- At M = 16 each 4-bit shape lands in one of three kernel families (split_k = max(1, 512 / tiles at bm = bn = 32)):
+
+  | family | shapes (count) | MLX 16 | floor | excess | the exact move | row |
+  |---|---|---|---|---|---|---|
+  | NAX qmm, no split | qkv (36), q_proj (12), lm_head (1) | 6.96 | 3.94 | ~3 | R-09b's prefetched loads | R-13c |
+  | non-NAX qmm_t_splitk | in_proj_z (36, split 2), o / out_proj (48, split 6) | 13.16 | 2.66 | ~10.5 | MLX's qmm_t_impl at BM 16 + fused partition sum | R-13d |
+  | qmv_wide, 4 vector groups | shared gate / up / down, k / v, a / b, shared-expert gate | ~4.7 | ~0.5 | ~4.2 | one pass, vecs_per_tg 16 | R-13b |
+
+  - qmm_t_splitk is MLX's standard qmm_t_impl at BM = BK = BN = 32, so half of each 32-row tile is wasted at M = 16.
+    It writes bf16 partials, and a separate sum-reduction launch runs per call (84 per check).
+  - In qmv_wide, k_lanes is always 8 for affine and vecs_per_tg never enters a vector's arithmetic (MTPLX's M4 route
+    kernel relies on this).
+
+## R-13b WIDE16 (Leap, pre-registered Tue 20:08 EET; NewIdeas accepted the lines 20:05): the small shapes in one pass
+- **Screen (scripts/r13b_screen.py, ~2 min):** MLX's own dequantize + qmv_wide_impl, text from the installed
+  quantized.h, at NV 4 / 8 / 16.
+  - NV 4 must equal MLX: it checks the transcription.
+  - kern23's small 4-bit shapes and counts, random weights, cold. Bitwise vs MLX's 16-row call on 8 instances per
+    shape.
+- **Lines:** PASS >= 2 ms saved per check AND bitwise on every shape. KILL < 1 ms or not bitwise.
+- **Prediction:** builds and NV16 is bitwise: 80 %. MLX ~4.7 -> NV16 ~2.2 ms per check: ~-2.5. PASS 55 %, BETWEEN
+  30 %, KILL 15 % (these shapes may be launch-bound rather than read-bound).
+- **Result (Tue 20:32, ~1.5 min; data/r13b_screen.txt): KILL. The transcription is bitwise; one pass is 2x slower.**
+
+  | shape (count) | MLX 16-row | NV4 | NV8 | NV16 |
+  |---|---|---|---|---|
+  | shared gate / up 640 x 2560 (96) | 1.85 | 1.94 | 1.77 | 4.45 |
+  | shared down 2560 x 640 (48) | 1.51 | 1.51 | 1.34 | 3.61 |
+  | k / v 512 x 2560 (24) | 0.61 | 0.57 | 0.54 | 1.10 |
+  | in_proj_a / b 48 x 2560 (72) | 0.47 | 0.56 | 0.52 | 0.65 |
+  | shared-expert gate 1 x 2560 (48) | 0.31 | 0.35 | 0.33 | 0.37 |
+  | **per check (ms)** | **4.76** | **4.93** | **4.50** | **10.17** |
+
+  - All NV are bitwise = MLX on every shape: vecs_per_tg never enters the arithmetic. MLX's quantized.h functions
+    transcribed into a custom kernel (integer constants in the header) build and match MLX. R-13d can reuse that.
+  - The premise was wrong. MLX's 4 vector groups read the same small weights at the same time and hit cache, so the 4
+    reads are not 4x DRAM. One 16-vector pass has 4x fewer threadgroups and 4x the registers, and loses its latency
+    hiding.
+  - NV8 is the best exact option at -0.26 ms per check: below the KILL line.
+  - vs prediction: bitwise (80 %) yes; ~-2.5 ms predicted, measured +5.4 (wrong: these shapes are latency-bound, as I
+    feared in the prediction's note).
+  - Consequences: R-15 step 2 should not use NV16 for the drafter's qmv_wide shapes. For R-13d, cutting the wasted
+    rows (BM 16) may not help if the split-K kernel is latency-bound, so time it before building more on it.
+
+## R-11 result + R-11b (Leap, Tue 20:10 EET)
+- **R-11 result (Tue 20:07, 8 s of timed cycles; data/r11_screen.txt): LEVER by its line (11.49 ms), but most of it is
+  not removable by one submission.**
+  - Per-cycle wall at 12 layers + the drafter: S 52.92, SB 51.46, G1 52.48, O 51.44 ms. Paired: S - SB 1.36, S - G1
+    0.24, S - O 1.63.
+  - S's CPU spans: draft build 0.45, PLE + check build 4.68 (PLE staging 3.38), accept + commit build 0.61. That is
+    5.75 ms of direct "idle", and 11.5 at 48 layers. The share after the acceptance read is 2.90; after the draft
+    read it is 8.59 (PLE needs the tokens on the CPU), logged separately as NewIdeas asked.
+  - But O (no sync at all) recovers only 1.63 of the 5.75. The no-sync bound is barely faster, so the CPU spans cannot
+    hide behind GPU work: the evals themselves (draft 13.2, check 33.8 ms) must be mostly CPU. MLX's C++ encodes each
+    kernel on the calling thread, and R-10's "Python build 0.46 ms" did not count that.
+  - The cheap exact variants (SB: the check async every 4 layers + the commit submitted alone) give 1.36 ms per cycle
+    at 12 layers, more than G1's GPU-side accept (0.24).
+  - PLE staging is 3.4 ms per check here (0.76 in CA's run). It is CPU work on the critical path in every arm.
+- **R-11b (scripts/r11b_screen.py, ~1.5 min; S and O):** main-thread CPU time inside each eval.
+  - Line: a stage is encoding-bound if its eval CPU >= 80 % of its eval wall.
+  - Prediction: check eval ~70 % CPU, draft eval ~80 %: one of the two encoding-bound, 60 %.
+  - If so, the lever is fewer kernels per check (fusion), not overlap.
+- **R-15 step 1 now also records the drafter's eval CPU time (same line).**
+- **Added to R-11b (NewIdeas ~20:13):**
+  - Dispatch counts: one untimed cycle's draft and check graphs, exported with mx.export_to_dot (view primitives not
+    counted).
+  - Pricing per stage: eval CPU per primitive; an indirect command buffer recorded once and replayed per cycle (~1.5 us
+    per dispatch, my Sun 05:50 floor); encoding on 4 threads.
+  - For MoonShots' R-24: per-row routing (top-10 expert ids for all 16 rows, 12 MoE layers) and the accepted length of
+    20 real drafted checks. Drafts come from DFlash2 on dfl2d_code sample 0, acceptance from the sample's true tokens,
+    and routing from the slice's verify forward. Saved to data/r24_routes.npz, with the union share from rejected rows.
+- **R-11b result (Tue 20:30, ~1 min; data/r11b_screen.txt): not encoding-bound. Overlap is worth ~1.3 ms per
+  12-layer cycle, not ~6.**
+  - Draft eval 12.65 ms wall with 2.56 ms of main-thread CPU (20 %). Check eval 33.52 ms with 5.21 ms CPU (16 %).
+    Both are GPU-bound, so R-11's "evals look CPU-bound" guess was wrong.
+  - Dispatches: draft ~595 kernel-launching primitives (3.8-4.3 us of eval CPU each); 12-layer check ~1,384.
+  - An indirect command buffer replayed per cycle would cost ~0.9 ms (draft) + ~2.1 ms (check, x4 at 48 layers) of
+    CPU. Encoding on 4 threads would cost ~0.6 + ~1.3 ms.
+  - But encoding already overlaps the GPU (16-20 % CPU during evals), so neither buys wall time: priced at ~0 for the
+    cycle.
+  - The open puzzle: S has 6.18 ms of CPU spans with nothing queued, yet O (no sync) wins only 1.29 ms (R-11: 1.63).
+    So ~5 ms of GPU work happens during S's CPU spans, or a fully busy GPU runs slower (clock / power). This screen
+    cannot tell which. The removable idle as measured is ~1.3-1.6 ms per 12-layer cycle.
+  - R-24 dump (MoonShots): 20 real drafted checks (HumanEval_10, only 184 context tokens), 9.40 drafts accepted per
+    check. Per MoE layer the expert union is 89.3 over all 16 rows vs 63.8 over the kept rows: 29 % of the union comes
+    only from rejected rows. data/r24_routes.npz holds routes [20, 12, 16, 10] and accepted [20].
+
+## R-32 STOPPRED (NewIdeas Tue ~20:35, ahead of R-21 and SB; Leap, pre-registered Tue 20:37 EET)
+- **Why:** MoonShots' R-24 on my dump: rejected-only experts are 28.2 % of a check's per-layer union. A cut from
+  layer 12 with a perfect stop row reaches 75 % of that (union -21 %, pairs -26 %). Kept rows stay exact (causal
+  layers); a wrong early stop costs tokens only.
+- **Screen (scripts/r32_screen.py, ~2 min + CPU):** CA's 12-layer slice on real drafted checks: DFlash2 on all 24
+  held-out code samples, acceptance from the samples' true tokens, real commits.
+  - The slice's head is the logit lens at layer 12: per row p(next draft), top-1 p, entropy.
+  - Layer-0 baseline: the drafter's p of its chosen token and its selector margin.
+  - Routing at layers 0-11 is the union proxy for layers 12-47.
+  - Predictors: stop at the first draft whose score < tau. Scores: lens p alone; a logistic probe on lens + drafter
+    features; the drafter p alone; a probe on drafter features. tau and the probes are fit on samples 0-11 (<= 2 %
+    token loss) and scored on 12-23.
+- **Lines (NewIdeas):** PASS: layer-12 whole-check union cut >= 10 % at <= 2 % token loss AND >= 5 points better than
+  layer 0. KILL: < 5 % at <= 2 % loss, or no better than layer 0.
+- **Prediction:** the oracle gives ~21 %. Layer-12 lens p at <= 2 % loss: ~8-12 %; layer-0 drafter p: ~4-7 %.
+  BETWEEN 45 %, PASS 35 %, KILL 20 %. The lens at layer 12 (a quarter of the depth) may be weak; the probe should
+  help.
+- **Result (Tue 20:43, 40 s of GPU; data/r32_screen.txt): BETWEEN by the letter. Layer 12 adds nothing over the
+  drafter's own confidence.**
+  - 628 real drafted checks on 24 samples. 8.80 accepted drafts per check (9.80 tokens).
+  - Oracle stop: whole-check union cut 23.7 %, pairs 29.1 %.
+
+  | predictor (tau on samples 0-11, scored on 12-23) | token loss | whole-check union cut (x 36/48) | pairs cut |
+  |---|---|---|---|
+  | layer 12: lens p(draft) alone | 0.0 % | 0.0 % (no tau within 2 %) | 0.0 % |
+  | layer 12: probe (lens + drafter features) | 2.0 % | 11.1 % | 14.2 % |
+  | layer 0: drafter p alone | 1.6 % | 9.0 % | 12.1 % |
+  | layer 0: probe (drafter features) | 2.1 % | 11.0 % | 14.1 % |
+
+  - The logit lens at layer 12 (a quarter of the depth) carries no usable signal. Everything the layer-12 probe knows
+    comes from the drafter's own p and margin.
+  - Because that signal exists at layer 0, the cut belongs in the drafter: truncate the proposal at the predicted stop.
+    The rows then leave all 48 layers, not 36: ~14.7 % union cut (~18.8 % of pairs) at ~2 % token loss, about 62 %
+    of the oracle's 23.7 %.
+  - Not tried: a probe on the raw layer-12 hidden states (2,560-d), which needs the dump extended. With lens scalars
+    adding 0.1 points, I doubt it.
+  - For MoonShots: data/r32_routes.npz (r24's layout + gates): routes and softmax gate weights [628, 12, 16, 10],
+    accepted [628], sample [628].
+  - vs prediction: lens ~8-12 % predicted, 0 measured (wrong); drafter ~4-7 % predicted, 9-11 % measured (wrong: the
+    drafter's confidence is better than I thought).
+  - R-35 TRUNC2 (NewIdeas ~20:47: a real-loop A/B of probe-based truncation): dead as specified, because DFL2E
+    covered it and does better.
+    - DFL2E's running-product rule (data/trunc_l5ft16_code.txt): conf >= 0.3 cuts 26.7 % of rows at -1.8 % tokens,
+      vs this probe's 18.8 % at -2.0 %. The probe's first-position-below-tau rule loses the cumulative signal.
+    - What stays open is DFL2E's engine test of that rule (variable rows per check above 9), in BigMoE's or Fit12's
+      loop.
+
+## R-11c SB (NewIdeas Tue ~20:31; Leap, pre-registered Tue 20:34 EET): the cheap exact variants, proved and timed
+- **Screen (scripts/r11c_screen.py, ~2 min):** S vs SB (the check async every 4 layers + the commit replay alone) on
+  two identically prefilled lanes per context (1K, 8K), same inputs, alternating 8-cycle blocks. Bitwise: drafts and
+  tokens of every cycle, plus the final states.
+- **Lines:** PASS: bitwise AND S - SB >= 1.0 ms per 12-layer cycle at both contexts. KILL: not bitwise, or < 0.3 ms
+  at both.
+- **Prediction:** bitwise 95 %. S - SB ~1.4 at 1K (R-11: 1.36), ~1.0 at 8K: PASS 55 %, BETWEEN 35 %.
+- **Result (Tue 20:59, re-run after the swap-guard stop at 20:54; data/r11c_screen.txt): PASS. Bitwise, 4.0-4.2 ms
+  per 12-layer cycle.**
+
+  | context | S (ms per 12-layer cycle) | SB | S - SB (paired median, 5 x 8 cycles) | bitwise (43 cycles + final states) |
+  |---|---|---|---|---|
+  | 1K | 51.86 | 47.82 | **4.04** | drafts, tokens, states: yes |
+  | 8K | 53.96 | 50.09 | **4.21** | yes |
+
+  - 3x R-11's 1.36. R-11 ran four arms on one cache in rotating blocks; here each arm has its own identically prefilled
+    lane, so this is the cleaner number.
+  - The gain is larger than the check's Python build (~1.4 ms per 12 layers), so async every 4 layers also helps the
+    GPU side (it starts earlier and works on smaller buffers), not only the CPU overlap. CA's earlier A vs async/4
+    gave 2.6 (1K) / 1.3 (8K).
+  - At 48 layers: ~16 ms per check if all of it scales with layers. The commit-alone part does not scale, so call it
+    ~11-16. That needs the 48-layer engine to confirm.
+  - Exact and trivial: async_eval every 4 layers in the verify forward + submit the commit's state arrays right after
+    the acceptance read.
+  - vs prediction: bitwise (95 %) yes; 1.4 / 1.0 predicted, 4.0 / 4.2 measured; PASS (55 %) yes.
+
+## R-13c NAXP (R-13's family 1; NewIdeas' lines; Leap, pre-registered Tue 20:44 EET)
+- **What MLX runs:** qkv, q_proj and lm_head at M = 16 take qmm_t_nax (no split; bm 32, bn 64, bk 64, wm 2, wn 2).
+  - Per 64-wide k step, all 128 threads dequantize a 64 x 64 weight tile into threadgroup memory between two
+    barriers. Each simdgroup then runs two 32-wide sub-steps of the NAX op.
+  - The second simdgroup row (rows 16-31) has no rows at M = 16 but still runs.
+- **Screen (scripts/r13c_screen.py, ~1.5 min):** MLX's nax.h + quantized_nax.h's loader inlined, integer constants in
+  the header.
+  - C1 = the replica. It must equal MLX, else BLOCKED.
+  - C2 = BM 16, BN 64. C3 = BM 16, BN 32 (2x the threadgroups). C4 / C5 = C2 / C3 with double-buffered weight tiles
+    (the next tile dequantizes while this one computes; one barrier per step).
+  - kern23's shapes and counts (random 4-bit weights, cold). Bitwise vs MLX on 4 instances per shape.
+- **Lines (NewIdeas):** PASS >= 1.5 ms saved per check AND bitwise on every shape. KILL < 0.5 ms or not bitwise.
+- **Prediction:** C1 bitwise 80 %. Today's family total is ~7.0 ms (kern23: qkv 3.31 + q 1.44 + lm_head 2.21; floor
+  3.94). Best arm ~5.2: -1.8. PASS 50 %, BETWEEN 35 %, KILL 15 %.
+- **Result (Tue 20:56, ~1 min; data/r13c_screen.txt): KILL. Every arm is bitwise, none is faster.**
+
+  | shape (count) | MLX | C1 replica | C2 BM16 | C3 BM16 BN32 | C4 C2 + double buffer | C5 C3 + double buffer |
+  |---|---|---|---|---|---|---|
+  | qkv (36) | 3.38 | 3.47 | 3.40 | 3.81 | 3.79 | 4.07 |
+  | q_proj (12) | 1.52 | 1.53 | 1.48 | 1.49 | 1.63 | 1.64 |
+  | lm_head (1) | 2.31 | 2.27 | 2.18 | 2.11 | 2.55 | 2.49 |
+  | **per check (ms)** | **7.20** | **7.26** | **7.06** | **7.41** | **7.97** | **8.19** |
+
+  - MLX's quantized NAX GEMM replicates bit for bit at any tiling and with double-buffered weight tiles.
+  - Unlike R-09b's bf16 kernel, which loads straight from device memory every step and gains from prefetch, this one
+    dequantizes each tile into threadgroup memory. Overlapping the next tile's loads buys nothing (it costs 0.8-1
+    ms), so the cost is the dequantize / NAX work, not load latency.
+  - The best exact arm (C2) saves 0.14 ms per check. vs prediction: -1.8 predicted (wrong); bitwise (80 %) yes.
+  - This family's 3.3 ms over its floor is not reachable with MLX's arithmetic order. Only a different dequant /
+    MMA scheme (a reference change, decision 4's non-identical side) gets it.
+
+## R-13d SPK16 (R-13's family 2, the biggest exact piece; NewIdeas' lines; Leap, pre-registered Tue 20:47 EET)
+- **What MLX runs:** in_proj_z (6144 x 2560, split 2) and o_proj / out_proj (2560 x 6144, split 6) at M = 16 take
+  affine_qmm_t_splitk.
+  - That is qmm_t_impl at BM = BK = BN = 32 with 2 x 2 simdgroups. Each split partition writes a bf16 partial; then a
+    strided sum over axis 0 runs as a second launch.
+  - At M = 16 half of each 32-row tile is padding.
+  - The per-output order is steel's BlockMMA: 8-wide simdgroup-MMA k-steps through each 32-wide block, independent of
+    the tile layout.
+- **Screen (scripts/r13d_screen.py, ~1.5 min):** MLX's steel gemm.h + quantized.h inlined. Each kernel is followed by
+  mx.sum(partials, axis=0), MLX's own reduction.
+  - D1 = MLX's qmm_t_impl at BM 32 (the replica: must equal MLX, else BLOCKED).
+  - D2 = MLX's qmm_t_impl at BM 16.
+  - D3 = D2's order with double-buffered X / W tiles.
+  - kern23's shapes and counts (random 4-bit, cold). Bitwise vs MLX's 16-row call on 4 instances per shape.
+- **Lines (NewIdeas):** PASS >= 4 ms saved per check AND bitwise on both shapes. KILL < 2 ms or not bitwise.
+- **Prediction:** D1 bitwise (incl. mx.sum = MLX's internal reduce) 65 %. MLX 13.2 ms per check (kern23), floor 2.7.
+  D2 ~10.5, D3 ~8.5: ~-4.7. PASS 40 %, BETWEEN 30 %, KILL 30 % (R-13b showed latency-bound kernels can lose when
+  the work per threadgroup changes).
+- **Result (Tue 20:57, ~1 min; data/r13d_screen.txt): PASS. D2 saves 4.52 ms per check, bitwise.**
+
+  | shape (split, count) | MLX | D1 replica BM32 | D2 BM16 | D3 BM16 + double buffer |
+  |---|---|---|---|---|
+  | in_proj_z 6144 x 2560 (2, 36) | 5.67 | 5.78 | **3.73** | 3.82 |
+  | o_proj + out_proj 2560 x 6144 (6, 48) | 7.48 | 7.63 | **4.90** | 4.97 |
+  | **per check (ms)** | **13.15** | **13.41** | **8.64** | **8.79** |
+
+  - D2 is MLX's own qmm_t_impl at BM 16, followed by mx.sum(partials, axis=0), MLX's own reduction. It is bitwise =
+    MLX's 16-row call on both shapes; D1 confirms that mx.sum reproduces MLX's internal strided reduce.
+  - The win is the padding: at M = 16 MLX multiplies 32-row tiles. Double buffering adds nothing (as in R-13c).
+  - vs prediction: D1 bitwise (65 %) yes; D2 ~10.5 predicted, 8.64 measured; PASS (40 %) yes.
+  - Exact per-check savings so far (standalone kernels): HC read S4 -14.68, R-13d -4.52 (R-13b -0.26 and R-13c -0.14
+    are below their lines).
+  - Next, the confirmation: both swaps inside CA's real check (R-36), bitwise logits + states and the paired time.
+
+## R-36 INCHECK (NewIdeas GO Tue ~20:59; Leap, pre-registered Tue 21:01 EET): S4 + D2 inside the real check
+- **Screen (scripts/r36_screen.py with scripts/leapk.py, ~2.5 min):** CA's 12-layer slice running the engine's eager
+  16-row check (acceptance read, lazy commit, keep 10). Four lanes, each identically prefilled, the same tokens,
+  alternating 8-check blocks, 5 rounds, at 1K and 8K:
+  - base: the engine as shipped.
+  - S4: GatedResidual's 16-row decode_verify read -> R-09b's S4.
+  - D2: mx.quantized_matmul calls MLX would serve with split-K at M = 16 -> R-13d's D2.
+  - both: S4 + D2.
+  - Bitwise: every check's logits and all cache states vs base.
+- **Lines (NewIdeas):** PASS = every bit equal AND 'both' saves >= 80 % of the standalone sum (>= 15.4 ms per 48
+  layers = >= 3.84 per 12-layer check) at 1K and 8K. KILL = any bit differs. Also reported: each swap's in-check
+  factor (4 x its 12-layer saving / standalone), including S4's x1.3 question.
+- **Prediction:** bitwise 85 % (S4's no-pending norm path and D2 inside MTPLX's own calls are new). S4 in-check factor
+  ~1.1 (12-layer saving ~4.0 ms), D2 ~0.9 (~1.0 ms), both ~5.0 per 12 layers -> ~20 ms per 48: PASS 60 %.
+- **Result (Tue 22:12, ~40 s of GPU; data/r36_screen.txt): PASS. Every bit equal; -18.2 to -18.4 ms per 48-layer
+  check in-check.**
+
+  | context | base (ms / 12-layer check) | S4 | D2 | both | saved S4 / D2 / both | both x4 (48 layers) |
+  |---|---|---|---|---|---|---|
+  | 1K | 36.09 | 32.92 | 34.42 | 31.51 | 3.56 / 1.62 / 4.60 | **18.42** |
+  | 8K | 38.30 | 35.02 | 37.00 | 33.79 | 3.33 / 1.47 / 4.55 | **18.19** |
+
+  - Bitwise vs the shipped engine: the logits of all 43 checks and every cache state, for S4, D2 and both, at both
+    contexts. The swaps engaged on 4,128 HC reads and 3,612 split-K matmuls.
+  - In-check factors (4 x the 12-layer saving / standalone):
+    - S4 0.97 / 0.91: it lands as measured standalone, not x1.3.
+    - D2 1.43 / 1.30: it does better in the check than standalone.
+  - The check falls 12.7 % (1K) / 11.8 % (8K) with identical bits. This is not a reference change. SB (R-11c,
+    -4.0 / -4.2 ms per 12-layer cycle) is separate and should stack; a combined run would confirm it.
+  - vs prediction: bitwise (85 %) yes; S4 ~1.1 predicted, 0.9-1.0 measured; D2 ~0.9 predicted, 1.3-1.4 measured;
+    ~20 per 48 predicted, 18.2-18.4 measured; PASS (60 %) yes.
+  - For the engine owner: scripts/leapk.py (hc_read, splitk_d2, routes_splitk) and r36_screen.py's two patch points
+    (GatedResidual.__call__ at 16 decode_verify rows with a block inject; mx.quantized_matmul where MLX takes split-K
+    at M = 16).
+
+## R-36b = R-39 STACK (NewIdeas GO ~22:15; Leap, pre-registered Tue 22:13 EET): do the three bit-identical levers stack?
+- **Screen (scripts/r36b_screen.py, ~3 min):** R-36's four-lane design with arms base, SB (check async every 4 layers
+  + commit replay alone), S4D2 (R-36's both) and all3 (SB + S4 + D2). Bitwise: logits of every check + all cache states
+  vs base, at 1K and 8K.
+- **Lines (NewIdeas, R-39):** PASS = every bit equal AND all3's paired saving >= 6.5 ms per 12-layer check at 1K and
+  8K. KILL = any bit differs. My earlier 80 %-stacking line is still reported.
+- **Prediction:** bitwise 90 %. SB here (checks only, no drafter) ~3 ms; S4D2 ~4.6; all3 ~7 ms per 12-layer check
+  (~28 per 48): stacking ratio ~0.9, PASS 70 %.
+- **Result (Tue 22:25, ~3 min; data/r36b_screen.txt): PASS. Every bit equal; all three stack (ratio 0.97-1.0):
+  -26.5 / -30.9 ms per 48-layer check.**
+
+  | context | base | SB | S4D2 | all3 | saved SB / S4D2 / all3 (sum of parts) | all3 x4 |
+  |---|---|---|---|---|---|---|
+  | 1K | 36.46 | 34.37 | 31.55 | **29.98** | 2.09 / 4.71 / **6.63** (6.80) | **26.5** |
+  | 8K | 39.65 | 36.45 | 33.64 | **31.76** | 3.20 / 4.49 / **7.73** (7.69) | **30.9** |
+
+  - Bitwise vs the shipped engine: logits of all 43 checks + every cache state, for SB, S4D2 and all3, at 1K and 8K.
+  - The check is 18.2 % (1K) / 19.5 % (8K) faster with identical bits.
+  - SB here is checks-only (2.1-3.2 ms). In R-11c's full draft + check cycle it gave 4.0-4.2, because the commit
+    replay then overlaps the draft build. In the engine's real loop the total may be nearer -30 to -34 ms.
+  - vs prediction: bitwise (90 %) yes; all3 ~7 per 12 layers predicted, 6.6 / 7.7 measured; PASS (70 %) yes.
+  - Hand-off note for BigMoE: HANDOFF_EXACT16.md.
+
+## R-15 step 2 (NewIdeas Tue ~22:27; Leap, pre-registered Tue 22:28 EET): the drafter's dense class on faster kernels
+- **Screen (scripts/r15b_screen.py, ~4 min; R-10's harness, 4-bit eager drafter):**
+  - E4: as is.
+  - D2: its split-K MLP calls via R-13d's D2.
+  - GU: gate | up merged into one 15,360-wide matmul (480 tiles, so MLX's NAX qmm, no split).
+  - GUD2: GU + down via D2.
+  - Draft ms on one sample (b16, b32) and tokens per check over the 24 held-out replays.
+- **Lines (QUEUE R-15):** PASS <= 6.5 ms at b16 with tokens within 1 %. KILL > 8.5 ms. The head (2.27) is untouched,
+  so this tests the dense half only.
+- **Prediction:** E4 ~9.8; D2 ~9.1; GUD2 ~8.6 ms (dense 4.66 -> ~3.5). KILL 55 %, BETWEEN 45 %. Tokens: D2 exact,
+  GU within 1 % (99 %).
+- **Result (Tue 22:35, ~4 min; data/r15b_screen.txt): BETWEEN. GUD2 7.93 ms at b16 (-20 %), tokens x0.9955.**
+
+  | arm | b16 ms | tokens x | b32 ms | tokens x |
+  |---|---|---|---|---|
+  | E4 | 9.93 | 1.0000 | 11.40 | 1.0000 |
+  | D2 (bit-identical) | 8.47 | 1.0000 | 11.40 | 1.0000 |
+  | GU (gate / up merged, NAX) | 8.29 | 0.9955 | 10.06 | 0.9984 |
+  | **GUD2** | **7.93** | 0.9955 | 10.31 | 0.9984 |
+
+  - D2 alone is exact for the drafter too: -1.46 ms per b16 draft. At b32 nothing changes, because the MLP calls have
+    32 rows and leave split-K.
+  - Merging gate | up (N 15,360, NAX qmm) moves the drafter's numerics by rounding only: tokens -0.45 % at b16.
+  - What is left at b16 (~7.9 ms): the head (~2.3), attention / conv / select / norms (~2.7), the rest (~1.6), and
+    ~1.3 ms of dense. Reaching 6.5 needs the head or the small ops fused, a different kind of change.
+  - vs prediction: E4 9.8 predicted (9.93); GUD2 ~8.6 predicted, 7.93 measured; BETWEEN (45 %) yes.
+
+## R-40 REF2 (Kamen approved decision 4, Tue 22:40; NewIdeas row R-40): plan (Leap, Tue 23:13, no GPU yet)
+- **Goal:** one patch module that makes the 45 GB engine's exact reference batch-invariant and faster:
+  - 4-bit dense via qmm16c (L1-23: -29 ms per 16-row check vs chunked; one fixed 16-row tile, decode pads);
+  - routed experts via experts_nax (qmmg25, L1-25);
+  - HC reads via S4; bf16 matmuls via MLX's 16-row calls (padding-independent per L1-23);
+  - SB scheduling;
+  - a load-time self-test.
+  - PASS (NewIdeas): bitwise batch-invariant AND <= today - 40 ms per 48-layer check.
+- **The real question is not the matmuls.** Today's 1-row decode runs other kernels than the 16-row verify for
+  attention (sdpa_vector vs the verify kernels / QSA selection), the GDN recurrence (decode step vs the T-step
+  kernel; the state is fp32, so the round trip itself is exact) and the router. Batch invariance needs either:
+  - (a) decode run as a 16-row verify with one real row (rows 1-15 padding, masked from the GDN / KV / conv state;
+    commit keep 1), so every token goes through the same kernels; or
+  - (b) proof that each of those ops gives the same bits per row at M = 1 and inside M = 16.
+- **First screen (INV0, Wed 08:02):** in CA's slice, a 16-row verify of 16 real tokens vs 16 AR steps of 1 token
+  (the engine's decode path), today's kernels and with the REF2 matmul patches. Per-layer row outputs are compared
+  bitwise to map where the rows first diverge (layer, op class). That decides (a) vs (b) before the module is built.
+- **INV0 (pre-registered Tue 23:16; scripts/inv0_screen.py, ~3 min):** AR16 (16 one-token steps through the engine's
+  verify path, commit keep 1) vs V16 (one 16-row verify), on identical 1K caches in CA's slice.
+  - Records in forward order: PLE, attention / GDN block, MoE and layer outputs. Bitwise per row; first divergence per
+    row.
+  - Run twice: today's kernels, and REF2's padding patches: every quantized matmul / bf16 Linear / HC read with < 16
+    rows padded to 16; 4-bit g64 N >= 1024 via qmm16c, the rest via MLX's 16-row calls; HC via S4; attention / GDN /
+    experts as shipped.
+  - Prediction: today, rows diverge at layer 0's first matmul. REF2: logits equal 30 % (attention / GDN already
+    position-invariant through the verify path at M = 1); otherwise the first divergence is in attention or GDN (70
+    %), which means route (a).
+  - **Result (Wed 15:47, 10 s; data/inv0_screen.txt): only attention breaks batch invariance under REF2.**
+    - today: all 16 rows diverge at record 0 (layer 0's GDN block: 1-row vs 16-row matmul kernels). Logits equal
+      0 / 16.
+    - REF2: records 0-9 equal for every row, i.e. layers 0-2 complete: GDN blocks incl. the recurrence, the PLE
+      layer, MoE (MLX's gather experts), HC reads (S4) and the layer outputs. The first divergence for all 16 rows is
+      record 10, layer 3's attention (the first QSA layer). Logits equal 0 / 16 (downstream of it).
+    - So the matmul / HC / expert side of REF2 is batch-invariant as built. What is left is the attention path: at
+      M = 1 vs inside M = 16 it runs other code / kernels (QSA block selection + SDPA).
+    - Next (KERNELS, Kamen's 15:47 role): find which part of QSA differs (the indexer's block selection, which may
+      depend on the total key count, vs the SDPA kernel: vector for 1 query vs full for 16), then either a
+      batch-invariant attention kernel (per-row selection + one key blocking from position 0) or decode as a 16-row
+      padded step. Only an attention fix is needed, not route (a) in general.
+    - vs prediction: today at layer 0 (yes, the GDN block's matmuls); REF2 "first divergence in attention or GDN"
+      (70 %): attention.
+- **INV1 (pre-registered Wed 15:50; scripts/inv1_screen.py, ~2 min):** INV0's REF2 run plus one patch. An attention
+  call with S < 16 rows is padded to 16 (copies of its last row) through the same 16-row verify path, the QSA cache
+  is trimmed back by the padding (QSACache.trim: KV + pooled blocks), and the real rows are kept.
+  - Pass for the route: every record and all 16 logits rows bit-identical AR vs verify.
+  - Prediction: 55 % all equal. Risk: the indexer's pooled current block includes the padding rows (future positions)
+    in AR but real rows in the verify; if the selection reads it, rows still differ.
+  - **Result (Wed 16:07, 11 s; data/inv1_screen.txt): REF2 IS BATCH-INVARIANT.** Logits of all 16 rows and every
+    one of the 37 records per forward (GDN, PLE, attention, MoE, layer outputs) are bit-identical between 16 one-token
+    AR steps and the 16-row verify, on the 12-layer slice at 1K.
+    - The REF2 patches that do it: every quantized / bf16 matmul and HC read with < 16 rows padded to 16 (qmm16c for
+      4-bit g64 N >= 1024; MLX's 16-row call otherwise; S4 for the HC reads), plus attention with < 16 rows padded to
+      16 through the verify path and the QSA cache trimmed back. GDN and MLX's gather experts are invariant as shipped.
+    - So spec decoding against REF2's own AR output is exact by construction, as far as this slice shows. The indexer
+      risk did not bite.
+    - vs prediction: 55 % all equal: yes.
+    - Next: the module (scripts/ref2.py: these patches + experts_nax + SB + a load-time self-test), then R-40's timing
+      screen vs today (-40 ms per 48 layers = -10 per 12-layer check), then EvalSuite's hand-off.
+- **R-40 screen (pre-registered Wed 16:10; scripts/ref2.py + scripts/r40_screen.py, ~4 min):** the module on CA's
+  slice, loaded with MTPLX_FUSED_GATE_UP=1 (MTPLX's sanitize-time gate | up fusion, no copy) so the experts run
+  experts_nax.
+  - Part 1: batch invariance, AR16 vs V16 with REF2 on (records + logits, all 16 rows) at 1K.
+  - Part 2: speed per 12-layer check, today's kernels (eager) vs REF2 + SB, paired lanes at 1K and 8K. Both lanes
+    load the fused gate | up option, so "today" here is the shipped kernels with MTPLX's fused-MoE option.
+  - Plus ref2.self_test().
+  - **Lines (NewIdeas):** PASS = bitwise batch-invariant AND >= 10 ms saved per 12-layer check (40 per 48) at 1K and
+    8K. KILL = not invariant.
+  - Prediction: invariant 85 % (experts_nax is new in the chain; L1-25 showed it row-invariant). Saving per 12 layers:
+    qmm16c dense ~3, experts ~5.5, S4 ~3.5, SB ~2-3 -> ~14 (~56 per 48): PASS 65 %.
+  - **Result (Wed 16:28, ~25 s of GPU; data/r40_screen.txt): PASS. REF2 is batch-invariant and -51 / -60 ms per
+    48-layer check.**
+    - self-test: qmm16c, MLX 16-row, bf16 Linear all invariant. All 12 MoE blocks loaded fused (experts_nax engaged).
+    - Part 1 (1K, with experts_nax in the chain): logits of all 16 rows and every record bit-identical between 16
+      one-token AR steps and the 16-row verify.
+
+    | context | today (ms / 12-layer check) | REF2 + SB | saved (paired) | x4 (48 layers) |
+    |---|---|---|---|---|
+    | 1K | 39.60 | 26.78 | 12.82 | **-51.3** |
+    | 8K | 41.88 | 27.36 | 14.91 | **-59.6** |
+
+    - The check is 32 % (1K) / 36 % (8K) faster.
+    - vs prediction: invariant (85 %) yes; ~14 per 12 layers predicted, 12.8 / 14.9 measured; PASS (65 %) yes.
+    - Next: EvalSuite runs the same-scores verdict (math / code / instructions) with ref2.generate (AR = each token a
+      1-row verify + commit keep 1). Hand-off: REF2_HANDOFF.md.
+- **EvalSuite's catch (Wed ~16:30): the full 125B only runs streamed (bigmoe.loader.load_streamed), whose expert
+  pools hold separate gate / up / down. REF2's experts patch needed MTPLX's fused gate | up module.**
+  - Fix in ref2.py (no BigMoE change): experts_split = qmmg on separate gate and up calls (= the fused halves, bit for
+    bit), patched into mlx_lm's SwitchGLU.__call__, which BigMoE's streamed subclass calls with slot ids. Also patched:
+    bigmoe.stream._switch_sorted. Self-test gains "experts split == fused" and "experts rows alone". BIGMOE_TIER is
+    not supported.
+  - **Streamed check (pre-registered Wed 16:35; scripts/ref2_stream_check.py, ~5-8 min):** the full 125B in
+    EvalSuite's exact REF harness (evalsuite.env + evalsuite.model.load('ref', C = 192): load_streamed + its
+    gate-rank combine patch; switched at 16:4x on EvalSuite's note, before any run). ref2 now exposes per-path call
+    counters (ref2.counts()). Same 1K prefill on two caches; 16 one-token AR steps (ref2.ar_step) vs one 16-row verify.
+    Every record of all 48 layers and every logits row, bitwise. Pass = self-test + all equal; then EvalSuite runs.
+  - Prediction: PASS 75 %. Risks: the streamed MoE's routing / slot path or a layer-specific QSA difference beyond
+    layer 11.
+  - **Result (Wed 16:52, 30 s; data/ref2_stream_check.txt): PASS. REF2 is batch-invariant on the FULL streamed 125B.**
+    - Harness: EvalSuite's REF (C = 192, SwitchGLUStreamed, 29.4 GB active). self-test all True (incl. experts split
+      == fused, experts rows alone).
+    - 16 one-token AR steps vs one 16-row verify: all 145 records per forward (48 layers) and all 16 logits rows
+      bit-identical.
+    - Counters per AR token: experts 48 (every layer on the REF2 kernel), attention 12 (padded QSA), hc_read 96,
+      hc_eager16 1, qmm16c 181, mlx16 300.
+    - EvalSuite has the green light for the same-scores verdict (ref2.generate).
+    - vs prediction: PASS (75 %) yes.
+- **R-40 step 2, EvalSuite's same-scores verdict (Wed ~21:10; ~/EvalSuite/docs/RESULT_ref2_2026-10-28.md, EvalSuite
+  commit 84ebfba): PASS.** REF2 scores the same as today's stock reference (ref.r2, re-decoded the same day), 210 core
+  rows each, on Leap's 86ca915 frozen at ~/EvalSuite/snap/leap-86ca915 (all 13 chunks had the same file hashes).
+
+  | set | REF2 - today | p |
+  |---|---|---|
+  | math | +8.0 | 0.12 |
+  | IFEval | -3.0 | 0.38 |
+  | HumanEval+ | 0.0 | 1.00 |
+
+  - All three are within the floor's rounding noise.
+  - REF2 ran on every AR step of all 210 rows, at exactly 48 experts / 12 attention / 96 hc_read / 1 hc_eager16
+    calls per step.
+  - Flags (information only): 4 rows looped, 3 of them also loop in the stock arms. IFEval agreement is 95 %,
+    against the floor's 97 %.
+  - REF2's plain AR runs at 11.65 tok/s vs 15.50 for today's AR (x0.75), as the hand-off expected. Spec checks are
+    the fast path. Peak 35.6 GB (+0.6 GB).
+  - Decision 4's condition is met: REF2 may replace the 45 GB line's exact reference. NewIdeas has the verdict.
+- **R-40 STEP 3 (NewIdeas Wed 21:2x, QUEUE row R-40 'STEP 3'; pre-registered Thu 2026-10-29 01:55 EET;
+  scripts/r40s3_screen.py, ~6 min): REF2 + SB vs today's shipped exact check, all 48 layers, streamed, with live
+  drafting.**
+  - Harness: EvalSuite's REF harness (evalsuite.model.load('ref'): load_streamed + its install), at C = 176 instead of
+    the line's 192. That keeps the process under the 36 GB rule with the drafter loaded; numerics don't depend on C.
+  - Drafter: DFlash2 L1-20 (bf16, block 16, the official 1-step loop with R-06's exact two-stage head), run live on
+    taps from the verify forward (layers 5 / 15 / 25 / 35 / 45). It always runs on stock kernels.
+  - Loop: greedy, keep = accepted + 1, commit_verified_window.
+  - Arm today: stock kernels, the engine's exact verify scopes, the commit left lazy.
+  - Arm REF2 + SB: ref2 on for prefill and checks. SB = the mid-loop async every 4 layers (R-37's
+    BIGMOE_VERIFY_MIDLOOP, patched per arm) + the commit replay submitted alone.
+  - Prompts: 2 code (HumanEval/68, /91) + 2 math (math500 prealgebra/1640, algebra/694), interleaved, up to 256 new
+    tokens. ABBA / BAAB per prompt. No new prompt after 420 s; the verdict then uses the prompts done.
+  - 16-row checks with > 92 ids take BigMoE's _sync_call path: a per-layer sync on the ids, ensure, scratch gather.
+  - Exactness:
+    - every REF2 run's tokens equal EvalSuite's REF2 AR rows (results/ref2, Leap 86ca915 = today's kernel files);
+    - the REF2 runs agree with each other;
+    - on HumanEval/68 and prealgebra/1640, every kept check row's logits are bit-identical to in-process ref2.ar_step
+      logits for the first 48 tokens.
+  - Speed: the median cycle (draft + check + commit) per run. Saving = today - REF2, averaged per prompt, then the
+    median over prompts. Also reported: prefill s, kept per check, tok/s per domain, REF2 counters per check.
+  - **Lines (NewIdeas):** PASS = exact AND >= 40 ms saved per 48-layer check. KILL = < 20 ms saved. BETWEEN otherwise.
+  - Prediction: exact 90 %. Saving ~30 ms (range 20-45):
+    - SB's mid-loop async can hide little behind the per-layer id syncs of the _sync_call path;
+    - the experts run experts_split on the scratch pool (two qmmg) instead of the fused experts_nax;
+    - the slice's kernel-only share was ~8.8 ms per 12 layers (~35 per 48).
+    - PASS 30 %, BETWEEN 55 %, KILL 15 %.
+  - **Result, first attempt (Thu 01:57-02:06; logs/job.out; stopped by run_locked's 9-min limit after 1.3 prompts, no
+    verdict file):**
+    - Speed: a 16-row check takes ~3.9 s in this engine (today median cycle 3910 / 3906 ms, REF2 + SB 3830 / 3860 on
+      HumanEval/68). Drafting is 25 ms. 16 rows x 10 ids exceed MAXK 40, so every check takes BigMoE's _sync_call:
+      per layer an id sync, synchronous SSD loads (ensure), a scratch gather and clear_cache.
+    - tok/s with live DFlash2: code 3.8 (kept 15.41 per check: /68's answer repeats the prompt's code); math 1.2 (kept
+      5.24). For comparison, REF2's plain AR runs at 11.65 tok/s (EvalSuite).
+    - REF2 saved 80 / 46 ms per check on /68, ~1-2 % of the check and inside its noise.
+    - **Not exact:**
+      - 0 / 48 logits rows bit-identical to in-process ref2.ar_step, on both prompts;
+      - tokens equal EvalSuite's REF2 AR rows 256 / 256 on /68 but only 199 / 256 on prealgebra/1640.
+      - This contradicts the 16:52 stream check (C 192, P 1024, no SB, no drafter).
+    - The runner's rc-143 retry repeated the same run; Leap stopped it by PID at 02:09 (it held the shared lock for
+      nothing).
+- **R-40 STEP 3x (pre-registered Thu 02:12; scripts/r40s3x_screen.py, ~3 min): localize the exactness break, and price
+  warm checks.**
+  - Setup: as STEP 3, HumanEval/68 at C = 176. AR = 16 ref2.ar_step on the REF2 row's first 16 tokens.
+  - Part A, variants (each with its own prefill, then one 16-row verify of the same tokens, rows vs AR, bitwise):
+    - V0 = REF2 alone (= the stream check here); V0b = V0 again (determinism);
+    - V1 = + SB mid-loop; V2 = + taps hook; V3 = drafter loaded + one draft before the verify; V4 = all of STEP 3.
+    - V5 (added Thu 15:44, before any run): V0 after a stock 16-row check + commit on another cache. STEP 3 ran its
+      today arm before the compared REF2 run; the 16:52 stream check kept REF2 on throughout.
+  - Part B: warm 16-row checks (sliding by one token, commit keep 1, so each check's experts are mostly resident).
+    Today vs REF2 + SB in alternating blocks of 4, 5 rounds.
+    - Line (step 3's, on warm checks): PASS >= 40 ms saved, KILL < 20 ms.
+    - Prediction: warm check ~0.8-1.5 s (syncs + gathers); saving ~35 ms: PASS 35 %, BETWEEN 45 %, KILL 20 %.
+  - Prediction: V0 == AR 60 % (then V1, SB's mid-loop async, is the main suspect, 50 %); prefills deterministic 90 %.
+    If V0-V4 all pass, V5 (order / first-call state) is the suspect.
+  - **Result (Thu 16:12-16:17, rc 0; data/r40s3x_screen.txt):**
+    - **Part A: REF2 is bit-exact in every live-loop variant; the break is a state leak from a stock check.**
+      - V0, V0b, V1 (SB mid-loop), V2 (taps), V3 (drafter + a draft), V4 (all of STEP 3): 16 / 16 verify rows
+        bit-identical to ar_step.
+      - Prefills deterministic (last logits equal); verify deterministic (V0 == V0b).
+      - V5: after one stock 16-row check + commit keep 5 on ANOTHER cache, a fresh prefill of the same prompt gives
+        other bits (last logits differ). All 16 verify rows then differ from the AR, though the argmax still agrees.
+      - So STEP 3's REF2 runs (after its today run) were judged against a cache from a changed prefill; REF2's
+        kernels are not at fault.
+    - **Part B: warm 16-row checks (0.0 expert misses per check):** today 4299.8 ms, REF2 + SB 4277.4 ms. Saved
+      22.4 ms per 48-layer check: BETWEEN (step 3's line, applied to warm checks).
+      - Spread today 4231-7390, REF2 4217-5722.
+      - Even with every expert resident, a 16-row check costs ~4.3 s: the engine path, not the kernels, sets the
+        price.
+      - **Correction (Thu 17:2x, from ~/BigMoE/bigmoe/stream.py; replaces 'the _sync_call path').** The checks took
+        PF1's _sync_call_staged -> _staged_full. EvalSuite's env forces BIGMOE_PF_PREFILL=1 + BIGMOE_PF_FULLSCR=1, and
+        _stage_drop (the only exit) runs only on a gated call with <= MAXK (40) ids. An all-16-row loop never makes
+        one, so every check inherits the prefill's staging.
+        - Every layer then streams ALL non-resident experts of the next one: ~336 x 2.8 MB x 48 = ~45 GB per check,
+          ~3.8 s at ~12 GB/s. That is the 4.3 s. The 0.0 misses are a counter artifact (staging bypasses ensure).
+        - BigMoE's default (PF1 off) is the plain _sync_call: ensure loads only the needed experts. STEP 3z re-runs
+          step 3 there.
+    - vs prediction: V0 == AR (60 %) yes; SB the suspect (50 %) no, V5 was. Warm check ~0.8-1.5 s predicted, 4.3 s
+      measured; saving 35 predicted, 22.4 measured (BETWEEN, 45 %).
+- **R-40 STEP 3y (pre-registered Thu 16:25; scripts/r40s3y_screen.py, ~1-2 min): which call leaves the
+  prefill-changing state, and which component carries it.**
+  - Prefill A with per-layer records (GDN, attention, MoE, PLE, HC read, layer output: the last row + a checksum of all
+    rows), REF2 off.
+  - Then, in order, each trigger followed by a fresh prefill compared record by record:
+    - t1 = REF2 16-row check + commit keep 5 (REF2's own loop);
+    - t2 = stock 16-row check, no commit;
+    - t3 = stock commit keep 5;
+    - t4 = stock 1-row AR step.
+  - A measurement, no lines.
+  - Prediction: t1 leaves no state (70 %), since V0-V4 + the AR's commits didn't. t2 is the trigger (60 %), t3 (30 %).
+    The earliest differing record is an HC read or the MoE (stock <= 16-row paths REF2 replaces) at layer 0 (50 %).
+  - **Amended prediction (Thu 17:36, before any run; from reading ~/BigMoE/bigmoe/stream.py and ext/bigmoe_ext.cpp): a
+    stale PF1 staging entry, i.e. wrong expert weights, not a numerics drift.**
+    - The mechanism:
+      - The commit's PLE-layer replay (zero-based layer 1; ple_layer_ids [2]) is a lone layer forward. At keep 5 its
+        MoE call has 50 ids > MAXK 40, so under EvalSuite's PF1 it takes _sync_call_staged.
+      - That call kicks layer 2's staging into buffer 0 (_STAGE["pending"][2]), which nothing consumes. Only
+        _stage_drop clears pending, and only a gated call runs it.
+      - The next forward's layer 0 restages buffer 0 with layer 0's experts, and layer 2 skips its own kick
+        ("2 in pending").
+      - ext.scratch_full copies staging slots by position, with no record of which layer filled the buffer. So
+        layer 2's non-resident experts get layer 0's weights.
+      - ext.adopt then writes them into layer 2's pool, so the damage persists in later forwards of the process.
+    - Hence:
+      - t1 leaks too (80 %): REF2's own commit keep 5 takes the same path. The leak is PF1 + a commit with keep >= 5,
+        not stock kernels.
+      - The earliest differing record is record 14 = layer 2's MoE (75 %).
+      - t2-t4 also differ from A, because the pool stays damaged (70 %).
+      - This fits STEP 3. /68 (kept 15.41, mostly full accepts, no replay) matched the REF2 row 256 / 256;
+        prealgebra/1640 (kept 5.24) matched only 199 / 256.
+    - Exposure: only PF1 with lone > MAXK calls. AR (keep 1) and full-accept commits go through the gated path or
+      skip the replay. BigMoE's shipped engine has PF1 off. STEP 3z keeps PF1 off outside prefills.
+  - **Result (Thu 17:46-17:48, runner 20, rc 0; data/r40s3y_screen.txt): a stale PF1 staging entry. REF2 is not
+    involved; it is BigMoE's PF1 path under EvalSuite's env.**
+    - Prefills are deterministic (A == B: all 242 records and the last logits).
+    - After any 16-row check: nothing pending. After a commit keep 5, REF2's (t1) or stock (t3): pending = [2].
+    - The next prefill then differs from A from record 14 = layer 2's MoE on (228 of 242 records, the last logits).
+      Before it, every record is equal: layers 0-1 (incl. the PLE layer) and layer 2's HC reads + GDN.
+    - t2 (stock check, no commit) and t4 (a 1-row gated step, whose _stage_drop clears pending): the next prefill
+      == A, bit for bit.
+    - **Stock kernels leave no state; neither do REF2's.** The trigger is the commit's lone PLE-layer replay with
+      > MAXK ids under PF1. Its stale layer-2 entry is consumed by the next forward, whose layer 2 builds its scratch
+      from buffer 0 after layer 0 has restaged it (ext.scratch_full has no layer tag): wrong expert weights.
+    - Damage lasts one forward when a prefill consumes the entry: a long prefill uses every resident expert, so
+      ext.adopt stops at once ("the tail is used this chunk"). If a 16-row check consumes it (STEP 3's live loop:
+      every check after a partial accept of 5-15 rows), adopt can copy the wrong weights into layer 2's pool, where
+      they stay while resident. That part is by the code, not measured here.
+    - vs the amended prediction: t1 leaks (80 %) yes; record 14 = layer 2's MoE (75 %) yes; t2-t4 damaged (70 %) no
+      (one forward only, as above). The original prediction (t1 clean 70 %; HC / MoE at layer 0, 50 %) was wrong.
+    - Fix (BigMoE's engine; Leap edits nothing there): when _stage_kick stages layer M into buffer b, drop any other
+      pending entry on buffer b (a stale one then re-stages at its own turn). Or tag each buffer with its layer and
+      re-stage on a mismatch at pop.
+    - Reported Thu 17:49 to BigMoE (engine owner) and EvalSuite (forces PF1). EvalSuite checked: no suite verdict is
+      exposed (PF1 is on only for the ref family, all AR keep 1). MoonShots (PF1's origin) got a note.
+- **R-40 STEP 3y-fix (BigMoE asked Thu 17:51; pre-registered Thu 17:52; scripts/r40s3y_screen.py 176 fix,
+  runner_r21.sh after runner 20, ~1-2 min): the same bisection on BigMoE 7ac3192.** The fix does both:
+  _stage_kick drops other pending entries on the buffer it restages, and a pop whose buffer holds another layer
+  restages (_STAGE["blayer"]).
+  - **PASS:** prefill determinism holds, AND after t1 and t3 (commit keep 5) the next prefill == A bit for bit (all 242
+    records + the last logits), AND t2 / t4 stay == A. Any differing record = FAIL.
+  - Expected: pending still shows [2] right after a commit keep 5. The fix drops that entry at the next forward's
+    layer-0 kick, so the decisive line is the prefill. Safety-net restages 0. PASS 90 %.
+  - **Result (Thu 20:52-20:53, third attempt, runner 25, rc 0, C 128; BigMoE b8bd33c, which contains 7ac3192;
+    data/r40s3y_screen_fix.txt): PASS.**
+    - Prefill determinism holds.
+    - After a commit keep 5, REF2's (t1) or stock (t3): pending still [2], as expected. The next prefill == A now:
+      all 242 records + the last logits (before the fix: 228 records differed from layer 2's MoE on).
+    - t2 / t4 == A. Safety-net restages 0: the kick-time drop handled it.
+    - The first two attempts (19:14, 20:06, C 176) were stopped by the swap guard during the load.
+    - vs prediction: PASS (90 %) yes. Result to BigMoE.
+- **R-40 STEP 3z = the STEP 3 re-run (orchestrator Thu 15:4x: 'with a longer chunk or fewer prompts'; pre-registered
+  Thu 17:30; scripts/r40s3z_screen.py, ~7-9 min): REF2 + SB vs today on BigMoE's default check path, exactness in a
+  REF2-only process state.**
+  - Why a re-run, not a repeat: STEP 3 measured two harness artifacts.
+    - (1) Its checks took EvalSuite's forced PF1 path, which BigMoE's default leaves off (see STEP 3x's correction).
+      Here PF1 stays on for prefills (EvalSuite's REF2 rows were made so). It is off for checks and commits
+      (BigMoE's default _sync_call: per layer an id sync, ensure of the needed experts only, a scratch gather). The
+      switch-off does what the engine's first decode call does (_stage_drop).
+    - (2) A stock check changes later prefills (STEP 3x V5). So exactness is judged in Part A, before any stock call.
+  - Harness, drafter, loop and arms: as STEP 3 (C = 176, DFlash2 L1-20 on taps, greedy, keep = accepted + 1).
+  - Part A (exact, REF2 only): HumanEval/68 and prealgebra/1640. 48 ref2.ar_step logits, then one REF2 + SB spec run
+    of <= 256 tokens. Its tokens must equal EvalSuite's REF2 AR rows, and its kept check rows' logits the AR's, bitwise.
+  - Part W (warm): 16-row checks sliding by one token along /68's REF2 row, commit keep 1. Today vs REF2 + SB in
+    alternating blocks of 4, 5 rounds (STEP 3x's Part B, on the default path).
+  - Part B (live A/B): /68 ABBA, prealgebra/1640 BAAB, then /91 and algebra/694 while the budget lasts. No new prompt
+    after 330 s, no new run after 420 s, runs cut at 500 s are dropped. Saving = today - REF2 median cycle per prompt,
+    median over prompts. Also prefill s, tok/s and kept per domain, and misses + SSD time per check.
+  - **Lines (STEP 3's):** PASS = Part A exact AND >= 40 ms saved per 48-layer check (Part B). KILL = < 20 ms.
+    BETWEEN otherwise.
+  - Prediction:
+    - Part A exact 85 %: the checks now run REF2's experts_split on a compact scratch instead of the full-E one.
+    - Check + commit 0.5-1.2 s live (misses ~20-50 per check-layer at C = 176), 0.3-0.6 s warm.
+    - Saving ~30 ms (range 15-50): every layer syncs on the ids, so the GPU sits on the critical path and kernel
+      savings show undiluted; SB adds ~0. PASS 30 %, BETWEEN 50 %, KILL 20 %.
+    - Part B's REF2 runs after stock runs may leave the REF2 rows (V5's leak): information, not the verdict.
+  - **Result (Thu 18:38-18:47, runner 20, rc 1 = not exact; data/r40s3z_screen.txt; BigMoE 7ac3192 incl. the PF1 fix):
+    FAIL (not exact). Speed: REF2 + SB saves 137.5 ms per 48-layer check (line 40); exactness breaks after
+    partial-accept commits.**
+    - Part A, REF2 only, before any stock call:
+      - HumanEval/68: tokens == the REF2 row 256 / 256, logits rows bitwise vs AR 48 / 48. Its first 48 tokens came
+        from full accepts (kept 15.41), so no commit replay ran.
+      - prealgebra/1640: tokens == 55 / 256, logits rows 40 / 48. Kept 4.92, so a partial commit followed every check.
+      - So a 16-row check right after a prefill, or after full accepts, is bit-identical to REF2's AR. The partial
+        commit (trim + GDN replays + the PLE layer's lone forward over the kept rows) leaves state that is not.
+      - REF2's AR never runs that path: its 1-row commit is a full accept (MTPLX returns early, no replay).
+    - The stock arm on 1640 also leaves its own AR row (ref.r2) at exactly token 55. A common, non-REF2 commit path
+      fits that; a near-tie token at 55 would also explain it.
+    - Speed on BigMoE's default check path (PF1 only for prefills):
+      - Live A/B: /68 saved 160.3 ms per check (today 1660 / 1855 ms per cycle, REF2 + SB 1551 / 1643). 1640 saved
+        114.7 ms (today 1630, REF2 1515; 2 of 4 runs fit the budget). Median 137.5 ms, 3.4x the 40 ms line.
+      - Warm (Part W): today 913.8 ms vs 746.9 ms, saved 166.9 ms. REF2's arm had fewer misses (74.7 vs 107.9 per
+        check, ~10-30 ms of SSD).
+      - Checks cost 1.2-1.9 s live: ~450-880 misses per check (8-18 per layer at C 176), io 130-230 ms, plus 48
+        id syncs + scratch gathers. tok/s: code 8.6 -> 9.6, math 3.3 -> 3.3 (kept 5.12).
+      - Prefill 4.2-9.1 s on PF1 (EvalSuite's env; the SSD was contended: runs varied 4.3 -> 9.1 s).
+      - Step 3's 3.9-4.3 s checks were EvalSuite's PF1 staging.
+    - vs prediction: Part A exact 85 % no. Check + commit 0.5-1.2 s predicted, 1.2-1.9 s live (misses ~2x
+      the guess), 0.75-0.91 s warm. Saving ~30 predicted, 137.5 measured: PASS-size, but the verdict is FAIL on
+      exactness.
+    - Swap rose 5.97 -> 7.83 GB during the run (+1.86, under run_locked's 2 GB stop): keep the next screens light.
+    - Next: STEP 3w bisects the partial commit, comparing per-layer cache state after a 16-row check + commit keep k
+      with REF2's AR after k steps. Suspect: the PLE layer's lone replay at S = k rows runs MTPLX's small-S GDN
+      path, whose fused conv + norm is not bitwise (L1-31: "the engine runs S > 6"). Alternatives: the QSA trim's
+      pooled blocks, or an S-dependent HC / PLE path.
+- **R-40 STEP 3w (pre-registered Thu 18:49; scripts/r40s3w_screen.py, runner_r22.sh after runner 21, ~2 min, no
+  drafter): which part of a partial-accept commit leaves state REF2's AR does not.**
+  - Setup: as 3z's harness, REF2 + SB on, PF1 for prefills only; prealgebra/1640 (P 62).
+  - AR reference: REF2's AR, 17 steps from one prefill, every layer's cache state digested after k steps.
+  - Spec path, for each k in {2, 5, 8, 12, 15, 16}: a fresh prefill, ONE 16-row check of the AR's own first 16
+    tokens (every row matches), commit keep k, the same digests. Then one ar_step probe vs the AR's next logits.
+  - State per layer, sha1 per slot:
+    - GDN: conv + recurrent;
+    - the PLE layer: all slots;
+    - QSA: keys, values, raw indexer keys, pooled blocks.
+  - k = 16 is a full accept (MTPLX returns early, no replay): the control.
+  - A measurement; no lines. What it decides:
+    - only the PLE layer differs -> make its replay take the verify's own path (REF2-side, exact);
+    - QSA differs -> trim / pooled blocks (MTPLX's);
+    - GDN layers differ -> the replay kernel vs the forward's.
+  - Prediction:
+    - k = 16 all equal, and check rows == AR 16 / 16 (95 %).
+    - For k < 16, the pure GDN layers equal (85 %) and the QSA layers equal (75 %). The PLE layer (zero-based 1)
+      differs (60 %), at least for k <= 6.
+    - Probe logits differ wherever a state does (90 %).
+  - **Amendment (Thu 18:51, before any run): arm B.** The same commits, wrapped in attention_phase("decode_verify") +
+    model_forward_kind("target_verify"), without the capture scope.
+    - Why: MTPLX branches on the phase in two places the PLE layer's replay crosses. The HC inject is
+      _verify_inject in decode_verify and 2 * sigmoid(logits / hc) elsewhere (they differ in MLX 0.32.2). The MoE
+      is _verify_call vs the stock combine. REF2's AR runs every step inside the verify scopes; STEP 3z's commits
+      ran outside.
+    - Also checked: MTPLX's fused 2-6-row conv + norm (MTPLX_FUSED_CONVNORM_VERIFY, not bitwise) is off in this env
+      (only BIGMOE_GDN_EXACT turns it on), so the earlier S <= 6 suspect is unlikely.
+    - Prediction: arm B makes every k equal to the AR, states and probe (55 %). Otherwise arm B narrows the
+      difference to the PLE layer's non-phase parts.
+  - **Result (Thu 19:54-19:55, runner 22, rc 0; data/r40s3w_screen.txt): no difference anywhere. One partial commit
+    is exact.**
+    - Both arms, every k in {2, 5, 8, 12, 15, 16}: prefill == the AR's, check rows == AR 16 / 16, and all 48
+      layers' state after commit keep k == REF2's AR after k steps. That covers the 35 GDN, the PLE layer and 12 QSA,
+      every slot. The probe step's logits == the AR's too.
+    - The phase doesn't matter here: arm A == arm B.
+    - So 3z's break needs something 3w held fixed:
+      - (a) the rejected rows' CONTENT. 3w's rows k..15 were the AR's own next tokens; 3z's were wrong drafts.
+        Stale buffer data beyond the trimmed frontier is outside the digested state (QSA raw keys / KV past
+        kv.offset; pooled blocks are cut by length) but readable by the next forward. With 3w's tokens, stale ==
+        what the AR writes there, so a leak would be invisible.
+      - (b) multi-cycle effects, e.g. a lazy snapshot of a buffer that a later forward updates in place.
+      - (c) the drafter between checks.
+    - vs prediction: k = 16 equal (95 %) yes; PLE layer differs (60 %) no; arm B fixes it (55 %) moot.
+    - Next: STEP 3v. Garbage in the rejected rows plus per-layer records of the NEXT check, clean (AR-built state)
+      vs dirty (commit-built state). A multi-cycle synthetic loop without the drafter separates (a) / (b) from (c).
+- **R-40 STEP 3v (pre-registered Thu 19:58; scripts/r40s3v_screen.py, runner_r24.sh after runner 23, ~2-3 min, no
+  drafter): does a partial commit leak the REJECTED rows' content into the next forward?**
+  - Setup: 3w's harness, REF2 + SB on, prealgebra/1640, REF2's AR for 48 steps.
+  - Part 1, one cycle, k in (2, 5, 8, 12):
+    - clean = prefill + k AR steps;
+    - dirty = prefill + one 16-row check of toks[:k] + garbage in rows k..15 + commit keep k. Garbage = 'shift'
+      (each row holds the AR token one position later) or 'const' (token 1000).
+    - From each state the same 16-row probe check (AR tokens k..k+15) runs with per-layer records. Reported: dirty
+      vs clean rows and the earliest differing record; clean rows vs the AR's logits.
+  - Part 2, many cycles: ~7 checks of row 0 + m correct + (15 - m) wrong drafts (m from a fixed list), greedy accept,
+    commit keep accepted + 1 (3z's loop without the drafter). Kept rows are compared bitwise with the AR logits.
+  - A measurement; no lines. What it decides:
+    - Part 1 dirty != clean -> a leak through stale rows. The earliest record names the component to fix in REF2's
+      path or MTPLX's trim.
+    - Part 1 equal but Part 2 off -> a multi-cycle effect.
+    - Both equal -> the drafter or taps (c).
+  - Prediction:
+    - Part 1: dirty != clean for some k (70 %). The earliest differing record is the first QSA layer's attention
+      (zero-based 3; raw indexer keys / pooled blocks past the frontier) (55 %).
+    - Clean == AR 16 / 16 (95 %). Part 2 reproduces 3z's break (< all kept rows equal) (65 %).
+  - **Result (Thu 20:36-20:38, runner 24, rc 0, 99 s, C 128; data/r40s3v_screen.txt): no leak, no multi-cycle effect.
+    Everything exact.**
+    - Part 1, all 8 cases (k 2 / 5 / 8 / 12 x shift / const): after a partial commit with garbage in the rejected
+      rows, the 16-row probe check == the clean (AR-built) state's probe. All 16 rows and all 242 per-layer records
+      are equal, and clean == AR 16 / 16.
+    - Part 2, 7 checks in a row with synthetic drafts (kept 4, 1, 7, 2, 10, 3, 5; keep 1 = the gated path, keep 10 =
+      _sync_call): kept rows == AR 32 / 32. Every accept landed exactly where designed.
+    - So REF2's checks + partial commits + wrong rejected rows + multi-cycle are exact. 3z's 1640 break (40 / 48 rows)
+      must come from what 3v leaves out: the DFlash2 drafter (its forward between checks, or its specific tokens),
+      the taps hook, or ref2.remove() / apply() around drafting.
+    - vs prediction: leak (70 %) no; QSA (55 %) no; Part 2 reproduces (65 %) no.
+    - Next: STEP 3u runs 3z's REF2 loop on 1640 with per-check diagnostics in variants that switch those pieces
+      one at a time.
+- **R-40 STEP 3u (pre-registered Thu 20:40; scripts/r40s3u_screen.py, runner_r26.sh after runner 25, ~2 min, C 128):
+  what in 3z's live loop breaks REF2's bit-identity?**
+  - Setup: REF2's AR for 64 steps on prealgebra/1640, then four runs of 3z's REF2 + SB loop up to 48 tokens. Every
+    kept row is compared bitwise with the AR; the first differing check (index, kept, rows, drafts) is reported.
+    - U0 as 3z: the drafter drafts with REF2 switched off (remove / apply around it), taps on.
+    - U1: the drafter drafts with REF2 left on.
+    - U2: the drafter runs as in U0, but the check uses synthetic drafts from the AR tokens (3v's pattern).
+    - U3: no drafter forward; synthetic drafts; taps on; REF2 switched off / on between checks.
+  - A measurement; no lines. Reading:
+    - U0 breaks, U2 breaks -> the drafter's execution touches the target (shared module / buffer / state).
+    - U0 breaks, U2 exact -> the drafter's token choices (some ids / patterns) trigger it.
+    - U0 breaks, U1 exact -> the REF2 switch matters. U3 isolates the switch + taps without the drafter.
+  - Prediction: U0 reproduces 3z's break (85 %). U3 exact (70 %), U2 breaks (40 %), U1 exact (40 %).
+  - First run (Thu 21:20-21:21, runner 26): died after the AR with a NameError (the bitwise-compare helper
+    3z's harness never defined); no data. Fixed (92d5d30; every name in the script now resolves). Re-queued as
+    runner 28, after R-50b.
+  - **Result (Thu 22:00-22:01, runner 28, rc 0, 62 s, C 128; data/r40s3u_screen.txt): neither the drafter nor the
+    REF2 switch nor the taps matter. The loop breaks without any of them.**
+
+    | variant | checks, kept | kept rows == AR | first differing check |
+    |---|---|---|---|
+    | U0 as 3z | 10: 6 8 1 4 4 2 15 2 2 11 | 40 / 55 | #7 at relative 40 (kept 2, rows 0-1) |
+    | U1 REF2 on while drafting | same as U0, bit for bit | 40 / 55 | #7, same |
+    | U2 drafter runs, synthetic drafts | 11: 4 1 7 2 10 3 5 1 6 2 8 | 41 / 49 | #10 at relative 41 (kept 8, rows 0-7) |
+    | U3 no drafter, synthetic, taps, switch | same as U2, bit for bit | 41 / 49 | #10, same |
+
+    - Deterministic (U0 == U1, U2 == U3). Every check after the first differing one differs too.
+    - 3v's synthetic loop stayed exact only because it stopped after 7 checks (relative 32).
+    - The break is near relative 40-41 (absolute 102-103) in both loops, but it is not one position. Position 40
+      is exact in U3 (row 1 of check #9) and differs in U0 (row 0 of check #7, right after a keep-15 commit). It
+      follows the state some commit leaves.
+    - Ruled out by reading MTPLX: the QSA indexer's sparse selection, which engages only past 2048 tokens
+      (indexer_budget 2048 / ratio 4 = block_topk 512 blocks). The n-gram hot cache (exact byte copies).
+    - vs prediction: U0 breaks (85 %) yes; U3 exact (70 %) no; U2 breaks (40 %) yes; U1 exact (40 %) no.
+- **R-40 STEP 3t (pre-registered Thu 22:05; scripts/r40s3t_screen.py, ~1-2 min, C 128, gather path as 3u): where does
+  REF2's loop leave its AR?**
+  - U3's synthetic loop on 1640 (no drafter, no taps).
+  - At every check start: all 48 layers' cache state digested vs REF2's AR at the same position. Reports the first
+    check whose START state differs, and its layers / slots.
+  - Per-layer records (sha1 of each row) for every check and every AR step. At the first check with a differing
+    kept row: the earliest differing record of that row vs the AR step's.
+  - A measurement; no lines. Reading:
+    - start state differs -> the previous commit (layer / slot named) is the cause;
+    - start state equal but a record differs -> the check's own computation at that layer / part.
+  - Prediction: the start state of the breaking check differs (65 %), in a QSA layer's KV (45 %) or the PLE layer
+    (30 %).
+  - **Result (Thu 22:06, runner 29, rc 0, 32 s, C 128; data/r40s3t_screen.txt): the PLE layer's replay.**
+    - Checks #0-#9 are exact, with start states equal to the AR's at every start. Check #9 started at relative 39
+      (absolute 101) and kept 2.
+    - Check #10's START state differs from the AR's in ONE layer: zero-based 1 (the PLE layer), slots 0, 1, 2. Those
+      are its GDN conv state, its GDN recurrent state and the PLE short-conv state. Slot 3 (n-gram context ids) is
+      equal, and all other 47 layers are equal.
+    - Check #10's row 0 differs from the AR step first at record 7 = layer 1's GDN output. Everything before it in
+      the forward is equal: layer 0, layer 1's PLE output and HC read.
+    - So check #9's commit replay of the PLE layer (2 rows, from an equal start state, with row inputs equal to the
+      AR's) produced a different layer-1 state than the AR's two 1-row steps.
+    - Ruled out by reading MTPLX:
+      - The n-gram row ids: the NumPy staging and the MLX graph path compute the same rows. The tokens at 39-40 are
+        25 / 68490, no EOS.
+      - The row bytes: both go through _SidecarGather.gather_np + mx.dequantize.
+      - The lookahead lanes: they check the row ids before use.
+    - Remaining suspect: mx.conv1d. REF2 pins matmuls / HC / attention / experts to 16 rows but not the PLE layer's
+      depthwise dilated short conv (k 4, dilation 3) nor the GDN conv. Their output for a row may depend on how many
+      rows the call holds (1 in the AR, keep in the replay), rarely, via the reduction order.
+    - vs prediction: start state differs (65 %) yes; QSA (45 %) no; PLE layer (30 %) yes.
+- **R-40 STEP 3s (pre-registered Thu 22:10; scripts/r40s3s_screen.py, seconds of GPU, no model): is MLX 0.32.2's
+  conv1d row-invariant?**
+  - Synthetic bf16 streams on the PLE conv shape (10240 channels, k 4, dilation 3, 9 state rows) and the GDN conv
+    shape (10240, k 4, dilation 1, 3 state rows), 64 rows each.
+  - AR = 64 one-row calls, each with its state window. Batched = the same rows in calls of S = 2..16 rows. Each output
+    row is compared bitwise with the AR's.
+  - Also the explicit form (sum of k shifted multiplies in fp32, fixed order), S rows vs 1.
+  - A measurement; no lines. Reading:
+    - conv1d differs at some S -> fix the replay inside REF2's path. Either the PLE replay runs as 1-row calls (the AR's
+      own computation, so REF2's AR bits stay), or the conv goes to the explicit form everywhere (row-invariant by
+      construction, but a reference change: EvalSuite re-checks REF2).
+    - conv1d invariant -> look elsewhere in the PLE replay (record its tensors directly).
+  - Prediction: conv1d differs for some S (70 %). The explicit form is invariant at every S (90 %).
+  - **Result (Thu 22:13, a shared lock, 0.2 s; data/r40s3s_screen.txt): conv1d is row-invariant.** Both shapes, every
+    S in 2..16: 0 of 64 rows differ from 1-row calls (0 of 655,360 elements). The explicit fixed-order form equals
+    conv1d bit for bit at every S. vs prediction: conv1d differs (70 %) no.
+- **R-40 STEP 3r (Thu 22:14, pre-registered in the script header; scripts/r40s3r_screen.py, 0.1 s, shared lock): the
+  PLE layer's reductions.**
+  - The gate's (key * query).sum(-1) over 2560, the full gate (sqrt|g| * sign), GroupedRMSNorm (mx.fast.rms_norm per
+    2560-group), the HC mean over 4 streams and an fp32 sum. Each was run on S rows at once vs one at a time.
+  - **Result: 0 differing rows for every op at every S (2..16).** Row-count arithmetic is not the cause.
+- **Root cause (Thu 22:15, by reading MTPLX after 3r):** mtplx/attention_math.py's attention_gate, which the PLE layer
+  uses for value * sigmoid(gate), picks its lowering by PHASE.
+  - In decode_verify it runs a compiled fused expression; elsewhere, the stock output * mx.sigmoid(gate). Its docstring
+    says the two differ in the last bit for some bf16 inputs (e.g. -6.84375).
+  - REF2's AR steps and its 16-row checks run inside the verify scopes. The loop's commit_verified_window ran outside
+    them, so the commit's lone PLE-layer replay took the stock sigmoid.
+  - At gate values where the two lowerings differ, the replayed PLE output, and with it the PLE conv state (slot 2)
+    and the GDN input (slots 0-1), left the AR's. That is 3t's signature: rare, data-dependent, deterministic, and
+    invisible in 3w's 16 positions, which is why arm B (the phase) showed no difference there.
+  - GatedResidual's inject and the MoE combine also branch on the phase. They shape the replayed layer's output,
+    which the commit discards.
+  - Fix (ref2.py, 22:15): REF2 wraps Qwen4ExpTextModel.commit_verified_window in attention_phase('decode_verify') +
+    model_forward_kind('target_verify') when on (CFG commit_phase). REF2's AR bits don't change: its 1-row commit is a
+    full accept and replays nothing.
+- **R-40 STEP 3q (pre-registered Thu 22:14; scripts/r40s3q_screen.py, runner 30, ~4-5 min, C 144, ref2's defaults =
+  slot call + commit phase): is REF2 bit-exact in the live drafting loop now?** (the wall Kamen named)
+  - Part L, live DFlash2 loop up to 256 tokens on HumanEval/68, prealgebra/1640, HumanEval/91, algebra/694 while the
+    budget lasts:
+    - every token vs EvalSuite's REF2 AR row;
+    - kept rows' logits vs 48 in-process REF2 AR steps, bitwise.
+  - Part D: 3t's synthetic loop on 1640 (64 tokens). Every check start's 48-layer state digest vs the AR's.
+  - Part C, control: Part L's 1640 run with commit_phase off. It must leave the REF2 row, as 3z / 3u did.
+  - **PASS** = every compared token and logits row equal (L) AND every start state equal (D) AND the control breaks.
+    **FAIL** = any difference in L or D. **VOID** = the control doesn't break.
+  - Prediction: PASS 75 %. Other phase-dependent paths in the replay are possible but would also show as state
+    differences in D.
+  - **Result (Thu 22:16-22:19, runner 30, rc 0, 178 s, C 144; data/r40s3q_screen.txt): FAIL. The phase fix works, and
+    3 of 4 prompts are now bit-exact in the live loop. algebra/694 has a second, separate break.**
+
+    | prompt (kept per check) | tokens == EvalSuite's REF2 row | logits rows vs AR | tok/s (cycle) |
+    |---|---|---|---|
+    | HumanEval/68 (15.41) | 256 / 256 | 48 / 48 | 28.3 (505 ms) |
+    | prealgebra/1640 (5.43) | 256 / 256 (was 55) | 48 / 48 (was 40) | 13.9 (368 ms) |
+    | HumanEval/91 (8.09) | 256 / 256 | 48 / 48 | 18.5 (368 ms) |
+    | algebra/694 (7.34) | 216 / 256 | 14 / 48 | 15.4 (460 ms) |
+    | control: 1640, commit phase OFF | 55 / 256 | 40 / 48 | 13.6 |
+
+    - Part D: the synthetic loop's start states == the AR's at all 11 check starts (3t broke at #10 without the fix).
+    - The control reproduces the old break exactly, so the phase fix is what closed 1640.
+    - On 694 only 14 of the first 48 kept rows match: an early break, within the first ~2-3 checks, and a different
+      source. Tokens held to 216 (a numeric difference that rarely flips argmax).
+    - Speed with ref2's defaults (slot call; C 144; live drafting): 28.3 / 18.5 tok/s on code, 13.9 / 15.4 on math.
+    - vs prediction: PASS (75 %) no; the phase fix itself yes (1640 and Part D).
+    - Next: STEP 3p, 3t's bisection on 694: AR digests at every position, the live drafter loop and the synthetic
+      loop, the first check whose start state differs (layer / slot) and the first differing record.
+- **R-40 STEP 3p (pre-registered Thu 22:22; scripts/r40s3p_screen.py, runner_r32.sh after R-50c, ~2 min, C 144, ref2's
+  defaults): where does the loop leave REF2's AR on algebra/694?**
+  - AR: 64 REF2 steps with per-layer row records and a 48-layer state digest at EVERY position.
+  - Loop A (live DFlash2 drafter, as 3q) and Loop B (3t's synthetic drafts), up to 64 tokens each. At every check
+    start: the state digest vs the AR's. Every kept row vs the AR logits. Reported: the first check whose start state
+    differs (layer / slot) and, at the first differing kept row, the earliest differing record.
+  - A measurement; no lines. Prediction: Loop A breaks within the first 3 checks (75 %); Loop B also breaks (50 %);
+    the first differing start state is in one layer again (60 %), a QSA layer this time (P 98 + a check crosses
+    absolute ~100-115) (35 %).
+  - **Result (Thu 22:21-22:22, runner 32, rc 0, 39 s; data/r40s3p_screen.txt): the CHECK itself, at layer 35's
+    attention, for rows past absolute 112.**
+    - Loop A (live drafter): kept 6, 12, 14, 1, 7, 2, 4, 4; kept rows == AR 14 / 50.
+      - Check #1 (start relative 6 = absolute 104, kept 12): rows 0-7 equal, rows 8-11 differ.
+      - Row 8's earliest differing record is record 142 = layer 35's attention output; everything before it is equal,
+        including the 8 earlier attention layers.
+      - The next start state differs from layer 36 on (GDN 36-38, 40-42; QSA 39, 43), i.e. downstream of it.
+    - Loop B (synthetic drafts): kept rows == AR 49 / 49, no start state differs. Its checks started at 110 (kept 2)
+      and 112, so no kept row met the condition below.
+    - The condition: a kept row at absolute p >= 112 in a check that started before 112. REF2's AR pads attention to
+      16 rows (key length p + 16 >= 128), while the check's key length is start + 16 < 128. 694's first 48 rows
+      cover 98-145, hence exactly 14 equal; 1640's first 48 cover 62-110, hence never.
+    - vs prediction: Loop A within 3 checks (75 %) yes; Loop B breaks (50 %) no; one layer (60 %) yes, QSA (35 %) yes.
+- **R-40 STEP 3o (Thu 22:24, pre-registered in the script; scripts/r40s3o_screen.py, 1.1 s, shared lock): is MLX's
+  fused SDPA invariant to the key length?**
+  - Synthetic: head_dim 256, 2 query heads on 1 KV head, 16 rows, bool causal mask (MTPLX's head-chunked verify
+    shape). Rows near 90 / 104 / 112 / 120 / 240 / 500, N extended by 1..40 masked keys.
+  - **Result: 0 N values change any row's bits.** The kernel alone is N-invariant here, so 3p's difference must
+    enter through how MTPLX builds the call or its inputs.
+- **R-40 STEP 3n (pre-registered Thu 22:28; scripts/r40s3n_screen.py, runner 33, ~1.5 min, C 144): inside layer
+  35's attention.**
+  - Every mx.fast.scaled_dot_product_attention call of layer 35 (12 head chunks) is captured for 3p's check #1 (row 8
+    = absolute 112) and for the AR step at 112.
+  - Compared bitwise: the row's q (post-rope), keys and values 0..112, and the row's output.
+  - Reading:
+    - q or k / v differ -> the inputs (rope / cache writes); the first differing key position names which write;
+    - all inputs equal but the output differs -> the kernel in the real call shape (mask form / strides / chunking).
+  - Prediction: a key / value at some position 104..111 (written by this check's rows 0-7) differs from the AR's (50
+    %); q differs (15 %); inputs equal, output differs (35 %).
+  - **Result (Thu 22:27 and 22:29 (3n-b: all 12 chunks + the gate + o_proj), runner 33, rc 0;
+    data/r40s3n_screen.txt): the SDPA kernel itself.**
+    - In all 12 head chunks, row 8's q, keys 0..112 and values 0..112 are bit-identical between the check (N 120,
+      mask (1, 1, 16, 120)) and the AR's padded call (N 128).
+    - In 11 chunks the row output is equal too. In chunk 5 (query heads 10-11) it differs.
+    - attention_gate: the gate input is equal, the SDPA input differs, so the gated output and o_proj differ.
+    - So MLX's fused vector SDPA gives a row different bits for equal inputs when the call's key length is 120 vs
+      128, data-dependently (1 of 12 chunks here; 3o's random data never hit it).
+    - vs prediction: inputs equal, output differs (35 %) yes.
+    - The kernels (mlx/include/.../sdpa_vector.h): the 1-pass kernel stripes keys over 32 simdgroups (fixed, so
+      N-invariant). The 2-pass kernel stripes them over `blocks` threadgroups, a function constant the host picks
+      from the call. A host switch between the two, or a change of `blocks`, as N crosses ~128 would regroup the
+      softmax partial sums. The host source is not on this Mac.
+- **R-40 STEP 3m (pre-registered Thu 22:38; scripts/r40s3m_screen.py, runner 34, ~1 min): the real differing chunk
+  replayed at other key lengths.**
+  - From 3n's capture: the check's chunk-5 inputs re-run at N = 113..~190 plus 192 / 200 / 255 / 256 / 257 / 300 /
+    512 / 1024 / 1100, extra keys zero-padded and masked. Reported: at which N row 8 equals the AR's output (N 128) or
+    the check's (N 120).
+  - Also: the check's call with contiguous k / v and with an additive float mask.
+  - Reading: the N classes on real data give the rule a fix must respect (group a check's rows by the AR's class).
+  - Prediction: the check's bits hold for N < 128 and the AR's for N >= 128 up to the next class boundary (65 %);
+    contiguity / mask form doesn't matter (85 %).
+  - **Result (Thu 22:33, runner 34, rc 0, 16 s; data/r40s3m_screen.txt): the boundary is N = 128 exactly.**
+    - Chunk 5's row 8 from the check's real inputs equals the check's own bits at N 113..127 and the AR's at N 128..167
+      (and on: the printout stopped at 40 matches).
+    - Replays reproduce both original calls. Contiguous k / v and an additive float mask change nothing.
+    - So MLX's vector SDPA switches mode at 128 keys for this call shape (2 query heads x 16 rows per call), and each
+      side is N-invariant.
+    - vs prediction: yes (65 %); contiguity / mask form doesn't matter (85 %) yes.
+  - Fix design (keeps REF2's AR bits, so EvalSuite's reference stands):
+    - REF2 wraps MTPLX's _verify_sdpa. In a 16-row call with N keys, row j sits at position N - 16 + j, so its AR
+      step's call had N + j keys.
+    - Rows whose AR class differs from the call's are recomputed in one extra SDPA call, with k / v zero-padded and
+      masked to that class's lower bound.
+    - The AR's own padded call never splits: its only real row is j = 0.
+    - This needs the full class map (all boundaries, not just 128): STEP 3l.
+- **R-40 STEP 3l (pre-registered Thu 22:36; scripts/r40s3l_screen.py, runner 35, ~1 min): the SDPA key-length class
+  map on real data.**
+  - Check #1's chunk-5 SDPA inputs from all 12 attention layers. Each is re-run at ~100 key lengths from 120 to
+    33,000: dense around every power of two 128..32768, every 8 up to 300, plus 384 ... 24576, 33000.
+  - Output hashes form the classes; reported: the boundaries.
+  - Prediction: boundaries at 128 and at the 2-pass block-count switches (somewhere in 1024..16384) (60 %); no
+    boundary between 128 and 1023 (80 %).
+  - **Result (Thu 22:36, runner 35, rc 0, 17 s; data/r40s3l_screen.txt): one boundary only, at 128.** The 12 real calls
+    (chunk 5 of every attention layer) at 57 key lengths from 120 to 33,000 fall into exactly 2 output classes:
+    N <= 127 (2 probes) and N >= 128 (55 probes, up to 33,000). vs prediction: a second boundary (60 %) no; none in
+    128..1023 (80 %) yes.
+  - The fix is in ref2.py (22:3x, CFG sdpa_classes / sdpa_bounds = (128,)). REF2 wraps MTPLX's _verify_sdpa: rows of a
+    16-row call whose AR step had >= 128 keys while the call has < 128 are recomputed with k / v zero-padded and
+    masked to 128, then selected in. The AR's own call never splits (REF2's AR bits unchanged).
+- **R-40 STEP 3k (pre-registered Thu 22:40; scripts/r40s3k_screen.py, runner 36, ~7 min, C 144; ref2's defaults =
+  slot call + commit phase + SDPA classes): REF2 bit-exact in the live drafting loop? (the wall Kamen named)**
+  - Part L, the live DFlash2 loop up to 256 tokens on HumanEval/68, prealgebra/1640, HumanEval/91, algebra/694, and
+    the short prompts algebra/1282 (P 50) and gsm8k/708 (P 53), whose checks cross absolute 112 early:
+    - every token vs EvalSuite's REF2 AR row;
+    - kept rows' logits vs max(48, 152 - P) in-process REF2 AR steps, so the compared rows reach past absolute 112.
+  - Part D: 3t's synthetic loop on 1640, every check start's state vs the AR's.
+  - Part C, control: algebra/694 with the SDPA classes OFF. It must break as in 3q (14 / 48).
+  - **PASS** = every compared token and logits row equal (L) AND D exact AND the control breaks. **FAIL** = any
+    difference.
+  - Prediction: PASS 70 %.
+  - **Partial result (Thu 22:38-22:40, runner 36; logs/job.out): 4 of 4 finished prompts bit-exact with both fixes.
+    Then the 22:40 quiet window's PAUSE froze the job (SIGSTOP).**
+
+    | prompt (kept) | tokens == EvalSuite's REF2 row | logits rows vs AR | SDPA splits per check | tok/s (cycle) |
+    |---|---|---|---|---|
+    | HumanEval/68 (15.41) | 256 / 256 | 48 / 48 | 0.00 | 29.3 (520 ms) |
+    | prealgebra/1640 (5.31) | 256 / 256 | 90 / 90 (past absolute 112) | 0.75 | 14.6 (342 ms) |
+    | HumanEval/91 (8.09) | 256 / 256 | 48 / 48 | 0.00 | 18.9 (402 ms) |
+    | algebra/694 (7.73) | 256 / 256 (3q: 216) | 54 / 54 (3q: 14 / 48) | 0.73 | 16.0 (465 ms) |
+
+    - Not yet run: algebra/1282, gsm8k/708, Part D, Part C. The job resumes or loses its lock after 00:00 (Kamen: no
+      new work before 00:00). Re-run 3k first thing.
+    - Reported to the orchestrator as BIG (partial) at 22:42.
+  - **Resumed run (Fri 00:04-00:06, in the soft-end ramp): no difference anywhere, but incomplete.**
+    - The script's time budget counted the 84-min freeze. So algebra/1282 was cut after 2 checks (12 / 12 tokens,
+      11 / 11 logits rows bitwise), and gsm8k/708 and Part C were skipped.
+    - Part D: start states == the AR's at 11 check starts.
+    - The printed "FAIL" comes from the cut rule (a cut prompt counts as not exact), not from a difference.
+    - Totals so far: 1036 / 1036 tokens, 251 / 251 logits rows, D exact. The control has not run.
+  - **Re-run (Fri 00:10, runner 37, same lines and prediction).** The budgets now count running time only: a ticker
+    thread that a SIGSTOP freezes, like run_locked's limit. Each prompt line says "paused" if PAUSE appeared mid-run.
+  - **RESULT (Fri 00:20-00:24, runner 37; data/r40s3k_screen.txt): PASS. REF2 is bit-exact in the live drafting
+    loop.** 232 s running, no pause. Prediction PASS 70 %: right.
+
+    | prompt (kept) | tokens == EvalSuite's REF2 row | logits rows vs AR | SDPA splits per check | tok/s (cycle), C 144 |
+    |---|---|---|---|---|
+    | HumanEval/68 (15.41) | 256 / 256 | 48 / 48 | 0.00 | 29.0 (539 ms) |
+    | prealgebra/1640 (5.31) | 256 / 256 | 90 / 90 | 0.75 | 14.9 (348 ms) |
+    | HumanEval/91 (8.09) | 256 / 256 | 48 / 48 | 0.00 | 19.2 (400 ms) |
+    | algebra/694 (7.73) | 256 / 256 | 54 / 54 | 0.73 | 16.6 (451 ms) |
+    | algebra/1282 (6.89) | 256 / 256 | 102 / 102 | 0.65 | 17.8 (362 ms) |
+    | gsm8k/708 (6.16) | 197 / 197 (EOS) | 99 / 99 | 0.75 | 14.5 (423 ms) |
+
+    - Totals: 1477 / 1477 tokens and 441 / 441 logits rows bitwise.
+    - Part D: start states == the AR's at 11 check starts.
+    - Control (algebra/694, SDPA classes OFF): 216 / 256 tokens and 14 / 54 logits rows. It breaks exactly as 3q did.
+  - **CAVEAT (Fri 01:4x): EvalSuite's R-56 runs the same loop to full length (C 192, 36 suite prompts).**
+    - So far 16 of 21 prompts are equal to the stored REF2 rows.
+    - 5 diverge at 1-ULP near-ties (gap 0.125, or 0.0) at absolute positions 498 / 515 / 573 / 724 / 910, at check
+      rows 11 / 0 / 2 / 11 / 1. Other prompts pass those positions exactly, so it is not a class in N.
+    - ar_bad is 0 on the first 48-97 rows of every prompt.
+    - So 3k's PASS holds as tested (256 tokens; logits on the first 48-128 rows). Full-length exactness is open: either
+      the loop drifts after ~100 tokens, or the stored rows differ from today's AR. EvalSuite's bitwise diagnostic
+      decides.
+    - The orchestrator was told at 01:4x.
+  - **EvalSuite 01:40: geometry/702 (P 520) has only 2/48 kept rows bitwise equal to the in-process AR.** All 8
+    divergences sit at 498-1124 total keys. So the break shows within the first rows on a long prompt, not as slow
+    drift.
+- **R-40 STEP 4a (pre-registered Fri 02:10; scripts/r40s4a_screen.py, ~4 min, C 144): where the loop leaves the AR past
+  ~512 keys.**
+  - Method: REF2's AR, then from a fresh prefill the same AR steps up to a check whose drafts are the AR's own tokens.
+    Every row of that check is then an AR row. Per row: logits bitwise, and the first DecoderLayer whose output differs.
+  - Cases:
+    - A: 702 right after its prefill (keys 536).
+    - B: HumanEval/68 right after its prefill (keys 383): the control (3k: exact).
+    - C1 / C2: HumanEval/68 with checks at absolute 500 and 520, so keys past 512 on a short prompt.
+  - Prior reading: MTPLX's QSA indexer stays dense up to T // 4 <= block_topk (512), i.e. T <= 2051, on both of its
+    lanes. 3l's probes showed one SDPA class boundary (128) up to 33K keys.
+  - Prediction:
+    - C fails like A (a keys-past-512 effect, not prompt length): 60 %. Only A fails (the > 512-token prefill): 30 %.
+    - The first differing layer is a QSA attention layer (3): 60 %.
+    - B is exact: 95 %.
+  - **RESULT (Fri 02:06-02:07, runner 39; data/r40s4a_screen.txt): a keys-past-512 effect in the QSA attention call.**
+
+    | case | check at (keys) | logits rows bitwise | first differing layers |
+    |---|---|---|---|
+    | A 702 (P 520) | 520 (536) | 2 / 16 (rows 0-1) | QSA 35 (row 2), 23 (row 4), 11 (row 6), 7 (row 12); the rest GDN, carried by the recurrence |
+    | B HumanEval/68 (P 367) | 367 (383) | **16 / 16, every layer equal** | none |
+    | C1 HumanEval/68 | 500 (516) | 2 / 16 | QSA 11 (row 2), 7 (row 6); the rest GDN |
+    | C2 HumanEval/68 | 520 (536) | 2 / 16 | QSA 11 (row 2), 3 (rows 5, 6, 8, 13); the rest GDN |
+
+    - Max |logit delta| per row: up to 0.59 (A), 3.1 (C1) and 4.6 (C2).
+    - Predictions: C fails like A (60 %): right. First difference in a QSA attention layer (60 %): right. B exact: right.
+    - Every first difference is a QSA attention layer. A GDN layer differs only for a row whose earlier row differed
+      at the attention layer below it (the recurrence carries it).
+    - Rows 0 and 1 always match. Their AR steps' calls have N and N+1 keys; rows >= 2 have N+2 and up.
+    - **Reading:** for q_len 16, MLX 0.32.2 takes its full attention kernel (NAX on M5: bq 64, bk 32, head dim split in
+      two), not the vector kernel. Past ~512 keys a row's bits depend on the call's key length on real data. 3o's
+      synthetic data never showed it (start 500: 0 of 40 N differ).
+- **R-40 STEP 4b (pre-registered Fri 02:30; scripts/r40s4b_screen.py, ~2 min, C 144): the class map past 512, real
+  data.**
+  - Capture: layer 35's _verify_sdpa inputs in 4a's case A (check at 520), and in AR step 2 (position 522).
+  - Replays:
+    - a: both calls reproduce their outputs.
+    - b: check row 2 with the keys zero-padded to N' = 536..1100: which N' give the AR's bits.
+    - c: the AR's call with the real row moved to q index 2.
+    - d: the bucket fix, both calls padded to 1024 (and 1536).
+  - Prediction:
+    - b: classes are pairs of N (N and N+1 alike, per 4a's rows 0-1); the AR's N (538) gives the AR's bits: 70 %.
+    - c: the row index does not matter: 80 %.
+    - d: the bucket fix makes row 2 equal: 75 %.
+  - If d passes, the fix pads every 16-row attention call past 512 keys to a 512-bucket. Rows whose AR bucket
+    differs are recomputed in that bucket (ref2's sdpa_classes, with bounds at the bucket edges).
+    - That changes REF2's AR bits past 512 keys, so the reference rows must be regenerated: EvalSuite's call.
+    - The alternative keeps the AR: recompute every row j >= 2 at its own AR length, about 8 calls per chunk. Too
+      slow to adopt; for a test only.
+  - **RESULT (Fri 02:28, runner 40; data/r40s4b_screen.txt): the bucket fix holds on the captured call.**
+    - Row 2's q, keys 0..522 and values are equal in the AR's call (538 keys) and the check's (536), yet the outputs
+      differ. Both replays reproduce.
+    - b: across N' = 536..1100 the row takes only TWO bit patterns. It flips between the AR's and the check's in
+      even-length runs (2 to 26) with no period: 52 runs; 455 of 565 N' give the AR's bits.
+    - c: moving the real row to q index 2 does not change it.
+    - d: both calls padded to 1024, and to 1536: equal.
+    - Predictions: two classes, not pairs (wrong in form, right that N alone decides); the index does not matter
+      (right); the bucket fix works (right).
+- **R-40 STEP 4c (pre-registered Fri 02:45; scripts/ref2_kb.py + r40s4c_screen.py, ~4 min, C 144): the key-bucket fix in
+  the live loop.**
+  - ref2_kb: every 16-row attention call with N >= 512 keys runs at the next multiple of 512 (zero-padded, masked).
+    Rows whose AR step lands in another class (< 128, 128-511, or another 512-bucket) are recomputed in that class.
+    Below 512 keys nothing changes.
+  - It is a separate module, because ref2.py is pinned by EvalSuite's R-56. It changes REF2's AR bits past 512 keys,
+    so the reference is the in-process REF2 AR with key buckets.
+  - Harness = 3k's. Part L: 702 (AR rows 520..679) and HumanEval/68 (AR rows 367..586, across 512), the live loop to
+    256 tokens, every kept row with an AR row compared bitwise. Part C: 702 with the buckets off must break.
+  - PASS = every compared row equal AND the control breaks. Prediction: PASS 75 %.
+  - **RESULT (Fri 02:43-02:47, runner 41; data/r40s4c_screen.txt): PASS. With key buckets the live loop is
+    bit-exact past 512 keys.** 169 s running.
+
+    | prompt | kept | logits rows bitwise vs the bucketed AR | tokens == stored REF2 row (old reference) | tok/s (cycle), C 144 |
+    |---|---|---|---|---|
+    | geometry/702 (P 520) | 5.12 | **160 / 160** (positions 520-679) | 118 / 256 | 14.9 (317 ms) |
+    | HumanEval/68 (P 367) | 15.41 | **220 / 220** (367-586, across 512) | 256 / 256 | 27.0 (548 ms) |
+    | control: 702, buckets off | 4.74 | 2 / 160 | 118 / 256 | 14.1 (301 ms) |
+
+    - 3732 calls were bucket-padded, and 192 class-split recomputes ran (AR and loop together).
+    - The bucketed AR leaves the stored row at 702's token 118, as the old loop did. That is the reference change
+      past 512 keys (EvalSuite's diagnostic: the old AR ties there, 24.25 / 24.25).
+    - EvalSuite's R-56 diagnostic (02:4x) agrees on the location. On all 8 failing prompts the loop leaves the old AR
+      at the first row whose AR call has 513-514 keys. The stored rows reproduce with today's AR.
+    - **Merged into ref2.py as REF2b (02:5x):** CFG key_buckets (default on), kb_from / kb_step 512. key_buckets off
+      reproduces REF2's original AR.
+    - Still open:
+      - a bitwise microtest of the merge against the module that passed 4c;
+      - the 1024 bucket edge (not reached here);
+      - regenerating the reference rows on REF2b and the R-56 re-run with a bitwise check on every kept row
+        (EvalSuite).
+- **STEP 3y-fix, first attempt (Thu 19:14:47-19:15:04, runner 21): stopped by run_locked's swap guard, no result.**
+  Swap went 9.8 -> 14.7 GB during the model load, right after the previous holder's job. Reported to the
+  orchestrator as BIG (machine). Re-queued as runner 23, which waits 30 s after a lock grant and re-checks memory
+  before loading.
+
+- **STEP 3y-fix, second attempt (Thu 20:06:30-20:06:48, runner 23, after a 30 s settle): stopped by the swap guard
+  again** (9.7 -> 13.0 GB in 18 s).
+  - The machine held 13 GB in the compressor and ~24 GB free. A ~30 GB load at C 176 pushes compressed pages to
+    swap, and the 58 %-free gate doesn't see it. STEP 3w's load at 19:54 grew swap by 0.
+  - **Amendment (Thu 20:08, before their runs): C capped in the scripts.** 3y-fix and 3v run at C 128 (-6.5 GB;
+    numerics don't depend on C). R-50 runs at C 144 (-4.3 GB; slot calls need <= 0.9 C = 129 experts, else the
+    shipped path takes over and the script counts the fallbacks).
+  - 3y-fix is re-queued as runner 25, after runner 24 (3v).
+- **REF2 module notes (Wed 15:33, desk):**
+  - experts_nax (qmmg25, L1-25: -22 ms per 16-row check, batch-invariant, 2.3x more accurate) needs gate | up
+    concatenated per expert. A copy would cost ~1.3 GB per layer.
+  - MTPLX already has _FusedGateUpSwitchGLU (qwen4_exp.py ~1499), which builds gu_weight at sanitize time and
+    replaces the separate weights. So the module uses the engine's gu_weight when present, or fuses at load the
+    same way; never a copy.
+  - Projected REF2 saving per 48-layer check: dense via qmm16c ~-11.5, experts ~-22, S4 ~-14, SB ~-8 to -16 =>
+    ~-56 to -64 ms vs the -40 line. That is conditional on batch invariance (INV0).
+  - INV0 is queued (runner_r10). It waits for an open lid: closed since Tue 23:57.
+
+## R-50 SLOTCALL (NewIdeas GO Thu 18:59, from Leap's 18:48 proposal; Leap, pre-registered Thu 2026-10-29 19:18 EET): 16-row checks without the scratch gather
+- **Idea:** BigMoE's plain _sync_call (the 45 GB check path, PF1 off) runs per layer:
+  - id sync -> ensure -> mx.take of the needed experts (up to 0.9 C = 158 x 9 pieces, ~2.8 MB each) into a scratch
+    pool -> the MoE on compact ids -> clear_cache.
+  - The gather keeps MLX's sorted gather on the reference's expert ORDER. REF2's expert kernel (qmmg25 / experts_split)
+    computes every (row, expert) pair on its own (self-test 'experts rows alone'), so the order and the slot numbers
+    don't matter.
+  - So the experts kernel can run on the pool itself with slot ids, as the gated path already does: no gather, no
+    scratch, no clear_cache.
+- **Prior art:** this is what BigMoE's gated path and the 24 GB engine do for <= MAXK ids (slot ids into the pool,
+  sync-free). Applied to the > MAXK plain path under a batch-invariant expert kernel: new here.
+- **Screen (scripts/r50_screen.py, runner_r23.sh, one lock ~7 min):**
+  - 3z's harness (C 176, PF1 for prefills only, live DFlash2 drafting), both arms REF2 + SB.
+  - gather = _sync_call as shipped; slot = REF2-on calls with <= 0.9 C distinct experts on pool slots (the rest fall
+    back). The patch lives in this process only; BigMoE's file is untouched.
+  - HumanEval/68 ABBA, prealgebra/1640 BAAB, <= 160 tokens.
+- **Lines (NewIdeas):** PASS = every token AND each run's first-check logits hash equal between the arms AND >= 40 ms
+  saved per check (median cycle, gather - slot, median over prompts) -> into REF2's path. KILL = < 15 ms.
+- **Prediction:** bit-equal 95 %. The gather moves ~100-158 experts x 2.8 MB per layer, ~13-21 GB of copies per
+  check at C 176, ~65-100 ms at copy speed, partly hidden behind the id syncs. Saving ~60 ms (range 30-100):
+  PASS 65 %, BETWEEN 25 %, KILL 10 %.
+- **Amendment (Thu 20:08, before the run):** C 144 (see STEP 3y-fix's second attempt).
+- **Result (Thu 20:16-20:18, runner 23, rc 0, 143 s; data/r50_screen.txt): PASS. Median saving 384.2 ms per 16-row
+  check, about 6x the prediction; bit-equal.**
+
+  | prompt (kept per check) | gather: cycle / tok/s | slot: cycle / tok/s | saved per check |
+  |---|---|---|---|
+  | HumanEval/68 (15.55) | 960.0, 1033.4 ms / 14.0-14.1 | 553.4, 537.9 ms / 25.7-25.8 | 451.1 ms (x1.83 tok/s) |
+  | prealgebra/1640 (5.03) | 654.5, 659.9 ms / 7.4-7.5 | 344.1, 335.8 ms / 14.1-14.4 | 317.2 ms (x1.92 tok/s) |
+
+  - Bit-equal: all 4 runs per prompt produce the same 160 tokens and the same first-check logits hash
+    (25c55047fab416f5 / bb10459d7f720669).
+  - Misses per check are equal across arms (~1266-1284 on /68, ~602 on 1640). So the saving is the gather path's
+    own cost, not I/O.
+  - Slot calls cover 48.1-48.4 MoE calls per check (every layer + the commit's lone PLE-layer replay). 2 fallbacks
+    in two /68 runs (> 0.9 C = 129 distinct experts).
+  - Why 6x the prediction: per layer the shipped path makes a fresh ~330 MB scratch (9 mx.take + concatenate) and
+    frees it with clear_cache. That is ~16 GB of new buffers per check, paid at allocation / page-fault speed, not
+    copy speed. Not profiled; the drop itself is measured.
+  - REF2-only by construction. The slot ids keep exactness only where REF2's per-(row, expert) kernel runs: calls of
+    <= 16 rows with REF2 on. Larger calls would hand stock MLX's sorted gather slot-ordered ids. The adopted form
+    must gate on rows <= 16 (this screen's prefills ran PF1 and never reached it).
+  - Context: in this harness REF2 + DFlash2 16-row checks go 14 -> 26 tok/s on code and 7.4 -> 14.3 on math, at C 144
+    with 600-1280 SSD misses per check. That is not the shipped 45 GB line (~64 tok/s on code, MTP head, 2-7-row
+    gated checks). The exact 16-row path is still the slower one; this removes ~40-48 % of its check.
+  - vs prediction: bit-equal (95 %) yes. Saving 60 predicted, 384 measured: the scratch is an allocation cost, not
+    a copy cost.
+  - Next (NewIdeas' line: PASS -> into REF2's path):
+    - ref2.apply() installs the slot call when BigMoE's stream is loaded, gated on REF2 on + rows <= 16 + PF1 off +
+      <= 0.9 C distinct ids.
+    - BigMoE (engine owner) gets the finding: its shipped plain-path gather costs ~8 ms per layer-call in
+      allocations. For its own stock paths a reused scratch buffer (no clear_cache) may be a cheap exact win too;
+      that is BigMoE's to screen.
+> (a quote from the project owner, kept private)
+  pre-registered Thu 21:02; scripts/r50b_screen.py, runner_r27.sh after runner 26, ~2 min):** warm 16-row checks,
+  gather vs slot, at the 45 GB line's REF2 configuration (C 192), with the needed experts resident.
+  - Setup: no drafter; REF2 + SB on; PF1 for prefills only.
+  - Windows: 16-row checks sliding by one token along HumanEval/68's REF2 row, commit keep 1 (3z's Part W). Four
+    passes over the same 14 windows, each from a fresh prefill, in the order gather, slot, slot, gather.
+  - Logits per window are compared across all passes. Time = median over warm checks (window >= 2) per arm.
+  - **Lines (R-50's):** PASS = every window's logits equal across the arms AND >= 40 ms saved per warm check. KILL =
+    < 15 ms.
+  - Prediction: the gather's cost scales with the distinct experts per layer-call (~100-130 for 16 rows), not with C,
+    so the saving carries over. Warm gather ~700-900 ms vs slot ~350-500 ms, saving ~250-450 ms. Bit-equal 95 %;
+    PASS 85 %.
+  - The result goes to the orchestrator either way (Kamen asked directly), and to NewIdeas.
+  - **Result (Thu 21:57-21:58, runner 27, rc 0, 65 s, C 192 = 29.4 GB active; data/r50b_screen.txt): PASS. A warm
+    16-row check at the 45 GB configuration costs ~200 ms on pool slots vs 0.6-1.6 s with the gather. Bit-equal.**
+
+    | pass (order G S S G) | warm check + commit, windows 2-13 | misses per check |
+    |---|---|---|
+    | 1 gather | 597-704 ms | 39-121 |
+    | 2 slot | 164-240 ms | 9-49 |
+    | 3 slot | 159-231 ms | 14-58 |
+    | 4 gather | 1382-1604 ms | 17-66 |
+
+    - Medians (pre-registered): gather 1043.1 ms, slot 200.3 ms, saved 842.9 ms per 48-layer check.
+    - Against gather's better pass alone (~650 ms) the saving is still ~450 ms (x3.2).
+    - Logits are equal across all 4 passes for every window.
+    - The gather arm doubled between pass 1 and pass 4 at equal misses, while the slot arm stayed flat. That fits
+      the allocation reading: fresh ~330 MB scratches get slower as memory fills. The slot path has no scratch.
+    - Pass 1 had ~2x the misses of the later passes (its pool came cold from the prefill). The pool persists across
+      passes; G S S G puts one gather pass at each end.
+    - For the route to 350 at 45 GB:
+      - An exact 16-row check now costs ~200 ms warm at C 192: ~32 misses per check (~90 MB from SSD) plus 48
+        per-layer id syncs plus compute.
+      - With DFlash2's kept per check (code 9.57, math 7.00) that is ~44 / ~33 tok/s for the exact 16-row path
+        (with ~15 ms of drafting), vs ~14 with the gather. Today's 45 GB line (MTP head, 2-7-row checks) is ~64 on
+        code.
+      - 350 needs ~35 ms per 16-row check at ~12 kept. The next levers on this path: the per-layer id sync, i.e. a
+        sync-free 16-row gate (BigMoE's MAXK build), plus REF2's kernel savings (137 ms measured in 3z) where they
+        still apply.
+    - vs prediction: PASS (85 %) yes, bit-equal (95 %) yes. Saving 250-450 predicted, 450-843 measured (slot 200 ms,
+      better than the 350-500 guess).
+
+## R-50c (Kamen via the orchestrator, Thu 22:1x: profile the new ~200 ms check end to end before a sync-free gate is built; NewIdeas GO 22:08; Leap, pre-registered Thu 2026-10-29 22:18 EET): where the warm 16-row check's time goes at the 45 GB configuration
+- **Why:** R-50's waste went unseen because the check's time was never broken down: the copy was predicted at ~60 ms
+  and the allocations cost 6x that. The next lever should come from a measured breakdown.
+- **Screen (scripts/r50c_screen.py, runner_r31.sh after 3q, ~2 min):**
+  - Setup: C 192; REF2 + SB with ref2's defaults (slot call, commit phase); no drafter; R-50b's warm windows (/68
+    REF2 row, sliding, commit keep 1); 2 passes of 14, windows >= 2 counted.
+  - Per MoE layer-call (an instrumented copy of ref2's slot path, the same work):
+    - sync = the id sync's wait: GPU work up to the router + latency;
+    - ensure = CPU + SSD for misses;
+    - build = slot map + MoE graph;
+    - moe = the expert kernels + their sync;
+    - between = Python building the next layer's dense graph.
+  - Per check: wall, head eval, the tail after the last MoE call, the commit, and a bare sync's latency.
+  - Derived: GPU busy ~ sync + moe + head - sync latencies. The bubble (GPU idle) ~ ensure + build + between + tail +
+    the latencies.
+- **Lines (NewIdeas):** PASS = bubble >= 80 ms per check -> BigMoE builds R-55 GATE16 (sync-free 16-row gate, REF2's
+  slot kernel unchanged). KILL = bubble < 40 ms -> compute is the lever (REF2 kernels). BETWEEN otherwise.
+- **Prediction:** GPU busy ~70-90 ms (dense ~18, experts ~35, attention / GDN / HC / head ~20-35); bubble ~90-120 ms
+  (48 x ~2 ms ensure + build + Python); commit ~5-10 ms. PASS 65 %, BETWEEN 25 %, KILL 10 %.
+- **Result (Thu 22:20, runner 31, rc 0, 26 s, C 192 = 29.4 GB active; data/r50c_screen.txt): BETWEEN. Bubble ~60 ms
+  of a 185 ms check.** Medians over 24 warm checks, ms:
+
+  | stage | ms per check | note |
+  |---|---|---|
+  | expert kernels (48 MoE calls) + their sync | 77.7 | ~1.36 ms GPU per layer; ~100 experts x 2.8 MB = ~13.4 GB per check at ~173 GB/s, near the bytes floor |
+  | GPU up to each router + sync | 64.6 | attention / GDN / HC / dense / shared expert / router: ~52 GPU + ~12 sync latency |
+  | ensure (CPU + SSD) | 22.7 | 44 misses per check (~123 MB, ~10-12 ms of SSD) + 48 ensure calls |
+  | Python building the dense graph between layers | 10.2 | |
+  | head eval | 2.6 | |
+  | slot map + MoE graph build | 1.9 | |
+  | unexplained | 1.6 | |
+  | **check** | **181.5** | + commit 3.6 = 185.1 wall |
+
+  - GPU busy ~120 ms. The bubble (GPU idle) ~60 ms = ensure 22.7 + Python 12.1 + 97 sync latencies x 0.256 ms
+    (~25).
+  - A sync-free 16-row gate (R-55 GATE16) could take ~60 ms at most, 185 -> ~125 ms (-32 %), and only if ensure's
+    misses are prefetched too. NewIdeas' line calls that BETWEEN (build at >= 80).
+  - The floor under the exact 4-bit 16-row check: experts ~48 ms at 280 GB/s for 13.4 GB, plus dense ~20 ms, about
+    70 ms. 350 needs ~35 ms per check at ~12 kept. So the route needs fewer bytes per check (or more kept per byte),
+    not only fewer syncs.
+  - vs prediction: GPU busy 70-90 predicted, 120 measured (the experts at 78, not 35: experts_split on ~100 experts at
+    16 rows is bandwidth-bound); bubble 90-120 predicted, 60 measured; commit 5-10 predicted, 3.6 measured.
+    BETWEEN (25 %).
+
+## S45 (Leap, pre-registered Fri 2026-10-30 00:10 EET; Kamen 10-29 21:1x: 45 GB news first, in tok/s at 45 GB and ms per check): the exact path's live speed at 45 GB
+
+- **What:** STEP 3k's live loop in speed mode (`r40s3k_screen.py 192 256 speed`, runner 37 after the 3k re-run).
+  - EvalSuite's REF harness at C 192, REF2 + SB with ref2's defaults (slot call, commit phase, SDPA classes).
+  - DFlash2 L1-20 drafting, up to 256 tokens on the 6 3k prompts (2 code, 4 math). No AR, Part D or control.
+- **Reports:**
+  - tok/s per prompt, and the means for code and for math;
+  - per cycle (medians): drafter ms, and check + commit ms;
+  - misses and SSD read ms per check;
+  - every token vs EvalSuite's REF2 row (a free exactness check at C 192);
+  - footprint now, lifetime peak and MLX peak.
+- **A measurement, no lines.**
+- **Prediction:**
+  - median cycle 250-330 ms (R-50b: a warm check ~200 ms at C 192, plus the drafter);
+  - code ~40 tok/s, math ~20 tok/s;
+  - every token equal.
+- **RESULT (Fri 00:24-00:26, runner 37; data/s45_speed.txt): code 25.1 tok/s, math 19.2 tok/s at C 192, exact.**
+
+  | prompt | kept | tok/s | cycle (median, ms) | drafter (ms) | check + commit (ms) | misses per check | SSD reads per check (ms) |
+  |---|---|---|---|---|---|---|---|
+  | HumanEval/68 | 15.41 | 27.1 | 415.5 | 15.6 | 396.8 | 779 | 194.1 |
+  | prealgebra/1640 | 5.31 | 18.2 | 280.6 | 12.5 | 266.1 | 414 | 110.7 |
+  | HumanEval/91 | 8.09 | 23.1 | 302.7 | 13.4 | 292.8 | 563 | 144.4 |
+  | algebra/694 | 7.73 | 20.3 | 359.6 | 12.4 | 350.1 | 644 | 162.2 |
+  | algebra/1282 | 6.89 | 21.7 | 295.6 | 12.9 | 286.3 | 483 | 125.9 |
+  | gsm8k/708 | 6.16 | 16.5 | 338.3 | 12.7 | 317.2 | 531 | 161.6 |
+
+  - Median cycle 320.5 ms; kept 8.27 per check. Every token == EvalSuite's REF2 row at C 192 too.
+  - Memory: footprint now 32.0 GB, lifetime peak 36.3 GB, MLX peak 35.9 GB. The "45 GB" configuration peaks at
+    36 GB on these prompts.
+  - Against the prediction:
+    - cycle 320 ms, inside 250-330: right;
+    - math 19 vs ~20: right;
+    - code 25 vs ~40: wrong. HumanEval/68 keeps 15.4 per check but its checks cost 397 ms (779 misses).
+  - **Where the cycle goes:**
+    - The drafter takes ~13 ms; check + commit takes 266-397 ms.
+    - R-50c's warm check (sliding by one token, 44 misses) took ~185 ms.
+    - The live loop moves ~8 tokens per check and misses 413-779 experts per check, which costs 111-194 ms of SSD
+      reads. That is about the whole gap to R-50c.
+  - **So at 45 GB the misses are now the biggest exact-safe piece: ~1/3 to 1/2 of the check.**
+    - Levers: a bigger C (~9 GB of headroom to 45 GB is ~+64 slots per layer at ~135 MB per slot), and overlapping
+      the reads with compute (prefetch the next layer's experts from a lookahead router). Neither changes numerics.
+    - BigMoE's own look-ahead (BIGMOE_PREFETCH) lives only on the gated path (<= 40 ids). 16-row checks reach
+      ext.ensure synchronously, with no look-ahead, and EvalSuite refuses that env anyway. The overlap lever is
+      BigMoE's engine work; proposed to NewIdeas and sent to BigMoE.
+
+## S45b (Leap, pre-registered Fri 2026-10-30 00:45 EET; the orchestrator 00:3x: measure past 45 GB if it cuts misses): misses and speed vs C on the exact path
+
+- **What:** S45's harness unchanged at C 224, 256 and 288 (runner 38). Each run is gated on memory_pressure's free
+  share: 66 / 69 / 75 %. A C is skipped if its gates stay shut ~46 min. The swap guard (+2 GB) stays.
+- **Expected peaks:** lifetime ~36.3 GB at C 192, plus ~135 MB per slot, so ~40.6 / 44.9 / 49.2 GB.
+- **Prediction:** misses per check fall as C^-1.5, about -21 / -35 / -46 % vs C 192 (mean 569). SSD ms falls with them
+  (C 192: mean ~150 ms per check). tok/s rises about +8 / +19 / +28 % over C 192 (code 25.1, math 19.2). Every
+  token stays equal.
+- **A measurement, no lines.** If C 256 (~45 GB) gives >= +15 % tok/s exactly, it goes to EvalSuite and BigMoE as a
+  config candidate for the 45 GB line (their call), with its footprint.
+- **NewIdeas GO (00:55, seen after the run):** C 192 / 224 / 256 only, and C 256 only with >= 50 GB free. My gates
+  were looser (69 / 75 %, ~44 / 48 GB), and the runner went on to C 288 after the first trip.
+- **RESULT (Fri 00:55-01:32, runner 38): C 224 measured; C 256 and C 288 stopped by the swap guard.**
+
+  | C | lifetime peak | misses per check (mean) | SSD ms per check (mean) | median cycle | tok/s code | tok/s math | all-6 mean |
+  |---|---|---|---|---|---|---|---|
+  | 192 (S45) | 36.3 GB | 569 | 149.8 | 320.5 ms | 25.1 | 19.2 | 21.2 |
+  | 224 | 40.5 GB | 432 (-24 %) | 115.7 (-23 %) | 270.9 ms (-15 %) | 24.7 | 21.9 | 22.8 (+8 %) |
+  | 256 | stopped 17 s into the load: swap 11.3 -> 14.1 GB | | | | | | |
+  | 288 | stopped 17 s into the load: swap 14.0 -> 18.3 GB | | | | | | |
+
+  - Every token at C 224 == EvalSuite's REF2 row.
+  - HumanEval/91 got slower at C 224 (21.5 vs 23.1 tok/s) although its median cycle fell 12 %. Swap grew 1.5 GB
+    during that run, which may explain it.
+  - Against the prediction: misses -24 % (predicted -21 %): right. All-6 tok/s +8 %: right. Code alone: not up.
+  - Lesson (memory: swap-eats-the-disk): the free-share gate overstates room for one big load, and a sweep must stop at
+    the first trip. Swap is 18.2 GB after this; the WATCH line is 20.
+  - What remains: at C 224 the SSD reads are still ~116 ms of a ~271 ms cycle. The look-ahead prefetch on the
+    16-row path is NewIdeas' R-57 for BigMoE.
+
+## R-58 REF2-T (NewIdeas GO 10:20, from Leap's 10:0x answer; the tier plan 4433333333 is Kamen-adopted, STATE.md:31): REF2 on BigMoE's rank-tier engine
+
+- **Desk port (Fri 16:1x, ref2.py; CFG["tiers"], on by default, inert without BIGMOE_TIER):**
+  - BigMoE's own _sync_call runs every tier call with > 40 ids (5-16-row checks, big commit replays) as the exact
+    4-bit prefill (tier.prefill_call). Its tiers apply to 1-4-row calls only, through the gated tier_call.
+  - REF2-T's _tier_slots runs 5-16-row calls at the plan's tiers on pool slots, as tier_call does: base-pool (MSB-3)
+    slots for every rank, LSB-sidecar slots for ranks 0-1, MoonShots' fused 3c kernel (tierglu.tier_glu).
+  - 3c computes each (row, rank) pair in its own threadgroups, and its docstring states the pair arithmetic is
+    subset-invariant. So rows should be batch-invariant.
+- **INV-T (pre-registered 16:20; scripts/r58_invt_screen.py, runner 43 after runner 42, ~4 min, C 192):** STEP 4a's
+  method with tiers on.
+  - Cases: HumanEval/68 (keys 383) and 702 (keys 536, key buckets).
+  - Counts: tier calls on the AR's gated path and on the check's REF2-T branch.
+  - Control: the branch off, so the check's experts run exact 4-bit. It must differ.
+  - **PASS** = 16/16 rows and every layer equal in both cases, with tier calls on both paths, AND the control differs.
+    **KILL** = any row differs.
+  - Prediction: PASS 75 %. The risk is a tier path state I haven't read, such as the gate's spin / first-pass logic.
+- **INV-T RESULT (Fri 17:32-17:33, runner 43; data/r58_invt_screen.txt): PASS. REF2-T is batch-invariant on the tier
+  engine.** 50 s.
+
+  | case | logits rows bitwise | layers | tier calls: AR (gated tier_call) / check (REF2-T slot branch) |
+  |---|---|---|---|
+  | B HumanEval/68, keys 383 | 16 / 16 | every layer equal | 768 / 48 |
+  | A 702, keys 536 (key buckets) | 16 / 16 | every layer equal | 768 / 48 |
+  | control: tier branch off (the check's experts at exact 4 bits) | 0 / 16 | first difference at layer 0 | 768 / 0 |
+
+  - Prediction PASS 75 %: right.
+  - BigMoE runs the gate arm as a copy (~/BigMoE/scripts/r58g_invt_screen.py: BIGMOE_MAXK 160 + build_next, GATE_N 160).
+    It checks that their sync-free 16-row tier gate gives the same bits.
+- **S45-T (pre-registered Fri 17:40; scripts/r58_s45t_screen.py, a copy of r40s3k_screen.py with BIGMOE_TIER=4433333333
+  / GLU 3c; runner 45 after runner 44):**
+  - `224 256 speed 16,0.3,16 interleave`: a discarded warm-up, then per prompt tiers block 16, tiers t 0.3, tiers
+    block 16, on S45's 6 prompts at C 224.
+  - The reference is the REF2-T AR, so the stored 4-bit REF2 rows will not match. Exactness = tokens equal across the
+    three runs of each prompt.
+  - **PASS (NewIdeas' line)** = tiers block 16's all-6 wall-clock mean >= +10 % over 4-bit block 16 in S45c-2 (both
+    after a warm-up), and tokens equal across the runs. **KILL** < +4 %.
+  - Also reported: tiers + t 0.3, the stacked lever, vs 4-bit block 16.
+  - Prediction: tiers block 16 +12 %; tiers t 0.3 +30 % over 4-bit block 16.
+  - **Moved (Fri 18:3x, NewIdeas):** S45-T runs on BigMoE's gate, the path the line would adopt. BigMoE's R-58G PASS:
+    their sync-free 16-row tier gate == _tier_slots bitwise (16/16 rows + layers at 383 / 536 keys).
+    - Sizing per MoonShots' M-08 (~/MoonShots/data/split45.txt): C_m ~257-269 / C_l 96-128 at REF2's C 224 bytes. A
+      small LSB pool (C_l 32) would swamp the reads (+25-145 %).
+    - My slot-path S45-T is dropped; it was never queued. I suggested BigMoE add the tiers + t 0.3 arm.
+
+## R-61 / R-62: the check's dense kernels after R-59 (Fit12's profile, Sat 02:2x; NewIdeas: fold any bit change into the next reference bundle with REF2-T, one same-scores test)
+
+R-59 at C 224, warm 16-row REF2b check, ms per check (x its bytes floor at 280 GB/s):
+- GDN 24.1 (5.7x, 36 layers);
+- QSA attention 11.6 (9.1x, 12 layers);
+- HC reads 7.95 / 7.22 (3.5x / 3.2x);
+- non-expert total 53.1.
+
+- **R-62 ATT16 (pre-registered Sat 02:4x):** one SDPA call per QSA layer for the 16-row check instead of MTPLX's 12
+  head-chunked calls.
+  - MTPLX chunks whenever q_len x GQA > 32, to stay on MLX's vector kernel. But MLX 0.32.2 sends q_len > 8 to its full
+    (NAX) kernel, which takes GQA natively, so for 16 rows the chunking only multiplies dispatches.
+  - Test (synthetic, the model's shapes; key lengths 383 / 536 / 1024 with REF2b's buckets): one call vs 12 chunks, ms
+    and bitwise.
+  - The full kernel computes each (head, query tile) on its own, so the bits should not change.
+  - PASS = bit-identical AND <= 1/3 of the chunked time: exact-safe, adopt without a reference change.
+  - BETWEEN = faster but bits differ: goes in REF2-T's bundle.
+  - KILL = not faster.
+  - Prediction: bit-identical 70 %, ~0.25 ms per layer (11.6 -> ~3 ms per check).
+- **R-61 GDN16-125:** L1-15's GDN kernel program for the 35B (prework and gated norm fused, the recurrence with its
+  gates inside, the state kept on-chip across the check's rows; 35B pass 44 -> 37 ms) ported to the 125B's GDN (Hk 16,
+  Hv 48, Dk = Dv = 128).
+  - Step 1: per-piece times at 16 rows on synthetic weights (projections, conv, recurrence, norm / gates), to see where
+    the 24.1 ms goes.
+  - Step 2: the kernel, bitwise vs today's GDN path.
+  - PASS >= -10 ms per check; KILL < -4 ms. Bit-identical = exact-safe; else REF2-T's bundle.
+- Both are small synthetic screens (< 2 GB), for a shared GPU by day (night order: big runs first).
+- **K-60 RESULT (Sat 07:30, runner 51, shared GPU, rough; data/k60_experts_bw.txt): the experts kernel has ~29 % time
+  headroom.**
+  - A check's call: 16 rows x top-10 over 100 experts gives 76 distinct, 210 MB per layer call.
+  - experts_split (REF2's path) takes 1.40 ms = 150 GB/s; a plain uint4 streaming read of the same bytes takes 0.99 ms
+    = 210-212 GB/s.
+  - At the read ceiling the experts would cost ~47 instead of ~67 ms per check: ~-20 ms, ~13 % of the stack's 154 ms
+    cycle at C 224.
+  - Exact-safe if qmmg's per-output accumulation order is kept: only memory access changes, e.g. more loads in flight.
+    A candidate kernel row, after R-62 / R-61.
+> (a quote from the project owner, kept private)
+  hold_guard.sh). Reading, planning and writing only.
+- **R-62 RESULT (Sat 19:58, runner 52, Kamen's 19:55-20:45 hour; shared GPU, rough; data/r62_att16.txt): BETWEEN.** One
+  SDPA call per layer is 2.1-2.8x faster than MTPLX's 12 head chunks, but bit-identical only below 512 keys.
+
+  | key length | bitwise equal | 12 chunks (ms per layer) | one call | x 12 layers per check |
+  |---|---|---|---|---|
+  | 383 | yes | 0.732 | 0.297 | 8.8 -> 3.6 ms |
+  | 1024 | **no** | 0.707 | 0.254 | 8.5 -> 3.1 ms |
+  | 2048 | **no** | 0.726 | 0.346 | 8.7 -> 4.2 ms |
+
+  - The PASS line needed bit-identity AND <= 1/3 of the time. Got 0.36-0.48x, with bits that differ past 512: the same
+    length-dependent NAX behaviour as 4b, now head-count-dependent too.
+  - ~-5 ms per check (~3 % of the stack's 154 ms cycle).
+  - It goes into the next reference bundle: REF2's AR and the check would both take the one call, and the key-bucket
+    logic keeps them consistent. Prediction "bit-identical 70 %": wrong past 512.
+- **R-61 step 1 RESULT (Sun 05:11, runner 54, shared GPU, rough; data/r61_gdn_profile.txt): no single piece dominates.**
+  - One GatedDeltaNet built from the model's config: random 4-bit g64 projections, bf16, REF2 on, no cache. Each piece
+    was timed alone with an eval after it.
+
+    | piece (ms per layer) | 16 rows | 1 row |
+    |---|---|---|
+    | P: the 4 input projections (qmm16c, padded) | 0.740 | 0.590 |
+    | C: conv chain (concat, conv1d, silu, split, l2norm x 2, scale) | 0.453 | 0.370 |
+    | R: gated_delta_update (16 sequential steps) | 0.583 | 0.273 |
+    | O: gated norm + out_proj | 0.336 | 0.363 |
+    | W: the whole mixer call | 2.906 | 1.203 |
+
+  - Timed alone, every launch waits on a sync, so the absolute numbers are ~4x R-59's in-model 0.67 ms per layer
+    (24.1 / 36).
+  - The shares are what count: P 35 %, R 28 %, C 21 %, O 16 %. The stock 16-row chain is ~35 small kernels per layer
+    (the padded projections with their pad / slice ops, ~10 for the conv chain, the gate math around the recurrence,
+    ~5 for the norm), ~1,260 per check. That fits R-59's 5.7x the floor.
+  - **Step 2:** L1-15's 35B GDN16 program, ported. One prework kernel (conv + silu + l2norm + scale for any S <= 16),
+    the recurrence with the gates inside, one gated-norm kernel; qmm16c projections stay.
+    - Estimate ~-15 to -20 ms per check (~10-13 % of the stack's cycle).
+    - Every op is row-independent, so the same kernels at S = 1 (the AR) keep REF2's batch invariance. The rounding
+      differs from the stock chain, so it is a reference change, for the next bundle with R-62.
+  - **Better: MoonShots already has EXACT fused GDN pieces for the 125B** (patches/planes_engine/gdn_exact.py, Oct 21;
+    FINDINGS: bitwise == MTPLX's eager chain at S 1-8, model-level 4-row verify logits bitwise; -13 kernels per GDN layer,
+    ~-3.5 ms per pass).
+    - gdn_prework_exact: concat + conv1d + silu + l2norm + scale + the conv state in one dispatch, every rounding
+      replicated. gated_norm_exact: SigmoidRMSNormGated in one dispatch.
+  - **Tensor check at 16 rows (Sun 05:2x, shared lock; MoonShots' tests copied to scripts/ms_copy/, S up to 16): PASS.**
+    The prework has 0 mismatches in q / k / v / state at S 1-16 and every scale; the gated norm has 0 of 98,304 at S 16.
+    So for 16-row checks they are EXACT-SAFE (REF2b / REF2-T bits unchanged), no reference change.
+  - **Step 2a (next):** route the 16-row path to them under REF2. Lift MTPLX's S <= 6 cap on the rows branch to 16, set
+    MTPLX_FUSED_CONVNORM_VERIFY, install MoonShots' patch, and swap SigmoidRMSNormGated for gated_norm_exact.
+    - Then one live-loop run: every token / logits row == without it, plus the check-time gain.
+    - It is exact-safe, so it joins the exact-safe stack (gate + truncation) under one every-token check (FAST
+      INTEGRATION rule 2).
+    - The bigger GDN pieces (the padded projections' glue, the recurrence's gate math) come after.
+  - **R-61a GDNX (pre-registered Sun 05:2x; ref2.py CFG gdn_exact, default off; runner 55):**
+    - With the switch on, REF2 routes 1-16-row GDN calls to MoonShots' exact prework kernel (MTPLX's fused branches,
+      the rows cap lifted from 6 to 16) and SigmoidRMSNormGated to gated_norm_exact.
+    - Live A/B at C 224, CAP 192, quiet lock, NO-SWAP >= 44.5 GB: warm-up, then per prompt gate + t 0.3, gdnx gate +
+      t 0.3, twice (A-B-A-B), on S45's 6 prompts.
+    - Lines:
+      - tokens equal across all runs (else FAIL);
+      - adopt as REF2's default if the median cycle is not worse (exact-safe and fewer kernels);
+      - its +5 % speed line is informative only. MoonShots' estimate is ~-3.5 ms of a ~154 ms cycle (~+2 %).
+    - Prediction: exact; median cycle -2 to -5 ms.
+    - **RESULT (Sun 05:24-05:32, runner 55, quiet lock; data/r61a_gdnx_c224.txt): exact, and a small gain. ADOPTED as
+      REF2's default.** Tokens are equal across all 4 runs of every prompt.
+
+      | run (C 224, gate + t 0.3) | median cycle | steady state | wall-clock |
+      |---|---|---|---|
+      | 0: without | 163.0 ms | 42.27 | 33.82 |
+      | 1: gdnx | 157.6 ms | 43.97 | 36.42 |
+      | 2: without | 156.1 ms | 43.84 | 29.91 (an outlier run) |
+      | 3: gdnx | 155.5 ms | 44.16 | 37.23 |
+
+      - The measure that counts: median cycle 159.6 -> 156.6 ms (-3.0 ms, -1.9 %); steady state 43.1 -> 44.1 (+2 %).
+        This matches MoonShots' ~-3.5 ms and the prediction.
+      - The printed wall-clock verdict ("+14-17 %, PASS") comes from run 2's low wall-clock (29.9 at an unchanged
+        steady state), not from GDNX.
+      - Per its pre-registered rule (exact and not slower), it is adopted.
+        - ref2.py CFG gdn_exact = True by default.
+        - The kernels come from a frozen, byte-identical copy (~/Leap/third_party/ms_gdn, README), so a later edit in
+          MoonShots' tree cannot change REF2.
+        - No bits change: REF2b / REF2-T rows stay valid.
+
+## REF2c bundle + the experts kernel (NewIdeas 06:1x: (A) first; Leap)
+
+- **K-60-T (Sun 06:09, runner 56, shared GPU, rough; data/k60t_tier_bw.txt): the 3c tier kernel has the same headroom
+  as qmmg.**
+  - It is the 45 GB default's experts path under REF2-T: MSB-3 base for every rank, LSB-1 sidecar for ranks 0-1.
+  - A check's call (16 rows x 10 ranks, 76 base + 24 sidecar slots = 182 MB): tier_glu takes 1.209 ms = 150 GB/s,
+    58.0 ms per check. A plain read of the same bytes takes 0.83-0.85 ms = 215-220 GB/s.
+  - So ~31 % time headroom, ~-18 ms per check (~12 % of the cycle), on the default path.
+  - Exact-safe if 3c's per-output accumulation order stays: only memory access changes (loads in flight, layout).
+    That makes it the biggest check-time piece, and it could ship alone as exact.
+- **Plan:**
+  - (A1) 3c bandwidth, exact-safe: find the limiter in tierglu's kernels A (gate / up + SiLU) and B (down).
+  - (A2) the REF2c bundle for the bit-changing pieces (R-62 attention, GDN in-proj fusion, gates in the recurrence,
+    FMA dequant), one regen + same-scores test with REF2c-T.
+- **K-61 TIERGRP (Sun 06:2x, shared GPU, rough; scripts/tierglu_grouped.py, k61_tiergrp_test.py, data/k61_tiergrp.txt):
+  KILL.**
+  - The lines were set in the session plan before the run (PASS = bitwise equal to tier_glu AND >= 25 % faster per layer
+    call; KILL = not faster); they are logged here after it.
+  - Design: 3c with the (row, rank) pairs grouped by (base slot, tier, sidecar slot); each weight chunk is loaded once
+    and applied to every pair of the group in 3c's own per-pair order. Groups are capped at 2, 4 or 16 pairs.
+  - Bitwise PASS: max |diff| 0 for M 1 / 4 / 16, three routings, both plans, ld 0 / 1 and caps 2 / 4 / 16.
+  - Slower everywhere at M 16:
+
+    | union | distinct experts | tier_glu | grouped |
+    |---|---|---|---|
+    | U 100 | 85 | 1.107 ms | 0.71-0.86x |
+    | U 70 | 66 | 1.085 ms | 0.73-0.85x |
+    | U 24 | 24 | 1.049 ms | 0.87-0.91x |
+
+  - This agrees with MoonShots' 10-22 microbench (~/MoonShots/wide/MICROBENCH.md): 3c's cost is arithmetic per pair
+    (~6.5 us each), not DRAM. tier_glu hardly moves from 85 to 24 distinct experts (1.107 -> 1.049 ms).
+  - So K-60-T's "150 vs 218 GB/s" was not a bandwidth gap: 3c is ALU-bound.
+  - The bit-identical route is closed: MoonShots' grouped3c ran -10-20 %, their mr3c 1.6-2x slower, mine 0.71-0.91x.
+- **K-62 NAX3 (pre-registered Sun 06:2x EET): a dequantize-once tier kernel on the M5's matrix units.**
+  - Probe (scripts/nax_probe.py, 06:2x): mx.fast.metal_kernel runs Metal 4's mpp::tensor_ops::matmul2d (16 x 32 x 16,
+    bf16 in, fp32 accumulate) with MLX's BaseNAXFrag element map.
+    - It is exact against numpy.
+    - A row's output is bitwise the same across 6 different sets of other rows.
+  - Design:
+    - One threadgroup per (group of <= 16 pairs with the same base slot, tier and sidecar slot) x 32-column tile.
+    - A = the group's x rows (bf16, padded to 16 rows).
+    - B = the raw codes q as bf16, which are exact small integers (tier 2: q & 6; tier 4: 2q + lsb).
+    - fp32 accumulators per 64-value group: C += s * (X Q_g) + b * xsum_g.
+    - So each expert is dequantized once per check, not once per pair.
+  - It is not bit-identical to 3c, so it is a REF2c item. It needs:
+    - batch invariance: a pair's bits must not depend on its group's other pairs, the group size or its row in the
+      tile;
+    - the bundle's same-scores test.
+  - Lines:
+    - PASS = INV bitwise AND >= 1.3x faster than tier_glu at M 16, U 70 (a natural-like union) AND an error against an
+      fp64 reference no worse than 1.5x 3c's (max and mean).
+    - KILL = < 1.1x at U 70, or INV fails.
+  - Expected: ~0.6-0.7 ms vs 1.085 ms (~-20 ms per check, ~13 % of the cycle). Per-pair cost also falls, so wider checks
+    (trees, longer drafts) get cheaper per row.
+- **K-62 result (Sun 06:3x, shared GPU, rough; scripts/tierglu_nax.py, k62_nax_test.py; data/k62_nax.txt v1,
+  k62b_nax.txt v2): KILL at the pre-registered line (1.05x < 1.1x at U 70). A lead for wide checks.**
+  - Accuracy: closer to fp64 than 3c in both versions. Max |err| / RMS 2.3e-2 vs 3c 3.3e-2; mean 3.2e-3 vs 4.2e-3.
+    70.8 % of outputs differ from 3c's bits (bf16 rounding of h and y).
+  - INV: PASS bitwise in both versions. The probe row gave the same bits alone, as row 0 or row 9 of 16 with other
+    companions, and in a call where all 16 rows route alike (a group of 16).
+  - Speed at M 16:
+
+    | union | groups | tier_glu | v1 (per-value decode) | v2 (k-permuted, 2 values per 32-bit op) |
+    |---|---|---|---|---|
+    | U 100 | 101 | 1.087 ms | 0.75-0.83x | 0.92x |
+    | U 70 | 87 | 1.075 ms | 0.84-0.94x | **1.05x** |
+    | U 24 | 40 | 1.044 ms | 1.64-1.81x | **2.07x** |
+
+  - Where v2's time goes at U 70: the MMA path alone (codes held constant) takes 0.52 ms; decode alone (no MMA) takes
+    0.90 ms; both together take 1.03 ms. They barely overlap.
+    - The 16-row MMA tile carries ~1.8 real rows per group, so the MMA path costs ~6 us per group even with free
+      decode.
+    - The DRAM floor for these bytes is ~0.62 ms.
+  - Why it is a lead: the cost scales with groups, not pairs. At 2.5+ pairs per expert it wins 2x (U 24).
+    - Wide checks give that sharing: S 32 has ~3.2 pairs per distinct expert (MoonShots' union table), and budget
+      routing more.
+    - So the kernel matters once checks get wider. Unexplored levers: B as uint8, or as uint4 from threadgroup memory
+      (MPP supports bf16 x ui8 cooperative and bf16 x ui4 from memory); fewer registers so decode and MMA overlap.
+  - Also new and reusable: custom kernels can drive the M5's matrix units with batch-invariant bits, and REF2c can use
+    that elsewhere.
+- **K-62c-e (Sun 06:3x-06:47, shared GPU, rough; NewIdeas told 06:40): tuning the lead. NAX4 is BETWEEN: 1.21-1.28x at
+  U 70, 2.1-2.3x at U 24. A REF2c candidate.**
+  - Probes:
+    - Matrix-unit peak (scripts/nax_tput.py, nax_shapes.py): ~1.3 G ops/s of 16 x 32 x 16 (~10.5 T MAC/s) on register
+      operands.
+    - Integer decode of B overlaps fully with the MMAs; marshalling A with conversions costs ~25 %.
+    - Shapes that build: 16 x 32 x 16, 16 x 32 x 32, 32 x 32 x 16. There is no 8-row shape, so the 16-row padding is
+      fixed.
+    - MPP takes B as packed uint4 straight from threadgroup memory (bf16 x uint4b_format -> fp32; K must be a multiple
+      of 32). scripts/nax_u4_probe.py: exact. Layout: extents (k, n), strides (1, row nibbles), low nibble = even k.
+      MPP's get_multidimensional_index confirms the A and C element maps.
+  - c (prefetching the next group's codes): no gain, 0.98-1.02 ms. Load latency is not the limit.
+  - **e = NAX4 (scripts/tierglu_nax4.py; data/k62e_nax4.txt):**
+    - Lane r decodes weight row n0 + r per 64-value group: 6 aligned words, then 3c's spread8 to nibbles (~1.5 ops per
+      value). The nibbles go to threadgroup memory and two 16 x 32 x 32 MMAs per group read them.
+    - Accuracy is the same as K-62 (better than 3c against fp64). INV is PASS bitwise. Stage sizes 1 / 2 / 5 give equal
+      bits.
+
+    | union | groups | tier_glu | NAX4 | (v2) |
+    |---|---|---|---|---|
+    | U 100 | 101 | 1.097 ms | 1.024 (1.07x) | 0.89x |
+    | U 70 | 82-87 | 1.07-1.09 ms | **0.84-0.90 (1.21-1.28x)** | 1.01x |
+    | U 24 | 40-44 | 1.04-1.05 ms | **0.45-0.50 (2.1-2.3x)** | 1.97x |
+
+  - Where NAX4's 0.897 ms goes at U 70 (82 groups):
+    - kernel A (gate / up) 0.575 ms, at ~70 % of matrix-unit peak (floor 0.40);
+    - kernel B (down) 0.273 ms, ~73 % (floor 0.20);
+    - the two rowsum64 dispatches ~0.03 ms each.
+    - Codes all read from one row (diag 3, no DRAM footprint): 0.70 ms. So scattered code reads cost ~0.15 ms.
+    - Decode stages of 2 or 5 groups are slower (occupancy).
+  - Floor: ~0.60-0.65 ms at U 70 (the 16-row MMAs and the DRAM bytes are equal), i.e. up to ~1.65x. Left: coalesced
+    code staging, and fusing the rowsums (hsum in kernel A's epilogue, xsum via shuffles).
+  - Per check at 45 GB: ~-10 to -12 ms (1.08 -> 0.85-0.9 ms x 48), ~7 % of the 155 ms cycle. It grows with check width
+    (U 24-like sharing: ~-28 ms).
+  - Lines: PASS needed >= 1.3x at U 70, KILL < 1.1x. Got 1.21-1.28x: BETWEEN. As a bit change it can only go in with
+    the REF2c bundle (one regen + same-scores test). Integration needs:
+    - both of REF2-T's paths on it (1-4-row gated tier_call and 5-16-row _tier_slots), so the bits do not depend on
+      call size;
+    - a GPU grouping for BigMoE's sync-free gate path (MoonShots' csr kernel, keyed by slot and tier);
+    - a check on BigMoE's real pools and routing first.
+- **K-62f / g (Sun 06:4x-06:5x, shared GPU, rough): NAX4 on REAL data. 16 rows ~1.4x (1.07-1.97x), 32 rows ~1.9x (1.30-2.77x);
+  ~3.4x MORE accurate than 3c against fp64.** (scripts/k62f_real.py, k62g_acc_real.py; data/k62f_real_L{6,20,40}.txt)
+  - Setup: one real 125B layer's v3 pools (records3: MSB-3 + LSB-1 of all 512 experts, slot = expert id; MoonShots'
+    loader). Routing is real: Breakthrough's expA 125B decode traces, top-10 of S consecutive tokens, 12 passes per
+    trace. Random x.
+
+    | layer | S 16: code / chat / math / bulgarian | S 32: code / chat / math / bulgarian |
+    |---|---|---|
+    | L6 (75-89 distinct at S 16) | 1.19 / 1.08 / 1.07 / 1.15x | 1.50 / 1.34 / 1.30 / 1.39x |
+    | L20 (49-69) | 1.27 / 1.40 / 1.36 / 1.69x | 1.72 / 1.89 / 1.82 / 2.07x |
+    | L40 (40-68) | 1.31 / 1.94 / 1.46 / 1.97x | 1.81 / 2.77 / 1.91 / 2.70x |
+
+  - tier_glu is 1.16-1.22 ms at S 16 and 2.28-2.38 ms at S 32. INV PASS in all 24 cells (a pass's row 0 alone == inside
+    the pass, bitwise).
+  - Accuracy, L20 S 16, against fp64 from the same dequantized weights, all four traces:
+    - 3c: mean |err| 1.23-1.26e-2 x RMS, max 9.2e-2 to 1.05e-1, median relative 1.6e-2.
+    - NAX4: mean 3.6e-3, max 2.5-3.4e-2, median relative 4.5e-3.
+    - NAX4's error is smaller in 76 % of outputs and larger in 13 %.
+    - Likely cause: 3c copies MLX's qmv load_vector, which sums the x values in bf16 (`x[i] + x[i + 1] + ...` on
+      device bfloat) before the sum * bias term. NAX4 sums them in fp32 (rowsum64).
+  - Per check at 45 GB (S 16, 48 layers): 3c ~57 ms -> NAX4 ~40 ms, ~-16 ms (~10 % of the 155 ms cycle, ~+11 % tok/s).
+    That is an estimate from 3 layers, not measured end to end.
+    - Wider checks get much cheaper: S 32 costs ~2.3 ms per layer on 3c vs ~1.25 on NAX4 (~-50 ms per check).
+  - Not BIG yet: an end-to-end number (REF2c-T live loop) comes first. Next: integration under a ref2 switch.
+    - The slot path (_tier_slots, host ids) is straightforward.
+    - The 1-4-row gated tier_call and the sync-free gate need a GPU grouping (MoonShots' csr kernel keyed by slot and
+      tier) so every call size uses the same kernel.
+- **K-62h (Sun 06:5x, shared GPU, rough; scripts/k62h_gpugrp.py): the pair grouping on the GPU works, but small checks
+  lose.**
+  - tierglu_nax4.gpu_grp is one threadgroup that ranks pairs by (slot, tier, sidecar slot) and cuts groups of <= 16. It
+    has no host sync; the grid is sized for P groups and the empty ones exit. The LP1 rule is in both the kernels and the
+    key.
+  - Bitwise == the host grouping in every cell (L20, 4 traces, S 1 / 3 / 16 / 32, 6 passes each). It costs
+    ~0.02-0.035 ms per call.
+  - Small calls are SLOWER than 3c: S 1 0.105 -> 0.18 ms (0.57-0.60x); S 3 0.25 -> 0.30 ms (0.79-0.86x). S 16 is
+    1.36-1.61x and S 32 1.79-2.03x with the GPU grouping.
+    - Why: a 1-pair group still pays the full 16-row MMA (~7.4 us), about 3c's per-pair cost, plus 4-5 dispatches.
+  - For REF2c every call size must use NAX4, because the bits differ from 3c. With L1-14 truncation (t 0.3, ~9.8 rows per
+    check on average, 1-16), the end-to-end gain is below the 16-row ~1.4x. Rough at ~10 rows: ~-11 ms per check. The
+    live A/B decides.
+- **K-62L (pre-registered Sun 06:58 EET; runner 57, quiet lock, night mode): NAX4 in the 45 GB default's live loop.**
+  - ref2.py CFG tier_nax4 (off by default): bigmoe.tier._tier_glu -> NAX4 with the GPU grouping, so tier_call (1-4 rows
+    and gated verify rows) and _tier_slots all take one kernel. It refuses BIGMOE_OOO.
+  - Harness: scripts/k62_live.py, a copy of BigMoE's r57_screen.py (their R57_PRESET 45 settings: REF2-T 4433333333 / 3c,
+    R-55 gate, L1-14 truncation t 0.3, C 224, DFlash2, CAP 256).
+    - Arms gate+t (3c) vs gate+t+nax (NAX4, prefill included), ABBA per prompt, 4 of S45's prompts, warm-up discarded.
+    - NAX4's tokens are compared only across its own runs (determinism).
+  - Lines:
+    - PASS = median cycle -8 % or better AND steady-state tok/s +8 % or better;
+    - KILL = cycle better by less than 3 %;
+    - else BETWEEN.
+  - Prediction: cycle -5 to -10 %, steady +5 to +11 % (truncated checks ~10 rows, where NAX4 is ~1.2-1.3x on the
+    experts, ~35-40 % of the cycle). PASS 35 %, BETWEEN 45 %, KILL 20 %.
+  - The same-scores test (REF2c bundle) and an exactness check (NAX4's live loop == its own AR) come only after a PASS
+    or BETWEEN.
+  - **Runs:**
+    - Runner 57 (quiet, C by memory) queued 06:58, then stopped at 07:05. The quiet grant waits while any other session
+      uses >= 80 % CPU, and Breakthrough's 1-core job (99 %) held it. Its ticket also blocked this session's small GPU
+      screens.
+    - REF2-T's lifetime peak at C 224 is 38.0 GB (BigMoE's S45-T B run; 33.4 GB is MLX's active memory after load).
+      So C 224 needs >= 42 GB NO-SWAP under a quiet lock, and 46 under a shared one.
+    - Runner 58 (07:06): the same A/B at **C 160 on a shared lock**, rough (peak ~29.6 GB + 8 <= 38.3 available). A
+      quiet confirmation at C 224 follows if it shows a gain.
+    - NAX4's default decode stage was gs 2 (meant 1; gs 1 is ~5 % faster at U 70). Bits are equal across gs, so the
+      K-62f/g/h numbers and runner 58 understate NAX4 slightly. The default is now gs 1.
+- **K-62L RESULT (Sun 07:06-07:09, runner 58, SHARED GPU, C 160, rough; data/k62l_c160_screen.txt): KILL by its line.**
+  - Median cycle 170.0 -> 179.7 ms (+5.7 %); steady-state tok/s 37.9 -> 38.6 (+1.8 %); check + commit 161.1 -> 169.4 ms.
+    Line: PASS cycle -8 % AND tok/s +8 %; KILL cycle better by < 3 %.
+  - The switch was active only in the NAX4 arm, and tokens were equal across the runs of each arm. Peak 29.7 GB.
+  - Per prompt (steady tok/s 3c -> NAX4; median cycle):
+
+    | prompt | steady tok/s | median cycle | misses per check |
+    |---|---|---|---|
+    | HE/68 (kept 15.4) | +0.4 % | 305 -> 302 ms | 1094-1294 vs 1082-1108 |
+    | prealgebra/1640 (kept 5.2) | -1.4 % | 135 -> 138 ms | 281-350 vs 297-298 |
+    | HE/91 (kept 7.0) | +0.9 % | 155 -> 154 ms | 426-449 vs 434 |
+    | algebra/694 (kept 7.4) | +2.7 % | 185 -> 205 ms | 509-590 vs 619-635 |
+
+  - Why no gain:
+    - (1) At C 160 the loop is SSD-bound: demand SSD 57-200 ms per check, 280-1300 misses. With the sync-free gate, the
+      GPU waits on loads, so expert compute is mostly off the critical path.
+    - (2) NAX4 is a different reference. Its tokens differ slightly from 3c's (kept 7.43 vs 7.40 on 694), so the
+      routing and the misses differ; algebra/694 had +23 % misses in the NAX4 runs.
+    - (3) Truncated checks average ~7-10 rows, where NAX4 is ~1.1-1.2x and 1-3-row calls are slower.
+  - So the experts' compute share of today's cycle is small: about 3-6 ms of ~150 at C 224 by estimate. A live A/B
+    between two references cannot resolve it through SSD noise.
+  - NAX4 stays a kernel lead for wide checks (S 32 ~1.9x) and compute-bound regimes. It is not a REF2c item now.
+- **K-62i (Sun 07:0x, shared GPU, rough; scripts/tierglu_nax5.py, k62i_nax5.py): folding NAX4's two rowsum dispatches
+  into its kernels (x sums from the A loads via lane shuffles; h sums in A's epilogue) changes nothing.** S 1 0.178-0.181
+  vs 0.179-0.182 ms, S 16 within +-1 %. INV PASS. Small calls are latency-bound, not dispatch-bound: 10 groups x 20 tiles,
+  each simdgroup walking 40 quant groups in sequence.
+- **K-62j NAX6 (built 07:1x; scripts/tierglu_nax6.py, k62j_nax6.py; runs after runner 58):** NAX4 with a fixed split-K
+  (kernel A: 4 chunks per tile, kernel B: 2). The chunk accumulators are summed in a fixed order in threadgroup memory,
+  so the structure is the same for every call size and INV holds by construction. Aim: S 1-3 to 3c's level or better
+  (S 1 0.105, S 3 0.25 ms), S 16 not slower.
+  - **RESULT (Sun 07:1x, shared GPU, rough, L20 real data): a small gain, the small-call gap stays.** INV PASS.
+
+    | rows | 3c | NAX4 (gs 1) | NAX6 |
+    |---|---|---|---|
+    | S 1 | 0.105 ms | 0.60x | 0.65x |
+    | S 3 | 0.25 ms | 0.82-0.86x | 0.86-0.88x |
+    | S 16 | 1.17 ms | 1.40-1.63x | 1.46-1.71x |
+    | S 32 | 2.30 ms | 1.88-2.10x | 1.92-2.16x |
+
+  - A 1-pair group pays the full 16-row MMA set (~7.4 us at peak), which sets the small-call floor. Splitting K hides only
+    part of the latency.
+  - **A1 closed for today's 45 GB operating point** (truncated checks of ~7-10 rows, SSD-bound cycles; K-61 and K-62L
+    KILL). The matrix-unit tier kernel (NAX6 best) stays the lead for wide checks (S 32 ~2x) and compute-bound regimes.
+    The ref2 switch (CFG tier_nax4) stays off.
+- **R-62b INV (Sun 07:0x, shared GPU; scripts/r62b_inv.py, data/r62b_inv.txt): PASS.** The single-call 16-row SDPA (ref2
+  CFG att_single) gives a row the same bits at any position among the 16 rows, with 5 different companion sets, and with
+  the actual key count varied inside one padded length (L 384 / 512 / 1024 / 2048).
+  - The control is not blind: chunked vs one call differs in 10 / 16 outputs at L 1024 / 2048 (0 at 512 in this draw).
+  - So att_single is a valid REF2c piece under REF2b's key buckets. Its live check (live loop == its own AR past 512
+    keys) comes with the bundle.
+- **REF2c GDN in-proj (desk, 07:0x):** MTPLX_FUSED_GDN_INPROJ=1 concatenates qkv / z / b / a at load into one quantized
+  matmul. Under REF2 only b and a (N 48, below CFG dense_min_n) would change kernel, onto qmm16c, so their bits change.
+  - It is a load-time option, so it needs its own process (A-B-A processes).
+  - RANKED_45GB estimates -2.5 ms per check.
+
+## R-65 DISPATCH (Leap, pre-registered Sun 2026-11-01 07:2x EET): how many kernels one check of the 45 GB default launches
+
+- Why: the check is GPU-bound (R-11b) with many tiny kernels. R-61 counted ~35 per GDN layer, and GDNX's -3.0 ms for
+  ~470 removed kernels is ~6 us per launch. K-62L showed the experts kernel is not the limiter at this operating point.
+  If the check launches thousands of tiny kernels, fusing them could be worth more than any single kernel.
+  - mx.compile on elementwise chains is usually bit-identical (each op still rounds to its own dtype), so this could join
+    the exact-safe stack.
+- Census (scripts/r65_dispatch.py: BigMoE's r57 harness via k62_live.py, REF2-T on the gate + t 0.3, C 160, shared lock,
+  one prompt, CAP 64):
+  - During checks 3-5, every mx.eval / mx.async_eval first exports its pending graph (mx.export_to_dot).
+  - Nodes are counted by primitive, views excluded (R-11b's method).
+  - Host materializations outside mx.eval are missed, so the count is a lower bound.
+- Lines:
+  - >= 2,500 kernel-launching primitives per check -> build a fusion pass (exact-safe first), ~-6 ms per 1,000 removed;
+  - < 1,500 -> park;
+  - between: list the top 5 fusion targets with their counts and decide with NewIdeas.
+- Prediction: ~4,000-6,000 per 16-row check (R-11b: 1,384 at 12 layers on the old engine).
+- **RESULT (Sun 07:2x, shared, C 160; data/r65_dispatch.txt): ~3,944 kernel-launching primitives per 16-row check
+  (lower bound; 2 checks, 28 eval segments). Over the 2,500 line: build a fusion pass, exact-safe first.**
+  - Real work: CustomKernel 865 (~18 per layer: qmm16c, 3c tier A / B, GDNX, BigMoE's ext), Matmul (bf16) 388 (~8 per
+    layer), QuantizedMatmul (MLX's own) 300 (~6 per layer).
+  - Small elementwise and glue, ~1,700 per check (~35 per layer):
+    - Multiply 421, AsType 274, Add 158, GatherAxis 144, Select 144, Sum 115, Concatenate 110;
+    - Sigmoid 85, Negative 84, SliceUpdate 60, Divide 50, ArgPartition 48 + ArgSort 48, Arange 48, RMSNorm 40,
+      Cos / Sin 24 + 24;
+    - plus 3 compiled fusions (48 + 36 + 12).
+  - Gate path: PostIds 96 + SpinWait 96 (2 per layer).
+  - Views: Reshape 3,591, Broadcast 1,166, ExpandDims 618, Slice 565 (no launch unless a copy follows).
+  - Priced at GDNX's ~6 us per removed tiny kernel: fusing ~1,000-1,500 of the ~1,700 is ~-6 to -9 ms per check (~4-6 %
+    at C 224).
+  - Bits: mx.compile is not always bit-identical to eager (R-40 3t: the PLE gate's compiled sigmoid differs in the last
+    bit). Each fusion gets a bitwise test; the ones that differ go to REF2c.
+- **R-65b ATTRIB (Sun 07:3x, shared, C 160; scripts/r65b_attrib.py, data/r65b_attrib.txt): where the kernels come from
+  (per 16-row check, approximate).**
+
+  | piece | kernels per check | per call | main primitives |
+  |---|---|---|---|
+  | attention (12 QSA layers) | ~1,500 | ~125 | Matmul 288, Multiply 264, AsType 168, Softmax 144, Select 144, Concatenate 108 |
+  | MoE block (48) | ~1,344 | ~28 | QuantizedMatmul 192, CustomKernel 144, GatherAxis 144, Sum 96, PostIds / SpinWait 96 each, Softmax / ArgPartition / ArgSort / Divide 48 each |
+  | GDN (36) | ~360 | ~10 | already lean after GDNX: 6 custom kernels, b / a projections, compute_g, sigmoid |
+  | hyper_residual_write | 96 | 2 | |
+  | the rest (HC reads / writes, norms) | ~600 | | |
+
+  - **Attention is unfused.** A 16-row SDPA call (q_len 16, head_dim 256, bool mask) decomposes into scale, QK^T matmul,
+    mask select, softmax and PV matmul.
+    - MTPLX's 12 head chunks make 61 kernels per call; one call (R-62 att_single) makes 5. Checked by graph export at
+      N 383 / 1024. This is why R-62 was 2.1-2.8x faster.
+    - So att_single removes ~56 kernels per call. A custom fused attention kernel (one per call) could go further: with a
+      fixed key-block order it is N-invariant by construction (masked keys add exact zeros), which could retire REF2b's
+      zero-padded key buckets and class-split calls.
+  - **MoE routing** is ~6-8 tiny kernels per layer (softmax precise, argpartition, take_along_axis, sum / divide,
+    BigMoE's sort): ~350 per check. A fused router (bitwise replication -> exact-safe) is worth ~-2 ms.
+
+## REF2c pieces measured (Leap, Sun 2026-11-01 07:2x-07:3x, shared GPU, rough; NewIdeas 06:1x: the REF2c bundle first)
+
+- **R-62 att_single: READY.** R-62b INV PASS. R-62: -5 ms per check (12 attention layers, 61 -> 5 kernels per call).
+- **R-67 GATES (scripts/gdn_gates.py, r67_gates_test.py; data/r67_gates.txt): KILL.** The GDN gate math (g, beta) moved
+  inside mlx_lm's recurrence kernel in fp32.
+  - INV PASS: 16 one-row calls == one 16-row call, bitwise.
+  - The gates move up to 6 % of RMS from stock on random inputs. Stock rounds a + dt_bias to bf16 before the exp
+    chain, so fp32 is the more accurate one.
+  - Slower at 16 rows: 0.094 vs 0.081 ms per call, because every thread recomputes the transcendentals each step.
+    Stock's two extra tiny kernels are worth < ~0.5 ms per check even if fixed. Not in the bundle.
+- **R-68 INPROJ (scripts/r68_inproj_test.py; data/r68_inproj_pad32.txt): ~-0.5 ms per check (lower bound), only b's
+  bits change.**
+  - MTPLX's fused qkv / z / b / a projection is N 16480, not a multiple of 64. REF2 then sends it to MLX's own
+    16-row matmul: 0.78x and every part's bits change.
+  - Padded to 16512 rows (32 zero rows) it takes qmm16c: qkv / z / a bitwise equal to the separate calls, b differs,
+    1.12x (0.128 -> 0.114 ms per GDN layer).
+  - RANKED_45GB's -2.5 ms estimate is ~5x too high. The real dispatch gaps may add ~0.4 ms.
+- **R-66 FATT16 (Sun 07:3x; scripts/fatt16.py, r66_fatt_test.py, nax_probe_nt.py; data/r66_fatt.txt): BETWEEN.** One fused
+  kernel per 16-row attention call at head_dim 256 (MLX 0.32 falls back to 5 kernels).
+  - Flash-attention-2 online softmax on the matrix units: S = QK^T per 32-key block, fp32 softmax, O += PV with V as the
+    un-transposed right operand (layout probed: 2 key rows x 4 dims per lane, like the destination).
+  - INV PASS on all four (bitwise): other rows' queries changed; the same query at another row; N grown by 37 / 300
+    masked keys; an AR-style call (query alone, N + 7 keys). So it is batch- and N-invariant by construction and would
+    retire REF2b's key buckets and class splits.
+  - More accurate than MLX's call vs fp64: mean |err| 1.77e-3 vs 2.27e-3 x RMS, max 1.42e-2 vs 1.67e-2.
+  - Speed, chained (8 calls per eval):
+
+    | N keys | 12 chunks | one call (att_single) | FATT16 |
+    |---|---|---|---|
+    | 383 | 0.234 ms | 0.061 ms | 0.113 ms (0.54x) |
+    | 1024 | 0.287 ms | 0.088 ms | 0.072 ms (1.23x) |
+    | 2048 | 0.325 ms | 0.112 ms | 0.121 ms (0.93x) |
+
+  - It is latency-bound (one simdgroup per head walks every key block). Unchained, its 1 dispatch vs 5 is worth
+    ~20-30 us per call. Without key buckets it computes the real N instead of the next 512-multiple.
+  - Next lever if wanted: split the key blocks over 2-4 simdgroups per head with a fixed-order merge (still invariant).
+    Beyond att_single, attention is worth only ~1-2 ms per check, so parked as the REF2c attention alternative.
+- **REF2c bundle as measured: ~-6 ms per check (~4 % of the C 224 cycle)**, nearly all from att_single. The fused
+  attention kernel (head_dim 256 is unfused in MLX 0.32: R-65b) would add ~-2-3 ms; the router fusion (exact-safe if
+  bitwise) ~-2 ms.
+
+## R-69 OOO-EXACT (Leap, Sun 2026-11-01 07:3x; tensor level, shared GPU; scripts/r69_ooo_exact.py, data/r69_ooo_exact.txt): BigMoE's TIER_COMBINE and OOO are exact-safe under REF2-T
+
+- Question: REF2-T today runs tier_glu without scores, then the verify call's MLX combine
+  `(y * scores[..., None]).sum(-2)`. R-58G popped TIER_COMBINE, and the OOO path (resident pairs while the loader spins,
+  then the rest) needs scores.
+  - Do BigMoE's fused combine (3c dispatch B, scores in) and OOO (tier_glu_phase 1 / 2 + combine_phase) give the same
+    bits?
+- **Result: bitwise equal at S 1 / 2 / 4 / 7 / 10 / 16.** 3 trials each: synthetic pools, plan 4433333333, real top-10
+  routing scores (precise softmax, argpartition, renormalized in bf16), a random ~30 % of pairs in phase 2.
+  - combine_phase alone == MLX's combine at S 1-16 too (MoonShots' LY = 8 order holds at every width).
+- So both can join the exact-safe stack on the 45 GB default:
+  - TIER_COMBINE saves the combine's ~2 kernels per layer;
+  - OOO overlaps each layer's SSD loads with its resident experts' compute (BigMoE: +4-6 % in v3 at 24 GB). At 45 GB
+    the misses are 280-1,300 per check at C 160 (K-62L) and fewer at C 224.
+- Open, BigMoE's side: the OOO path takes `post` / gate.spin. Does it run on the R-55 sync-free gate path? Then a live
+  "every token == REF2-T" run with TIER_COMBINE + OOO on, and the speed A/B.
+- **R-69L (pre-registered Sun 07:3x EET; runner 59, SHARED GPU, C 160, rough): TIER_COMBINE + OOO live.**
+  - The gate path already passes the gate's post into tier_call (stream.py), and with TIER_COMBINE the MoE block hands
+    scores down (tier.py), so BIGMOE_OOO=1 takes _ooo_call on the 45 GB default with no code change.
+  - Harness: scripts/k69_live.py (k62_live.py's copy of BigMoE's r57; R69_KEEP_COMBINE stops the TIER_COMBINE pop).
+  - One process per arm: A (default) - B (TIER_COMBINE=1 BIGMOE_OOO=1) - A, each 4 of S45's prompts, CAP 256, warm-up.
+  - Lines:
+    - PASS = every token of B == A on every prompt AND median cycle -3 % or better;
+    - KILL = any token differs (not exact live) or the cycle worse by > 2 %;
+    - else BETWEEN.
+  - Prediction: tokens equal 90 %; cycle -3 to -8 % at C 160 (SSD-heavy).
+  - **RESULT (Sun 07:31-07:34, runner 59, shared, C 160; data/r69l/): VOID. B never ran OOO.**
+    - B's flags were on (TIER_COMBINE True, OOO True), but OOO calls were 0.
+    - Tokens equal in A1 / B / A2 on all 4 prompts; cycle 176.3 / 177.7 / 176.8 ms. B was effectively A.
+  - **R-69D diagnosis (Sun 07:3x, scripts/k69_diag.py, data/r69d/):**
+    - Every tier_call got post (the gate path) but never scores, at all widths 1-16.
+    - The active SparseMoeBlock.__call__ is EvalSuite's `block` (evalsuite/model.py:339; EM.load installs it), not
+      BigMoE's `_call`. With STATE.sorted it routes itself (argsort by score) and combines with MLX ops.
+    - So bm["tier"]["scores"] is never set, and TIER_COMBINE / OOO cannot engage in any EvalSuite-based run: the r57
+      harness, R57_PRESET 45, the REF rows.
+    - BigMoE's own `_call` takes only <= 8-row calls anyway.
+  - The fix belongs to EvalSuite / BigMoE: in `block`, when the switch has a tier bm and TIER_COMBINE is on, set
+    bm["tier"]["scores"] (and "shared" for OOO's spin edge) before the switch call, and skip the combine when the
+    switch returns combined rows (as BigMoE's _call does).
+    - Exactness carries over: R-69 showed both fused combines == MLX's combine for any rank order at S 1-16.
+    - Sent to BigMoE and EvalSuite 07:4x.
+  - **R-69b (pre-registered Sun 07:4x; runner 60, shared, C 160):** the fix tried in my harness process only
+    (scripts/k69b_live.py, R69_PATCH_BLOCK=1; no edits to EvalSuite's or BigMoE's files).
+    - A replacement block runs EvalSuite's sorted routing with the same ops, hands the scores to the tier path, and
+      uses its combined rows.
+    - Processes A1 (default) - B (patch + TIER_COMBINE + OOO) - A2, 4 prompts, CAP 256.
+    - Lines:
+      - PASS = OOO calls > 0 in B AND every token of B == A AND == BigMoE's REF2-T reference rows
+        (data/r57/s45t_B_tokens.json, arm gate+t) AND median cycle -3 % or better;
+      - KILL = any token differs;
+      - BETWEEN = exact but < 3 %.
+    - **RESULT (Sun 07:38-07:41, runner 60, SHARED GPU, C 160, rough; data/r69b/): PASS, exact, +13 % steady-state.**
+      - B ran OOO: 7,479 _ooo_call calls; every tier call got scores (post + scores at every width 1-16).
+      - Tokens: B == A1 == A2 on all 4 prompts, and all == BigMoE's REF2-T reference rows (s45t_B_tokens.json gate+t).
+
+        | arm | median cycle | check + commit | steady tok/s | whole-run tok/s |
+        |---|---|---|---|---|
+        | A1 / A2 (default) | 177.8 / 176.7 ms | ~169-170 ms | 36.4 / 36.6 | 34.7 / 34.8 |
+        | B (patch + TIER_COMBINE + OOO) | 156.9 ms (-11 %) | 146.8 ms | 41.2 (+13 %) | 38.9 (+12 %) |
+
+      - Per prompt, steady state: HE/68 50.3 -> 57.5 (+15 %); 1640 33.2 -> 38.2 (+15 %); HE/91 36.5 -> 40.7 (+12 %);
+        694 36.8 -> 41.7 (+13 %). Misses and demand SSD are unchanged (520, ~99 ms per check): OOO hides them, it does not
+        remove them.
+      - Measured at C 160 (more SSD-bound than C 224). BigMoE's quiet C 224 arm tonight gives the 45 GB number; it needs
+        the block patch to engage.
+      - Adoption is NewIdeas' call. EvalSuite will then port the patch into model.py and run a ~40-min R-56c-style audit
+        vs results/ref2t.
+    - **BigMoE follow-up (07:4x):**
+      - Their r57 harness has the same fix (R57_COMBINE=1 -> _fused_block, aebc4e1). It also passes 'shared' for OOO's
+        spin edge (no value change) and acts only on 1-16-row calls.
+      - Tonight's quiet C45 turn runs C45_OOO=1 at C 224, checked token by token against s45t_B gate+t.
+      - Native fix (01f652c): tier._call (BigMoE's own runtime, not EvalSuite's) now takes up to 16 rows on rank plans.
+        Before, 9-16-row calls got tiers by argpartition position, not rank. Uniform plans keep 8, so the exact 24 GB
+        stacks are untouched.
+      - **Caveat:** EvalSuite's block computes the shared expert with a standalone sigmoid; native verify (tier._call
+        and MTPLX's _verify_call) uses attention_gate's lowering, and MTPLX notes the two can differ at rare bf16
+        inputs. So a native REF2-T run needs a native reference, not EvalSuite's token rows.
+
+## REF2c FREEZE + R-70 FUSED ROUTER (Leap, Sun 2026-11-01 11:4x-11:5x EET; NewIdeas 07:5x routing; shared GPU, day rules)
+
+- **REF2c frozen at 91cd316: ref2.CFG att_single + gdn_inproj** (on top of REF2-T). EvalSuite regenerates it tonight
+  as REF2c-T (full regen, then the live audit) and runs one same-scores test.
+  - FATT16 is left out. NewIdeas' rule was "only if it is free", and it is not: 0.54x vs att_single at 383 keys.
+  - gdn_inproj (new ref2 switch, R-68's padded fused projection):
+    - each GDN layer's qkv | z | b | a packs + 32 zero rows (16480 -> 16512, so it takes qmm16c);
+    - built once per layer at its first call with the switch on; the four modules are then dropped;
+    - with the switch off, a built layer runs the four calls on row slices (= the stock bits).
+- **R-71 in-proj INV (scripts/r71_bundle_inv.py, data/r71_bundle_inv.txt): PASS.** Real 4-bit packs of GDN layers
+  0 / 16 / 32 / 46, 4 trials each:
+  - every row of a 16-row call == the same row run alone, and == the same row among 15 other companions;
+  - switch off == the separate modules.
+  - Bits vs REF2-T: qkv and z unchanged. b and a change in 0.1-0.8 % of their outputs (R-68's synthetic draw had a
+    unchanged by chance).
+- **R-71b GDN-layer INV (scripts/r71b_gdn_layer_inv.py, data/r71b_gdn_layer_inv.txt): PASS.** MTPLX's GatedDeltaNet
+  with layer 0's real weights, under REF2 + GDNX (gdnx 34 calls) + gdn_inproj (built, 19 calls):
+  - after a 37-token prefill, one 16-row call == 16 one-row calls, bitwise for y and for the conv and recurrent state;
+  - on vs off: 45 % of y's outputs move in the last bits, so a full regen is needed.
+  - With R-62b (att_single, SDPA level), the bundle's INV is covered piece by piece. The live check (loop == its own
+    AR) is EvalSuite's audit after the regen.
+- **R-70 FUSED ROUTER (scripts/router_fused.py, r70_router_test.py; data/r70_router.txt): exact-safe, bitwise PASS,
+  ~-1.0 ms per check (shared GPU, rough).**
+  - What it replaces: one kernel for the MoE block's routing chain, the same chain in EvalSuite's block and BigMoE's
+    tier.install_block: softmax precise, argpartition, take, sum, divide, negate, argsort, take x 2 (~9 kernels per
+    layer).
+  - How each step is replicated from MLX 0.32's kernel sources:
+    - softmax: softmax_single_row line by line (128 threads, 4 reads each, simd_max / simd_sum, fast::exp, 1 / sum);
+    - argpartition: MLX runs it as its stable merge sort, so it is the top-k keys (bf16 bits << 16 | index) in
+      ascending order;
+    - sum: row_reduce_small's thread loop, which accumulates in the output type (bf16), left to right;
+    - divide: bf16 / bf16;
+    - argsort: stable, so rank = #larger + #equal-earlier.
+  - Bitwise test: inds and score bits over 11 input families (normal sigma 0.5-8, logits on 1/4 and 1/16 grids, all
+    equal, 3 levels, peaked) and the live shapes [1, R, 512] for R 1-16.
+    - **0 of 540,672 rows differ.**
+    - The control is not blind: an fp32 sum differs in 132,830 rows, so bf16 accumulation is required.
+  - Speed, 48 dependent layers per eval: 21-22 us saved per layer at R 16 / 10 / 1, so **~-1.0 ms per check** (not
+    the ~2 ms estimated at ~6 us per kernel; here the tiny kernels cost ~3.4 us each).
+  - It ships alone (no regen) after one live token check vs the REF2-T rows. Then the drop-in goes to the block
+    owners (EvalSuite model.py, BigMoE tier.py).
+
+## R-72 ATT-ANAT + exact attention fusions (Leap, Sun 2026-11-01 11:5x EET; shared GPU, day-sized; scripts/r72_att_anat.py, data/r72_att_anat.txt)
+
+- **Harness:** one real QSA attention layer (MTPLX's Attention + indexer, layer 3's 4- / 8-bit weights) under REF2,
+  prefilled to 383-4,100 keys, then 16-row check calls in the verify phase. Each arm trims back, so all arms see the
+  same cache. Census = kernel-launching primitives of the call's graph (R-65's method).
+- **Two exact-safe fusions, both published inside MTPLX and wired for 1-8 rows only; here as ref2 switches at
+  REF2's 16-row calls:**
+  - CFG att_rope: the attention RoPE as one dispatch (mtplx.kernels.qwen4_m4_rope.rope_qk) instead of the stock
+    table + two rotations.
+  - CFG idx_prep: the indexer's RMSNorm + partial RoPE (queries and pooled block keys) through the shipped
+    qsa_indexer_prepare kernel. It is enabled without MTPLX_FUSED_QSA_INDEXER, which would also switch the block
+    selector.
+- **Bits: PASS at T0 383 / 700 / 1,100 / 2,600 / 4,100.** The indexer selects blocks past ~2,048 keys. Checked
+  bitwise: y and the KV / raw-key / pooled-block cache rows.
+  - att_rope == REF2-T, idx_prep == REF2-T, both == REF2-T;
+  - both on top of att_single == att_single.
+- **Kernels per 16-row attention call:**
+
+  | keys | REF2-T | + att_rope + idx_prep | att_single (REF2c) | att_single + both |
+  |---|---|---|---|---|
+  | 383-1,100 (dense) | 125-131 | 81-87 | 69-75 | 25-31 |
+  | 2,600-4,100 (indexer selects) | 171 | 111 | 115 | 55 |
+
+  - So the exact pair removes 44-60 kernels per call, ~530-720 per check over the 12 QSA layers.
+  - What remains with att_single + both (31 at 700 keys):
+    - the projections: qmm16c q / o, MLX's k / v / indexer qk;
+    - the 5 SDPA kernels and the 3 key-bucket pads;
+    - 5 cache slice-updates, the mask build (Arange, Full, LessEqual), 2 RMSNorms and the output gate.
+- **Speed per call (T0 700; 8 calls chained, graph built per call; shared GPU, rough):** REF2-T 0.690 -> 0.598 ms
+  (-1.1 ms per check). att_single 0.450 -> 0.380 ms (-0.8 ms per check).
+- Status: exact-safe, so no regen is needed. It joins the router (R-70) in one every-token check vs the REF2-T rows
+  before shipping (FAST INTEGRATION: exact-safe changes are stacked under one check).
+
+## R-73 GLUE-ANAT + exact glue kernels (Leap, Sun 2026-11-01 12:0x EET; shared GPU, day-sized; scripts/r73_glue_anat.py, glue_fused.py, data/r73_glue_anat.txt)
+
+- **Harness:** the per-layer glue around attention / GDN and the routed experts, with layer 3's real weights under
+  REF2-T: two HC reads (REF2's leapk.hc_read), the MoE block minus the experts (8-bit gate, routing, shared expert +
+  its gate, tail), the residual write. The attention output and the experts' combined rows are inputs.
+- **Probe:** to replay MLX's eager bf16 sigmoid in a custom kernel, exp must be metal::precise::exp. That gives 0 of
+  65,536 bf16 inputs off; the JIT default (maybe-fast) and fast exp each miss 1. MLX's own kernels are built with
+  precise math, so later replays must use precise:: math.
+- **Kernels per layer (16-row check):** base 30 = HC reads 10 + MoE glue 18 + write 2.
+  - R-70's router (9 -> 1): -8.
+  - moe_tail, y + sigmoid(g) * s in one kernel (3 -> 1): -2.
+  - CFG hc_write, the residual write as one compiled kernel in MTPLX's op-diet view spelling (2 -> 1): -1.
+    - The stock spelling's reshape between the ops blocks fusion; a plain mx.compile of it stayed at 2.
+  - All three: **19 per layer, -11 per layer, ~-530 per check.**
+- **Bits: PASS** for each piece alone and all three together, == base over 6 trials (input scales 0.5-8).
+- **Speed (8 dependent layers per eval; shared GPU, rough):** base 0.441 -> all 0.401 ms per layer, ~-1.9 ms per
+  48-layer check.
+- **The exact-safe stack so far:**
+  - R-72 attention: -44 to -60 kernels per QSA call;
+  - R-70 router + R-73 tail + write: -11 per layer;
+  - together ~-1,060 to -1,250 kernels per check, of ~3,944. REF2c's att_single (-672) comes on top.
+  - Rough sum of the measured pieces: ~-3 ms per check at the microbench's ~3 us per tiny kernel. At GDNX's in-situ
+    ~6 us per kernel it would be ~-6 to -7 ms.
+- **R-74 SHARED-CAT (12:1x; scripts/r74_shared_cat.py, glue_fused.shared_cat; data/r74_shared_cat.txt): exact-safe,
+  -2 kernels per layer.**
+  - What it does: the MoE input's three small 4-bit projections (shared expert gate_proj N 640, up_proj N 640,
+    shared_expert_gate N 1) as one MLX call on the row-concatenated packs. N is 1281, not a multiple of 64, so REF2
+    keeps MLX's own 16-row call; padding to 64 would send it to qmm16c, with other bits.
+  - Bits:
+    - every part == the separate calls on the real packs of layers 3 / 20 / 44, input scales 0.5-4, 16- and 1-row
+      (padded) calls, 0 / 7 / 31 / 63 zero rows: 12 / 12 configs;
+    - in the glue harness, cat and all four == base over 6 trials.
+  - **Glue per layer with all four pieces: 30 -> 17 (-13 per layer, ~-620 per check).**
+  - Speed (less contended this run, rough): base 0.321 -> 0.301 ms per layer, ~-1 ms per check. Here a tiny kernel
+    costs only ~1.5-3 us; the in-situ value comes from the C 224 run.
+- **K-73L -> BigMoE's C45 turn (BigMoE 12:1x): K-73 rides tonight as arm K (tag c45k_224) at C 224.**
+  - Their r57_screen at 3375145 carries the K73_EXACT block; order A no-OOO -> B default -> K -> A2 -> P.
+  - Every token is checked vs s45t_B, under the quiet lock. B and K are single runs, so small gains read against the
+    A / A2 spread.
+  - Runner 61 was cancelled 12:09. R-74 was offered as a one-line add.
+- **K-73L as first planned (runner_r61.sh, scripts/k73_live.py = a copy of BigMoE's r57_screen.py at b9049b0):**
+  - processes A (R57_PRESET=45) - B (+ K73_EXACT=1: the whole stack) - A at C 160, 4 prompts, CAP 256;
+  - every token vs the REF2-T rows (s45t_B gate+t), shared GPU, rough timing;
+  - night only; waits for NO-SWAP >= 37.7 GB and for no other process over 8 GB.
+  - On PASS: the ref2 switches default on, and the block pieces (router_fused, moe_tail) go to the block owners
+    (EvalSuite model.py, BigMoE tier.py / r57_screen).
+
+## R-75 / R-76 the drafter's share (Leap, Sun 2026-11-01 12:1x-12:2x EET; shared GPU, rough; scripts/r75_draft_anat.py, r76_draft_fuse.py, draft_fused.py)
+
+- **Why:** in REF2-T's C 224 run (s45t_B) the cycle is 131.9 ms and check + commit 121.1 ms. So ~10.8 ms per cycle is
+  the drafter plus bookkeeping, serial with the check.
+- **R-75 anatomy:** DFlash2 (5 sliding-window layers, hidden 2560, ffn 7,680, selector rank 256) bound to the real
+  4-bit embed / lm_head, driven by r57_screen's propose verbatim.
+  - **649 kernels per propose:** hidden_states 469, head2s 12, chain 168.
+  - Shared GPU (Breakthrough at ~50 %): hidden_states 10-12 ms, head2s 2.8, chain 1.4.
+  - The 469 come mostly from the grouped dynamic conv (4 calls per layer, ~11 tiny ops each) and a per-layer mask
+    rebuild.
+- **R-76 draft_fused.install() (exact-safe; the drafts are bitwise identical):**
+  - one kernel per conv call, replaying the eager bf16 ops in order (+0 above the block's first row);
+  - the attention mask memoized per (ctx_len, rows, window).
+  - 30 cycles on two identically built caches: hidden, candidates, path and confidences all bitwise equal.
+  - **Kernels per propose 649 -> 364.** ms per propose 16.2 -> 14.5 (shared, rough); hidden_states 11.6 -> 10.7.
+- **Reading, with October's R-06 / R-10 / R-15 (above):** the drafter's time is mostly GPU time in its dense
+  projections and head.
+  - bf16 at M 16 runs ~60 % of its bytes floor; an 8-bit / 4-bit drafter saved only ~1 ms in R-06. So no big lever
+    here.
+  - Left on the table (exact, from R-15 step 2):
+    - D2 for its split-K MLP calls: -1.5 ms on the 4-bit drafter; check whether the bf16 path splits;
+    - a fused selector chain: ~-1.3 ms, with bit-exact replication of MLX's rank-256 bf16 sum;
+    - the head on qmm16c: ~-0.7 ms, but it moves the drafter's numerics.
+- R-76 was offered to BigMoE as one more line in tonight's K arm (12:2x); BigMoE added it, K arm frozen.
+- **R-77 CHAIN (scripts/chain_fused.py, r77_chain_test.py; data/r77_chain.txt): exact, the selector walk in 8 kernels
+  instead of 167.**
+  - Every (predecessor, successor) edge for all 15 steps is computed at once with the same MLX ops in the same order.
+    MLX's own rank-256 sum stays row-independent.
+  - The walk runs in one threadgroup: bf16 add, argmax with first-index ties, and MLX's softmax_single_row for 16
+    values replayed as in R-70.
+  - Bits: 60 real cycles (33 top-2 ties hit the tie rule) + 200 tie-heavy synthetic walks: PASS.
+  - 1.45 -> 0.30 ms (shared, rough).
+- **R-78 FORMS (scripts/r78_draft_forms.py; data/r78_draft_forms.txt): L1-23's trick on the drafter's bf16
+  projections.**
+  - At 16 rows, x @ Wt (pre-transposed, contiguous) and (W @ x.T).T are bitwise == nn.Linear's x @ W.T, and some are
+    faster.
+  - At 8 / 15 rows they take other kernels and differ, so the context rows keep nn.Linear.
+  - The MLP matmuls already run near their bytes floor. ~-0.6 ms per propose (shared, rough).
+  - draft_fused.install(forms=True, draft=...) puts x @ Wt on the MLP + q, replacing W (no extra memory), and
+    (W @ x.T).T on k / v block rows, o and the conv projections.
+- **R-79 DRAFT-STACK (scripts/r79_draft_stack.py; data/r79_draft_stack.txt): R-76 + R-77 + R-78 together.**
+  - Path + confidences bitwise over 60 cycles.
+  - **ms per propose 14.45 -> 12.41 (-14 %; 4 interleaved rounds, shared GPU with Breakthrough at ~50 %, rough).**
+    In the quiet ~10 ms drafter that is likely ~-1.5 to -2 ms per cycle.
+  - Tonight's K arm carries R-76 only. R-77 + R-78 join the next stacked check.
+
+
+## R-80 / R-81 long context: the first call and the attention curve (Leap, Sun 2026-11-01 12:3x EET; shared GPU, rough; scripts/r80_first_call.py, r81_att_ctx.py)
+
+- **Why:** Breakthrough's FIXED-PART result (12:16). The first check after a 9-12K-token prefill costs 1.6-3.4 s, vs
+  82-191 ms steady; the second ~290-380 ms. That start-up excess is ~48 % of agent's per-check cost (8-18 % on
+  code / math / chat).
+  - Their candidates: the prefill's lazy tail, cold pools, one-time builds / compiles at the new context.
+  - Separately, context costs +2.27 ms per K per check.
+- **R-80 (one real QSA attention layer, fresh process, short warm-up at 700 keys, then 16-row checks at 10,000 /
+  10,600 / 14,000 keys):**
+  - First call at a new length = 1.4-1.7x the steady call: +1.4 / +1.6 / +8.5 ms per layer. The very first call in
+    the process: 6.9 vs 1.3 ms.
+  - **So one-time kernel builds on the attention side are tens of ms per check at most, not seconds.** The excess
+    must be the prefill tail or cold pools (or the GDN / MoE side, untested here).
+- **R-81 attention vs context (median of 5 after warm-ups at each length; selection off = the plain causal mask, same
+  SDPA work):**
+
+  | keys | REF2-T ms per call | att_single | selection's own cost | REF2-T x 12 layers per check | att_single x 12 |
+  |---|---|---|---|---|---|
+  | 2,000 | 1.05 | 0.83 | ~0 | 12.6 | 9.9 |
+  | 4,000 | 1.34 | 1.08 | ~0 | 16.1 | 12.9 |
+  | 8,000 | 1.89 | 2.10 | +0.66 | 22.7 | 25.2 |
+  | 10,000 | 2.03 | 1.71 | +0.05 | 24.3 | 20.6 |
+  | 14,000 | 2.69 | 2.43 | +0.12 | 32.3 | 29.2 |
+  | 20,000 | 3.10 | 2.91 | +0.25 | 37.2 | 34.9 |
+
+  - The 16-row verify computes dense QK^T over every key with the indexer's mask; the selection itself is cheap.
+    So attention grows ~1.2-1.4 ms per K context per check.
+  - A block-sparse 16-row kernel (only the selected blocks + the causal tail) would cap it near the 2K level:
+    ~-12 ms per check at 10K and ~-24 at 20K (~-13 % of agent's steady 88.7 ms check at ~10K).
+  - Natural form: FATT16 (R-66) with fully masked 32-key blocks skipped. That is exact under FATT16's own invariant
+    numerics (a skipped block leaves (m, l, O) unchanged), so a REF2c / REF2d-type item; it also retires the key
+    buckets. Not built.
+  - R-80's 11 ms per call at 14K was an outlier (GPU contention or the first length).
+- **Block-sparse FATT16 priced on paper (12:3x): small under exactness. Not built.**
+  - The verify mask is per row at the indexer's 4-token blocks (top-512 per row of ~2,500 blocks at 10K: ~20 %
+    density).
+  - REF2 needs a row's bits to be independent of the other rows (AR == check). So a fused 16-row kernel must keep
+    absolute-position key groups (masked keys = exact zeros, as FATT16) and can skip only a group that no row selects.
+  - With overlapping rows (union ~30 % at 10K, ~15 % at 20K), a 16-key group is empty for all rows ~25 % of the time
+    at 10K and ~50 % at 20K. That is a 1.3-2x SDPA gain at long context only, a few ms per check.
+  - A compact union-list kernel would get the full ~4-5x, but its chunking depends on the other rows: not
+    batch-invariant, so a non-exact fast-mode option only (Kamen's call).
+
+## R-82 HC-GATE (Leap, Sun 2026-11-01 12:4x EET; shared GPU, real weights; scripts/r82_hc_gate.py, data/r82_hc_gate.txt): exact-safe, -1 kernel per HC read
+
+- After REF2c and the exact stack, the two HC reads per layer are the biggest remaining kernel group (~5-6 each).
+  REF2's S4 read runs: norm -> S4 split-K partials -> _ACCUM (the partition sum) -> gate1 (table lookups) -> MLX's
+  bf16 up matmul -> tail.
+- ref2 CFG hc_gate (leapk.hc_read fuse_gate) runs _ACCUM + gate1 as one kernel. It is the same fp32 partition sum in
+  the same order, rounded to bf16, then gate1's lookups on those bits; the intermediate `both` is never written.
+- **Bits PASS:** real HC weights of layers 3 / 20 / 44, attention and MLP reads, 4 inputs each, with and without the
+  pending write: mixed / written / inject bitwise.
+- **Kernels per read 6 -> 5, ~-96 per check.** The tail could join the up matmul only with a bitwise replica of MLX's
+  bf16 GEMM at K 320: not done.
+- Joins R-77 + R-78 in the next stacked check. ref2.self_test PASS with the switch off (BigMoE's harness imports
+  ref2 / leapk live).
+
+## R-83 GDN-INPROJ-X (Leap, Sun 2026-11-01 12:4x EET; shared GPU, real weights; scripts/r83_gdn_x.py, data/r83_gdn_x.txt): R-68's fusion without the reference change, exact-safe
+
+- **NewIdeas 12:4x:** by day, cut chat's constant part (the drafter stack, then exact-safe fusions on the dense part and
+  the syncs, stacked for one every-token check).
+- ref2 CFG gdn_inproj_x:
+  - qkv | z as ONE qmm16c call (N 16,384). qmm16c's per-column bits don't depend on N (R-68 / R-71).
+  - b | a as ONE MLX 16-row call (N 96, below dense_min_n, so it stays on MLX's kernel).
+  - Every part keeps REF2-T's bits, unlike REF2c's gdn_inproj, which moves b / a to qmm16c.
+  - Built once per layer; the four modules are dropped, so no extra memory. With the switch off, a built layer runs
+    the four calls on row slices.
+- **Bits PASS:**
+  - tensor level: real packs of GDN layers 0 / 16 / 32 / 46, 4 scales, 16- and 1-row (padded) inputs, all four parts;
+  - layer level, layer 0 under REF2 + GDNX: 16-row call, 16 one-row calls (y + conv / recurrent state), and switch off
+    after the build, all == stock.
+- **Kernels per 16-row GDN call 10 -> 8, ~-72 per check.** ref2.self_test PASS with it off.
+- Joins the next stacked check with R-77, R-78 and R-82.
+
+## R-84 DRAFT-HEAD (Leap, Sun 2026-11-01 12:4x EET; shared GPU, rough; scripts/r84_draft_head.py, data/r84_draft_head.txt): the drafter's head on qmm16c
+
+- The drafter's head is the target's 4-bit lm_head (248,320 x 2560) at 15-16 rows. MLX's 16-row call is used
+  because r57 removes REF2 around propose. qmm16c (REF2's 16-row NAX kernel) is faster. The draft logits round
+  differently, so drafts are not bitwise; the target still verifies every token, so outputs stay exact.
+- head2s 2.72-2.81 -> 2.16-2.33 ms (~-0.5 ms per propose).
+- **Kept per check, teacher-forced along the 125B's own tokens (D-02b's replay; L1-20 drafter with R-76 / R-77 / R-78
+  in both arms):**
+  - code 9.569 (666 checks) -> 9.555 (667 checks);
+  - math 6.997 (2,046 checks) -> 7.007 (2,043 checks).
+  - Unchanged within noise (+-0.15 %). 92 % / 97 % of the aligned checks have identical drafts.
+- Side check: with R-76 / R-77 / R-78 installed, the replay reproduces D-02b's original numbers (9.57 / 7.00) exactly,
+  consistent with those pieces being bitwise.
+- Verdict: a small optional win (~0.5 ms per cycle, ~0.4-0.7 %). It is kept OUT of tonight's K83 arm so that arm's
+  drafts stay bitwise and its A / K comparison stays clean. A later batch can take it.
+
+## Chat's constant part: what is left after the two stacks (Leap desk notes, Sun 2026-11-01 12:5x EET; no GPU)
+
+- **Commit replay (MTPLX capture-commit):** the verify stashes the rows the GDN recurrence consumed. A rejected window
+  (most truncated checks) then replays only the recurrence over the kept rows from the pre-verify snapshot, plus a full
+  forward of the one PLE layer.
+  - That is ~5 tiny kernels per GDN layer (compute_g, sigmoid, the recurrence, conv concat, contiguous) x 35, ~175 per
+    commit, serial on the GPU before the next draft.
+  - Batching across layers is exact (same per-head arithmetic), but Metal's 31-buffer limit forces groups of ~4
+    layers. Concatenating the 36 fp32 states into one buffer would copy ~110 MB per commit, eating the ~0.5-1 ms
+    gain.
+  - Worth it only with a persistent per-check state layout. Parked.
+- **Syncs per cycle:** the GPU idles while the CPU builds the first verify segment after the draft's read-back, and
+  during the acceptance bookkeeping + commit build before the next draft (~2-3 ms per cycle estimated, ~2-4 % of a
+  chat cycle).
+  - Truncation makes the row count data-dependent, so the draft-verify sync can't simply go.
+  - K-80's per-check split (graph-build ms) will measure the build share tonight.
+- Ranked for the next batch (exact): the drafter head on qmm16c (R-84, drafts not bitwise, -0.5 ms); attention k | v
+  on one MLX call (-12 kernels per check); swiglu folded into qmm16c's down-projection prologue (-48). All small next
+  to what tonight's K-73 / K-83 arms measure.
+
+## Trees for the kept-per-check wall: prior art and the exactness cost (Leap desk notes, Sun 2026-11-01 05:4x; ranked row #10)
+
+- **Bole** (arXiv 2608.01651): tree speculation for hybrid-attention models. The linear-attention recurrence is
+  rewritten as a tree-structured closed form, in one kernel that verifies all nodes in parallel; speculative state
+  updates are kept as token-level factors, and only the chosen state is rebuilt.
+  - Tree verification 3.4-7.7x faster, transient state memory 82-99x smaller, decode up to 2.03x the best tree baseline
+    (SGLang). It claims "losslessly encodes" the state; the abstract claims no bit-exactness.
+- **TreeWY** (arXiv 2608.20961): a tree-structured WY transform of the gated delta rule, one triangular solve for all
+  nodes, rebuilding only the accepted state. On Qwen3.5 35B / 397B, our model's family: memory saved; "a wider,
+  higher-acceptance draft becomes possible, though not yet a throughput win"; "essentially identical acceptance".
+- **For REF2's exact checks:**
+  - Both reorder the recurrence's arithmetic, so neither is bit-exact against REF2's sequential AR.
+  - An exact tree check needs:
+    - (1) the GDN state of each node computed sequentially from its parent's state: one state buffer per node, ~3 MB
+      per layer, so 16 nodes ~50 MB per layer, reused layer by layer;
+    - (2) attention with each tree row's visible keys in the AR's own layout. Past 512 keys the NAX kernel's bits
+      depend on where keys sit (4b), and a tree interleaves siblings. So each row needs a gather of its visible keys
+      (prefix + ancestors) into contiguous order, ~16 extra SDPA calls per QSA layer, much like keep-the-AR.
+  - The likely gain: a sibling only where the drafter is unsure (L1-14's confidence), i.e. EAGLE-2-style dynamic
+    trees. DFlash2's top-K recall says the 2nd candidate often holds the token (oracle top-16 12.8 vs 9.5 picked).
+  - The earlier L1-22 trees gave +5 %. Routed to NewIdeas 05:3x: the REF2c bundle (A) or exact trees (B) first.
+
+## S45c TRUNC125 (NewIdeas 01:46; Leap, pre-registered Fri 2026-10-30 04:00 EET): L1-14's running-confidence truncation in the exact loop at 45 GB
+
+- **What:** S45's harness at C 224 (`r40s3k_screen.py 224 256 speed 16,0.3,0.2`, runner 42), REF2b (ref2.py with key
+  buckets). Three arms in one process: block 16, t 0.3, t 0.2.
+  - A truncated check verifies 1 + the depths whose running product of the selector's confidences is >= t (L1-14).
+  - REF2 pads every <= 16-row call, so a truncated row has the bits of a full check's row: exact by construction. Only
+    the rows' experts shrink: fewer misses and fewer expert bytes.
+- **Also:** REF2b's key-bucket cost per 16-row attention call (synthetic, the model's shapes, N 536 / 800 / 1000),
+  buckets on vs off.
+- **Lines (NewIdeas):** PASS = all-6 mean tok/s >= +5 % over block 16, with every token == the block-16 arm's.
+  KILL = < +2 %.
+- **Prediction:**
+  - t 0.3: ~11 rows per check, kept ~8.0 of 8.27, misses -20 %, tok/s +8 %.
+  - t 0.2: ~12 rows, +5 %.
+  - Every token equal.
+  - Bucket cost <= 3 ms per check.
+- **First, the REF2b merge check (runner 42 KBTEST, 17:01): PASS.** The merged ref2.py == the 4c module bitwise at
+  N = 100..1100. With buckets off it == MTPLX's plain call, wherever no class boundary is crossed.
+- **RESULT (Fri 17:10-17:18, runner 42; logs/job.out; the swap guard stopped the job during t 0.2's 6th prompt,
+  11.4 -> 14.5 GB): exact, and a large steady-state gain, but the pre-registered wall-clock verdict is not clean.**
+  - REF2b bucket cost per 16-row attention call: N 536 0.94 -> 1.12 ms, N 800 0.66 -> 0.68, N 1000 0.78 -> 0.70. That
+    is <= +2.2 ms per check: right.
+  - Every token in both truncation arms == the block-16 arm's and EvalSuite's REF2 rows: exact.
+
+    | arm (C 224) | rows per check | kept | median cycle | misses per check | SSD ms per check | wall-clock all-6 tok/s | steady-state tok/s (kept / median cycle, mean of 6) |
+    |---|---|---|---|---|---|---|---|
+    | block 16 | 16.00 | 8.27 | 293.2 ms | 432 | 116.5 | 22.80 | 26.9 |
+    | t 0.3 | 9.84 | 7.91 | 205.1 ms (-30 %) | 330 (-24 %) | 91.3 | 23.40 (+2.6 %, but see below) | **32.6 (+21 %)** |
+    | t 0.2 (5 prompts) | ~9.3 | ~7.3 | ~231 ms | ~318 | ~100 | - | 31.5 vs 27.8 on the same 5 (+13 %) |
+
+  - **Why the wall-clock line misleads:**
+    - t 0.3's algebra/1282 hit a PAUSE (flagged): 1.2 tok/s over the wall.
+    - Order warm-up: block 16 ran first. HumanEval/68 truncates nothing in every arm (16.00 rows, kept 15.41), yet
+      goes 27.6 -> 35.4 -> 38.5 tok/s, because the process's first prompt pays a 10.5 s prefill and cold checks.
+    - Per prompt at t 0.3, the cycle falls 25-32 % and kept falls 3-9 % (1640, HumanEval/91, 694, 1282, 708).
+  - Predictions: rows ~11 (got 9.8); misses -20 % (-24 %); tok/s +8 % (steady-state +21 %, wall-clock unclean); every
+    token equal (right); bucket cost (right).
+  - **Verdict: not called on the pre-registered line (the run was cut, paused and order-biased). The steady state
+    says PASS-size.**
+  - **S45c-2 (pre-registered 17:3x):** a clean re-run, t 0.3 vs block 16 only, at C 224 on the same 6 prompts.
+    - Order: a warm-up prompt first (discarded), then per prompt A-B-A (block 16, t 0.3, block 16).
+    - Reports wall-clock tok/s per run, PAUSE-flagged runs excluded.
+    - Same lines: PASS = all-6 mean tok/s of t 0.3 >= +5 % over the mean of the two block-16 runs, every token
+      equal. KILL < +2 %.
+    - Prediction: +15 to +22 %.
+    - **Attempt 1 (Fri 18:36, runner 44): stopped by the swap guard 15 s into the load** (10.4 -> 13.5 GB). Another
+      session's GPU job and Kamen's apps were resident; the 66 % gate left ~2 GB of margin at C 224's ~40.5 GB peak.
+      Re-queued as runner 45 with a 72 % gate (~46 GB free).
+  - **S45-STACK (pre-registered Fri 20:5x; replaces S45c-2 under FAST INTEGRATION; NewIdeas' RANKED_45GB.md exact-safe
+    stack, items 1 + 2 at C 224):**
+    - One process at C 224, the gate switchable per run (BIGMOE_MAXK 160 + ext build_next; stream.GATE_N 160 / 40).
+    - After a discarded warm-up, per prompt: slot block 16, gate block 16, slot t 0.3, gate t 0.3, slot block 16.
+      CAP 192 tokens, so 30 runs fit one lock. Runner 45, gate 76 % free (the ~40.5 GB peak + 8 GB).
+    - Reports: wall-clock tok/s per run (PAUSE-flagged runs excluded) and the steady state. Each arm vs the two slot
+      block-16 runs: the gate alone, truncation alone, and the stack.
+    - Exact: every token equal across all 5 runs of a prompt.
+    - Lines:
+      - the stack (gate + t 0.3) >= +40 % over slot block 16 = PASS;
+      - truncation alone keeps S45c-2's lines (PASS +5 %, KILL < +2 %);
+      - any token difference = FAIL.
+    - Prediction: gate +30 % (R-55: +35-48 % live), t 0.3 +15-20 %, the stack +45-60 %.
+    - **Attempt 1 (Fri 21:01, runner 45): stopped by the swap guard 20 s into the load** (14.7 -> 19.3 GB), although
+      memory_pressure's free percentage passed 76 % at 21:00. vm_stat minutes later: wired 36.7 GB (the concurrent
+      shared MLX jobs' Metal buffers), available (free + inactive + speculative + purgeable) ~14.5 GB.
+      - The free percentage is not a usable gate for ~40 GB loads while other MLX jobs run.
+      - Runner 45 now gates on vm_stat's available >= 49 GB (the peak + 8 GB), so it waits for a genuinely quiet Mac
+        (likely the night). Fit12 was warned before its own C 224 load.
+    - **Attempt 2 (Fri 23:30, runner 46, queue-first per the orchestrator's 23:2x rule):** granted, then released.
+      After the settle, 37 GB was available: wired only 7 GB, but Kamen's apps and the system had 21.8 GB active. So
+      while his apps are open, ~37 GB is the ceiling and no C 224 / C 192 run fits.
+    - **Orchestrator 23:3x: run the stack as a proof of concept at a smaller C, labelled "not the 45 GB point"; stop
+      probing C 224 until it says memory is back** (it asked Kamen to quit Chrome / Spotify and leave the lid open).
+      - Quiet-lock runs may then gate on peak + 4 GB.
+      - **C 160, not C 128:** BigMoE's R-55 gate needs base slots >= a call's distinct experts (<= 160 for 16 rows),
+        so C 128 could evict a slot the same call still needs. C 160 peaks at ~32.5 GB, gate 37 GB (+4). Runner 47.
+      - Same 5 arms and lines. The relative gains and the every-token check transfer; tok/s at 45 GB does not.
+    - **RESULT (Fri 23:39-23:47, runner 47, quiet lock; data/s45c2_c160.txt): PASS on every line. The exact-safe stack
+      is +50 % at C 160 (not the 45 GB point).** Every token is equal across all 5 runs of every prompt.
+
+      | arm (C 160, CAP 192, after a warm-up) | wall-clock tok/s (5 prompts) | vs slot block 16 | steady state | median cycle | rows | kept | misses |
+      |---|---|---|---|---|---|---|---|
+      | slot block 16 (runs 0 + 4; one paused run excluded) | 19.65 | - | 20.0 / 20.8 | 405 / 386 ms | 16.0 | 8.37 | 757 |
+      | gate block 16 (R-55) | 26.50 | **+34.8 %** | 26.8 | 294 ms | 16.0 | 8.37 | 758 |
+      | slot t 0.3 (L1-14) | 22.99 | **+17.0 %** | 25.7 | 277 ms | 10.0 | 7.96 | 582 |
+      | gate + t 0.3 (the stack) | 29.52 | **+50.2 %** | 34.1 | 209 ms | 10.0 | 7.96 | 582 |
+
+      - Predictions: gate +30 % (got +34.8), t 0.3 +15-20 % (+17.0), stack +45-60 % (+50.2): all right.
+      - Bucket cost: <= +2.3 ms per check.
+      - It stacks nearly multiplicatively: 1.348 x 1.170 = 1.577 expected, 1.502 measured.
+      - Sent to the orchestrator as BIG at 23:48, labelled C 160. The C 224 run waits for the orchestrator's "memory is
+        back".
+    - **C 224 attempt (Fri 23:50-23:51, runner 48, after the orchestrator's "memory is back"): stopped by the swap guard
+      30 s into the load** (9.0 -> 12.6 GB). At the grant, vm_stat available was 45.0 GB against the 44.5 needed.
+      - 'Inactive' includes anonymous app memory, which only swap frees. At 23:52: free 24.7, file-backed 9.0,
+        anonymous 24.9, wired 7.1 GB.
+      - The gate that frees without swap is free + speculative + purgeable + file-backed: ~42 GB at the grant, ~35 at
+        23:52.
+      - **No more C 224 attempts tonight** (four trips today). The C 160 stack stands; the orchestrator was told.
+    - **Then (orchestrator 23:5x and 01:4x NIGHT MODE):** Chrome closed until 08:00 and Kamen's other apps quit, so
+      NO-SWAP is ~48 GB with nothing running. The NO-SWAP gate is the rule for every big load.
+      - Runner 49 (C 224 stack, NO-SWAP >= 44.5 after the grant) was released twice short (36.5 at 00:38, 41.2 at 01:21,
+        before the apps were quit); queued again 01:36.
+  - **C 224 RESULT (Sat 02:29-02:37, runner 49, quiet lock; NO-SWAP 49.9 GB at the grant; data/s45c2_c224.txt): PASS on
+    every line at the 45 GB point. Exact:** every token is equal across all 5 runs of every prompt.
+
+    | arm (C 224, CAP 192, after a warm-up) | wall-clock tok/s | vs slot block 16 | steady state | median cycle | rows | kept | misses |
+    |---|---|---|---|---|---|---|---|
+    | slot block 16 (runs 0 + 4) | 24.97 | - | 27.6 | 292 / 288 ms | 16.0 | 8.37 | 446 |
+    | gate block 16 (R-55) | 32.91 | **+31.8 %** | 36.1 | 226 ms | 16.0 | 8.37 | 441 |
+    | slot t 0.3 (L1-14; 5 prompts, 694 paused) | 28.90 | **+12.5 %** | 33.5 | 210 ms | 10.0 | 7.96 | 346 |
+    | gate + t 0.3 (the stack) | **36.36** | **+45.6 %** | **43.5** | 154 ms | 10.0 | 7.96 | 345 |
+
+    - Predictions: gate +30 % (right), t 0.3 +15-20 % (got +12.5: a bit low, as C 224 has fewer misses to save),
+      stack +45-60 % (right).
+    - Bucket cost: <= +2.7 ms per check.
+    - Sent to the orchestrator as BIG at 02:37 (before its 04:15-07:45 quiet window).
+  - **S45-LONG (pre-registered Sat 01:4x; the orchestrator's "a longer, steadier 45 GB number"; runner 50 after runner
+    49):**
+    - The same exact loop at C 224, CAP 256.
+    - Per prompt: slot block 16, gate + t 0.3, slot block 16, after a warm-up.
+    - 12 prompts not in S45's six, all with EvalSuite REF2 rows: HumanEval 101 / 27 / 117 / 4 / 86 / 143,
+      MATH-500 intermediate_algebra 1422 / algebra 2232 / prealgebra 1655, GSM8K 705 / 715 / 724.
+    - One 25-min quiet ticket (run_locked 20 min).
+    - Lines: the stack >= +40 % wall-clock over slot block 16 = PASS (as S45-STACK); any token difference = FAIL.
+    - Prediction: +40 to +55 % at C 224 (fewer misses than C 160, so a little below its +50 %); exact.
+    - **RESULT (Sat 02:55-03:02, runner 50, quiet lock; NO-SWAP 48.4 GB at the grant; data/s45long_c224.txt): PASS,
+      +45.3 %, exact** (tokens equal across all 3 runs of every prompt).
+
+      | arm (C 224, CAP 256, 12 prompts) | wall-clock tok/s | steady state | median cycle | rows | kept | misses |
+      |---|---|---|---|---|---|---|
+      | slot block 16 (runs 0 + 2) | 27.58 | 30.4 | 295 / 300 ms | 16.0 | 9.26 | ~450 |
+      | gate + t 0.3 | **40.09 (+45.3 %)** | 44.3 | 177 ms | 11.3 | 8.94 | 374 |
+
+      - It matches S45-STACK's +45.6 % on the other 6 prompts: the exact stack is a steady ~+45 % at the 45 GB point
+        over 18 prompts.
+      - Sent to the orchestrator 03:02 (before its quiet window) and to NewIdeas.
+
+## D-02 DOMAINS (NewIdeas' DRAFTER TRACK D98, Kamen Wed 15:33; split by Leap 15:44, agreed): DFlash2's gap per domain
+- **Why:** Kamen's target is ~98 % per guess (~14 of 16 kept per check) on chat, math, code and agent. Chat1000
+  REPORT 12: twins of the 125B reach 14-15 on code / math. On IFEval / chat / agent the 125B's own float-order floor
+  is 13.2 / 13.7 / 11.0, so ~0.95 is the realistic top there.
+- **D-02b (scripts/d02b_screen.py, ~2 min):** DFlash2 L1-20 (bf16, block 16, the official 1-step loop, exact
+  two-stage head) teacher-forced along the 125B's own tokens: code (dfl2d_code, 24) and math (dfl2d_math, 60).
+  - Reported per domain: kept per check, per-token rate, rate per depth 1-15, P(first 15 right).
+  - The >= 0.99-sure share of first misses waits for D-02a (the stored features keep the 125B's top-1 token, not its
+    probability).
+- **D-02a then:** dfl2c_extract features + the 125B's probabilities for IFEval (30), multi (24), agent (12 turns), and
+  probabilities for code + math. Then D-02b on those.
+- **Expectation (a measurement, no lines):** code kept ~10.2 (R-10's 10.23 at b32 is the nearest; ~9.5 at b16),
+  per-token ~0.93. Math kept ~8.5, per-token ~0.91.
+- **D-02b result (Wed 15:48, 35 s; data/d02b_screen.txt):**
+
+  | domain | checks | kept per check | per-token rate | P(first 15 right) | rate at depth 1 / 4 / 8 / 12 / 15 | near-copy 10 % per token (REPORT 12) |
+  |---|---|---|---|---|---|---|
+  | code (HumanEval+) | 666 | **9.57** | **0.924** | 0.276 | 0.941 / 0.946 / 0.939 / 0.906 / 0.858 | 0.983 |
+  | math (GSM8K CoT) | 2,046 | **7.00** | **0.871** | 0.086 | 0.908 / 0.874 / 0.868 / 0.836 / 0.791 | 0.970 |
+
+  - The gap to the near-copy is ~6 points per token on code and ~10 on math. Kamen's ~0.98 is twin territory there.
+  - The rate falls with depth in both domains (code 0.94 -> 0.86, math 0.91 -> 0.79), so the deep positions are
+    where a better drafter pays most.
+  - Leap is the KERNELS session since Kamen's 15:47 role change. D-02a (IFEval / multi / agent features + the 125B's
+    probabilities) and all further drafter work go to MTP Head (TrainLab).
+
+## Runner 62 read-out (Mon 2026-11-02 07:2x-07:49 EET; quiet lock, C 160, R57_PRESET=45 with OOO + TIER_COMBINE; data/runner_r.log, data/k80/k80_diag_screen.txt, data/r73l/k83_{A,K}_screen.txt)
+
+### K-83 stacked every-token check: EXACT, draft -1.2 ms, cycle -1.5 %, steady +0.7 %
+| arm (own process, A first) | tok/s (steady) | median cycle | check + commit | draft | misses | demand SSD | every token == REF2-T |
+|---|---|---|---|---|---|---|---|
+| A = the default | 39.5 (41.6) | 153.7 ms | 145.9 ms | 11.4 ms | 469 | 94.2 ms | 6 / 6 prompts |
+| K = K-73 + K-83 stacks | 39.5 (41.9) | 151.4 ms | 145.1 ms | 10.2 ms | 469 | 95.4 ms | 6 / 6 prompts |
+- Draft per prompt 12.0 / 11.4 / 11.5 / 11.3 / 11.4 / 11.3 -> 10.3 / 10.2 / 10.0 / 10.3 / 10.2 / 10.2 ms: R-76 / R-77 /
+  R-78 engage live. Engagement at graph build: att_rope 2,724, idx_prep 5,616, hc_write 11,035, gdn_inproj_x 8,311
+  fused calls, hc_gate on (hc_read 22,070), draft_fused + forms, chain_fused.
+- Why small: at C 160 the check is SSD-bound (demand SSD 94-95 of 145 ms), so the dense-side savings (-0.8 ms on
+  check + commit) hide behind the loads. The drafter's -1.2 ms lands in full (the SSD idles while it drafts).
+- NewIdeas' 01:28 question (C45 arm K: draft 11.5 -> 11.9 ms): arm K had R-76 (draft_fused.install(), BigMoE 2c7b871)
+  but not R-77 (chain_fused) or R-78 (forms=True). So K-83's -1.2 ms comes from R-77 + R-78; R-76 alone moved nothing
+  live.
+- Verdict: PASS as exact-safe (every token equal, both stacks live). Small at C 160; the dense part shows more where
+  the loop is GPU-bound (C 256+).
+
+### K-80 first-check split: three named parts; the non-SSD one-time cost is the largest
+| run (one process, after a gsm8k warm-up) | prompt | draft: 1st / median | check + commit: 1st / median | misses: 1st / median | demand SSD: 1st / median | first-cycle excess: SSD / draft / other |
+|---|---|---|---|---|---|---|
+| 1, cold pools | agent/bash18 (9,687 tok) | 39.1 / 13.0 | 223.2 / 117.6 | 856 / 260 | 153.6 / 57.0 | 131.7 ms: 73 % / 20 % / 7 % |
+| 2, cold pools | agent/text23 (8,582 tok) | 36.9 / 13.1 | 314.0 / 207.1 | 1,202 / 792 | 215.8 / 140.1 | 130.7 ms: 58 % / 18 % / 24 % |
+| 3, warm repeat | agent/bash18 (9,687 tok) | 41.8 / 13.0 | 190.6 / 91.9 | 127 / 134 | 40.4 / 36.6 | 127.5 ms: 3 % / 23 % / 74 % |
+- 1. **Miss burst** when the pools hold another prompt's experts (runs 1-2): +76-97 ms of demand SSD, 71-91 % of the
+  check's excess.
+- 2. **The drafter's first call**: +24-29 ms in every run (37-42 vs 13 ms), outside the check. It is the window prefill
+  (up to SWIN - 1 context positions through DFlash2): real compute that could run inside the target's prefill.
+- 3. **A one-time non-SSD cost inside the first check** (run 3: normal misses, SSD +3.8 ms): +84 ms in the graph-build
+  phase (159.6 vs 75.9 ms, the median of checks 2-7) + 15 ms in the tail. The build waits on each layer's router ids
+  (the sync-free gate), so this is GPU progress plus CPU stalls inside the check. Not kernel builds: same prompt and
+  shapes as run 1 in the same process (R-80: first-length builds are +1.4-8.5 ms per attention layer at most).
+- **The first-cycle excess is ~128-132 ms in all three runs, cold or warm.** The miss burst and the one-time cost
+  overlap, so warming the pools alone would likely leave ~95 ms. Part 3 is the first target, then 2, then 1.
+- Candidates for part 3 (K-80 cannot separate them):
+  - (a) the MLX buffer cache starts empty (run() ends with mx.clear_cache(); the prefill refills it with 1,024-row
+    buffers a 16-row check cannot reuse), so the first check allocates every intermediate buffer fresh;
+  - (b) the gate's first call after the slot-mode prefill (pf1(False) drops the staging buffers);
+  - (c) first touch of decode-only buffers (page faults).
+- Separating test (10 min, agent prompt after a long prefill): run the first check twice with a rollback between (if
+  the second copy is at the median, part 3 is one-time setup); then no mx.clear_cache() between runs plus one 16-row
+  dummy forward right after the prefill (allocator warm).
+- 1-row checks take no gate: build 16.5-17.5 ms (pure CPU graph build, ~0.35 ms per layer).
+- Line (ROUTE_350 A6 / DAY9 #7: KILL if the split names nothing >= 30 %): **PASS**. Part 3 is 74 % of the warm first
+  cycle's excess, the miss burst 58-73 % of the cold ones', the drafter's window 18-23 % of all three. A6 goes to
+  BigMoE by cause.
+
+> (a quote from the project owner, kept private)
+- **C0 / NEW-2 timeline (condition 5; scripts/c0_timeline.py):** BigMoE's r57_screen.py (e3210bf, the 45 GB default:
+  R57_PRESET=45 = REF2-T + gate + t 0.3 + OOO + TIER_COMBINE + K-73) with probes. At checks 1, 2, 5, 10, 15, 30 the cache
+  is rolled back (mtplx rollback_after_verify) and the check re-run:
+  - warm repeats (all experts resident) as live;
+  - one synced pass: pieces hc_a / mixer (gdn, att) / hc_m / moe_pre (router + shared) / experts (tier GLU + combine) /
+    moe_post / hc_w / ple, each split into CPU build and eval (one sync taken off);
+  - a row sweep 1-16 on the untruncated draft path, and synced passes at 1 and 16 rows;
+  - a last forward equal to the real one bitwise, then the commit as usual.
+  - By day at C 112 (fits ~29 GB NO-SWAP), code HumanEval/68 + chat multi/bg0; tonight at C 256 if a ticket allows.
+  - Instrument, no line. Prediction: warm 16-row check 85-105 ms; experts 45-60 ms of it; dense (mixers + HC + router /
+    shared) 30-40; per added row warm 2.5-3.5 ms (M-16's beta 2.64).
+- **C2 (condition 4; scripts/k62p_floor.py):** NAX6 at S 16 on real layers 6 / 20 / 40 + real routing vs the byte floor
+  (each distinct expert's MSB-3 2.15 MB + LSB-1 0.77 MB for experts at 4-bit ranks, at 300 and 215 GB/s).
+  - Line: C2 (a floor kernel) is worth building only if NAX6 / floor >= 1.3x; else KILL.
+  - Prediction: NAX4 ran ~180 GB/s in K-62f, so NAX6 / floor ~1.2-1.6x: BETWEEN-ish (KILL 40 %, PASS 60 %).
+- **B3 (condition 9; same script):** expert slope from 16 to 32 rows (3c and NAX6, x 48) + dense matmuls 0.26 ms per row
+  (D32) + GDN steps / attention rows ~0.3-0.4 = the NAX32 beta. Line: KILL if > 2.5 ms per row.
+  - Prediction: NAX6 slope ~1.2-1.5 -> beta ~1.8-2.2: PASS (75 %).
+- **A2 + A4 (condition 5; scripts/r86_a2a4.py):** bmm16 (L1-29) and SPK16 (R-13d D2) against the kernels the default
+  runs now (S4 for the HC read's mix-down, qmm16c for the split-K shapes), plus bits.
+  - Lines: A2 KILL if tokens differ or < -1.5 ms; A4 KILL if < -2 ms.
+  - Prediction: both KILL. S4 and qmm16c already took these gains (R-09b / R-36, REF2), and bmm16's / D2's bits differ
+    from S4's / qmm16c's (a reference change, not an exact-safe swap).
+- **D7 (condition 6; scripts/r85_d7.py):** the L1-20 drafter in 4 arms on D-02b's teacher-forced replay (code 24, math
+  60): A = today's K-83 drafter (bf16, R-76 / R-77 / R-78, MLX head); B = A + R-84 qmm16c head; C = 4-bit layers (R-06b's
+  quantize) + R-76 + R-77 + qmm16c head; D = C with REF2 applied in the propose (16-row 4-bit projections on qmm16c).
+  - Line: PASS if an arm proposes in <= 8 ms with kept within -1 % of A; KILL if every arm stays > 8 ms.
+  - Prediction: A ~10, B ~9.5, C ~8.4, D ~7.5-8; kept -0.3 to -0.6 % in C / D (R-06b: -0.4 %). PASS 50 %.
+- **C1 (condition 4, tonight, BigMoE's harness):** ref2 CFG tier_nax_ooo (101573d): NAX6 in OOO's two phases (phase-aware GPU
+  grouping), bitwise == one NAX6 call in 96 / 96 real-data cases (data/k62o_nax_ooo_L20.txt). Kernel level (shared,
+  rough): OOO's two NAX6 phases ~1.26x vs 3c's at S 16 (one call 1.75x); at S 8 0.85x (each phase pays whole 16-row MMA
+  tiles for half-empty groups).
+
+### DAY9 results 1 (Mon 11:02, quiet lock; data/k62p_floor.txt, data/r86_a2a4.txt)
+- **A2 bmm16 HC mix-down: KILL (both clauses).** Per check (x 97 HC reads, 16 x 10240 -> 320): MLX 8.85 ms, bmm16 2.07,
+  S4 (what REF2 runs, + the 4 gate rows) 2.29. bmm16 vs the default: -0.22 ms (line -1.5), and its bits differ from S4's
+  (S4 == MLX bitwise). L1-29's -2.5 ms was against MLX's form; S4 (R-09b / R-36, in REF2) took it.
+- **A4 SPK16 shapes: KILL.** Per check at 16 rows: in_proj_z (x 36) MLX 8.26 / D2 4.08 / qmm16c 1.48 ms; o_proj + out_proj
+  (x 48) MLX 10.68 / D2 5.30 / qmm16c 1.97. SPK16 is +5.94 ms SLOWER than REF2's qmm16c (and bitwise MLX, not qmm16c).
+  The guide's -4.5 ms was against MLX's split-K; qmm16c already saves ~15.5 ms there.
+- **C2 the expert kernel vs its byte floor (S 16, real routing, layers 6 / 20 / 40 x 4 traces x 4 windows):**
+  | rows | bytes per check (x 48) | 3c | NAX6 | floor at 300 / 215 GB/s | NAX6 / floor |
+  |---|---|---|---|---|---|
+  | 16 | 7.38 GB | 50.5 ms (146 GB/s) | 43.2 ms (171 GB/s) | 24.6 / 34.3 ms | 1.75 / 1.26x |
+  | 24 | 9.82 GB | 74.7 ms (131 GB/s) | 56.1 ms (175 GB/s) | 32.7 / 45.7 ms | 1.71 / 1.23x |
+  | 32 | 11.33 GB | 98.9 ms (115 GB/s) | 65.8 ms (172 GB/s) | 37.8 / 52.7 ms | 1.74 / 1.25x |
+  - Quiet, NAX6 is only 1.17x faster than 3c at S 16 (L6 0.96x, L20 1.22x, L40 1.42x): layers with more distinct
+    experts gain least. NAX6 holds ~171-175 GB/s at every width; 3c falls from 146 to 115 GB/s.
+  - The line (C2 worth building if NAX6 / floor >= 1.3x) straddles the 215-300 GB/s range: **BETWEEN until the
+    machine's achievable read bandwidth is measured** (bw_probe.py, next quiet slot). At ~250 GB/s it is ~1.46x.
+- **B3 NAX32 beta: PASS.** Expert slope from 16 to 32 rows: 3c 3.03, NAX6 1.41 ms per added row per check. + dense
+  matmuls 0.26 (D32) + GDN steps / attention rows ~0.3-0.4 (C0 measures) = **~2.0-2.1 ms per row vs the 2.5 line**.
+  Bytes per added row fall from ~0.42 GB (1 -> 16) to 0.25 GB (16 -> 32): rows share experts, and NAX6 turns that
+  into time while 3c, paying per pair, does not.
+- **C0 at C 112: crashed in its own probe (not a finding).** At C 112 the tier base pool holds 103 experts per layer,
+  so a 16-row probe call (up to 160 ids) skipped the sync-free gate (stream.py: > 92 ids only if the pool holds them)
+  and REF2-T's slot path asserted 119 > 103. The live checks were fine. Re-queued at C 160 (C_m ~168).
+- **D7 (R-85) fused 4-bit drafter: BETWEEN (data/r85_d7.txt; quiet; D-02b's teacher-forced replay).**
+  | arm | propose code / math (median) | kept code / math | identical drafts vs A (code) |
+  |---|---|---|---|
+  | A today's drafter (bf16, R-76 / 77 / 78, MLX head) | 9.92 / 9.50 ms | 9.569 / 6.997 | - |
+  | B A + qmm16c head (R-84) | 9.35 / 9.32 | 9.555 / 7.007 | 615 / 666 |
+  | C 4-bit layers on MLX's kernels + R-76 / 77 + qmm16c head | 10.04 / 10.06 | 9.526 / 6.807 | 106 / 654 |
+  | D C with REF2 in the propose (16-row 4-bit on qmm16c) | **7.17 / 7.41** | 9.498 / 6.820 (-0.75 % / -2.53 %) | 112 / 655 |
+  - Time line (<= 8 ms): D passes. Kept line (within -1 % of A): code passes, math fails (-2.5 %). MLX's own 4-bit
+    16-row calls are no faster than bf16 (C); the gain is qmm16c's (D).
+  - Net per cycle, roughly: code +1 % (draft -2.75 ms, kept -0.75 %), math ~-1 %. Not adoptable as is; the kept loss is
+    the 4-bit quantization (R-06b's -0.4 % was the older drafter). Next: mixed precision (the most sensitive layers bf16)
+    or a short 4-bit fine-tune of l120 (MTP Head), then D again.
+
+### DAY9 results 2 (Mon 11:04-11:09, quiet lock; data/c0/c0_c160_*.{txt,json}, data/bw_probe.txt)
+- **Bandwidth probe: the M5 Pro streams 258-287 GB/s** (uint4 read kernel, 1-4 GB, medians; best 294; mx.sum 270-285).
+- **C2 -> PASS.** The 16-row check's experts (7.38 GB) have a floor of 25.7-28.6 ms at 258-287 GB/s. NAX6's 43.2 ms is
+  1.5-1.7x above it (1.4x at 85 % of streaming); 3c's 50.5 ms is 1.8-2.0x. Line >= 1.3x: a floor-level expert kernel
+  has room. NAX6 holds ~171-175 GB/s (60-66 % of streaming) at every width.
+- **C0 / NEW-2 timeline at C 160** (the 45 GB default's loop with K-73; code HumanEval/68 + chat multi/bg0; 15 probe
+  checks; every probe's logits == the real check's bitwise; HumanEval/68 every token == REF2-T). Warm = all of the
+  check's experts resident (0 misses in every warm pass).
+  | piece (ms per check, synced, CPU build inside) | 1 row | 16 rows | per added row |
+  |---|---|---|---|
+  | experts (tier GLU + OOO + combine, 48) | 7.1-9.4 | 52.4-56.3 | **2.9-3.2** |
+  | GDN mixers (36) | 12.3-13.4 | 12.0-13.1 | ~0 |
+  | HC reads (hc_a + hc_m, 96) | 12.9-14.7 | 10.9-11.7 | ~-0.1 |
+  | QSA attention (12; ~200-key contexts) | 7.4-8.9 | 7.1-9.0 | ~0 |
+  | router + shared expert (moe_pre) | 2.9-4.3 | 2.4-3.1 | ~0 |
+  | MoE tail (moe_post) | 1.0-2.0 | 1.8-2.4 | ~0 |
+  | head + embed + final mixer | 2.2-2.5 | 2.6-2.7 | 0 |
+  | PLE, residual write, glue | ~1.5 | ~1.5 | 0 |
+  - One eval sync = 222 us (taken off each record). "glue" printed -10.3 is that subtraction on 48 already-evaluated
+    layer outputs (no real sync): the true glue is ~+0.4 ms.
+  - **Unsynced warm check: 36-38 ms + 2.9-3.2 ms per row over 2-16 rows** (84-89 ms at 16 rows). The synced 16-row sum
+    is ~95 ms because the ~8.5 ms of CPU build overlaps the GPU when unsynced. **Dense constant ~32 ms of GPU**
+    (cost model: 30.2): GDN 12.4, HC reads 11.4, attention 7.3, router / shared / tail 5.1, head 2.7, rest ~1.5.
+  - **The row term is all experts.** Every dense piece is flat from 1 to 16 rows (the padded 16-row kernels). So the
+    regression's 7.82 ms per row (C 224, no OOO) is ~3.0 ms of expert GPU + ~4.8 ms of SSD.
+  - **Cold vs warm (the SSD's share at C 160):** code 16-row live checks 214-472 ms (972-2,449 misses, SSD 162-367
+    ms) vs 84-89 warm; chat 4-6-row checks 66-108 ms vs 47-54 warm.
+  - **1-row checks cost more than 2-row ones** (48-49 vs 43.5-44 ms warm): SB's mid-loop async_eval covers 2-16 rows
+    only, so a 1-row check's 9.3 ms of graph build doesn't overlap the GPU. Exact fix: SB at 1 row. Small: 11 of 132
+    chat checks (8 %) were 1-row, ~0.5 %.
+  - **K-80 cross-check:** the immediate warm repeat of a run's FIRST check is at the normal warm level (code 84.9 /
+    84.4 vs 88.7 at check 5; chat 60.2 then 52.6 vs 53.5). So the first-check excess is one-time setup + misses,
+    paid once per run, not a property of that check's work. The drafter's first call: 24-26 vs 12-13 ms here.
+  - **B3 refinement:** GDN / attention add ~0 per row up to 16 rows, so the NAX32 beta is ~1.7-1.9 (1.41 experts +
+    0.26 dense + ~0-0.2), PASS with more margin.
+- **Condition 5 (constant <= 13 ms) on these numbers:** today's dense constant is ~32 ms of GPU. A1 (REF2c-T failed
+  IFEval), A2 and A4 are gone; A3 (K-73) is in. What is left is GDN 12.4 (A5, one-kernel GDN body) and the HC reads
+  11.4 (~4x their byte floor: 0.64 GB per check, ~2.3 ms). Even both at ~4 ms plus attention / tail fusions lands
+  ~15-18 ms. <= 13 needs more than the known exact levers.
+- **D7b (R-85b) which parts can stay bf16 (Mon 11:17-11:19, quiet; data/r85b_d7b.txt).** All arms with REF2 in the
+  propose (16-row projections on qmm16c / REF2's bf16 forms), R-76 conv kernel, R-77 chain, qmm16c head.
+  | arm | 4-bit parts | propose code / math | kept code / math vs A |
+  |---|---|---|---|
+  | A | none (bf16) | 10.39 / 10.16 ms | 9.555 / 7.042 (ref) |
+  | D | layers + fc | **6.08 / 5.92** | -0.60 % / **-3.14 %** |
+  | E | layers (fc bf16) | **6.30 / 6.25** | **+0.00 %** / -3.39 % |
+  | F | MLPs only | 8.13 / 7.98 | -0.30 % / -1.93 % |
+  | G | MLPs + q / o | 7.60 / 7.46 | +0.47 % / -2.17 % |
+  - Arm D took 7.17 / 7.41 ms in D7's run and 6.08 / 5.92 here (both quiet): read the 4-bit propose as ~6-7.4 ms.
+  - **Code: PASS.** E proposes in 6.3 ms (from 10.4) with code kept unchanged; D in 6.1 ms at -0.6 %. Every 4-bit
+    arm stays inside -1 % on code.
+  - **Math: every 4-bit arm loses 1.9-3.4 % kept**, MLP-only included, so keeping parts in bf16 does not fix it: the
+    MLPs' 4-bit rounding (RTN, g64) costs math drafts. A 4-bit-aware fine-tune of l120 (MTP Head) is the fix to try.
+  - Net, roughly (draft -4 ms per cycle): code +1.5-2.5 % with E; math ~0 (draft gain eaten by kept). With a
+    per-type drafter switch (NewIdeas' type rule exists for chat), code could take E alone.
+
+## ANE-1: DFlash2 L1-20 on the Neural Engine (Fable mission 17, idea 2.3; Mon 2026-11-02, pre-registered 17:0x)
+- Order: the orchestrator (Kamen approved coremltools 9.0 for this probe only; no torch). DRAFTER_WALL.md 2.3: a bigger
+  drafter on the Neural Engine drafts the next block from the likely cut points while the GPU checks.
+- Build: scripts/ane_probe.py, coremltools' MIL builder from the safetensors, int8 symmetric per channel (W8A16), body
+  (fc + 5 DFlash2 layers, 2,031 cached + 16 new context rows, 16-row block) and head (target lm_head, 4-bit ->
+  dequantized -> int8, 20 chunks + per-128 block max); embeddings, two-stage top-16 and the selector chain on the CPU.
+- Step 1 line: one 16-row block > 30 ms on CPU_AND_NE = KILL. Step 2 line: the GPU's warm check time > +10 % while the
+  Neural Engine drafts = KILL. Step 2 is judged with the ANE drafting back to back (worst case). The GPU check is a
+  proxy: the expert part of a 16-row check (48 chained NAX6 calls, real layers 6/20/40 and real routing, 7.4 GB). The
+  dense part is less bandwidth-bound, so the proxy's slowdown is an upper bound for the whole check. Shared lock: MTP
+  Head's x4 training is on the GPU, so the A/B blocks are interleaved and the idle-block spread is reported.
+- **Results (Mon 17:00-17:16, shared lock beside MTP Head's x4 training; data/ane_probe.txt):**
+  | step | line | result | verdict |
+  |---|---|---|---|
+  | 1: one 16-row block on the Neural Engine | <= 30 ms | body 14.8 / 16.1 + block-max head 8.1 / 8.5 + CPU top-16 and chain 0.3 / 0.4 = **23.8 / 25.6 ms** (two runs) | **PASS** |
+  | 2: GPU check proxy beside it | <= +10 % | back to back **x1.070** (blocks 1.066-1.083), 36 drafts/s x1.060, 12/s x1.013 | **PASS** |
+  | kept per check (r84 replay, MLX bf16 vs ANE int8) | none set | code 9.569 -> 9.540 (-0.30 %), math 7.011 -> 7.010 (-0.01 %) | int8 + fp16 cost nothing |
+  - Placement (MLComputePlan): all 620 body ops and the head's matmuls / maxes run on the Neural Engine. Only the
+    head's two output concats run on the CPU.
+  - Python copies the 248,320-column logits out as fp32, which adds 3-6 ms (26.8 / 31.6 ms with it). Native code reads
+    the fp16 output in place and needs only the 16 best 128-blocks per row.
+  - Bandwidth: the head streams 75-79 GB/s, the body only 30-32 GB/s. The likely causes, not yet split: 42 MB of cache
+    inputs copied per call, and 620 small ops. A stateful cache (CoreML StateType) and fewer ops should bring a block
+    to ~17-19 ms.
+  - The ANE's own draft time barely moves while the GPU runs: 23.5 -> 24.1 ms.
+  - **fp16 range (new; matters for any ANE or fp16 port of this drafter):**
+    - The residual stream reaches ~35,000 after layer 0 and ~196,000 in layer 4 (MLX fp32), past fp16's 65,504. bf16
+      has fp32's range, so MLX never shows it.
+    - The first build drafted badly: hidden cos 0.889 vs MLX fp32, NaN on the CPU in fp16, with int8 and fp16 weights
+      alike.
+    - Exact fix: every norm on the stream is an RMSNorm (scale-invariant), so the body carries h / 32 (embeddings and
+      o_proj / down_proj x 1/32) and prescales each norm's input.
+    - After the fix: cos 0.9989 (min 0.9971), CPU fp16 0.9988, top-1 = MLX's on 95 % of rows, kept unchanged (above).
+  - Caveats:
+    - Step 2's check is a proxy: the expert part only, 61.5 ms here under MTP Head's load. The dense part is less
+      bandwidth-bound, so x1.07 is an upper bound for the whole check. It ran on a shared GPU; a quiet re-run or the
+      real engine at night would firm it up.
+    - A 1B-class body (2x) at today's 30 GB/s is ~32 ms + the head's 8.5, so ~40 ms a candidate: two per ~85 ms day
+      check, or ~25-30 ms each with the cache fix.
+
+## ANE-2: the batched 3-candidate Neural Engine call (Fable mission 18 item 1; line <= 14 ms; Mon 2026-11-02 17:40-18:20)
+Shared lock, beside MTP Head's x4 training and my own MLX replays: the timings are rough. Random weights of the real
+shapes, since latency does not depend on the values.
+- **Head (data/ane_head_bench.txt):**
+  - The full 248K-row head, int8, takes 8.06 ms at 15 rows and 8.42 ms at 45 (three candidates add only +0.4 ms).
+  - fp16 takes 10.6 / 13.2 ms, so the Neural Engine streams >= 120 GB/s. int8's 79 GB/s is a weight-rate limit
+    (~79 G weights/s), not bandwidth.
+  - The target's exact 4-bit g64 head (uint4 + fp16 scale / offset) falls back to the CPU: 131 / 173 ms. The
+    Neural Engine runs int8, not int4 blockwise.
+  - So the head needs fewer weights, not fewer bytes per weight.
+- **Body ablations (ANE-1 graph; data/ane_body_bench.txt):**
+  - The 2,031-row cache passed as inputs costs most of it: 20.5 ms vs 7.8 ms with a 15-row cache.
+  - The DFlash2 convs cost ~4.9 ms there.
+  - 48 rows add only +1.9 ms.
+- **States (data/ane_state_bench.txt):**
+  - The cache as CoreML states runs on the Neural Engine with a one-hot scatter write: 6.7 vs 10.8 ms as inputs.
+  - A dynamic slice_update falls back to the CPU.
+  - A V^T state written by `v @ onehot` fails at run time (bisect T1); the `onehot^T @ rows` write works.
+- **v2 (scripts/ane_v2.py; data/ane_v2.txt):**
+  - Design:
+    - One stateful call drafts 3 x 16 rows.
+    - Channels-first layout, every linear a 1x1 conv.
+    - q_proj rows and o_proj columns permuted to (kv group, head dim, head), so GQA needs only small transposes.
+    - Query-major attention over a 2,064-slot ring of K / V states.
+    - DFlash2 convs by broadcasting.
+    - The h / 32 fp16 fix; int8.
+  - All 647 ops run on the Neural Engine.
+  - **15.7-15.9 ms per batched call** with a top-32K head.
+  - Back-to-back variants:
+    - convs: ~0.2 ms;
+    - 32K head: ~3.0 ms, of which ~0.8 is Python's fp32 copy of the logits;
+    - in-model state write: ~2.4 ms;
+    - attention over the 2,064-slot ring: ~6.5 ms (a 528-slot ring gives 9.3 ms in total).
+  - **Native-path estimate ~13.1 ms**, not yet measured. The host writes the accepted rows into the state buffer
+    (MLState; Python's write_state takes whole arrays), and the logits are read in place.
+- **FR-Spec head (Zhao et al. 2025: frequency-ranked draft vocabulary; exact-safe; data/frspec_walk.txt):**
+  - Ranking: 109K generated tokens from TrainLab captures, with the test samples excluded.
+  - Kept per check vs the full head, MLX replay:
+    | head | code | math | agent |
+    |---|---|---|---|
+    | top 32K static | -6.72 % | -7.39 % | (not run) |
+    | top 32K + the session's own tokens (CPU) | **-0.89 %** | **-1.14 %** | **-4.07 %** |
+    | top 16K + session | -1.48 % | -2.36 % | -4.93 % |
+  - 86-88 % of code's misses are tokens already in the context (copied identifiers). The session extension costs
+    3-11 extra tokens per sample.
+- **Shorter attention window (MLX replay, full head):** agent 1,024: -3.92 %; 512: -8.61 %. Code 0.00 / -0.15 % (the
+  code samples are <= 841 tokens).
+- **Reading:**
+  - <= 14 ms looks reachable on the native path with the full 2,048 window and a 32K FR-Spec head + session, at
+    ~1 % kept on code / math and ~4 % on agent.
+  - The full head does not fit (~19-20 ms).
+  - Next: a Swift harness with host-side state writes and in-place logits, on the real weights (latency + cos +
+    kept with the batched ring).
+- **Native path, measured (18:2x; native/ane_native.swift, scripts/ane_v2.py parts=all+native, W 2,048):**
+  - Setup:
+    - A Swift CLI with preallocated fp16 inputs and output backings, so the logits are not copied out.
+    - The model only reads the K / V ring states and attends over [ring | block i's 16 context rows | its own block
+      rows].
+    - After each call the host commits the accepted rows into the states (MLState.withMultiArray, 11 rows x 10
+      states).
+  - Random weights of the real shapes: predict 12.56 ms (p10 11.86, p90 14.03) + commit 0.11 = 12.67 ms.
+  - **Real weights (top-32K FR-Spec head): predict 12.33 ms (p10 11.41, p90 12.92) + commit 0.09 = 12.42 ms per
+    batched 3-candidate call: PASS (line 14).** Shared GPU (another session's walk at 60-98 %). The CPU's
+    two-stage top-16, the session extras and the chain add ~0.3-0.5 ms natively.
+  - **Correctness (real weights, vs the stock MLX drafter in fp32):** hidden cos mean 0.9988, min 0.9969 over 192
+    rows (4 samples x 3 candidate slots x 16 rows), as ANE-1's 0.9989 / 0.9971.
+  - **End-to-end kept on the Neural Engine (18:3x; ane_v2.py nwalk):**
+    - Setup: v2 native on the real weights. The host keeps the ring, writes it into the states, passes the accepted
+      rows since the last draft as context rows (prompts in 16-row chunks) and commits them after each call. Head:
+      top-32K + the session's tokens on the CPU; two-stage top-16 + chain on the CPU.
+    - Code 9.512 (670 checks), math 7.098 (968), agent 3.040 (631).
+    - vs MLX with the same head: +0.3 % / -0.5 % / +5.2 %. vs the MLX full head: -0.6 % / -1.7 % / +1.0 %.
+    - The agent edge is plausibly the ring's exact absolute-position window vs MLX's rotating cache on > 2,047-token
+      contexts. Untested, and the set is 12 windows.
+    - So the batched native call drafts as well as MLX with the same head. The head choice is the only kept cost.
+  - Not run yet: a quiet re-time; 64K + session kept.
+
+## Dense-pass check + GDNB: one-dispatch GDN body (cloud Fable's dense plan, ~/FableGod/CLOUD_ANSWER_DENSE.md; Mon 19:xx)
+- **The cloud's diagnosis, checked against this table:** right in direction, wrong in its numbers. Sent to the
+  orchestrator 19:0x.
+  - Count: ~3,944 kernel launches per 16-row check (R-65), minus K-73's ~1,100-1,250, so ~2,700-2,850 now (not
+    re-counted). The cloud said ~1,500.
+  - Cost per launch: 1.3-1.6 us per dependent dispatch, ~6 us per removed tiny kernel in situ. The cloud said 10-15.
+  - Host syncs: no blocking per-layer sync is left. SB queues async_eval every 4 layers, and R-55's gate does one
+    PostIds / SpinWait handshake per layer, which OOO overlaps.
+- **GDNB (scripts/gdnbody.py, gdnbody_test.py; ref2 CFG gdn_body, off by default):**
+  - What it is: the 1-16-row GDN body as ONE dispatch, one threadgroup per value head. Inside:
+    - the exact prework for every row;
+    - the recurrence row by row, with the fp32 state in registers (mlx_lm's loop body verbatim);
+    - the exact gated norm for every row;
+    - g and beta in-kernel.
+  - **Bitwise == REF2-T on layer 0's real weights:**
+    - pieces q / k / v / y / conv state / recurrent state;
+    - the whole layer at S 16 / 8 / 1;
+    - one 16-row call == 16 one-row calls;
+    - the capture-commit stash, through ref2's switch.
+  - So this lever needs no REF3-T.
+  - **g / beta in-kernel, proved by exhaustion (gdnb_gates_exhaust.py):**
+    - compute_g replica: 0 / 113,246,208 differ (every bf16 a x 48 heads x all 36 GDN layers' A_log / dt_bias);
+    - Sigmoid with metal::precise::exp: 0 / 65,536.
+  - **Side finding:** a custom kernel's metal::exp is the FAST exp. Sigmoid with it differs from MLX's on 1 / 65,536
+    bf16 inputs (-6.84375) and on 628 / 65,536 fp32 values. MoonShots' "exact" GDN kernels (TgSigmoid in the silu and
+    the gate) inherit this, so they are not bit-identical to MLX's eager chain on rare inputs. REF2-T is unaffected:
+    decode and verify run the same kernels, so SD == AR holds.
+  - Kernels per 16-row layer call: 10 -> 8 (gates outside); -> 6 with the gates in.
+  - **Speed:**
+    - First quiet-ish read: whole layer in a 36-layer chain, reference 0.335 vs fused 0.328 ms at S 16 (-0.26 ms per
+      check). Small: the fused kernel's 48 x 256 threads walk 16 state rows per simdgroup per step.
+    - 16 / 32-simdgroup variants are ready (gdnbody_time.py). The quiet timing waits for MTP Head's run (ticket
+      queued 19:0x).
+- **GDNB quiet timing (Mon 19:13, quiet lock; data/gdnbody_time.txt):** every variant bitwise == REF2-T (y and state).
+  | 16 rows, ms per layer (36 chained) | reference | fused NSG 8 | NSG 16 | NSG 32 | NSG 8, gates outside |
+  |---|---|---|---|---|---|
+  | GDN body | 0.0821 | 0.0861 | **0.0788** | 0.0784 | 0.0888 |
+  | whole GDN layer | 0.3376 | 0.3261 | **0.3210** | 0.3351 | 0.3401 |
+  - Best (NSG 16): -0.003 ms on the body, about -0.017 ms on the whole layer (the ranges overlap). So -0.1 to -0.6 ms
+    per check. At 1 row, about zero.
+  - **Verdict on the cloud's first kernel:**
+    - Bits: PASS. Bit-identical 1-row vs 16-row and vs REF2-T, so no REF3-T is needed.
+    - Speed: <= 0.2 ms per layer, PASS, but today's chain already meets it (GDNX, R-61, fused the body to 0.082 ms per
+      layer).
+    - Value: ~0.1-0.6 ms per check, not -3. The one-dispatch design's 48 threadgroups (one per head, so the gated norm
+      stays in the threadgroup) give back in parallelism what the 4 removed launches save.
+  - **Where a GDN layer's 0.338 ms goes:** the body is ~0.08 ms. The other ~0.256 ms is the projections: in_proj qkv /
+    z / b / a + out_proj, ~29 MB of 4-bit weights per layer, ~2.2x the byte floor at 16 rows. GDN's 12.4 ms per check
+    is ~9 ms of GEMMs, the same 16-row 4-bit GEMM efficiency problem as the HC reads (~4x floor) and the other dense
+    projections.
+  - GDNB stays as an exact-safe switch (ref2 CFG gdn_body, off), for a bundle if one is built.
+
+## D1-B HC kernel B (Leap, pre-registered Mon 2026-11-02 20:5x EET; Fable mission 26 ~/FableGod/HC_READ.md design D1; orchestrator 20:4x, NewIdeas queue item 1; scripts/d1b_screen.py, data/d1b_screen.txt)
+
+- **What:** kernel B of D1, the two-kernel bitwise HC read. One kernel replaces three: R-82's partition sum + gate
+  (_ACCUM_GATE) in the prologue, a bitwise replica of MLX's K-320 bf16 up GEMM, and leapk's tail in the epilogue.
+  Kernels per 16-row read 5 -> 3 (norm, S4 partials, B).
+- **What MLX runs for up (M 16, N 10,240, K 320; matmul.cpp v0.32.2):** steel_gemm_fused_nax. gemv_wide declines at 16
+  rows; no NAX split-K at K 320. Tiles 64 x 128 ('s' devices), 2 x 4 simdgroups of 32 x 32, BK 256 + a K tail of 64.
+  Every output is the same ten 32-wide k steps, each two 16 x 32 x 16 NAX ops; the 16 rows fill the first 16-row
+  fragment, whose ops don't see the zero-filled rows 16-31 (the same fact S4 relied on).
+- **Design change vs Fable: no column interleave of W_up.** Each threadgroup's 4 simdgroups take the same 32 channels of
+  the 4 streams: the 32-aligned column runs s x 2560 + ch0, the same runs MLX gives one simdgroup. So every output keeps
+  its place in its 16 x 32 op (Fable's risk (b) does not arise) and no weight copy is needed. The 4 streams of a channel
+  meet in threadgroup memory for the tail.
+- **Arms:** B{CPT}p{GPF}: CPT = 32-channel groups per threadgroup (1 / 2 / 4: 80 / 40 / 20 threadgroups of 128 / 256 /
+  512 threads), GPF = W_up loads issued GPF - 1 steps ahead (1 = MLX's loop, 4 = S4's); v = float4 prologue loads.
+- **Checks:**
+  1. The replica's up (a debug variant) == MLX's `mix @ W_up^T`, plus mixed / inject, for all 96 mixers.
+  2. 96-read chains (real HC weights of all 48 layers, the pending write on, as R-09c): every read's mixed / written /
+     inject == the S4 chain (leapk.hc_read with R-82 off and on).
+  3. Kernels per read (census).
+  4. ms per 96-read chain, arms interleaved, median of 40 after 3. Shared GPU, so rough.
+- **Lines:** bits 96 / 96, else BLOCKED (one fix, not a verdict). PASS >= 1.9 ms saved per 96 reads vs S4 + R-82
+  (Fable's bound for the B half: 9.9 -> 8.0). KILL < 0.8 ms. BETWEEN otherwise.
+- **Prediction:** replica bitwise 85 %. Saving ~1.3 ms per 96 reads: the prologue re-reads the 61 KB of partials in
+  every threadgroup (~3 us) and the tail's latency moves inside B, against two boundaries + the gate and tail kernels
+  (~10-12 us per read). BETWEEN 55 %, PASS 30 %, KILL 15 %.
+- **Result (Mon 21:02-21:13; data/d1b_screen.txt): exact everywhere; KILL on the pre-registered arms by 0.07 ms, ~1.0 ms
+  with a post-hoc variant. Far below Fable's -2.6.**
+  - **Bits:** the replica's up == MLX's `mix @ W_up^T` on all 96 mixers (scalar and float4 prologue), and mixed / inject
+    too. Every arm's 96-read chain == the S4 chain (R-82 off and on), 96 / 96. Kernels per read: S4 6, S4g 5, B 3.
+  - **Quiet timing (quiet lock 21:11, Kamen's apps open), ms per 96-read chain, median of 40:**
+
+    | arm | ms | vs S4 + R-82 |
+    |---|---|---|
+    | S4 (today, R-82 off) | 10.59 | +0.08 |
+    | S4g (S4 + R-82) | 10.51 | - |
+    | pre-registered: B1p4 / B2p4 / B4p4 / B2p1 / B2p2 | 10.85 / 10.17 / 9.91 / 10.05 / 9.99 | +0.34 .. -0.60 |
+    | pre-registered: **B2p4v** (best) | **9.78** | **-0.73** |
+    | post-hoc: B4p4v / B4p1v / B2p1v | 9.56 / 9.66 / 9.64 | -0.95 / -0.85 / -0.87 |
+    | post-hoc: **B4p2v** (best) | **9.48** | **-1.03** (-1.11 vs S4) |
+
+  - **Verdict:** KILL on the pre-registered arms (best -0.73, line 0.8). The post-hoc best (B4p2v: 20 threadgroups of
+    512 threads, float4 prologue, W_up loads 1 step ahead) is -1.03, in the BETWEEN band but not the verdict.
+  - **Shared-GPU runs (rough):** -0.74 (21:02) and -1.71 (21:04, while the GPU was busy, S4 14.56 ms). The saving grows
+    with GPU contention: fewer dependent launches. In the live check it may land between the quiet and the busy number.
+  - **Why it is small:** per read, S4g 109.5 us vs B4p2v 98.8 us, so -10.7 us. The weights' floor is ~47 us (13.2 MB).
+    The work fused away (the gate kernel, the tail kernel, two boundaries) was worth ~11-15 us. Kernel B pays some of it
+    back: every threadgroup re-reads the 61 KB of fp32 partials and does 5,120 table lookups before its first MMA. The
+    float4 prologue alone was worth 0.55 ms per 96 reads, so the prologue's latency is several us. The four streams
+    also meet through threadgroup memory. The up GEMM runs at its bytes either way.
+  - **What it says about D1:** Fable's -2.6 (bound -1.9) for the B half assumed ~25 us of removable chain tax per read
+    in these kernels; the measured part is ~11. Kernel A has the same structure: the rms over full streams must come
+    before the first scaled tile, ~3-7 us serial per one-simdgroup threadgroup. So D1 ~ -1.0 (B) + ~0.3-0.8 (A) =
+    **~-1.3 to -1.8 ms per check, not -3.4.**
+  - **Where the rest goes:** ~99 us per read vs the ~47 us floor. Mostly the two GEMMs' in-chain latency: S4's
+    4,096-wide partitions each walk 128 k steps on one simdgroup, and the 2,048-wide one idles for half the walk. The
+    rest is the norm kernel and the launches. A per-kernel GPU timeline (Metal System Trace) of one read would settle the
+    split. An S4 whose W_d tiles are streamed into threadgroup memory by loader simdgroups (same MMA sequence, so
+    bitwise) is the lever that view points at, up to ~-0.6 ms per check if S4 reaches its bytes.
+  - **Keep as exact-safe:** ~1 ms per check (~1.2 % of the 84 ms check). Proposed as ref2 CFG hc_b (off by default) for
+    the next exact bundle with GDNB.
+
+## M27-P matrix-unit peak (Leap, pre-registered Mon 2026-11-02 21:1x EET; Fable mission 27 ~/FableGod/EXPERT_KERNEL.md section 0.3; orchestrator 21:1x; scripts/nax_peak.py, data/nax_peak.txt)
+
+- **Why:** EXPERT_KERNEL.md says NAX6's ceiling is the matrix unit's rate on padded 16-row tiles, priced at Sunday's
+  probe: 1.3 G op/s of 16 x 32 x 16, ~10.5 T MAC/s. That probe ran ONE dependent accumulator chain per simdgroup and
+  reported only that shape; NAX6 issues 16 x 32 x 32 ops.
+- **Probe:** every op shape that builds (16x32x16, 16x32x32, 32x32x16, 16x32x64, 32x32x32, 16x16x16, 16x64x16) x 1 / 2 /
+  4 independent accumulator chains per simdgroup (each its own B and destination, A shared) x threadgroups of 1 / 4
+  simdgroups. Operands in registers: no memory, no decode. 1,280 simdgroups x 256 ops per chain, median of 11.
+- **Line (Fable's):** best >= 1.6 x 10.5 = 16.8 T MAC/s -> the NAX7 world (NAX7 alone can reach >= 85 % of streaming).
+  Otherwise the NAX7 + hybrid world.
+- **Prediction:** the per-MAC rate of 16 x 32 x 32 within +-10 % of 16 x 32 x 16; 2-4 chains +20-60 %. Best ~13-17 T
+  MAC/s. P(>= 1.6x) = 35 %.
+- **Result (Mon 21:22, quiet lock, Kamen's apps open; data/nax_peak.txt): the matrix unit tops out at ~14.0 T MAC/s =
+  1.34x Sunday's 10.5, under the 1.6x line, so the NAX7 + hybrid world.**
+  - Calibration: Sunday's kernel verbatim today reads 11.7 T MAC/s (Sunday 10.5), so ~10 % is run-to-run / thermal.
+    Against this run's own calibration the best is 1.20x.
+  - Best per op shape (1 chain, the best threadgroup size):
+
+    | op | G op/s | T MAC/s |
+    |---|---|---|
+    | 16 x 32 x 16 | 1.57 | 12.8 |
+    | **16 x 32 x 32 (NAX6's)** | **0.86** | **14.0** |
+    | 32 x 32 x 16 | 0.76 | 12.5 |
+    | 32 x 32 x 32 | 0.42 | 13.9 |
+
+    16x32x64, 16x16x16 and 16x64x16 do not build.
+  - **More independent accumulator chains do not raise the rate.** 2 chains are flat (12.1-13.9), and 3-4 chains
+    collapse to 2-11 T MAC/s (register spills: the per-launch time grows 4-20x). One chain per simdgroup at 64
+    simdgroups per core already saturates the unit. Threadgroup size (1-8 simdgroups) changes nothing.
+  - **What it changes in EXPERT_KERNEL.md's accounting:** NAX6's op set per group, priced at 16x32x16 at 10.5 (7.32
+    us), is 4,800 ops of 16x32x32 at 0.86 G op/s = 5.6 us here. That is 81 % of the group's byte time (6.95 us at 284
+    GB/s), not 105 %. 85 % of streaming leaves 6.9 us per group for the body, i.e. 5.6 us of ops + ~1.3 us for
+    everything else (exposed DRAM, marshalling, barriers; today ~2.8). NAX7 alone lands between Fable's 73 % (1x) and
+    99 % (2x): ~80-83 % by interpolation. The hybrid (1-2-pair groups off the matrix unit) is needed for >= 85 %.
+  - vs prediction: 16x32x32 within +-10 % of 16x32x16 per MAC (predicted) — it is +9 %. Chains +20-60 % (predicted) —
+    wrong, 0 % or worse. Best 13-17 (predicted) — 14.0. P(>= 1.6x) 35 % — no.
+
+## D3C 3c zero-DRAM diagnostic (Leap, pre-registered Mon 2026-11-02 21:2x EET; orchestrator 21:2x "a faster bitwise replica of 3c"; scripts/d3c_diag.py, data/d3c_diag.txt)
+
+- **Question:** is REF2-T's expert kernel (3c: MoonShots' planes_engine tierglu, ~5.7-7.1 us per pair) bound by memory
+  latency (then a bitwise replica with prefetched loads can win, as S4 did over MLX's split-K) or by ALU issue (then only
+  fewer ops per weight help; Sunday's S11, decode shared across a group's rows, was slower)?
+- **Test:** 3c itself on random pools (640 x 2560 experts, plan 4433333333, 16 rows x 10 ranks = 160 pairs, fused
+  combine), routings: real (U 70 / 24 distinct), one (every pair reads slot 0: the same pairs, tiers and arithmetic, ~3
+  MB of codes that stay in cache), all (160 distinct). Kernel A alone and A + B, interleaved, median of 25.
+- **Lines (A + B at U 70):** 'one' >= 30 % faster -> latency / memory-bound, build the replica. < 10 % -> ALU-bound,
+  drop the road. Between: partial, the gap is the replica's ceiling.
+- **Prediction:** kernel A (25,600 short threadgroups, 4 rows per simdgroup) is latency-sensitive: 'one' 20-35 % faster.
+  P(>= 30 %) = 40 %.
+- **Result (Mon 21:25, shared GPU beside Fit12 at ~80 % GPU, rough; data/d3c_diag.txt): 3c is ALU / issue-bound at a
+  16-row layer's union. DROP the bitwise-replica road.**
+
+  | routing (160 pairs) | kernel A, ms | A + B, ms |
+  |---|---|---|
+  | real U 70 (68 distinct) | 0.844 | 1.456 |
+  | real U 24 | 0.778 | 1.326 |
+  | one (1 distinct: no DRAM) | 0.779 | 1.326 |
+  | all (160 distinct) | 1.266 | 2.004 |
+
+  - With every pair reading one cache-resident expert, 3c is only 8.9 % faster (A alone 7.7 %): under the 10 % drop
+    line. At U 24 it is exactly as fast as with no DRAM at all.
+  - So a replica with perfectly hidden loads gains at most ~9 % of 3c's time (~4-5 ms per check of ~50), and a
+    prefetching replica would get only part of that. S4's win came from a latency-bound kernel with idle simdgroups;
+    3c's 25,600 short threadgroups already keep the ALUs busy. Only fewer ops per weight would help, and Sunday's S11
+    (decode shared across a group's rows) lost on occupancy.
+  - DRAM does matter at the extreme: 160 distinct experts cost +38 % over the cache-resident case. That is the wide-
+    check regime, where NAX6 / NAX7 share one decode across a group's rows.
+  - Rough (shared GPU); the absolute times are inflated by Fit12's load. The direction is robust: even a quiet 2x larger
+    gap would leave the replica's ceiling at ~15-20 %, short of the 1.3x the road needed.
+  - vs prediction: 20-35 % predicted, 8.9 % measured. I was wrong: kernel A is not latency-bound.
+
+## N7-0 / N7-1 NAX6 breakdown and kernel-A knockouts (Leap, Mon 2026-11-02 21:34-21:40; NAX7 groundwork, Fable mission 27 design A; scripts/n7_breakdown.py, n7_knock.py; data/n7_breakdown.txt, n7_knock.txt)
+
+- **N7-0, the engine's C1 call by dispatch** (layer 20 real pools, real routing S 16, 16 passes, 72 groups / 60
+  distinct experts per call; shared GPU beside Fit12, so inflated ~1.4x): full call 1.259 ms; kernel A 0.811, kernel B
+  0.385; gpu_grp 0.042, rowsum64(x) 0.029, rowsum64(h) 0.034, combine 0.042 (the four small dispatches 0.147 ms, 12 %).
+  The pieces reproduce the full call bitwise.
+- **N7-1, kernel A alone with one piece knocked out** (same data, GPU otherwise free):
+
+  | arm | ms per call | vs full |
+  |---|---|---|
+  | full (NAX6 kernel A) | 0.575 | - |
+  | no DRAM footprint (DIAG 3) | 0.477 | -17 % |
+  | **no matrix ops** | **0.368** | **-36 %** |
+  | no A-operand loads | 0.571 | -1 % |
+  | no decode (raw codes) | 0.534 | -7 % |
+
+  - Kernel A's op set at M27-P's rate is 0.268 ms (72 groups x 3,200 ops of 16x32x32 at 0.86 G op/s). Its bytes are
+    ~0.30 ms (60 experts x 1.43 MB at 284 GB/s).
+  - **Without the ops the kernel is memory-bound** (0.368 ms ~ its bytes at ~235 GB/s). **With them it adds 0.207 ms
+    of its 0.268**: the matrix unit is ~80 % exposed, not overlapped with the stream.
+  - A loads cost nothing (L1 hits); the decode ~7 %.
+  - So the lever is overlap, not fewer instructions: each simdgroup waits for its codes, decodes, runs two ops and
+    consumes cg at once, and the 8 simdgroups of a 20 KB threadgroup (likely one per core) are too few to cover it.
+    Perfect overlap would put kernel A near max(bytes, ops) ~0.37-0.40 ms (-30-35 %).
+- **NAX7 step 1 (next):** kernel A software-pipelined, bitwise = NAX6: the codes of group g+1 (and g+2) loaded into
+  registers before group g's ops, the decode of g+1 between op.run(g) and g's epilogue (two cg destinations
+  alternating), the same per-output op sequence and chunk sums.
+
+## N7-2 NAX7 step 1: kernel A software-pipelined (Leap, pre-registered Mon 2026-11-02 21:4x EET; scripts/tierglu_nax7.py, n7_screen.py; data/n7_screen.txt)
+
+- **What:** NAX6's kernel A with the same per-output arithmetic and a new schedule. The codes / LSB / scale / bias of
+  quant group g + 2 are loaded into registers right after group g + 1 is decoded, and that decode runs between
+  op.run(g) and g's epilogue. So the loads get a full iteration to arrive and the decode overlaps the matrix unit.
+  Every output keeps NAX6's sequence (cg = 0, two 16x32x32 ops, acc += s cg + b xsum; chunk sums in order; swiglu).
+  Kernel B and the small dispatches stay NAX6's.
+- **Test:** real layer-20 pools, real routing (4 traces). Bits on 96 cases (4 traces x S 8 / 16 / 32 x 8 passes):
+  kernel A's h and the whole call's y vs NAX6. Time: kernel A alone and the whole call (+ combine), at S 16 / 8 / 32.
+- **Lines:** bits 96 / 96, else BLOCKED. PASS kernel A >= 20 % faster at S 16. KILL < 5 %.
+- **Prediction:** bitwise 90 %. Kernel A 0.575 -> ~0.45 ms (-20-25 %): about half of the 0.21 ms of exposed ops
+  hidden. The call ~-10-15 %. PASS 50 %, BETWEEN 35 %, KILL 15 %.
+- **Result (Mon 21:42, shared lock, GPU ~50 % free; data/n7_screen.txt): bits PASS 96 / 96 (h and y), but KILL: the
+  pipelined kernel A is SLOWER.** S 16: 0.569 -> 0.632 ms (+11 %); S 8 +5 %; S 32 +6 %; the whole call +2-3 %.
+  - The same as Sunday's K-62c (prefetching the next group's codes: nothing). So within one simdgroup the matrix op
+    blocks: putting the decode after op.run overlaps nothing, and the prefetched registers cost occupancy.
+  - So the overlap N7-1 asks for must come from OTHER simdgroups on the core. Next: is kernel A occupancy-bound
+    (threadgroup memory 20 KB per 8-simdgroup threadgroup)? Then a producer / consumer split (loader simdgroups decode
+    into a ring, op simdgroups only run ops) is the NAX7 structure to build.
+- **N7-3 (Mon 21:45, shared lock; data/n7_occ.txt): kernel A is not threadgroup-memory-bound.** Padding its
+  threadgroups from 20 to 24 / 28 / 32 KB changes nothing (0.562 / 0.558 / 0.567 / 0.566 ms; bits equal).
+- **N7-4 (Mon 21:46, shared lock, rough; scripts/nax_tg_probe.py, data/nax_tg_probe.txt): the matrix unit runs NAX6's
+  operand form at ~the register rate.** 16x32x32 with B in registers 0.77-0.81 G op/s; B as uint4 from threadgroup
+  memory (NAX6's form) 0.76-0.77; B as bf16 from threadgroup memory 0.70-0.79; uint4 + NAX6's per-pair epilogue
+  0.60-0.71. So kernel A's op set is ~0.33 ms with its epilogue, against 0.368 ms of memory-bound work: the two are
+  simply not overlapped (0.575 ~ 0.37 + 0.21).
+- **What N7-1..4 say together:** not DRAM-, decode-, occupancy- (threadgroup memory) or op-path-bound; within one
+  simdgroup the op blocks (N7-2). The overlap has to come from simdgroup roles: **NAX7-WS**, loader simdgroups that
+  fetch and decode two stages ahead into a ring in threadgroup memory while op simdgroups run only NAX6's op sequence.
+
+## N7-5 NAX7-WS kernel A: loader / op simdgroups (Leap, pre-registered Mon 2026-11-02 21:4x EET; scripts/tierglu_nax7.py kernel_a7w, n7_screen.py N7_ARM=ws; data/n7_screen.txt)
+
+- **What:** 16 simdgroups per threadgroup (NAX6: 8). Simdgroups 0-7 are NAX6's (projection x K chunk) and run only its
+  op sequence on decoded tiles. 8-15 are their loaders: loader 8 + c fetches quant group g + 1's codes / LSB / scale /
+  bias into registers and decodes it into a two-slot ring while op simdgroup c runs group g; one threadgroup barrier
+  per stage, in uniform control flow. The chunk sums and the swiglu are NAX6's. Bitwise == NAX6 by construction.
+- **Test, lines:** as N7-2 (bits 96 / 96 h and y, else BLOCKED; PASS kernel A >= 20 % faster at S 16; KILL < 5 %).
+- **Prediction:** bitwise 90 %. Kernel A 0.57 -> ~0.40-0.45 ms (-20-30 %): the loaders' DRAM waits now overlap the
+  op simdgroups' ops. The risk is the per-stage barrier: a stage lasts as long as its slowest loader, so the loaders'
+  one-stage fetch lead may still expose DRAM latency. PASS 50 %, BETWEEN 30 %, KILL 20 %.
+- **Result (Mon 21:49, shared lock, GPU ~50 % free): bits PASS 96 / 96, but KILL: 35 % SLOWER.** Kernel A S 16
+  0.562 -> 0.758 ms; S 8 +43 %; S 32 +31 %; the whole call +18-23 %.
+  - The stage barrier makes every stage as long as its slowest loader's DRAM wait plus the barrier, for all 16
+    simdgroups. NAX6's simdgroups run free (simdgroup barriers only), so the scheduler already interleaves their
+    phases. Lockstep staging throws that away.
+  - Two schedule changes (N7-2, N7-5), both bitwise, both slower. NAX6's free-running structure is a local optimum for
+    this op form. Next, measure what limits it: how many kernel-A threadgroups a core keeps resident (time vs grid
+    size with identical per-threadgroup work).
+
+## N7-6 / N7-7 residency and the matrix unit's arithmetic (Leap, Mon 2026-11-02 21:51-21:57; scripts/n7_resid.py, nax_order_probe.py, nax_order_fit.py; data/n7_resid.txt, nax_order_probe.txt, nax_order_fit.txt)
+
+- **N7-6 (shared lock, rough):** NAX6 kernel A on G one-pair groups (20 G threadgroups of identical work), dependent
+  chain. Below G ~ 8 the time is a ~40-70 us latency floor. From G ~ 10 (10 threadgroups per core) it rises linearly at
+  **~6.6-7.6 us per group with ~no fixed cost**. The whole call adds ~4.4 us per group (kernel B) and only ~10-20 us
+  per call for the small dispatches in a dependent chain (less than N7-0's standalone 0.147 ms suggested).
+- **N7-7 (shared lock), the matrix unit's per-output arithmetic** (16x32x32 in NAX6's form; A bf16 with exponents
+  2^-12..2^12, B nibbles, C fp32; 1,024 tests x 512 outputs):
+  - The element mapping is right: integer operands (every order exact) match 100 %.
+  - Adversarial operands: **no fp32 order matches.** Sequential with C first 38 %, C last 33 %, pairwise tree 37 %,
+    16-halves 38 %, 4-adjacent groups 42 %, exact-then-one-rounding 45 %, exact 16- / 8-wide chunks 44 / 41 %.
+  - Against the exact sum: 45 % bitwise, 39 % off by 1 ulp, 14 % by 2-8, 2.4 % by more. The errors are sign-symmetric.
+  - The descriptor's relaxed-precision flag changes nothing (identical outputs).
+  - N7-7b (CPU fit): block floating-point adder models (chunks of 4 / 8 / 16 / 32, 20-32 kept fraction bits after
+    aligning to the chunk's largest exponent, truncate / round / floor, C first / last / inside the block) top out at
+    45.6 %.
+  - **So the unit's datapath is not a reproducible fp32 sequence.** Fable's hybrid (1-2-pair groups on the ALUs) cannot
+    be bitwise to NAX6. It also makes a pair's bits depend on its group's size (companion rows), which breaks the row
+    invariance SD == AR needs, so it is dead for any exact reference, not only for REF2-T.
+- **The NAX road after tonight:**
+  - The measured peak is 1.34x (M27-P), so NAX6's op set per group is ~4.6 us in its own form (0.70 G op/s with its
+    epilogue).
+  - Its kernel A runs ~7-8 us per group against ~4.2-5.0 us of bytes. ~57 % matrix-unit and ~53 % DRAM utilization:
+    latency-bound with too little concurrency per core.
+  - Two schedule rewrites (N7-2 pipelined, N7-5 loader / op simdgroups) were bitwise and slower. Threadgroup memory
+    doesn't matter (N7-3), and NAX6's operand form runs at the register rate (N7-4).
+  - Left exact to NAX6: the dispatch fusion (small in a dependent chain; to be measured quiet) and register trimming,
+    if registers limit residency (untested).
+  - Left as reference changes: the tier merge (B: -15-17 % of groups; the NAX reference needs certifying anyway) and
+    the quality-defined int8 (C).

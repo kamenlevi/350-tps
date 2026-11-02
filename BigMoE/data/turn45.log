@@ -1,0 +1,26 @@
+23:50:25 [BigMoE CAP45 memory turn at C 160 (~33 GB): live-loop routing + MoE-input capture for Fit12's R-57b (data)] start: PEAK 33 GB, ticket 20 min, cmd: /bin/bash scripts/cap45_runner.sh
+00:11:28 [BigMoE CAP45 memory turn at C 160 (~33 GB): live-loop routing + MoE-input capture for Fit12's R-57b (data)] queue the quiet ticket (available 27 GB)
+queued #1; this returns when it's your turn and the Mac is quiet.
+your turn after 9 min: quiet lock held until 00:41. Measure now, and `peer unlock` as soon as you're done.
+00:21:37 [BigMoE CAP45 memory turn at C 160 (~33 GB): live-loop routing + MoE-input capture for Fit12's R-57b (data)] granted, 37 GB available: run
+lock released
+00:21:42 [BigMoE CAP45 memory turn at C 160 (~33 GB): live-loop routing + MoE-input capture for Fit12's R-57b (data)] done rc=0, ticket released
+00:21:42 [BigMoE S45-T re-run at C 224 RAM: REF2b gate vs REF2-T tiers on the gate (+ t 0.3), A-B-A] start: PEAK 41 GB, ticket 15 min, cmd: /bin/bash scripts/s45t_runner.sh
+00:40:48 [BigMoE CAP45 memory turn at C 160 (~32 GB): live-loop routing + MoE-input capture for Fit12's R-57b (data)] start: PEAK 32 GB, ticket 20 min, cmd: /bin/bash scripts/cap45_runner.sh
+00:46:30 [BigMoE CAP45 memory turn at C 160 (~32 GB): live-loop routing + MoE-input capture for Fit12's R-57b (data)] queue the quiet ticket (available 16 GB)
+queued #3 behind ojox-99, ojox-12; this returns when it's your turn and the Mac is quiet.
+your turn after 20 min: quiet lock held until 01:27. Measure now, and `peer unlock` as soon as you're done.
+01:07:43 [BigMoE CAP45 memory turn at C 160 (~32 GB): live-loop routing + MoE-input capture for Fit12's R-57b (data)] granted, 39 GB available: run
+lock released
+01:09:24 [BigMoE CAP45 memory turn at C 160 (~32 GB): live-loop routing + MoE-input capture for Fit12's R-57b (data)] done rc=0, ticket released
+01:43:13 S45-T grant 01:42: NO-SWAP 43 GB after 30 s (< 45 for C 224), PAUSE set: released, re-queue once (orchestrator protocol)
+02:01:18 S45-T grant 2 (02:00): NO-SWAP 42 GB (< 45 for C 224): released; no S45-T at C 224 tonight (2 failed grants)
+03:16:56 S45-T grant 3 (03:16): NO-SWAP 45 GB after 30 s: run
+06:47:08 [BigMoE R-57b: reserved prefetch slots + corrected forecast, live exact loop at C 176 (~35 GB), A-B-A] start: PEAK 35 GB, ticket 15 min, cmd: /bin/bash scripts/r57b_runner.sh
+06:47:08 [BigMoE R-57b: reserved prefetch slots + corrected forecast, live exact loop at C 176 (~35 GB), A-B-A] queue the quiet ticket (available 17 GB)
+queued #1; this returns when it's your turn and the Mac is quiet.
+your turn after 10 min: quiet lock held until 07:13. Measure now, and `peer unlock` as soon as you're done.
+06:58:33 [BigMoE R-57b: reserved prefetch slots + corrected forecast, live exact loop at C 176 (~35 GB), A-B-A] granted, 47 GB available: run
+lock released
+07:00:33 [BigMoE R-57b: reserved prefetch slots + corrected forecast, live exact loop at C 176 (~35 GB), A-B-A] done rc=0, ticket released
+07:05:25 R-57b re-run grant 07:05: NO-SWAP 44 GB (>= 39): run

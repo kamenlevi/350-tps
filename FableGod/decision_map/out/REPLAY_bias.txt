@@ -1,0 +1,11 @@
+| domain | C | misses per check: true (cache_replay.py) | proxy (wrong drafts) | ratio | kept per check |
+|---|---|---|---|---|---|
+| code | 51 | 569 | 688 | 1.21 | 8.7 |
+| code | 160 | 211 | 241 | 1.14 | 8.7 |
+| code | 256 | 96 | 102 | 1.07 | 8.7 |
+| ifeval | 51 | 336 | 420 | 1.25 | 2.5 |
+| ifeval | 160 | 88 | 105 | 1.19 | 2.5 |
+| ifeval | 256 | 35 | 38 | 1.07 | 2.5 |
+| multi | 51 | 215 | 260 | 1.21 | 1.9 |
+| multi | 160 | 68 | 77 | 1.14 | 1.9 |
+| multi | 256 | 31 | 31 | 1.02 | 1.9 |

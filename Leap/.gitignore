@@ -1,0 +1,7 @@
+data/dfl2/
+data/dfl2full/
+data/dfl2c*
+data/dfl2c/
+data/dfl2d*
+scripts/__pycache__/
+logs/

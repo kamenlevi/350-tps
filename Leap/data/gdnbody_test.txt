@@ -1,0 +1,19 @@
+GDNB test Mon 19:02
+layer 0 loaded (19 tensors); A_log mlx.core.bfloat16, dt_bias mlx.core.bfloat16, norm w mlx.core.bfloat16, eps 1e-06, conv w (10240, 4, 1)
+1. pieces vs REF2-T's chain (16 rows): {'q': True, 'k': True, 'v': True, 'y': True, 'conv state': True, 'recurrent state': True}
+2. layer S 16: output True, conv state True, recurrent state True
+2. layer S 8: output True, conv state True, recurrent state True
+2. layer S 1: output True, conv state True, recurrent state True
+3. INV fused: 16-row == 16 one-row calls: output True, conv state True, recurrent state True
+4. S 16: whole GDN layer in a 36-layer chain: reference 1.2226 ms, fused 0.7189 ms per layer (runs 1.5524, 0.8928 / 0.8671, 0.5708); saved +0.5037 ms per layer = +18.13 ms per check (36 GDN layers); kernels per layer call: reference 10 {'CustomKernel': 6, 'QuantizedMatmul': 2, 'CompiledAsTypeExpNegativeBroadcastBroadcastAddBroadcastBroadcastLogAddExpAsTypeBroadcastBroadcastMultiplyExp': 1, 'Sigmoid': 1}, fused 8 {'CustomKernel': 4, 'QuantizedMatmul': 2, 'CompiledAsTypeExpNegativeBroadcastBroadcastAddBroadcastBroadcastLogAddExpAsTypeBroadcastBroadcastMultiplyExp': 1, 'Sigmoid': 1}
+4. S 1: whole GDN layer in a 36-layer chain: reference 1.0699 ms, fused 1.1392 ms per layer (runs 1.3164, 0.8234 / 0.9449, 1.3334); saved -0.0693 ms per layer = -2.49 ms per check (36 GDN layers); kernels per layer call: reference 20 {'Full': 5, 'Concatenate': 5, 'CustomKernel': 6, 'QuantizedMatmul': 2, 'CompiledAsTypeExpNegativeBroadcastBroadcastAddBroadcastBroadcastLogAddExpAsTypeBroadcastBroadcastMultiplyExp': 1, 'Sigmoid': 1}, fused 18 {'Full': 5, 'Concatenate': 5, 'CustomKernel': 4, 'QuantizedMatmul': 2, 'CompiledAsTypeExpNegativeBroadcastBroadcastAddBroadcastBroadcastLogAddExpAsTypeBroadcastBroadcastMultiplyExp': 1, 'Sigmoid': 1}
+--- gates folded in (gates_in=True default) 19:08
+GDNB test Mon 19:08
+layer 0 loaded (19 tensors); A_log mlx.core.bfloat16, dt_bias mlx.core.bfloat16, norm w mlx.core.bfloat16, eps 1e-06, conv w (10240, 4, 1)
+1. pieces vs REF2-T's chain (16 rows): {'q': True, 'k': True, 'v': True, 'y': True, 'conv state': True, 'recurrent state': True}
+2. layer S 16: output True, conv state True, recurrent state True
+2. layer S 8: output True, conv state True, recurrent state True
+2. layer S 1: output True, conv state True, recurrent state True
+3. INV fused: 16-row == 16 one-row calls: output True, conv state True, recurrent state True
+4. S 16: whole GDN layer in a 36-layer chain: reference 0.3349 ms, fused 0.3276 ms per layer (runs 0.3366, 0.3332 / 0.3188, 0.3365); saved +0.0073 ms per layer = +0.26 ms per check (36 GDN layers); kernels per layer call: reference 10 {'CustomKernel': 6, 'QuantizedMatmul': 2, 'CompiledAsTypeExpNegativeBroadcastBroadcastAddBroadcastBroadcastLogAddExpAsTypeBroadcastBroadcastMultiplyExp': 1, 'Sigmoid': 1}, fused 6 {'CustomKernel': 4, 'QuantizedMatmul': 2}
+4. S 1: whole GDN layer in a 36-layer chain: reference 0.8949 ms, fused 0.9798 ms per layer (runs 0.8866, 0.9032 / 0.7043, 1.2553); saved -0.0849 ms per layer = -3.06 ms per check (36 GDN layers); kernels per layer call: reference 20 {'Full': 5, 'Concatenate': 5, 'CustomKernel': 6, 'QuantizedMatmul': 2, 'CompiledAsTypeExpNegativeBroadcastBroadcastAddBroadcastBroadcastLogAddExpAsTypeBroadcastBroadcastMultiplyExp': 1, 'Sigmoid': 1}, fused 16 {'Full': 5, 'Concatenate': 5, 'CustomKernel': 4, 'QuantizedMatmul': 2}
