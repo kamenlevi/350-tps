@@ -91,6 +91,29 @@ def _gen_fast24(rt, ids, cap, sampler, seed):
     return toks[:cap], "length"
 
 
+T0 = {}                                           # T0 (PREREG_t0): the arm's theta, and the last row's counts
+
+
+def _gen_t0(rt, ids, cap, sampler, seed):
+    """T0: Fit12's top-2 two-pass greedy decode at the arm's theta (t0_hook.gen); its counts go to the row"""
+    import t0_hook
+    toks, fin = t0_hook.gen(rt, ids, cap, sampler, seed, T0["theta"])
+    T0["stats"] = dict(t0_hook.STATS)
+    return toks, fin
+
+
+def t0_gate(rt, sampler, log):
+    """T0's VOID check: theta 1.01 on humaneval/HumanEval/156, 96 tokens, gives Fit12's gate logits-chain sha"""
+    import t0_hook
+    it = next(x for x in D.load("dec_humaneval") if x["key"] == "humaneval/HumanEval/156")
+    t0_hook.gen(rt, it["prompt_ids"], 96, sampler, 0, 1.01)
+    got = t0_hook.STATS.get("lsha")
+    log(f"T0 gate: theta 1.01 on HumanEval/156 x96: lsha {got} (Fit12's G1: 37ccd09ba2)")
+    if got != "37ccd09ba2":
+        log("T0: VOID: the gate does not reproduce Fit12's exact AR decode")
+        raise SystemExit(5)
+
+
 def fast_decode_gate(rt, v, out, sampler, log):
     """plan variants: use the compiled decode tiers only if they equal the plain ones on data AND re-decoding an
     already-saved row (made by the plain path, possibly at another C) gives the same tokens"""
@@ -208,6 +231,9 @@ def run(rt, v, thinking=False, sets=SETS, log=print, gate=None, limit=0, max_row
     eos = EOS
     if not thinking:
         fast_decode_gate(rt, v, out, sampler, log)
+    if v.get("t0") is not None:
+        T0["theta"] = v["t0"]
+        t0_gate(rt, sampler, log)
     t0, ntok, nrow, mem, ended = time.time(), 0, 0, RowMem(), None
     with open(out, "a") as f:
         for s in sets:
@@ -231,7 +257,8 @@ def run(rt, v, thinking=False, sets=SETS, log=print, gate=None, limit=0, max_row
                 seed = int(hashlib.sha1(it["key"].encode()).hexdigest()[:8], 16)
                 t = time.time()
                 mem.start()
-                gen = _gen_fast24 if v.get("fast24") else _gen_mtp if v.get("mtp") else _gen_ref2 if v.get("ref2") else _gen
+                gen = (_gen_t0 if v.get("t0") is not None else _gen_fast24 if v.get("fast24") else _gen_mtp if v.get("mtp")
+                       else _gen_ref2 if v.get("ref2") else _gen)
                 toks, finish = gen(rt, ids, cap, sampler, seed)
                 if gate is not None:
                     gate.check()
@@ -240,6 +267,8 @@ def run(rt, v, thinking=False, sets=SETS, log=print, gate=None, limit=0, max_row
                 row = dict(key=it["key"], set=s, n_prompt=len(ids), completion_ids=toks, finish=finish,
                            text=tok.decode([x for x in toks if x not in eos]), seconds=round(time.time() - t, 2),
                            fast=bool(M.STATE.fast_decode), mem=mem.row())
+                if T0.get("stats"):                      # T0 rows: steps, pass-2 rows, rate, logits-chain sha, times
+                    row["t0"] = T0.pop("stats")
                 if SSD:                                  # MTP rows: decode-phase SSD expert reads (misses), waited, late
                     row["ssd"] = dict(SSD)
                     SSD.clear()

@@ -5,8 +5,12 @@
 # decode on the pinned live bt_b12 (8db71cc537), MTP off. Shared GPU ("MEM 14 GB" in the lock reason: the day rule's one
 # memory-heavy job), cli --need 14 (B12_GB). Every process first runs T0's VOID gate (Fit12's lsha). Window: from START
 # once results/t0/GO exists (NewIdeas assigns the slot), until END (no chunk starts in its last 20 min). Then
-# tools/t0_report.py -> results/t0.txt and results/T0_DONE. Code pin: bt_b12.py, Fit12's t0 scripts, evalsuite/, MLX /
-# mtplx; a change stops it (exit 7). Stop it by pid only, and its cli child too.
+# tools/t0_report.py -> results/t0.txt and results/T0_DONE. Code pin: bt_b12.py, its engine ~/Breakthrough/v3p, Fit12's
+# t0 scripts, evalsuite/, MLX / mtplx; a change stops it (exit 7). Stop it by pid only, and its cli child too.
+# Tue 3 Nov 17:4x: T0_CK sets the chunk minutes (45 in the orchestrator's one-job window, Wed 15:30-Thu 00:15);
+# T0_AGENT_FIRST=1 runs the agent process first. Each chunk waits while another session's shared run has MEM > 5 GB in
+# its lock reason (the day rule). It stops (exit 8) once records3's index shows BigMoE's in-place conversion: the pinned
+# engine reads records3 row-major in every prefill (PLAN_records3_convert).
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 cd "$HOME/EvalSuite" || exit 1
 LOG=results/day41_runner.log
@@ -20,6 +24,9 @@ unset EVALSUITE_BIGMOE_CODE EVALSUITE_STAGE_ENV B12_ENGINE B12_FOLD B12_PFR_GRID
   B12_W B12_PMIN F12_R53A B12_FRS_NOCYCLE B12_PFR_MIN
 PY=.venv/bin/python
 A=b12llff4t0c; H=b12llff4t0h
+CK=${T0_CK:-15}; MINS=$((CK + 10))
+AGENT_FIRST=${T0_AGENT_FIRST:-0}
+R3IDX=$HOME/BigMoE/models/bare/records3/index.json
 say() { echo "$(date +%H:%M:%S) $*" >> "$LOG"; }
 nset() { if [ -f "results/$1/decode.jsonl" ]; then grep -c "\"set\": \"$2\"" "results/$1/decode.jsonl"; else echo 0; fi; }
 nall() { echo $(( $(nset $A math) + $(nset $A humaneval) + $(nset $A agent) + $(nset $H ifeval) + $(nset $H math) )); }
@@ -31,8 +38,16 @@ lid_shut() {
 calm() {
   while pgrep -f '^/bin/zsh [^ ]*soft_end\.sh' >/dev/null || [ -e "$HOME/.local/share/quiet/PAUSE" ] || lid_shut; do sleep 30; done
 }
+converted() {   # any layer with a "layout" entry, or a record size other than row-major records3's 2,932,736 B
+  grep -q '"layout"' "$R3IDX" || [ "$(grep -o '"recsz": [0-9]*' "$R3IDX" | sort -u)" != '"recsz": 2932736' ]
+}
+mem_busy() {    # another session's shared run with MEM > 5 GB (our own reasons start "evalsuite: MEM")
+  peer ls 2>/dev/null | grep "shared run" | grep -v "evalsuite: MEM" | grep -oE "MEM [0-9]+ GB" | awk '$2 > 5 {f = 1} END {exit !f}'
+}
 pin() {
   { shasum "$HOME/Breakthrough/scripts/bt_b12.py" "$HOME/Fit12/scripts/t0_hook.py" "$HOME/Fit12/scripts/t0_twopass.py"
+    (cd "$HOME/Breakthrough/v3p" && find . -type f \( -name '*.py' -o -name '*.so' -o -name '*.cpp' \) ! -path '*__pycache__*' \
+      | sort | xargs shasum)
     find evalsuite -name '*.py' ! -path '*__pycache__*' | sort | xargs shasum
     ls "$HOME/BigMoE/.venv/lib/python3.12/site-packages" | grep -E '^(mlx|mlx_lm|mlx_metal|mtplx)-.*dist-info$'; } 2>&1 \
     | shasum | cut -c1-12
@@ -42,8 +57,9 @@ say "runner 41 start (pid $$); code pin $PIN0; from $START once $GO exists, unti
 grep -q b12llff4t0c evalsuite/model.py || { say "T0 not wired (pending/t0_wire.py): runner stops"; exit 2; }
 while [ "$(date +%s)" -lt "$EARLIEST" ] || [ ! -e "$GO" ]; do sleep 60; done
 SWAPTRIPS=0; NOPROG=0
-next_job() {   # the next chunk: arms alternate on their core sets; the agent process last
-  if [ "$(nset $A math)" -lt 50 ] || [ "$(nset $A humaneval)" -lt 60 ]; then
+next_job() {   # the next chunk: arms alternate on their core sets; the agent process last (first with T0_AGENT_FIRST=1)
+  if [ "$AGENT_FIRST" = 1 ] && [ "$(nset $A agent)" -lt 29 ]; then echo "$A agent"
+  elif [ "$(nset $A math)" -lt 50 ] || [ "$(nset $A humaneval)" -lt 60 ]; then
     if [ $(( $(nset $H ifeval) + $(nset $H math) )) -lt 150 ] && [ "$1" = A ]; then echo "$H ifeval,math"; else echo "$A math,humaneval"; fi
   elif [ $(( $(nset $H ifeval) + $(nset $H math) )) -lt 150 ]; then echo "$H ifeval,math"
   elif [ "$(nset $A agent)" -lt 29 ]; then echo "$A agent"
@@ -54,11 +70,13 @@ while :; do
   job=$(next_job $last); [ -n "$job" ] || break
   set -- $job; v=$1; sets=$2
   calm
+  w=0; while mem_busy; do [ $((w % 10)) = 0 ] && say "another session's MEM job holds a shared lock: waiting (day rule)"; w=$((w + 1)); sleep 60; calm; done
+  converted && { say "records3 is converted (index.json): the pinned engine reads it row-major: runner stops at $(nall)/289 rows"; exit 8; }
   [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }
   left=$(( DEADLINE - $(date +%s) ))
   [ "$left" -gt 1200 ] || { say "deadline near: runner stops at $(nall)/289 rows"; exit 6; }
   b=$(nall)
-  if [ "$sets" = agent ]; then mins=$(( left / 60 - 5 )); ck=0; else mins=25; ck=15; fi
+  if [ "$sets" = agent ]; then mins=$(( left / 60 - 5 )); ck=0; else mins=$MINS; ck=$CK; fi
   EVALSUITE_DEADLINE=$DEADLINE ./bin/evalsuite gpu decode "$v" --sets "$sets" --chunk-minutes $ck --minutes $mins --share \
     >> "$LOG" 2>&1; rc=$?
   n=$(nall)

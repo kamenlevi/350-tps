@@ -23,7 +23,7 @@ def build():
     for dom, wf in WALK.items():
         Z, M = np.load(os.path.join(TD, wf)), np.load(os.path.join(TD, MAPW[dom]))
         zn = [str(x) for x in Z["names"]]
-        for s, nm in enumerate([str(x) for x in M["names"]][:12]):
+        for s, nm in enumerate([str(x) for x in M["names"]][:int(os.environ.get("DM_MAX", "12"))]):   # FLOOR night: DM_MAX 30
             i = zn.index(nm); ids = Z[f"{i}_ids"]; n = len(ids)
             assert np.array_equal(ids, M[f"{s}_ids"]) and np.array_equal(Z[f"{i}_checks"], M[f"{s}_checks"]), nm
             g = np.full(n - 1, np.nan)

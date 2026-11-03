@@ -14,9 +14,10 @@ DOM = lambda k: "code" if k.startswith("humaneval") else "math" if k.startswith(
 L = []
 def say(s=""):
     print(s); L.append(s)
+CC = os.environ.get("CMB_C", "256")                     # the chain's C (11-03: 224 when 256 did not fit the memory)
 def J(tag, kind):
     try:
-        return json.load(open(os.path.join(R, f"{tag}_256_{kind}.json")))
+        return json.load(open(os.path.join(R, f"{tag}_{CC}_{kind}.json")))
     except Exception:
         return None
 def toks(tag):
@@ -45,7 +46,7 @@ for t in ARMS:
     fs = [r["fast"] for r in rs if r.get("fast")]
     A[t] = dict(d=d, ok=ok, n=n, bad=sorted(k for k, v in tk.items() if k in ref and not all(eq(o, ref[k][0]) for o in v)),
                 peak=max(r["mem"][6] for r in rs), copy=cp, fast=fs)
-say("THE COMBINATION at C 256 (shared GPU by day: rough), steady tok/s per domain (checks >= 2), kept per check, draft ms")
+say(f"THE COMBINATION at C {CC} (shared GPU by day: rough), steady tok/s per domain (checks >= 2), kept per check, draft ms")
 say("| arm | adds | tokens equal | code | math | chat | agent | vs the arm before | vs cmb0 | peak GB |")
 say("|---|---|---|---|---|---|---|---|---|---|")
 ADDS = {"cmb0": "the default", "cmbj0": "joint sizes, equal RAM (on cmb0)", "cmbj2": "joint sizes +2.07 GB (on cmb0)", "cmb1": "chat switch", "cmb1c": "chat at 8 rows", "cmb1t": "chat t 0.4 (on cmb1c)", "cmb2": "A6 keep", "cmb3": "COPYGATE g2", "cmb4": "D7b code",
@@ -80,7 +81,7 @@ say("SSD MB per kept token per arm (code / math / chat / agent): " + "; ".join(
     for t in order))
 for t in order:                                          # the warm split's per-row cost (fastBEhw: Fable C's gated expert term)
     try:
-        W = json.load(open(os.path.join(R, f"{t}_256_warmsplit.json")))
+        W = json.load(open(os.path.join(R, f"{t}_{CC}_warmsplit.json")))
     except Exception:
         continue
     cw = [sm for w in W if w["key"].startswith("humaneval") for sm in w["samples"]]

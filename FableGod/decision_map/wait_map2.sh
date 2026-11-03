@@ -37,15 +37,19 @@ hard() {         # reasons to stop a running map (and not to start one)
   elif ioreg -r -k AppleClamshellState -d 1 | grep -q '"AppleClamshellState" = Yes'; then echo "lid closed"
   elif pgrep -f "turn45_a6.sh" >/dev/null; then echo "A6 first"
   elif e2_wants_mem; then echo "E2 waits for memory (first)"
+  elif [ -n "$WAIT_EARLYTAP" ] && pgrep -f "turns/et_job.sh" >/dev/null; then echo "EARLYTAP runs (first)"   # orchestrator Tue 06:5x
   fi
 }
 big_others() {   # the day rule (pacer RULES.md, Ultra section, Mon 20:50): ONE job over ~5 GB at a time
+  [ -n "$NO_DAYRULE" ] && return 1   # a slot granted beside others' share jobs (the orchestrator Tue 06:4x: BIG window)
   peer ls 2>/dev/null | grep -v "^You:" | grep -v "Breakthrough decision map" | grep -oE "shared run.*MEM [0-9]+ GB" | grep -oE "MEM [0-9]+" | awk '$2 >= 5 {f = 1} END {exit !f}'
 }
 soft() {         # reasons not to start
   if [ -e "$Q/PAUSE" ]; then echo "PAUSE (heat or a window)"
   elif pgrep -f "quiet/soft_end.sh" >/dev/null; then echo "soft_end ramp"
   elif big_others; then echo "another job over 5 GB (day rule)"
+  elif [ -n "$ONE_GPU" ] && peer ls 2>/dev/null | grep -v "^You:" | grep -v "Breakthrough decision map" | grep -q "shared run"; then
+    echo "another GPU job (one at a time, orchestrator Tue 09:11)"
   fi
 }
 why_not() { local w; w=$(hard); [ -z "$w" ] && w=$(soft); echo "$w"; }

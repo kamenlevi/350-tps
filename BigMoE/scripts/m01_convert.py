@@ -27,6 +27,7 @@ SRC = os.path.expanduser("~/BigMoE/models/bare/records3/")
 DST = os.path.expanduser("~/BigMoE/models/bare/records3m/")
 os.makedirs(DST, exist_ok=True)
 IX3 = json.load(open(SRC + "index.json"))["layers"]
+assert all(r.get("layout", "row-major") == "row-major" for r in IX3.values()), "records3 is converted (docs/PLAN_records3_convert.md): this script reads row-major records only"
 IXP = DST + "index.json"
 IXM = json.load(open(IXP)) if os.path.exists(IXP) else {"align": 16384, "format": "records3m", "src": "records3",
                                                            "layers": {}}

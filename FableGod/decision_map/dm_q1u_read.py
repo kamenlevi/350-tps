@@ -5,7 +5,7 @@ Usage (BigMoE venv): python dm_q1u_read.py -> out/Q1U_read.txt"""
 import json, os, math
 import numpy as np
 import dm_gate
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
+OUT = os.path.expanduser(os.environ.get("DM_OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")))
 base = json.load(open(os.path.join(OUT, "baseline.json"))); G = dm_gate.load()
 lines = []
 def say(s=""): print(s, flush=True); lines.append(s)

@@ -1,4 +1,4 @@
-# PREREG: RELAX, quality-defined modes on the 16-row live loop (Mon 2026-11-02 21:0x; revision 1 at 21:3x, revision 2 Tue 02:44; before any row)
+# PREREG: RELAX, quality-defined modes on the 16-row live loop (Mon 2026-11-02 21:0x; revision 1 at 21:3x, revision 2 Tue 02:44, revision 3 Tue 07:00; before any row)
 
 Source: the orchestrator's requests of 16:15, 18:3x, 19:5x and 21:22, built on:
 - Fable's RELAX_350 and mission 25 (COMMENT_LOOPHOLE.md);
@@ -24,11 +24,11 @@ except for its location. Keys: `results/relax/keys_<arm>.txt`.
 | arm (cloud 14) | sets (keys) | gate | acceptance | HC8 |
 |---|---|---|---|---|
 | control | HumanEval+ 60, the first 10 math, the first 20 IFEval, AT14 (104) | off | exact | off |
-| A, the gate alone (A) | HumanEval+ 60, math 50, agent 6 (116) | cf >= 0.99 + copy | exact | off |
-| B, the mode (B) | HumanEval+ 60, math 50, AT14 (124) | cf >= 0.99 + copy | exact, + the comment rule on HumanEval+ | on |
+| A, the gate alone (A) | HumanEval+ 60, math 50, agent 6 (116) | Q1-UNION, cf >= 0.9 + copy | exact | off |
+| B, the mode (B) | HumanEval+ 60, math 50, AT14 (124) | Q1-UNION, cf >= 0.9 + copy | exact, + the comment rule on HumanEval+ | on |
 | E (E) | IFEval 100, multi 24 (124) | off | R1(0.5) | off |
 | F (F) | as E | off | R1(0.5) or R2(top-2, 0.25 p1) | off |
-| C (C) | HumanEval+ 60, math 50 (110) | cf >= 0.99 + copy | R1(0.5), + the comment rule on HumanEval+ | on |
+| C (C) | HumanEval+ 60, math 50 (110) | Q1-UNION, cf >= 0.9 + copy | R1(0.5), + the comment rule on HumanEval+ | on |
 | G (G, optional) | as E | cf >= 0.999 + copy | R1(0.5) | off |
 | T3ALL (NewIdeas) | IFEval 100, HumanEval+ 60, math 50 (IFEval first) | off | exact | off; tiers 3333333333 |
 
@@ -62,6 +62,18 @@ except for its location. Keys: `results/relax/keys_<arm>.txt`.
     loader posts shrinks.
   - The mechanism is a wrapper on the streamed switch's `__call__`, active only inside the 16-row verify.
   - Row 15, the bonus after 15 kept drafts, is always exact.
+- **Revision 3, Q1-UNION** (NewIdeas' proposal; approved by the orchestrator 06:4x; in A, B and C):
+  - It replaces Q1 at cf >= 0.99 with Q1-UNION at cf >= 0.9; the copy gate is unchanged. G keeps plain Q1 at 0.999.
+  - Per layer of a check, U = every rank of the unsure rows + ranks 0-1 of the sure rows (cf-sure or copy-gated). A
+    sure row keeps a rank-2-9 expert at its own weight iff the expert is in U; otherwise that slot points at the row's
+    rank-0 expert at weight 0. No renorm. The loader posts U, which is Q1's union at the same threshold.
+  - Rule: Breakthrough's ~/FableGod/decision_map/dm_q1u_masks.py; the union step is OEA's (arXiv 2511.02237).
+  - Unit-tested (07:00, pending/test_relax.py): the graph's mask equals a numpy port of that rule on 200 random checks.
+    It keeps every slot Q1 keeps, and it posts exactly Q1's expert union.
+  - The map (03:19, SCOREBOARD fc32173), all-row flips, Q1-UNION 0.9 against Q1 0.99: code 0.98 vs 1.34 %, IFEval 4.92
+    vs 5.42 %, multi 3.04 vs 3.69 %. Gated code rows flip 7/2678 = 0.26 % against 2/2211.
+  - Bytes: the expert union per 16-row check on code is x0.618 against Q1 0.99's x0.720 (NewIdeas' CPU replay). SSD MB
+    per kept token on code is -40.5 % (band45's price).
 - **The copy gate:** a row the cf gate leaves exact takes top-2 when its last 8 input tokens occur in the prompt. Those
   8 tokens are the committed tokens plus this check's earlier drafts.
   - The source is the prompt only. This narrows the plan's "window". The reason is COPYGATE's rule 1 and its precision
@@ -136,15 +148,17 @@ except for its location. Keys: `results/relax/keys_<arm>.txt`.
 
 ## Predictions (information, not lines)
 - **Deviated tokens along G's own prefix (diagnostic):**
-  - Code: A ~1.3-1.6 % (map 1.34 % at 0.99; cloud 14 ~1.6 %); B about the same plus HC8's and the comment rule's
-    share (mission 25: R2 in comments 1.37 % of positions, all in comments); C ~2.8 % (cloud 14).
+  - Code: A ~1.0-1.3 % (map: Q1-UNION 0.9 at 0.98 % all-row flips); B about the same plus HC8's and the comment
+    rule's share (mission 25: R2 in comments 1.37 % of positions, all in comments); C ~2.5 % (cloud 14's R1 share on
+    top).
   - Chat: E ~3.7 % (RELAX_350's R1 on IFEval); F ~7 % (R2's 7.08 %, above the int4 twin's ~5 %); G ~E + 3-4 points.
 - **Kept per check, real** (first-order halved):
   - E on IFEval x1.05-1.10;
   - F x1.10-1.18;
   - the comment rule on HumanEval+ ~x1.03-1.06;
   - C's R1 on code ~x1.05.
-- **Expert union per check on code** (map): -40.8 % at 0.99, plus a few points from the copy gate.
+- **Expert union per check on code:** x0.618 with Q1-UNION 0.9 (NewIdeas' replay), plus a few points from the copy
+  gate.
 - **Copy gate coverage** (measured on CPU on REF2-T's own answers, Mon 21:06): rows inside a prompt copy are 53.8 % of
   HumanEval+ rows, 2.3 % of math and 1.4 % of IFEval. Most of these are cf-sure already. SAFARI's estimate for the
   added coverage on HumanEval+ is +3-8 points.
@@ -204,3 +218,20 @@ For each arm and set:
   - Then the replays of A, B, T3ALL, C and G at C 192: ~2.8 h.
   - If the slot runs short, drop G first, then C, then F.
 - **Report:** `tools/relax_report.py --score`, and a RESULT doc.
+
+## Smoke result (Tue 10:21-11:11): PASS (results/relax_smoke.txt)
+- **Step 0** equalled its reference in every G process: REF2-T, or REF2-T + HC8 for B and C. T3ALL's plan was in
+  effect.
+- **The rank-0 routing equals the masking bitwise** (A against Amask: 271/271 committed rows).
+- **The replay:** step 0 bitwise in every replay; the control replayed bitwise on every row (162/162) with no deviation.
+  - Replay B first went VOID: B's own gate-off rows are HC8, not REF2-T. The replay now checks on the control's (fixed
+    11:0x); the re-run gave 57/57.
+- **Gates engaged:** the union shrank on every gated check of A, B, C and G. HumanEval/45: union 8.61 -> 4.06 GB per
+  check, misses 1018 -> 436 (Q1-UNION 0.9).
+- **Rules engaged:** R1 / R2 kept more than the exact rule (E 7, F 38, C 3 checks); the comment rule was open on 25 / 4
+  rows of B / C; HC8 was on in B and C.
+- **Information from 2-3 prompts per arm** (not a result): F's R2 turned ifeval/1675 into a 967-token answer that kept
+  offering alternatives (REF2-T 45, E 126). The night's standard table (length, hesitation) will show whether that is a
+  pattern.
+- **T3ALL's bytes and speed in this harness are not representative:** the sidecar pool stays allocated but unused, so
+  the base pool is smaller (SSD 2.56 against 1.71 GB per check). T3ALL is a quality arm, as registered.

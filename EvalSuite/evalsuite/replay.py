@@ -2,8 +2,8 @@
 prefills the prompt, then feeds each logged check's 16 input rows to an exact cache (top-10 on every row, no drafter, no
 gate, no timing) and commits the same k+1 rows, so E sees exactly the prefix G committed. Per committed token: E's
 argmax, E's log-prob of the committed token and of its own argmax, and KLD(E || G) against G's logged top-64. The
-step-0 records (gate and rule off) must replay bitwise (row hashes): else VOID (exit 5). An arm without step-0
-records (T3ALL: its plan has no exact rows) checks the replay on the control's.
+step-0 records (gate and rule off) must replay bitwise (row hashes): else VOID (exit 5). An arm whose gate-off rows are
+not REF2-T's numerics (HC8: B, C) or that has none (T3ALL) checks the replay on the control's.
   `evalsuite gpu relax-replay ref --arm A [--keys FILE]` (same env as the arm; any C)
 Out: results/relax_<arm>[_tag]/replay/<key>.jsonl.gz (one line per check), replay_chunks.jsonl."""
 from __future__ import annotations
@@ -12,7 +12,7 @@ import numpy as np
 import mlx.core as mx
 from . import env, data as D, model as EM
 from .decode import footprint_peak_gb
-from .relax import EOS, OOO_ENV, SETS, el, out_dir, pause_wait, rowhash, swap_gb, _tick
+from .relax import ARMS, EOS, OOO_ENV, REF_TIER, SETS, el, out_dir, pause_wait, rowhash, swap_gb, _tick
 from .relax_core import R, kld_top
 
 
@@ -112,12 +112,13 @@ def main(rt, st, a, log):
         return res, first, bits
 
     # ------------------------------------------------ step 0: G's gate-off rows replay bitwise
-    s0 = glob.glob(os.path.join(OUT, "step0", "*.json"))
-    if not s0:                                    # an arm without exact rows (T3ALL: no step 0 of its own): the replay
-        ctl = out_dir("control")                  # checks itself on the control's gate-off rows instead
+    own_exact = not ARMS[arm]["hc8"] and ARMS[arm].get("tier", REF_TIER) == REF_TIER
+    s0 = glob.glob(os.path.join(OUT, "step0", "*.json")) if own_exact else []
+    if not s0:                                    # an arm whose gate-off rows are not REF2-T's (HC8: B, C) or that has none
+        ctl = out_dir("control")                  # (T3ALL): the replay checks itself on the control's gate-off rows
         s0 = glob.glob(os.path.join(ctl, "step0", "*.json"))
-        log(f"RELAX replay {arm}: no step-0 record of its own; step 0 on {ctl}'s")
-    assert s0, f"no step-0 record in {OUT}/step0 or the control's"
+        log(f"RELAX replay {arm}: step 0 on {ctl}'s gate-off rows (the arm's own are not REF2-T's numerics)")
+    assert s0, f"no usable step-0 record in {OUT}/step0 or the control's"
     z = json.load(open(max(s0, key=os.path.getmtime)))       # the newest G process's gate-off rows
     it0 = items[z["key"]]
     res0, first0, bits0 = replay(list(it0["prompt_ids"]), z["out"], z["recs"])

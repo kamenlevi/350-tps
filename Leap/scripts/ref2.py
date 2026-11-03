@@ -82,6 +82,15 @@ What changes (monkeypatches on MTPLX, read-only):
     With CFG nax_native every NAX6-N call first rewrites its dirty slots in place (tierglu_nax6n.repack_slots): in
     _nax6_glu, in _ooo_nax6 before phase 2, and before phase 1 too with CFG nax_repack_p1 (off: BigMoE gathers every
     other load native on the CPU, so phase 1 never meets a dirty slot).
+  - N3C (Tue 2026-11-03, off by default; the exact fallback for records converted to NAX6-N's native layout):
+    CFG["native_3c"] runs REF2-T's 3c calls on native records with tierglu_3cn (3c with native addressing; == 3c on
+    row-major records bitwise, TABLE_350 NATIVE-3C): tier_call's 3c branch and _tier_slots via _tier_glu_3cn, OOO's two
+    phases via _ooo_3cn (BigMoE's _ooo_call, step for step). Raises if combined with a row-major reader (tier_nax4, or
+    tier_nax_ooo without nax_native).
+  - Per-layer layouts (Tue 2026-11-03 17:3x, BigMoE's router, inert until bigmoe.tier has _LAYOUT): a layer's records are
+    0 row-major, 1 native or 2 native + p11 (11-bit scales, scripts/p11.py). _tier_glu_sel / _ooo_sel route by t["layout"]
+    or bigmoe.tier._LAYOUT[0]: 0 -> BigMoE's 3c, 1 / 2 -> 3c-N (p11 found from the pools' uint32 scale pieces); without a
+    router CFG native_3c decides as before. NAX6-N reads p11 pools the same way; _native_repack skips them.
 Bits change once vs today's engine (qmm16c / experts_nax round differently); this is the approved reference change.
 REF2b (Fri 2026-10-30, key buckets on) changes REF2's AR bits past 512 keys only; CFG["key_buckets"] = False gives
 REF2's original AR (EvalSuite's results/ref2 rows), whose live loop is exact only below 512 keys.
@@ -113,10 +122,10 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "kb_step": 512, "tiers": True, "gdn_exact": True, "tier_nax4": False, "tier_nax_ooo": False, "att_single": False,
        "gdn_inproj": False, "att_rope": False, "idx_prep": False, "hc_write": False, "hc_gate": False,
        "gdn_inproj_x": False, "gdn_body": False, "hc_b": False,
-       "nax_hybrid": False, "nax_native": False, "nax_repack_p1": False}
+       "nax_hybrid": False, "nax_native": False, "nax_repack_p1": False, "native_3c": False}
 _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
-              kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0)
+              kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0)
 _ORIG = {}
 _WCAT = {}
 
@@ -315,6 +324,8 @@ def _native_repack(msb, lsb, msb_slot, lsb_slot):
     """N7-15: the dirty slots among a call's pairs -> native, in place, before a NAX6-N call reads them; returns the slot
     arrays the call must take (pools without registered flags, or nax_native off: unchanged)"""
     f = _NATIVE_FLAGS.get(id(msb)) if CFG["nax_native"] else None
+    if f is not None and msb["gate_proj"]["s3"].dtype == mx.uint32:  # p11 pools come from native files: nothing to repack
+        f = None
     if f is None:
         return msb_slot, lsb_slot
     import tierglu_nax6n as NN
@@ -377,15 +388,83 @@ def _ooo_nax6(x, ids, bm, t, post, sc, shared):
                           grp=N6.gpu_grp_phase(sm, sl if R4 else sm, PLAN, phase, 2)).reshape(M * K, -1)
     return TG.combine_phase(y1, y2, phase, sc.reshape(-1, K)).reshape(*x.shape[:-1], -1)
 
+def _layout(t=None):
+    """the layer's record layout from BigMoE's per-layer router: t["layout"] or bigmoe.tier._LAYOUT[0] (0 row-major, 1 native,
+    2 native + p11); None without a router"""
+    if t is not None and "layout" in t:
+        return t["layout"]
+    BT = sys.modules.get("bigmoe.tier")
+    lay = getattr(BT, "_LAYOUT", None) if BT is not None else None
+    return lay[0] if lay is not None else None
+
+def _native(t=None):
+    """does this layer's tier GLU run on native records? (the router's layout; without one, CFG native_3c)"""
+    lay = _layout(t)
+    if lay is None:
+        return CFG["native_3c"]
+    if lay == 0 and CFG["native_3c"]:
+        raise RuntimeError("REF2 native_3c on a row-major layer (layout 0): the router decides per layer")
+    return lay in (1, 2)
+
+def _native_guard(t=None):
+    """N3C: records in the native layout must not reach a row-major reader"""
+    if _native(t) and (CFG["tier_nax4"] or (CFG["tier_nax_ooo"] and not CFG["nax_native"])):
+        raise RuntimeError("REF2 native_3c: native records need 3c-N, or NAX6-N (tier_nax_ooo + nax_native); not tier_nax4")
+
+def _tier_glu_3cn(x, msb, lsb, msb_slot, lsb_slot, plan="4433333333", scores=None, **kw):
+    """N3C (CFG native_3c): tierglu.tier_glu's signature on native records (tierglu_3cn.tier_glu_n, == 3c bitwise)"""
+    import tierglu_3cn as C3
+    COUNTS["native_3c"] += 1
+    return C3.tier_glu_n(x, msb, lsb, msb_slot, lsb_slot, plan=plan, scores=scores, **kw)
+
+def _ooo_3cn(x, ids, bm, t, post, sc, shared):
+    """N3C: bigmoe.tier._ooo_call (BigMoE's 3c OOO) step for step, its phase kernels from tierglu_3cn (native records)"""
+    import bigmoe.tier as BT
+    TG = BT._tier_glu_mod()
+    import tierglu_3cn as C3
+    BT.OOO_STATS["calls"] += 1
+    COUNTS["native_3c"] += 1
+    PLAN = BT.PLAN
+    K = ids.shape[-1]
+    x2 = x.reshape(-1, x.shape[-1])
+    M = x2.shape[0]
+    lo4 = [s_ for s_ in t["segs"] if s_[2] == 4]
+    R4 = lo4[-1][1] if lo4 else 0
+    assert not lo4 or lo4[0][0] == 0, t["segs"]
+    gate, L = bm["gate"], bm["L"]
+    dep_m, n_m = post(L, ids)
+    pre_m = dep_m[1:1 + n_m].reshape(M, K)
+    ok = pre_m >= 0
+    if R4:
+        dep_l, n_l = post(t["side"], ids[..., :R4], after=dep_m)
+        pre_l = dep_l[1:1 + n_l].reshape(M, R4)
+        ok = ok & mx.concatenate([pre_l >= 0, mx.ones((M, K - R4), mx.bool_)], axis=-1)
+    phase = mx.where(ok, 1, 2).astype(mx.int32)
+    y1 = C3.tier_glu_phase_n(x2, t["base"], t["sideP"], pre_m, mx.maximum(pre_l, 0) if R4 else None, phase, 1, plan=PLAN)
+    after = [y1] + ([shared] if shared is not None else [])
+    sm = gate.spin(mx.depends(dep_m, after), L, n_m).reshape(M, K)
+    sl = gate.spin(mx.depends(dep_l, after), t["side"], n_l).reshape(M, R4) if R4 else None
+    y2 = C3.tier_glu_phase_n(x2, t["base"], t["sideP"], sm, sl, phase, 2, plan=PLAN)
+    return TG.combine_phase(y1, y2, phase, sc.reshape(-1, K)).reshape(*x.shape[:-1], -1)
+
 def _ooo_sel(x, ids, bm, t, post, sc, shared):
-    """bigmoe.tier._ooo_call with REF2's C1 switch (off: BigMoE's 3c phases)"""
-    if _ON[0] and CFG["tier_nax_ooo"]:
-        return _ooo_nax6(x, ids, bm, t, post, sc, shared)
+    """bigmoe.tier._ooo_call with REF2's C1 switch (off: BigMoE's 3c phases). A converted layer (layout 1 / 2) takes 3c-N,
+    the native twin of BigMoE's 3c, even with REF2 removed (BigMoE 17:4x: r57_screen toggles REF2 around drafts)"""
+    if _ON[0]:
+        _native_guard(t)
+        if CFG["tier_nax_ooo"]:
+            return _ooo_nax6(x, ids, bm, t, post, sc, shared)
+        if _native(t):
+            return _ooo_3cn(x, ids, bm, t, post, sc, shared)
+    elif _layout(t) in (1, 2):
+        return _ooo_3cn(x, ids, bm, t, post, sc, shared)
     return _ORIG["ooo_call"](x, ids, bm, t, post, sc, shared)
 
 def _tier_glu_sel():
     """bigmoe.tier._tier_glu with REF2's switch: every tier GLU call (tier_call's 1-4-row and gated verify rows,
     _tier_slots' 5-16-row calls) takes the same kernel, so a pair's bits do not depend on the call size"""
+    if _ON[0]:
+        _native_guard()
     if _ON[0] and CFG["tier_nax_ooo"]:
         return _nax6_glu
     if _ON[0] and CFG["tier_nax4"]:
@@ -393,6 +472,9 @@ def _tier_glu_sel():
         if getattr(BT, "_OOO", False):
             raise RuntimeError("REF2 tier_nax4 needs BIGMOE_OOO off (its phase kernels are 3c's)")
         return _nax4_glu
+    if (_native() if _ON[0] else _layout() in (1, 2)):  # a converted layer takes 3c-N even with REF2 removed
+        _ORIG["tier_glu"]()                            # BigMoE's own hook first (its path; LP1 patches tierglu's sources)
+        return _tier_glu_3cn
     return _ORIG["tier_glu"]()
 
 _GDNX = [None]
@@ -589,6 +671,8 @@ def _tier_slots(self, x, indices, bm):
         assert len(u4) <= t["C_l"], ("REF2-T: more 4-bit experts than sidecar slots", len(u4), t["C_l"])
         s4 = np.array(BS.ext.ensure(t["side"], mx.array(u4.astype(np.int32))))
         sl = mx.array(s4[np.searchsorted(u4, ids4)].astype(np.int32).reshape(-1, ids4.shape[-1]))
+    if hasattr(T, "_LAYOUT"):                                         # BigMoE's per-layer router (layout 0 / 1 / 2)
+        T._LAYOUT[0] = t.get("layout", 0)
     y = T._tier_glu()(x.reshape(-1, x.shape[-1]), t["base"], t["sideP"], sm, sl, plan=T.PLAN)
     y = y.reshape(*x.shape[:-1], K, -1)
     mx.eval(y)                                                        # before a later ensure of L can evict slots
@@ -756,6 +840,7 @@ def apply():
             BT._tier_glu = _tier_glu_sel
             _ORIG["ooo_call"] = BT._ooo_call               # C1: CFG tier_nax_ooo runs OOO's phases on NAX6 (off: 3c)
             BT._ooo_call = _ooo_sel
+            BT.LAYOUT_ROUTER = True                        # BigMoE's guards: REF2 routes layouts 1 / 2 (per layer)
         except Exception:
             pass
     _ON[0] = True

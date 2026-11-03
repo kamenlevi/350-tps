@@ -1,6 +1,6 @@
 """KWALL (b), the MTP half (MTP Head, Mon 11-02; REPORT 'KWALL'): the native MTP head's (b5) depth-1 accuracy per class at the
-code map rows (~/FableGod/floor_rows.json), from D-24's teacher-forced ranks (data/d24/code_b5.npz: anchor a, depth 1 predicts
-token a + 1; map row i predicts token i + 1). Beside it DFlash2 L1-20's own accuracy at the same rows in the official loop
+code map rows (~/FableGod/floor_rows.json), from D-24's teacher-forced ranks (data/d24/code_b5.npz: anchor s, depth 1 predicts
+token s + 2, so map row i (predicting i + 1) reads s = i - 1; fixed 11-03, the first run read s = i). Beside it DFlash2 L1-20's own accuracy at the same rows in the official loop
 (HPD-0's walk: the row's draft at its depth). CPU. Output: data/kwall_mtp.txt (appended)."""
 import json, os
 import numpy as np
@@ -19,7 +19,7 @@ for r in R:
     mi = mk.get(r["nm"][:-4])
     if mi is None:
         continue
-    a0 = max(0, int(M["gen"][mi]) - 2); rr = r["i"] - a0
+    a0 = max(0, int(M["gen"][mi]) - 2); rr = r["i"] - 1 - a0   # row i predicts i + 1: MTP anchor s = i - 1 (fixed 11-03: was i - a0)
     rk = M[f"rk_{mi}"]
     if not (0 <= rr < rk.shape[0]):
         continue

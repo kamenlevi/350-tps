@@ -22,7 +22,7 @@ def overlap(st, v):
     n = lw = bw = both = ei = pk = 0
     for i in range(len(A["names"])):
         ids, off = A[f"{i}_ids"], int(A[f"{i}_off"])
-        assert np.array_equal(A[f"{i}_checks"], B[f"{i}_checks"]), (st, v, i)
+        assert np.array_equal(A[f"{i}_checks"][:, 1:], B[f"{i}_checks"][:, 1:]), (st, v, i)   # same anchors and m (k differs)
         for c, (k, m, an) in enumerate(A[f"{i}_checks"]):
             for j in range(int(m)):
                 t = int(ids[int(an) - off + 1 + j])

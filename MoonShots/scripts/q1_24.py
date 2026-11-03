@@ -35,6 +35,28 @@ def say(s):
     print(s, flush=True); lines.append(s)
 
 
+MTP = os.environ.get("Q124_GATE") == "mtp"                      # option B: MTP Head's per-anchor export (Tue 06:57)
+MTPDIR = os.path.expanduser(os.environ.get("Q124_MTPDIR", "~/TrainLab/data/mtp_map_code_v2"))   # v1 was one row late (MTP Head 15:37)
+
+
+def walk4_mtp(z, m):
+    """option B: 4-row checks walked with the native MTP chain's own right / wrong per depth (teacher-forced, equal to the
+    engine's chain up to its first miss); each check carries its rows' gate = the chain's top-1 probability per depth"""
+    ck = z["checks_walk"].tolist()
+    n = z["conf"].shape[0]
+    a, end, out = ck[0][0], min(ck[-1][0] + ck[-1][2], n), []
+    while a < end:
+        rows = min(ROWS, n - a)
+        kept = rows
+        for d in range(1, rows):
+            if m["right"][a, d - 1] != 1:
+                kept = d
+                break
+        out.append((a, rows, kept, True, np.r_[m["q"][a, :rows - 1].astype(float), np.nan]))
+        a += kept
+    return out
+
+
 def walk4(z, rates, u):
     conf, right, a, end, n = BW.prep(z)
     out = []
@@ -55,8 +77,8 @@ def needs4(z, wk, q1, budget):
     """per check: base / sidecar needs per layer (int16 arrays); q1 = sure rows top-2; budget = the b16 pass set"""
     ids, conf = z["ids"], z["conf"].astype(float)
     out = []
-    for a, rows, kept, full in wk:
-        cf = conf[a:a + rows].copy()
+    for a, rows, kept, full, *g in wk:
+        cf = g[0] if g else conf[a:a + rows].copy()              # option B: the MTP chain's probabilities
         cf[rows - 1] = np.nan                                    # the last row of a pass verifies nothing
         k = np.array([2 if (q1 and c >= 0.99) else 10 for c in cf])
         rid = ids[a:a + rows]
@@ -108,11 +130,15 @@ def main():
     Z = [{k: v for k, v in np.load(os.path.join(B.CAPDIR, w + ".npz")).items()} for w in names]
     PREW = [W4.prefill_of(z) for z in Z]
     rates = S45.rates_of(Z)
-    say(f"M-18d Q1-24 (option A) on Breakthrough's {len(names)} code windows: {ROWS}-row checks, C_m {CM} + C_l {CL}, decayed LFU "
+    say(f"M-18d Q1-24 (option {'B' if MTP else 'A'}) on Breakthrough's {len(names)} code windows: {ROWS}-row checks, C_m {CM} + C_l {CL}, decayed LFU "
         f"{DECAY}, {SEEDS} seeds; acceptance rates from the walks (depths 1-3: {rates[0]:.3f} {rates[1]:.3f} {rates[2]:.3f})")
+    if MTP:
+        MD = [dict(np.load(os.path.join(MTPDIR, w + ".npz"))) for w in names]
+        say(f"  option B: the native MTP chain's own acceptance and top-1 probabilities (MTP Head's export, {MTPDIR}); one walk")
     T = {}
-    for seed in range(SEEDS):
-        wks = [walk4(z, rates, np.random.default_rng(10_000 * seed + k).random(z["conf"].shape[0] + 1)) for k, z in enumerate(Z)]
+    for seed in range(1 if MTP else SEEDS):
+        wks = ([walk4_mtp(z, MD[k]) for k, z in enumerate(Z)] if MTP else
+               [walk4(z, rates, np.random.default_rng(10_000 * seed + k).random(z["conf"].shape[0] + 1)) for k, z in enumerate(Z)])
         for arm, budget in (("v3", 0), ("b16", BUDGET)):
             for q1 in (False, True):
                 Qw = [needs4(z, wks[k], q1, budget) for k, z in enumerate(Z)]
@@ -138,7 +164,7 @@ def main():
                 + (" -> " + ("PASS" if r <= 0.70 else "KILL" if r > 0.90 else "BETWEEN") if q1 else ""))
     pool.close(); pool.join()
     say(f"  total {time.time() - t0:.0f} s")
-    open(os.path.join(LZ.OUT, "q1_24.txt"), "w").write("\n".join(lines) + "\n")
+    open(os.path.join(LZ.OUT, ("q1_24_mtp_" + os.path.basename(MTPDIR) + ".txt") if MTP else "q1_24.txt"), "w").write("\n".join(lines) + "\n")
 
 
 if __name__ == "__main__":

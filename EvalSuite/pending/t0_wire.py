@@ -59,7 +59,17 @@ CLI = [
           "b12llff4t0c": 14, "b12llff4t0h": 14}'''),
     ('''B12_ENV["b12llff4p"] = dict(B12_ENV["b12llff4"], B12_PMIN="0.5")''',
      '''B12_ENV["b12llff4p"] = dict(B12_ENV["b12llff4"], B12_PMIN="0.5")
-B12_ENV["b12llff4t0c"] = B12_ENV["b12llff4t0h"] = %r   # T0: Fit12's gate env (model.T0_ENV)''' % T0_ENV),
+B12_ENV["b12llff4t0c"] = B12_ENV["b12llff4t0h"] = %r   # T0: Fit12's gate env (model.T0_ENV) less EVALSUITE_SHIP (set beside)
+T0_POP_BASES = ("b12llff4t0c", "b12llff4t0h")   # their env drops T0_POP (model.T0_POP): the live file's defaults
+T0_POP = %r'''
+     % ({k: x for k, x in T0_ENV.items() if k != "EVALSUITE_SHIP"}, T0_POP)),
+    ('''            env.update(SHIP_AR, EVALSUITE_SHIP="1", **B12_ENV[base], **(SHIP_MTP if B12_MTP[base] else {}))
+            if not guard:''',
+     '''            env.update(SHIP_AR, EVALSUITE_SHIP="1", **B12_ENV[base], **(SHIP_MTP if B12_MTP[base] else {}))
+            if base in T0_POP_BASES:              # T0 (PREREG_t0): Fit12's gate leaves these to the live file's defaults
+                for k in T0_POP:
+                    env.pop(k, None)
+            if not guard:'''),
     ('''           "b12llfx2": True, "b12llff2": True, "b12llff3": True, "b12llff4": True, "b12llff4p": True}
 B12_RE''',
      '''           "b12llfx2": True, "b12llff2": True, "b12llff3": True, "b12llff4": True, "b12llff4p": True,

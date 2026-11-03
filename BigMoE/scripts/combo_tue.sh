@@ -34,17 +34,39 @@ KEYS="humaneval/HumanEval/68,humaneval/HumanEval/91,humaneval/HumanEval/16,human
 KEYS="$KEYS,math500/test/prealgebra/1640.json,ifeval/1220,ifeval/1561,multi/de3,multi/zh15,agent/bash18,agent/text23"
 S1="R57_CHATSW=1"; S1C="$S1,R57_CHATROWS=8"; S2="$S1C,R57_A6=keep"; S3="$S2,R57_COPY=g2"; S4="$S3,R57_D7B=code"; S5="$S4,BIGMOE_JOINT=1"
 S6="$S5,K83_EXACT=1"
-say "combination start (pid $$, HAVE_LOCK=$HAVE_LOCK)"
-R57_KEYS=$KEYS MG=6 C45_ALARM=900 C45_REFTOK="$HOME/BigMoE/data/r57/chat23_ref_tokens.json:gate+t" C45_ARMS="cmb0_256:256" $RUN
+# CMB_C (11-03, the orchestrator: idle NO-SWAP is 45-47 GB with every app closed, so turns must peak <= ~41 GB): the C of
+# every arm (224 = M-17's sizes, peak ~38 GB + the drafters). At 224 the joint-size arms (C 256 files) drop out and cmbsc
+# loads laysz45_224_sc15.json. CMB_M2=1 first runs measurement 2 (the stall trace, without / with JOINT) and the pre-route
+# capture at the same C (their C 320 / 256 night slots never ran), then DAY9's chat-switch checks (chA / chB, D-23d's 21
+# prompts vs chat23; (b)'s <= 45 GB peak line projected to C 256 at +0.1325 GB per C unit).
+CC=${CMB_C:-256}; MGC=${CMB_MG:-6}
+CHREF="$HOME/BigMoE/data/r57/chat23_ref_tokens.json:gate+t"
+say "combination start (pid $$, HAVE_LOCK=$HAVE_LOCK, C $CC, MG $MGC)"
+if [ "${CMB_M2:-1}" = 1 ]; then
+  MG=$MGC C45_ARMS="c45t_$CC:$CC:BIGMOE_TRACE=1,R57_STALL=1 c45tj_$CC:$CC:BIGMOE_TRACE=1,R57_STALL=1,BIGMOE_JOINT=1" $RUN
+  say "measurement 2 (stall trace at C $CC, without / with JOINT) rc=$?"
+  PRK="humaneval/HumanEval/68,humaneval/HumanEval/16,humaneval/HumanEval/91,humaneval/HumanEval/6,humaneval/HumanEval/79"
+  PRK="$PRK,humaneval/HumanEval/19,humaneval/HumanEval/161,humaneval/HumanEval/17,humaneval/HumanEval/56,humaneval/HumanEval/141"
+  PRK="$PRK,humaneval/HumanEval/101,humaneval/HumanEval/63,ifeval/1220,ifeval/1561,ifeval/3280,multi/ar21,multi/de3,multi/es10"
+  R57_KEYS=$PRK MG=$MGC C45_CAP=128 C45_ALARM=600 C45_REFTOK=$CHREF C45_ARMS="pr_$CC:$CC:R57_PREROUTE=1" $RUN
+  say "pre-route capture rc=$?"
+  CHAT="ifeval/1220,ifeval/1561,ifeval/3280,multi/ar21,multi/ar22,multi/bg0,multi/bg2,multi/de3,multi/de4,multi/es10,multi/es11"
+  CHAT="$CHAT,multi/fr7,multi/fr8,multi/ja18,multi/ja19,multi/ru12,multi/ru13,multi/zh15,multi/zh16,agent/text23,agent/bash17"
+  R57_KEYS=$CHAT MG=$MGC C45_ALARM=900 C45_REFTOK=$CHREF C45_ARMS="chA_$CC:$CC chB_$CC:$CC:R57_CHATSW=1" $RUN
+  say "chat switch checks (chA / chB) rc=$?"
+fi
+R57_KEYS=$KEYS MG=$MGC C45_ALARM=900 C45_REFTOK=$CHREF C45_ARMS="cmb0_$CC:$CC" $RUN
 say "cmb0 (the default) rc=$?"
-REF0="$HOME/BigMoE/data/r57/cmb0_256_tokens.json:gate+t"   # the default's own tokens: every later arm against them
+REF0="$HOME/BigMoE/data/r57/cmb0_${CC}_tokens.json:gate+t"   # the default's own tokens: every later arm against them
 [ -s "${REF0%%:*}" ] || { say "no cmb0 tokens: stop"; exit 1; }
-R57_KEYS=$KEYS MG=6 C45_ALARM=900 C45_REFTOK=$REF0 C45_ARMS="${CMB_ARMS:-cmbj0_256:256:BIGMOE_TIER_SIZES=$HOME/BigMoE/data/seed45/joint45_256_0.json cmbj2_256:256:BIGMOE_TIER_SIZES=$HOME/BigMoE/data/seed45/joint45_256_2070.json cmb1_256:256:$S1 cmb1c_256:256:$S1C cmb1t_256:256:$S1C,R57_CHATTRUNC=0.4 cmb2_256:256:$S2 cmb3_256:256:$S3 cmb4_256:256:$S4 cmb5_256:256:$S5 cmb6_256:256:$S6 cmb3t_256:256:$S4,R57_COPY=g2t cmb32_256:256:$S4,R57_ROWS=32 cmbsc_256:256:$S6,BIGMOE_TIER_SIZES=$HOME/BigMoE/data/seed45/laysz45_256_sc15.json}" $RUN
+J=""
+[ "$CC" = 256 ] && J="cmbj0_256:256:BIGMOE_TIER_SIZES=$HOME/BigMoE/data/seed45/joint45_256_0.json cmbj2_256:256:BIGMOE_TIER_SIZES=$HOME/BigMoE/data/seed45/joint45_256_2070.json "
+R57_KEYS=$KEYS MG=$MGC C45_ALARM=900 C45_REFTOK=$REF0 C45_ARMS="${CMB_ARMS:-${J}cmb1_$CC:$CC:$S1 cmb1c_$CC:$CC:$S1C cmb1t_$CC:$CC:$S1C,R57_CHATTRUNC=0.4 cmb2_$CC:$CC:$S2 cmb3_$CC:$CC:$S3 cmb4_$CC:$CC:$S4 cmb5_$CC:$CC:$S5 cmb6_$CC:$CC:$S6 cmb3t_$CC:$CC:$S4,R57_COPY=g2t cmb32_$CC:$CC:$S4,R57_ROWS=32 cmbsc_$CC:$CC:$S6,BIGMOE_TIER_SIZES=$HOME/BigMoE/data/seed45/laysz45_${CC}_sc15.json}" $RUN
 say "arms rc=$?"
 # the FAST preset (Kamen 21:31: two first-class tracks): EvalSuite's RELAX rules on the full exact stack, per prompt set as
 # its arms B + E (code mode: gate 0.99 + copy gate + the comment loophole; chat R1) and C + E (+ R1 on code / math);
 # quality-defined, so no REF2-T token check (EvalSuite's same-scores test judges them): tok/s, kept and the gated share
-R57_KEYS=$KEYS MG=6 C45_ALARM=900 C45_ARMS="${CMB_FAST:-fastBE_256:256:$S6,R57_FAST=BE,R57_REFTOK= fastCE_256:256:$S6,R57_FAST=CE,R57_REFTOK= fastBEn_256:256:$S6,R57_FAST=BE,R57_NAX=1,R57_REFTOK= fastBEh_256:256:$S6,R57_FAST=BE,R57_NAX=1,R57_H1C=1,R57_REFTOK= fastBEhw_256:256:$S6,R57_FAST=BE,R57_NAX=1,R57_H1C=1,R57_REFTOK=,R57_WARMSPLIT=3}" $RUN
+R57_KEYS=$KEYS MG=$MGC C45_ALARM=900 C45_ARMS="${CMB_FAST:-fastBE_$CC:$CC:$S6,R57_FAST=BE,R57_REFTOK= fastCE_$CC:$CC:$S6,R57_FAST=CE,R57_REFTOK= fastBEn_$CC:$CC:$S6,R57_FAST=BE,R57_NAX=1,R57_REFTOK= fastBEh_$CC:$CC:$S6,R57_FAST=BE,R57_NAX=1,R57_H1C=1,R57_REFTOK= fastBEhw_$CC:$CC:$S6,R57_FAST=BE,R57_NAX=1,R57_H1C=1,R57_REFTOK=,R57_WARMSPLIT=3}" $RUN
 say "FAST arms rc=$?"
-"$HOME/BigMoE/.venv/bin/python" scripts/combo_report.py >> "$LOG" 2>&1; say "report rc=$? (data/cmb/combo_report.txt)"
+CMB_C=$CC "$HOME/BigMoE/.venv/bin/python" scripts/combo_report.py >> "$LOG" 2>&1; say "report rc=$? (data/cmb/combo_report.txt)"
 say "combination end"

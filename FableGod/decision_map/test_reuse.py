@@ -100,6 +100,29 @@ for nm, want in (("cert_top2_p099", ("cert", "topk2", 0.99, 2)), ("cert_top5_p09
     print(f"{nm}: gate {C.PERT.get('gate')} {'ok' if ok else 'MISMATCH'}")
 C.PERT.clear(); ablation("acert_top2_p07_p09_cf099")(); ok = C.PERT.get("gate") == ("acert", "topk2", 0.7, 0.9, 0.99, 2)
 bad += not ok; print(f"acert_top2_p07_p09_cf099: gate {C.PERT.get('gate')} {'ok' if ok else 'MISMATCH'}")
+for nm_, want in (("gate_bands+hc8w", None), ("gate_bands+moe_reuse_chain1_L08_35_dcf0999", ("bands",)),
+                  ("gate_top0_cf0999_L08_35", ("top", 0.999, 0))):     # FLOOR night names (Tue 07:0x)
+    C.PERT.clear(); f_ = ablation(nm_)
+    if want is None: ok = callable(f_)                      # hc8w swaps model weights: parse only
+    else:
+        f_(); ok = C.PERT.get("gate") == want
+        if "chain" in nm_: ok = ok and C.PERT.get("chain_gate") == 0.999 and C.PERT.get("chain_max") == 1 and min(C.PERT["reuse"]) == 8
+        if nm_.startswith("gate_top0"): ok = ok and C.PERT.get("k_layers") == set(range(8, 36))
+    bad += not ok; print(f"{nm_}: {'ok' if ok else 'MISMATCH'}")
+C.PERT.clear(); ablation("hyb_0.9_u8_t3")()                   # the FLOOR step-5 combo (Tue 07:1x)
+ok = (C.PERT.get("rmask"), C.PERT.get("gate"), C.PERT.get("t3"), C.PERT.get("t3k")) == ("hyb_0.9_u8_t3", ("t3mask",), 3, 2)
+bad += not ok; print(f"hyb_0.9_u8_t3: {'ok' if ok else 'MISMATCH'}")
+C.PERT.clear(); ablation("p1_oea_k1_ku4_t3")()                # the 12 GB pass-1 stack (Tue 15:0x)
+ok = (C.PERT.get("gate"), C.PERT.get("t3"), C.PERT.get("t3k"), C.PERT.get("t3keep")) == (("t3keep",), 3, 10, True)
+T = 12; rm = np.ones((T, 48, 10), bool); rm[3:9, :, 4:] = False; C.CUR["rm"] = rm; C.CUR["kpos"] = {}; C.CUR["L"] = 5
+kk = np.full(T, 10, np.int32); kk[~rm.all(axis=(1, 2))] = 0; C.CUR["k"] = kk           # measure()'s t3keep derivation
+kp = C._row_rm(T); ok = ok and (kk[3:9] == 0).all() and not kp[3:9].any() and kp[:3].all() and kp[9:].all()
+bad += not ok; print(f"p1_oea_k1_ku4_t3: settings, t3 rows = cut rows, stock path empty on them: {'ok' if ok else 'MISMATCH'}")
+C.clear(); C.PERT.update(gate=("top", 0.999, 0), k_layers={9}); C.CUR["k"] = np.zeros(5, np.int32); C.CUR["kpos"] = {}
+C.CUR["L"] = 3; k3 = C._row_k(5); C.CUR["L"] = 9; k9 = C._row_k(5)
+ok = (k3 == 10).all() and (k9 == 0).all() and C.CUR["kpos"] == {3: 5, 9: 5}; bad += not ok
+print(f"per-layer k (k_layers): outside all 10, inside the gate's k, rows counted in both: {'ok' if ok else 'MISMATCH'}")
+C.clear()
 C.PERT.clear(); ablation("moe_reuse_chain1_L08_35_dcf099")(); ok = C.PERT.get("chain_gate") == 0.99 and C.PERT["chain_max"] == 1
 bad += not ok; print(f"moe_reuse_chain1_L08_35_dcf099: chain_gate {C.PERT.get('chain_gate')} {'ok' if ok else 'MISMATCH'}")
 import dm_gate

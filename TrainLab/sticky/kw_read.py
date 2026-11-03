@@ -31,7 +31,7 @@ for r in R:
     top3 = t in set(int(x) for x in cand[o[:3]]); d1 = int(cand[o[0]]) == t
     mi = mk.get(r["nm"][:-4]); mt = None
     if mi is not None:
-        a0 = max(0, int(M["gen"][mi]) - 2); rr = A - a0
+        a0 = max(0, int(M["gen"][mi]) - 2); rr = A - 1 - a0     # MTP anchor s = A - 1 (fixed 11-03: was A - a0, one position late)
         rk = M[f"rk_{mi}"]
         if 0 <= rr < rk.shape[0]:
             mt = int(rk[rr, j]) == 0

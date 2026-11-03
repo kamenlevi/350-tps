@@ -20,7 +20,7 @@ def simulate(ids, gen, dfl, mtp, a0, arm, gate):
     cg = copygate.CopyGate(list(map(int, ids)), gen, "copygate") if gate else None
     A, kept, n = gen, [], len(ids)
     while A < n - 1:
-        r = A - a0
+        r = A - 1 - a0                                     # MTP anchor s = A - 1 predicts A + 1 at depth 1 (fixed 11-03: was A - a0)
         if r < 0 or r >= am.shape[0]:
             break
         m = min(31, n - 1 - A)

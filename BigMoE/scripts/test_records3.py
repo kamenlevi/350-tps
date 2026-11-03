@@ -16,6 +16,7 @@ MD = os.path.expanduser("~/BigMoE/models/bare")
 L = int(sys.argv[1]) if len(sys.argv) > 1 else 0
 N = max(16, int(sys.argv[2]) if len(sys.argv) > 2 else 96)
 r = json.load(open(os.path.join(MD, "records3", "index.json")))["layers"][str(L)]
+assert r.get("layout", "row-major") == "row-major", "records3 is converted (docs/PLAN_records3_convert.md): this script reads row-major records only"
 path3 = os.path.join(MD, "records3", r["file"])
 hdr = read_headers(MD)
 pre = f"language_model.model.layers.{L}.mlp.switch_mlp"

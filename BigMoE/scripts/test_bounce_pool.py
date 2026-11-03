@@ -43,6 +43,7 @@ def threads():
 
 
 r3 = json.load(open(os.path.join(MD, "records3", "index.json")))["layers"][str(L)]
+assert r3.get("layout", "row-major") == "row-major", "records3 is converted (docs/PLAN_records3_convert.md): this script reads row-major records only"
 rm = json.load(open(os.path.join(MD, "records3m", "index.json")))["layers"][str(L)]
 sizes = r3["msb_piece_size"]
 P = [mx.zeros((SLOTS, n // 2), mx.uint16) for n in sizes]; mx.eval(*P)

@@ -1,0 +1,10 @@
+Q1-ON-MISS arms: all-row flips per domain vs Q1 at 0.99's level (code 1.34 / IFEval 5.42 / multi 3.69 %); PASS <= 1x, BETWEEN <= 1.5x, KILL above
+| arm | code | IFEval | multi | verdict per domain |
+|---|---|---|---|---|
+| gate_top2_cf09 | 1.78 % (60) | 8.86 % (301) | 7.60 % (270) | BETWEEN / KILL / KILL |
+| q1u_0.9_live | 1.25 % (42) | 6.45 % (219) | 3.77 % (134) | PASS / BETWEEN / BETWEEN |
+| qom_0.9_live | not run | | | |
+| qom_0.5_live | not run | | | |
+| qom_0_live | not run | | | |
+
+Paired (McNemar: only-A, only-B, z):

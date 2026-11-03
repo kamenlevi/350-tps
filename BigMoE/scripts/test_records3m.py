@@ -22,6 +22,7 @@ MD = os.path.expanduser("~/BigMoE/models/bare")
 LAYERS = [int(x) for x in (argv[0] if argv else "0,23,47").split(",")]
 N = max(16, int(argv[1]) if len(argv) > 1 else 96)
 ix3 = json.load(open(os.path.join(MD, "records3", "index.json")))["layers"]
+assert all(r.get("layout", "row-major") == "row-major" for r in ix3.values()), "records3 is converted (docs/PLAN_records3_convert.md): this script reads row-major records only"
 ixm = json.load(open(os.path.join(MD, "records3m", "index.json")))["layers"]
 hdr = read_headers(MD)
 ok = True

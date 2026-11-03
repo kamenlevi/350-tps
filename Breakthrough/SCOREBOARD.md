@@ -2349,3 +2349,161 @@ sure / tie / mid (dmargin), code | IFEval | multi:
   Q1's at the same theta by construction (kept experts ~8.4 per row-layer). Q1-UNION at 0.9 has fewer flips than Q1 at
   0.99 on every measure while reading Q1-at-0.9's bytes: the lower theta Fable C predicted. Deterministic and
   token-repeatable (no cache state).
+- PRIOR ART (NewIdeas Tue 07:0x): Q1-UNION's union step is published as OEA, Opportunistic Expert Activation (arXiv
+  2511.02237, ICML 2026): every token keeps top-k0 and adds lower ranks only if the batch already loads them. New here:
+  k0 set per row by the drafter's cf (the sure rows' k0 2).
+
+## OEA AND THE UNION STACK (NewIdeas Tue 07:0x): PRE-REGISTRATION (Tue 07:1x, before the runs)
+- Arms (masks ~/NewIdeas/data/dm_masks/<arm>, NewIdeas' generator; its q1u_0.9 equals my out/q1u_cf09 on 36 of 36
+  windows; wired as q1_union(<abs dir>), mass, test_reuse ALL OK): oea_k8 / oea_k6 = every row keeps top-k0 + the
+  rank > k0 experts already in its check's union; hyb_0.9_u8 / hyb_0.9_u6 = drafter-sure rows (cf >= 0.9) k0 2, the
+  others k0 8 / 6. Union bytes per check vs exact (NewIdeas' CPU, same blocks; code / IFEval / multi): oea_k8 x0.828 /
+  0.834 / 0.814, oea_k6 x0.647 / 0.661 / 0.631, hyb_0.9_u8 x0.527 / 0.756 / 0.762, hyb_0.9_u6 x0.435 / 0.603 / 0.594
+  (Q1-UNION 0.9: x0.618 / 0.903 / 0.934).
+- Lines (NewIdeas' proposal, kept): per domain, all-row flips <= Q1 at 0.99's level (code 1.34, IFEval 5.42, multi
+  3.69 %) = PASS, up to 1.5x = BETWEEN, above = KILL; gated code flips (cf >= 0.99) reported beside. Read-out
+  dm_oea_read.py -> out/OEA_read.txt. Slot: the orchestrator's (today's one MEM job, or Wed before 00:30).
+
+## FLOOR NIGHT 1 (mission 13 narrowed; Fable's FLOOR_125B.md section 5; the orchestrator Tue 07:0x): PRE-REGISTRATION
+## (Tue 07:2x, before the runs; Wed 00:30 -> deadline Wed 15:00, after BigMoE's measurement if that runs first)
+- Windows: the 78 with HPD-0 cf walks: HumanEval 24, IFEval 30, multi 24 (measured rows 6,327 / 6,923 / 6,731 = 19,981,
+  2x the 36-window map; 27,404 positions). GSM8K / agent / MBPP wait for MTP Head's walks (asked 07:2x) and a second night.
+  Data: ~/Breakthrough/data/floor1 (78) and floor1_36 (the extras), DM_OUT; gate file built for 78 (dm_gate DM_MAX 30).
+- Runs, in order: (1) capture = the baseline + routing (its flips vs itself 0), then the gate check (baseline vs D-02a's
+  stored top-1 >= 99.9 %); (2) section 5's runs 1-4 on the 78: gate_bands, gate_top2_cf0999, gate_top5_cf099,
+  gate_bands+hc8w; (3) extras 5-7 on the 36: gate_bands+moe_reuse_chain1_L08_35_dcf0999 (the bounded chain on cf >= 0.999
+  rows stacked on the bands), gate_top0_cf0999_L08_35 (skip, k 0, on cf >= 0.999 rows in layers 8-35), gate_top4_cf099;
+  (4) Q1-UNION 0.9 at scale (masks on CPU after the capture) and, if today's map passes an OEA / hybrid arm, the best one.
+  Guards: the deadline, a swap guard (+2 GB stops the tree), others' quiet windows, PAUSE > 5 min, the lid.
+- Lines (section 5's, as written; counts scale with the rows):
+  - NEW WORLD-with-margin: band flip rates <= 0.02 % in the >= 0.999 band and <= 0.1 % in 0.99-0.999 on code, <= 0.3 %
+    per band on IFEval / multi; the whole sequence at the twin's level: 125B-sure rows <= 0.1 %, non-tie rows <= 1 % on
+    code and <= 5 % on chat; AND the C 256 replay on the night's routing <= 0.45 GB of expert reads per kept token at
+    12.5 and <= 30 MB of misses per kept token.
+  - EDGE: the >= 0.999 band flips > 0.1 %, or 125B-sure rows move > 0.3 % through the context, or bytes > 0.6 GB per
+    kept token.
+  - KILL of the mechanism: the 0.99-0.999 band at top-4 / top-5 > 1 %, or non-tie deviation > 2 % on code.
+  - Side verdicts: run 5 adopts reuse only if < 1 % stacked on the gated rows with no extra sure-row movement; run 6
+    decides skip; Q1-UNION / OEA at scale against their 36-window lines (a6dd04e, 78ccef8).
+- Added to the same load (NewIdeas Tue 07:3x; optional; pre-registered before the runs): hyb_0.9_u8_t3 and q1u_cf09_t3 =
+  the arm's mask with the sure rows' (cf >= 0.9) ranks 0-1 served from records3 at 3 bits through dm_t3 (gate ("t3",
+  0.9)), their union-member ranks 2-9 at 4 bits; masks dm_q1u_masks.py <arm>:t3 (36/36: unsure rows = the arm's, sure
+  rows' ranks 2-9 = the arm's, ranks 0-1 off). The 3-bit sure-rows arm was map-tested at cf 0.99 / 0.999 only. Line as
+  the others: per domain all-row flips <= Q1 at 0.99's level = PASS, <= 1.5x BETWEEN, above KILL. My mask builder now
+  reproduces NewIdeas' masks bit for bit (oea_k8 / k6, hyb_0.9_u8 / u6, q1u 0.9: 36/36 each) and builds them for the 78.
+- RESULTS Tue 10:1x (one load, 09:31-10:18; OEA_read.txt / CERT_read.txt): per-domain all-row flips vs Q1 at 0.99's
+  levels (code 1.34 / IFEval 5.42 / multi 3.69 %): oea_k8 0.62 / 3.83 / 3.07 % PASS / PASS / PASS (union bytes x0.83,
+  gated code 0/2211); oea_k6 0.71 / 6.06 / 5.38 % PASS / BETWEEN / BETWEEN; hyb_0.9_u8 1.34 / 6.18 / 4.08 % PASS /
+  BETWEEN / BETWEEN; hyb_0.9_u6 1.28 / 8.01 / 5.71 % PASS / BETWEEN / KILL; hyb_0.9_u8_t3 1.19 / 6.68 / 4.39 % PASS /
+  BETWEEN / BETWEEN; q1u_cf09_t3 1.19 / 5.06 / 3.24 % PASS / PASS / PASS (3-bit sure rows on Q1-UNION 0.9 cost +0.2
+  points on code, ~+0.1-0.2 on chat). The leftover two-pass arms all PASS their line: theta 0.95 0/2771 (all code 1.22 %),
+  top-5 0.9 0/3024 (0.92 %), acert 0.7/0.9 3/2911 (1.49 % = plain 0.9's), acert 0.5/0.8 8/2999 (1.66 % vs plain 0.8's
+  1.63 %, pass 2 in 52 vs 55 % of code blocks: worth taking over plain 0.8 by b43930c's rule). The night's step C takes
+  q1u_cf09 + q1u_cf09_t3 + oea_k8 at scale (hyb_0.9_u8 is BETWEEN on chat, so not its +3-bit). P1-OEA's three JSONs are
+  NewIdeas' to read.
+
+## 3-BIT PASS 1 (M-18 for the 12 GB two-pass; Fit12's item 4): PRE-REGISTRATION (Tue 10:4x, before the runs)
+- Runs (36 windows, built and unit-tested; t3 path = test_t3 ALL OK): t3_top2_all = every row's top-2 from records3 at 3
+  bits (the certificate source, as topk2 is for the 4-bit pass 1); t3cert_top2_p08 = rows whose own p1 under the 3-bit
+  cut >= 0.8 take their top-2 at 3 bits, the rest exact. Read-out dm_cert_read.py (its row "t3cert_top2_p08").
+- Lines: the sweep's (certified code rows of the mixed run <= 1 % PASS, > 5 % KILL); the 3-bit pass 1 is worth taking
+  over the 4-bit one (cert_top2_p08: 8/2976 certified, all code rows 1.63 %, pass 2 in 55 % of code blocks) when it
+  PASSes, its all-code-row flips stay within cert_top2_p08's 95 % CI, and its blocks needing pass 2 are <= +5 points.
+  Bytes: pass-1 records at ~0.75 of 4-bit (MSB-3).
+- RESULT Tue 11:00 (NewIdeas' read of the live-cut arms, ~/NewIdeas/data/LIVE_read.txt): q1u_0.9_live 1.25 / 6.45 / 3.77 %
+  (code / IFEval / multi) = PASS / BETWEEN / BETWEEN, worse than the 16-row q1u_cf09 everywhere (paired z +2.2 / +4.3 /
+  +2.6): the map's 16-row unions overstate Q1-UNION's chat quality; reach_0.9_0.5_live 1.28 / 6.80 / 4.31 % (a code-only
+  add-on). P1 mixed runs: P1-K1 certified code flips 7/2997 = the control's 7/3019 (PASS), all code rows 1.52 vs 1.96 %.
+  Consequence for FLOOR night 1: data/floor1/LIVE_CUT is set, so step B builds q1u_cf09 and q1u_cf09_t3 on live-cut
+  checks (my builder: NewIdeas' live_segments copied, bit-identical 36/36); oea_k8 as is. The t3 arms now take their
+  3-bit rows from the mask (gate ("t3mask",)), so a live cut's exact bonus row is never served twice.
+- RESULT 3-bit pass 1 Tue 11:1x (t3_top2_all 339 s, t3cert_top2_p08 310 s; CERT_read.txt): PASS and worth taking over the
+  4-bit pass 1 by its rule. Code: certified share 88.2 vs 88.4 %; certified-row flips 4/2970 = 0.13 % [0.05-0.35] vs
+  8/2976 = 0.27 % (pass 1 alone 6 vs 10); all code rows 1.75 vs 1.63 % (inside cert_top2_p08's CI); pass 2 in 57 vs 55 %
+  of code blocks (+2 <= +5). Chat all rows: IFEval 8.83 vs 8.51 %, multi 6.95 vs 7.04 %. With P1-K1 (pass 1 = top-1 +
+  union, PASS, reads x0.465) the two quality-cleared pass-1 levers stack to ~0.71 x 0.465 x 0.75 = ~0.25 GB of pass-1
+  reads per check at C 51 [P; the stack itself is not map-tested]; Fit12 times both in its 14:3x lock.
+- FLOOR NIGHT 1 HEAD (S0; the orchestrator 14:5x, NewIdeas 14:54, pre-registered in its QUEUE): p1_oea_k1_ku4_t3 = the
+  12 GB pass-1 stack, all rows: P1-K1 capped to each row's first 4 kept ranks (Fit12's KU 4; NewIdeas' masks oea_k1_ku4),
+  every kept rank on the cut rows served from records3 at 3 bits (dm_t3 routed_topk K 10 with the rank mask; test_t3:
+  1.9e-2 rel err vs a dequantize reference), uncut rows exact; then top_k8 (plain top-8, 4-bit). 36 windows. Lines
+  (NewIdeas'): code, theta 0.8, vs p1_top_k2: certified flips <= 0.48 % and blocks needing pass 2 <= 63 % = PASS, > 0.96 %
+  or > 73 % = KILL; top_k8 per domain vs Q1 at 0.99's levels. NewIdeas reads both (p1_cert_read.py, live_read.py).
+
+## STAGED VERIFICATION (BREAKTHROUGH PUSH, the orchestrator Tue 17:0x; ~/FableGod/push/BREAKTHROUGH_PUSH.md): PRE-REGISTRATION (Tue 17:1x, before any replay)
+- Question: does a cheap pass pick the right path out of the drafter's top-3 tree, so that ONE exact pass on that path
+  keeps more per check? EXACT by construction (the exact pass keeps only tokens equal to its own argmax, + its bonus); the
+  cheap pass only changes how much is kept. Prior art: trees (SpecInfer, EAGLE-2, Sequoia) and cascade / self-speculative
+  verification are published; a tree pass at a cheap-row price (P1-K1 / 3-bit / resident-only) feeding one exact chain
+  is adapted.
+- Replay (CPU, decision_map/dm_staged.py): HPD-0's 16-row checks on the map windows (anchor A; draft j predicts ids[A+j+1]);
+  truth = the window's tokens; drafter = DFlash2 L1-20's 16 candidates + teacher-forced selector softmax per depth (mission
+  24's TL_WALK_TOP16 table: code = ~/TrainLab/data/d02b_walk_kw_code.npz now; IFEval / multi = MTP Head's aligned data when
+  it lands); a node's children = its top-3 by that softmax.
+- Trees: T-inf = the width-3 lattice to depth 15 (the ceiling); T_N = static best-first trees of N = 32 / 64 / 128 nodes
+  (+ the anchor row) from the truth's per-depth rank frequencies, leave-one-window-out per domain (Sequoia / EAGLE-style);
+  the chain 0^15 (self-check).
+- Cheap pick: greedy from the anchor; at each node the child with the highest cheap logprob at that node's row (the arm's
+  top-8 on the map; children outside it rank below; none inside = the drafter's first child, counted 'unresolved'). Exact
+  pass: one pass on the chosen path; kept = its leading drafts equal to the truth + 1.
+- Cheap arms = all-row map runs, teacher-forced through the whole window (so conservative vs a tree pass with exact KV
+  before the anchor and a wider union): primary p1_oea_k1 (P1-K1 = top-1 + the check's union members); information
+  t3_top2_all, topk2, t3_all, oea_k6, oea_k8, p1_top_k2, and S0's p1_oea_k1_ku4_t3 / top_k8 when they land. A resident-only
+  C 256 cheap pass needs a GPU map arm (after FLOOR; pre-registered separately).
+- Metrics per domain (code; chat = IFEval + multi pooled): kept per exact pass (chain / oracle / staged, per tree and arm);
+  M2 = share of checks whose chosen path follows the truth as far as the tree holds it (staged depth = oracle depth);
+  fidelity = (staged - chain) / (oracle - chain); unresolved picks; cheap and exact rows per check. Information: + a cheap
+  tail (where the truth leaves the tree, the cheap pass's own argmax as one more draft); a cheap cut (the chosen path cut
+  where the product of the cheap pick probabilities < 0.3) vs the chain with DFlash2's live cut (t 0.3), as kept per exact row.
+- Excluded: each window's first check (its anchor row is not a measured map row).
+- Self-checks: (S1) the chain tree gives the walk's k + 1 at every check for every arm; (S2) a perfect picker gives staged =
+  oracle at every check and tree; (S3) per domain the drafter table's top-1 chain = the walk's k at every check (code
+  391/391), else that domain is not read.
+- Lines (primary arm p1_oea_k1, tree T_64): PASS (worth a GPU cost screen + Fable B's row price) = staged >= x1.25 the
+  chain's kept per exact pass on chat AND fidelity >= 0.75 on chat, with code >= x1.05; KILL = the T_64 oracle itself
+  < x1.15 on chat and < x1.05 on code (no top-3 headroom inside 64 rows), or fidelity < 0.5 on both domains (the cheap pass
+  cannot pick); BETWEEN otherwise. tok/s is priced afterwards with Fable B's row costs (ROW_WALL.md) [P], gains halved.
+- Prediction [G]: code chain ~11.4 per check, T_64 oracle +5-10 %, staged +4-8 %; chat chain ~2.8, T_64 oracle +30-45 %,
+  staged +20-35 %, fidelity ~0.8; M2 ~0.85 code / ~0.9 chat: BETWEEN-to-PASS on chat.
+- RESULT Tue 17:1x (decision_map/dm_staged.py, 20 s CPU; out/STAGED_read.txt; S1 / S2 / S3 ok; checks: code 379, IFEval
+  1361, multi 1833 on the 36 windows; IFEval / multi tables = MTP Head's d02b_walk_kw_{ifeval,multi}.npz, 17:11): KILL by
+  the line (the primary cheap pass cannot pick). p1_oea_k1 on T_64: code chain 8.43 -> oracle 9.17 (x1.087) -> staged
+  8.78 (x1.041), fidelity 0.47, M2 0.873; chat 2.16 -> 2.70 (x1.247) -> 2.34 (x1.084), fidelity 0.34, M2 0.827. Lattice:
+  code oracle x1.244, staged x1.135 (0.56); chat x1.309, x1.118 (0.38).
+  Why (post-hoc breakdown, lattice true-path nodes): P1-K1 saves 82 / 72 / 74 % of the drafter's misses (code / IFEval /
+  multi; truth = its #2 or #3) but breaks 1.2 / 6.3 / 7.0 % of its RIGHT picks (top-2-class arms the same): the tree's
+  headroom sits exactly at the rows where cheap passes leave the exact model. Near-exact passes pick: oea_k8 / oea_k6 /
+  t3_all save 93-98 % and break 0.1-1.5 %, fidelity 0.85-0.97 (T_64: code x1.08, chat x1.21-1.23), but they read
+  x0.65-0.83 of exact's bytes per row, so a 65-row tree pass costs more than the 16-row exact pass it replaces.
+  Headroom: even a perfect picker on T_64 gives chat x1.247 / code x1.087 (the line's x1.25 is out of reach for this
+  tree); the lattice (x1.31 / x1.24) needs one cheap step per depth (MTP Head's 'beam').
+  Information: the shipped chain with its live cut keeps code 8.23 at 10.1 exact rows (0.82 per row), chat 2.08 at 3.3
+  (0.63); oea_k8 on T_64 with the cheap cut keeps code 8.98 at 9.1-10.0 rows (~0.94), chat 2.55 at 2.6-3.5 (~0.83); its
+  tail token adds +0.8 / +1.0 per check. So a near-exact picker would make the exact pass nearly waste-free; it is a
+  lever only if such a pass is nearly free (resident-only at C 256: quality unmeasured, a GPU map arm after FLOOR).
+
+## RESIDENT-ONLY PICKER (the staged-verification lead; the orchestrator Tue 17:2x: "yes ... run it Wed after 15:00 with NewIdeas' QOM arms"): PRE-REGISTRATION (Tue 17:3x, before the masks' GPU run)
+- Arm res_c256 (36 windows, decision_map/out): every realized row of each HPD-0 check (A .. first miss) keeps ONLY the
+  experts resident in the base pool at its check's start, all ranks, 4-bit, the model's own weights (renorm off, as the
+  union arms); prompt rows exact. The pool moves by the exact pass alone: each check then loads its union (all ranks of
+  its 16 rows, the rows after the first miss by the wrong-draft stand-in p + 97). LRU replay = NewIdeas' (qom arms,
+  ~/NewIdeas/scripts/dm_oea_masks.py) copied: per-layer base pool C_m of ~/MoonShots/data/laysz45_256.json (mean 295 of
+  512), carried across a domain's windows in walk order, prompt rows warm it, plain LRU (no popularity prior: slightly
+  pessimistic). Builder decision_map/dm_res_masks.py; self-check: its qom mode at theta 0 on live checks = NewIdeas'
+  qom_0_live masks bit for bit.
+- Read-out: dm_staged.py with res_c256 as the picker (the pre-registered replay, 54036cf), plus its all-row flips per
+  domain vs the baseline argmax (dm_oea_read.py's method) and the kept share of realized row-layer experts.
+- Lines (T_64, as the replay): PASS = fidelity >= 0.85 on code AND on chat (a resident-only tree pass picks like a
+  near-exact one: then Fable B prices its compute for a ~65-row tree); KILL = fidelity < 0.6 on chat; BETWEEN otherwise.
+  Information: staged/chain, the cheap cut (kept per exact row vs the shipped cut chain's 0.82 / 0.63), the tail token.
+- Prediction [G]: kept share ~0.93-0.96 of row-layer experts; all-row flips between oea_k8's and topk5's; fidelity
+  ~0.75 code / ~0.70 chat: BETWEEN. Flag: outputs depend on the cache state (not token-repeatable), FAST at best as a
+  generator; as a picker the output stays EXACT (the exact pass decides every kept token).
+- Added Tue 17:5x, before the run: res_c256 also reads as a FAST decode mode on its own (skip every miss, load it for
+  later checks: no demand reads). Lines = dm_oea_read.py's (all-row flips per domain vs Q1 at 0.99's level: PASS <= 1x,
+  BETWEEN <= 1.5x, KILL above). Prediction [G]: code BETWEEN (96.5 % kept, rank 0 98.8 %), chat PASS (99.1 %).
+- WITHDRAWN Tue 17:4x, before any run (the orchestrator agreed): Fable B's ROW_WALL.md prices a resident-only row at
+  2.64-3.0 ms today / ~1.0 at the floor engine (its resident expert pairs still run), so a ~65-row resident-only tree pass
+  costs 65-195 ms per cycle against a 96.8 ms cycle, whatever its fidelity; and MoonShots' M-16 already measured the
+  resident-only pass's agreement with exact (code 0.97-0.996, chat 0.85-0.985 of rows at C 224), which answers the FAST
+  line. The masks stay in out/res_c256; Wed's day slot runs NewIdeas' three QOM arms only.

@@ -2,7 +2,11 @@
   .venv/bin/python pending/test_relax.py   -> one line per check, exit 0 when all pass"""
 import math, os, sys
 import numpy as np
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_here = os.path.dirname(os.path.abspath(__file__))
+for _d in (os.path.join(os.path.dirname(_here), "evalsuite"), _here):   # relax_core: evalsuite/ once wired
+    if os.path.exists(os.path.join(_d, "relax_core.py")):
+        sys.path.insert(0, _d)
+        break
 from relax_core import R, committed, gate_rows, keep_mask, kept, kld_top, prompt_grams, union_bytes, union_counts
 
 ok = True
@@ -128,6 +132,26 @@ try:
     u_mask = len(np.unique(np.array(inds)))
     u_route = len(np.unique(np.array(mx.where(keep, inds, inds[..., :1]))))
     check(f"route posts fewer distinct ids ({u_route} vs {u_mask})", u_route <= u_mask)
+    # Q1-UNION: the graph's mask == the numpy reference (Breakthrough's dm_q1u_masks rule) on random checks
+    from relax_core import gate_keep_mx, q1u_keep
+    rng_ = np.random.default_rng(7)
+    same_u = same_q = superset = no_new = True
+    for trial in range(200):
+        ids_ = np.stack([rng_.choice(64, 10, replace=False) for _ in range(R)]).astype(np.uint32)   # rank-sorted rows
+        sure_ = rng_.random(R) < 0.6
+        sure_[15] = False
+        ku = np.array(gate_keep_mx(mx.array(ids_)[None], mx.array(sure_), True))
+        kq = np.array(gate_keep_mx(mx.array(ids_)[None], mx.array(sure_), False))
+        same_u &= np.array_equal(ku, q1u_keep(ids_, sure_))
+        same_q &= np.array_equal(kq, keep_mask([int(x) for x in sure_]) if sure_.any() else np.ones((R, 10), bool))
+        superset &= bool((ku | ~kq).all())                    # every slot Q1 keeps, Q1-UNION keeps
+        posted = set(np.where(ku, ids_, ids_[:, :1]).ravel().tolist())
+        union_q1 = set(np.where(kq, ids_, ids_[:, :1]).ravel().tolist())
+        no_new &= posted == union_q1                          # the loader posts Q1's union: no new expert, same bytes
+    check("Q1-UNION mask in the graph == the numpy reference (200 random checks)", same_u)
+    check("Q1 mask in the graph == keep_mask (200 random checks)", same_q)
+    check("Q1-UNION keeps every slot Q1 keeps", superset)
+    check("Q1-UNION posts exactly Q1's expert union (no new expert, same bytes)", no_new)
 except ImportError:
     print("skip MLX checks (no mlx)")
 print("ALL OK" if ok else "SOME FAILED")

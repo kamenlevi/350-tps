@@ -27,10 +27,18 @@ RUN="/bin/bash data/r57/snap/c45_runner_la.sh"
 export C45_SCREEN=data/r57/snap/r57_screen_la.py C45_DEADLINE=${LA_DEADLINE:-1420} C45_OUT="$HOME/BigMoE/data/la45"
 B="BIGMOE_EXT_BUILD=build_la"
 P="$B,R57_ARMS=gate+t+pf,BIGMOE_PRED_LINES=4,R57_SPARE=16"
+CC=${LA_C:-256}; MGC=${LA_MG:-5}                       # LA_C (11-03: 224 when 256 does not fit the ~45 GB idle NO-SWAP)
 say "look-ahead start (pid $$, HAVE_LOCK=$HAVE_LOCK)"
-MG=5 C45_ARMS="${LA_ARMS:-la0_256:256:$B la1_256:256:$P la2_256:256:$P,BIGMOE_PF_SIDE=24 la3_256:256:$P,BIGMOE_PF_SIDE=24,R57_CORR=$HOME/Fit12/data/r57b la4_256:256:$P,BIGMOE_PF_SIDE=24,BIGMOE_JOINT=1}" $RUN
+MG=$MGC C45_ARMS="${LA_ARMS:-la0_$CC:$CC:$B la1_$CC:$CC:$P la2_$CC:$CC:$P,BIGMOE_PF_SIDE=24 la3_$CC:$CC:$P,BIGMOE_PF_SIDE=24,R57_CORR=$HOME/Fit12/data/r57b la4_$CC:$CC:$P,BIGMOE_PF_SIDE=24,BIGMOE_JOINT=1}" $RUN
 say "arms rc=$?"
 K="$B,BIGMOE_SSD_KEEPALIVE_US=50"
-MG=5 C45_ARMS="${KA_ARMS:-ka0_256:256:$B ka1_256:256:$K ka0r_256:256:$B ka1r_256:256:$K}" $RUN
+MG=$MGC C45_ARMS="${KA_ARMS:-ka0_$CC:$CC:$B ka1_$CC:$CC:$K ka0r_$CC:$CC:$B ka1r_$CC:$CC:$K}" $RUN
 say "keepalive arms rc=$?"
+# the volatile expert tier smoke (BIGMOE_VTIER on ext/build_vt; added 11-03 15:3x, unit-tested: scripts/test_vtier.py PASS):
+# vt0 = the default on build_vt, vt1 = + a 64 / 32-slot tier per base / sidecar pool (~7.8 GB volatile at C 224, about C 288
+# of base slots). Line (pre-registered before any run): exact (every token == REF2-T); PASS = SSD MB per kept token <= -10 %
+# vs vt0 with steady tok/s not down; KILL = MB down < 3 % or tok/s down > 2 %; else BETWEEN. The tier's GB beside the peak.
+V="BIGMOE_EXT_BUILD=build_vt"
+MG=$MGC C45_ARMS="${VT_ARMS:-vt0_$CC:$CC:$V vt1_$CC:$CC:$V,R57_VTIER=64,32}" $RUN
+say "volatile tier smoke rc=$?"
 say "look-ahead end"

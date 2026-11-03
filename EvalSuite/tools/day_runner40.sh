@@ -8,7 +8,8 @@
 # starts in the last 90 min; what is left (G first, then C, then F: the PREREG's drop order) waits for a new launch.
 # Kamen's schedule: big tests weekdays 00:30-15:00 only. NO-SWAP >= peak + 4 GB after the grant (cli). Code pin: the
 # snapshots, MoonShots' planes_engine, evalsuite/ (relax.py, replay.py, relax_core.py), Leap's drafter, the keys,
-# MLX / mtplx; a change stops it (exit 7). Stop it by pid only, and its cli child too.
+# MLX / mtplx; a change stops it (exit 7), and so does records3's in-place conversion (exit 8). Stop it by pid only, and
+# its cli child too.
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 cd "$HOME/EvalSuite" || exit 1
 LOG=results/day40_runner.log
@@ -47,6 +48,10 @@ calm() {
     sleep 30
   done
 }
+R3IDX=$HOME/BigMoE/models/bare/records3/index.json
+converted() {   # BigMoE's in-place records3 conversion (PLAN_records3_convert): the frozen engine reads row-major only
+  grep -q '"layout"' "$R3IDX" || [ "$(grep -o '"recsz": [0-9]*' "$R3IDX" | sort -u)" != '"recsz": 2932736' ]
+}
 pin() {
   { shasum snap/leap-faff8e5/*.py results/relax/keys_*.txt
     (cd "$EVALSUITE_BIGMOE_CODE" && find bigmoe ext -type f ! -path '*__pycache__*' | sort | xargs shasum)
@@ -81,6 +86,7 @@ for arm in $ARMS; do
   NOPROG=0
   while [ "$(have $arm)" -lt "$(want $arm)" ]; do
     calm
+    converted && { say "records3 is converted (index.json): the frozen engine reads it row-major: runner stops"; exit 8; }
     [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }
     [ "$(left)" -gt 5400 ] || { say "deadline near: runner stops (arm $arm at $(have $arm)/$(want $arm))"; exit 6; }
     b=$(have $arm)
@@ -95,6 +101,7 @@ for arm in $REPLAY; do
   NOPROG=0
   while [ "$(replayed $arm)" -lt "$(have $arm)" ]; do
     calm
+    converted && { say "records3 is converted (index.json): the frozen engine reads it row-major: runner stops"; exit 8; }
     [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }
     [ "$(left)" -gt 3600 ] || { say "deadline near: replays stop (arm $arm at $(replayed $arm)/$(have $arm))"; exit 6; }
     b=$(replayed $arm)

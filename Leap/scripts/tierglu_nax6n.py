@@ -3,7 +3,9 @@ NAX6's kernels (tierglu_nax6.py) with only their address arithmetic changed, on 
 (expert, 32-row tile, quant group) the 32 rows' codes (6 words each), LSB words (2 each), scales and biases (1 each) are
 contiguous: one load instruction of a simdgroup touches ~6 lines of codes instead of 32. The same values reach the same
 ops, so tier_glu_nax6n == tier_glu_nax6 bitwise (n7_native.py checks it).
-repack(pools) builds the native copy of NAX6's msb / lsb dicts (numpy, on the CPU)."""
+repack(pools) builds the native copy of NAX6's msb / lsb dicts (numpy, on the CPU).
+p11 (Tue 17:2x, TABLE_350 'P11'): pools whose s3 / b3 / b arrays are uint32 [C, 8804] (scripts/p11.py's 11-bit pieces)
+run kernels that read them through P11P (the same floats as the bf16 pieces); bf16 pools are untouched."""
 import os, sys
 from functools import lru_cache
 import numpy as np
@@ -14,6 +16,7 @@ from tierglu import PROJ, plan_masks
 import tierglu_nax6 as N6
 from tierglu_grouped import make_grp
 from tierglu_nax import rowsum64
+import p11 as P11
 
 def _swap(src, pairs):
     for a, b in pairs:
@@ -40,6 +43,32 @@ _CORE_N = _swap(N6._CORE4, [
 _A_N = N6._A4.replace(N6._CORE4, _CORE_N)
 _B_N = N6._B4.replace(N6._CORE4, _CORE_N)
 assert _CORE_N in _A_N and _CORE_N in _B_N
+# native + p11: the scale / bias pointers become P11R views of the expert's 11-bit piece (a lane = one row of the
+# 32-row tile, so its bit offset is fixed; srow[32 * g] / brow[32 * g] read group g)
+_CORE_NP = _swap(_CORE_N, [
+    ("constexpr int KB3 = S_K * 3 / 8, KG = S_K / 64, KL = S_K / 8;",
+     "constexpr int KB3 = S_K * 3 / 8, KG = S_K / 64, KL = S_K / 8; constexpr uint NB11 = S_O * KG / 32, PW11 = (11 * NB11 + 4) / 4 * 4;"),
+    ("const device T* srow = s3p + ((size_t)e * (S_O / 32) + n0 / 32) * (KG * 32) + lane;",
+     "const P11R srow = p11r(s3p, e, PW11, NB11, (n0 / 32) * (KG * 32) + lane);"),
+    ("const device T* brow;", "P11R brow = {};"),
+    ("brow = blp + ((size_t)el * (S_O / 32) + n0 / 32) * (KG * 32) + lane;",
+     "brow = p11r(blp, el, PW11, NB11, (n0 / 32) * (KG * 32) + lane);"),
+    ("brow = (tier == 2 ? b2p : b3p) + ((size_t)e * (S_O / 32) + n0 / 32) * (KG * 32) + lane;",
+     "brow = p11r(tier == 2 ? b2p : b3p, e, PW11, NB11, (n0 / 32) * (KG * 32) + lane);"),
+])
+_A_NP = _swap(N6._A4, [
+    ("const device T* s3p = pj == 0 ? s3g : s3u;", "const device uint* s3p = (const device uint*)(pj == 0 ? s3g : s3u);"),
+    ("const device T* b3p = pj == 0 ? b3g : b3u;", "const device uint* b3p = (const device uint*)(pj == 0 ? b3g : b3u);"),
+    ("const device T* b2p = pj == 0 ? b2g : b2u;", "const device uint* b2p = (const device uint*)(pj == 0 ? b2g : b2u);"),
+    ("const device T* blp = pj == 0 ? bg : bu;", "const device uint* blp = (const device uint*)(pj == 0 ? bg : bu);"),
+]).replace(N6._CORE4, _CORE_NP)
+_B_NP = _swap(N6._B4, [
+    ("const device T* s3p = s3d;", "const device uint* s3p = (const device uint*)s3d;"),
+    ("const device T* b3p = b3d;", "const device uint* b3p = (const device uint*)b3d;"),
+    ("const device T* b2p = b2d;", "const device uint* b2p = (const device uint*)b2d;"),
+    ("const device T* blp = bd;", "const device uint* blp = (const device uint*)bd;"),
+]).replace(N6._CORE4, _CORE_NP)
+assert _CORE_NP in _A_NP and _CORE_NP in _B_NP
 
 
 def repack(msb, lsb):
@@ -248,14 +277,36 @@ def _kbn():
         output_names=["y"], source=_B_N, header=N6._HDR4)
 
 
+@lru_cache(None)
+def _kan_p11():
+    return mx.fast.metal_kernel(
+        name="tierglu_nax6np_a",
+        input_names=["x", "xs", "w3g", "w3u", "s3g", "s3u", "b3g", "b3u", "b2g", "b2u", "l1g", "l1u", "bg", "bu",
+                     "msb_slot", "lsb_slot", "pidx", "seg", "nseg"],
+        output_names=["h"], source=_A_NP, header=N6._HDR4 + P11.P11_METAL)
+
+
+@lru_cache(None)
+def _kbn_p11():
+    return mx.fast.metal_kernel(
+        name="tierglu_nax6np_b",
+        input_names=["h", "hs", "w3d", "s3d", "b3d", "b2d", "l1d", "bd", "msb_slot", "lsb_slot", "pidx", "seg", "nseg"],
+        output_names=["y"], source=_B_NP, header=N6._HDR4 + P11.P11_METAL)
+
+
 def tier_glu_nax6n(x, msb_n, lsb_n, msb_slot, lsb_slot, plan="4433333333", grp=None, nsg_b=2, ks=4, ks_b=2, xs=None, b2=None):
     """tier_glu_nax6 on repack()'s native pools (plan without 2-bit ranks); == tier_glu_nax6 bitwise"""
     M, K = x.shape
     R = len(plan)
     m4, m2, r4 = plan_masks(plan)
     assert m2 == 0, "the native repack covers the 3- / 4-bit tiers"
-    N = msb_n["gate_proj"]["s3"].shape[1]
-    D = msb_n["down_proj"]["s3"].shape[1]
+    p11 = msb_n["gate_proj"]["s3"].dtype == mx.uint32             # p11 pools: uint32 [C, 8804] pieces
+    if p11:
+        N, D = msb_n["gate_proj"]["w3"].shape[1], msb_n["down_proj"]["w3"].shape[1]
+        assert msb_n["gate_proj"]["s3"].shape[-1] == P11.piece_words(N * 40) and b2 is None
+    else:
+        N = msb_n["gate_proj"]["s3"].shape[1]
+        D = msb_n["down_proj"]["s3"].shape[1]
     if grp is None:
         grp = N6.gpu_grp(msb_slot, lsb_slot, plan)
     pidx, seg, nsg_, nseg = grp
@@ -266,14 +317,14 @@ def tier_glu_nax6n(x, msb_n, lsb_n, msb_slot, lsb_slot, plan="4433333333", grp=N
     g, u, d = (msb_n[p] for p in PROJ)
     tmpl = [("T", x.dtype), ("NR_C", R), ("MASK4_C", m4), ("MASK2_C", m2), ("R4_C", max(r4, 1)), ("DIAG_C", 0), ("GS_C", 1)]
     xs = rowsum64(x) if xs is None else xs
-    (h,) = _kan()(inputs=[x, xs, g["w3"], u["w3"], g["s3"], u["s3"], g["b3"], u["b3"], bb["gate_proj"], bb["up_proj"],
+    (h,) = (_kan_p11 if p11 else _kan)()(inputs=[x, xs, g["w3"], u["w3"], g["s3"], u["s3"], g["b3"], u["b3"], bb["gate_proj"], bb["up_proj"],
                           L["gate_proj"]["l1"], L["up_proj"]["l1"], L["gate_proj"]["b"], L["up_proj"]["b"], ms, ls,
                           pidx, seg, nsg_],
                   template=tmpl + [("K_C", K), ("N_C", N), ("KS_C", ks)],
                   grid=(N // 32 * 64 * ks, nseg, 1), threadgroup=(64 * ks, 1, 1),
                   output_shapes=[(M * R, N)], output_dtypes=[x.dtype])
     hs = rowsum64(h)
-    (y,) = _kbn()(inputs=[h, hs, d["w3"], d["s3"], d["b3"], bb["down_proj"], L["down_proj"]["l1"], L["down_proj"]["b"],
+    (y,) = (_kbn_p11 if p11 else _kbn)()(inputs=[h, hs, d["w3"], d["s3"], d["b3"], bb["down_proj"], L["down_proj"]["l1"], L["down_proj"]["b"],
                           ms, ls, pidx, seg, nsg_],
                   template=tmpl + [("N_C", N), ("D_C", D), ("NSG_C", nsg_b), ("KS_C", ks_b)],
                   grid=(D // (32 * nsg_b) * 32 * nsg_b * ks_b, nseg, 1), threadgroup=(32 * nsg_b * ks_b, 1, 1),

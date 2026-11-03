@@ -23,7 +23,7 @@ DOMS = ("code", "ifeval", "multi")
 SCHEMES = tuple((f"cert_top2_p0{str(t)[2:]}", "topk2", t, 2, None) for t in (0.99, 0.95, 0.9, 0.8, 0.7)) + (("cert_top5_p09", "topk5", 0.9, 5, None),
            ("acert_top2_p07_p09_cf099", "topk2", 0.9, 2, (0.7, 0.99)), ("acert_top2_p05_p08_cf099", "topk2", 0.8, 2, (0.5, 0.99)),
            ("acert_top2_p05_p095_cf099", "topk2", 0.95, 2, (0.5, 0.99)),
-           ("acert_top2_p07_p09_cf09", "topk2", 0.9, 2, (0.7, 0.9)))
+           ("acert_top2_p07_p09_cf09", "topk2", 0.9, 2, (0.7, 0.9)), ("t3cert_top2_p08", "t3_top2_all", 0.8, 2, None))
 PRE = ("cert_top2_p099", "cert_top5_p09")              # pre-registered 18:3x (e00fed4); the sweep's others after
 REFS = (("gate_top2_cf099", "DAY9 Q1's gated run (drafter cf >= 0.99, top-2)"), ("hc8w", "HC8 (8-bit HC read)"),
         ("gate_top2t4_cf099", "the t4 control (Q1's top-2 through another summation order)"))
@@ -72,6 +72,7 @@ verdict, summary = {}, {}
 say("Two-pass check (mission 20) on the decision map: 36 windows, D-02a configuration, 4-bit experts; flips vs the baseline argmax.")
 for run, src, thr, k1, ad in SCHEMES:
     S, R = load(src), load(run)
+    if S is None: say(f"\n## {run}: its certificate source {src} is not run yet"); continue
     say(f"\n## {run}: top-{k1} on rows whose own p1 under the top-{k1} cut is >= {thr}"
         + (f" (or >= {ad[0]} where the drafter's cf >= {ad[1]} and its draft = pass 1's argmax)" if ad else "")
         + f" (certificate from {src}), the rest exact"
@@ -106,6 +107,7 @@ say("\n## The sweep at a glance (code; ifeval / multi blocks in brackets)")
 say("| scheme | certified share | blocks needing pass 2 (ifeval / multi) | pass 1 alone: certified flips | two-pass: certified flips | all code rows | verdict |")
 say("|---|---|---|---|---|---|---|")
 for run, src, thr, k1, ad in SCHEMES:
+    if run not in verdict: continue
     A = verdict[run]; o = [summary[(run, d)] for d in ("ifeval", "multi")]
     v = ("not run" if not A["nw"] else "PASS" if 100 * A["fc"] / A["nc"] <= 1 else "KILL" if 100 * A["fc"] / A["nc"] > 5 else "BETWEEN")
     say(f"| top-{k1} p1 >= {thr}{f' (>= {ad[0]} if cf >= {ad[1]} & agree)' if ad else ''} | {100 * A['nc'] / A['n']:.1f} % | {100 * A['bn'] / A['b']:.0f} % ({' / '.join(f'{100 * x['bn'] / x['b']:.0f} %' for x in o)}) | "

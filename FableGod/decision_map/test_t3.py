@@ -69,6 +69,22 @@ for r in range(5):
 ref = mx.concatenate(ref).astype(mx.float32); err = float(mx.max(mx.abs(y10.astype(mx.float32) - ref)) / mx.max(mx.abs(ref)))
 ok = err < 3e-2; bad += not ok
 print(f"routed_topk K=10 bits=3 vs dequantize reference: max rel err {err:.2e} {'ok' if ok else 'MISMATCH'}")
+kp = np.ones((5, 10), bool); kp[:, 4:] = False; kp[1, 1] = False   # a rank mask (P1-K1 at 3 bits): ranks 0-3 minus one
+yk = T.routed_topk(blk, 3, xg, bits=3, K=10, keep=kp)
+ref = []
+for r in range(5):
+    gr = np.array(g[r].astype(mx.float32)); sc = gr[top[r]] / gr[top[r]].sum(); acc = 0
+    Wr = T.read(3, top[r][:10])
+    for j in range(10):
+        if not kp[r, j]: continue
+        f = lambda p: mx.dequantize(Wr[p]["w3"][j], Wr[p]["s3"][j], Wr[p]["b3"][j], group_size=64, bits=3)
+        h = xg[r:r + 1]
+        a = nn.silu(h @ f("gate_proj").T) * (h @ f("up_proj").T)
+        acc = acc + float(sc[j]) * (a @ f("down_proj").T).astype(mx.float32)
+    ref.append(acc)
+ref = mx.concatenate(ref).astype(mx.float32); err = float(mx.max(mx.abs(yk.astype(mx.float32) - ref)) / mx.max(mx.abs(ref)))
+ok = err < 3e-2; bad += not ok
+print(f"routed_topk K=10 with a rank mask, bits=3 vs dequantize reference: max rel err {err:.2e} {'ok' if ok else 'MISMATCH'}")
 from bigmoe import tier                                     # the control's 4-bit rebuild (Metal), vs the bare weights
 Wc = T.read(3, np.array([10, 20]), lsb=True)
 for proj in ("gate_proj", "down_proj"):

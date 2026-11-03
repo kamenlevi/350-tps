@@ -185,6 +185,34 @@ def comment_draft_ok(text):
     return "\n" not in text or not text.split("\n", 1)[1].strip()
 
 
+def q1u_keep(ids, sure, k_gate=2):
+    """Q1-UNION's keep mask for one layer of one check (Breakthrough's dm_q1u_masks.py, OEA's union step on Q1's rows):
+    U = every rank of the unsure rows + ranks < k_gate of the sure rows; a sure row keeps a rank >= k_gate iff its expert
+    is in U. ids [rows, K] ints (rank-sorted), sure [rows] bool -> keep [rows, K] bool. Numpy reference for the wrapper."""
+    ids, sure = np.asarray(ids), np.asarray(sure, bool)
+    rows, K = ids.shape
+    contrib = (~sure)[:, None] | (np.arange(K) < k_gate)[None, :]
+    u = set(ids[contrib].tolist())
+    keep = contrib.copy()
+    for j in np.nonzero(sure)[0]:
+        keep[j, k_gate:] = [e in u for e in ids[j, k_gate:].tolist()]
+    return keep
+
+
+def gate_keep_mx(indices, sure, union, k_gate=2):
+    """the gate's keep mask in the graph (the streamed switch's wrapper uses this): indices [.., R, K] rank-sorted ids of
+    one layer, sure [R] bool (gated rows). Q1: a sure row keeps ranks < k_gate. Q1-UNION: + its ranks >= k_gate whose
+    expert is in the check's union (q1u_keep's rule). -> keep [R, K] bool (mlx)."""
+    import mlx.core as mx
+    K = indices.shape[-1]
+    keep = mx.logical_or(mx.logical_not(sure)[:, None], (mx.arange(K) < k_gate)[None, :])
+    if union:
+        f = indices.reshape(-1)
+        member = mx.any(mx.logical_and(f[:, None] == f[None, :], keep.reshape(-1)[None, :]), axis=1)
+        keep = mx.logical_or(keep, member.reshape(keep.shape))
+    return keep
+
+
 def kept(drafts, am, dlm, delta):
     """(k exact, k under the rule). Exact: leading drafts equal to their row's argmax. R1(delta): leading drafts whose
     logit is within delta of their row's max logit; dlm[j] = logit(d_j) - max logit on row j (<= 0). R1 keeps every

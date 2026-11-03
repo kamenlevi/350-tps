@@ -79,7 +79,8 @@ FRUGAL_GB = {"w2f_r10": 14, "w2f_r05": 11}       # Breakthrough's measured peaks
 B12_GB = {"b12": 14, "b12c192": 32, "b8": 11, "b8fast": 11, "b12l": 14, "b12ll": 14, "b12llb16": 14, "b12llb18": 14, "b12llb20": 14,
           "b12llugb": 14, "b12llugbx": 14, "b12llu2": 14, "b12llk8": 14, "b12llka80": 14, "b12llk10": 14, "b12llka100": 14,
           "b12llk8u2": 14, "b12llk10u2": 14, "b12llfoff": 14, "b12llfon": 14, "b12llox": 14, "b12llfx": 14, "b12llff": 14,
-          "b12llfx2": 14, "b12llff2": 14, "b12llff3": 14, "b12llff4": 14, "b12llff4p": 14}
+          "b12llfx2": 14, "b12llff2": 14, "b12llff3": 14, "b12llff4": 14, "b12llff4p": 14,
+          "b12llff4t0c": 14, "b12llff4t0h": 14}
 B12_ENV = {"b12": {"B12_NORM": "mass"}, "b8": {"B12_LATE3": "2,4", "B12_NORM": "mass"},   # mass: each used expert keeps
            "b8fast": {"B12_W": "3", "B12_NORM": "mass"},   # its exact top-10 weight (Breakthrough + NewIdeas, 10-22 07:47)
            "b12l": {"B12_LATE3": "2,4", "B12_NORM": "mass"},     # B12 + late cold ranks 2-3 (Breakthrough 10-23 02:42)
@@ -113,6 +114,9 @@ B12_ENV["b12llff3"] = dict(B12_ENV["b12llff2"], B12_ENGINE="v3o", B12_PFR_MIN="5
 # none): the control, and + p_min 0.5
 B12_ENV["b12llff4"] = dict(B12_ENV["b12llff3"], B12_ENGINE="v3p", F12_R53A="0")
 B12_ENV["b12llff4p"] = dict(B12_ENV["b12llff4"], B12_PMIN="0.5")
+B12_ENV["b12llff4t0c"] = B12_ENV["b12llff4t0h"] = {'MTPLX_PREFILL_CHUNK_SIZE': '512', 'BIGMOE_TIER_PF_GROUP': '64', 'BIGMOE_RESET_GEN': '0', 'B12_LATE3': '2,10', 'B12_NORM': 'mass', 'BIGMOE_PF_GROUP': '64', 'BIGMOE_ASYNC_EVERY': '1', 'B12_TRIMS': '1', 'B12_PFR': '1', 'B12_ALLWAIT': '0', 'B12_CACHE_MB': '64', 'BIGMOE_LOOP_GUARD': '0', 'MTPLX_NGRAM_PREWARM': 'off', 'MTPLX_COMPILED_VERIFY': '0', 'MTPLX_QWEN4EXP_COMPILE': '0', 'MTPLX_COMPILE_AR_FORWARD': '0', 'MTPLX_COMPILED_TARGET_PREFIX': '0', 'BIGMOE_SPARE': '0', 'BIGMOE_PF_NOPUBLISH': '1'}   # T0: Fit12's gate env (model.T0_ENV) less EVALSUITE_SHIP (set beside)
+T0_POP_BASES = ("b12llff4t0c", "b12llff4t0h")   # their env drops T0_POP (model.T0_POP): the live file's defaults
+T0_POP = ("B12_ENGINE", "B12_FOLD", "B12_PFR_GRID", "B12_CM", "B12_CL", "B12_FOLD_CM", "B12_FOLD_AW", "B12_W", "B12_PMIN")
 SHIP_AR = {"MTPLX_PREFILL_CHUNK_SIZE": "512", "BIGMOE_TIER_PF_GROUP": "64",    # the hook's run env (04:43)
            "B12_ENGINE": "v3f", "B12_TRIMS": "0",  # the verdicts' engine (bt_b12 defaults to v3g + trims from a50d103)
            "BIGMOE_RESET_GEN": "0"}               # spec125 must not import ~/BigMoE's bigmoe (its bigmoe_ext clashes)
@@ -123,8 +127,9 @@ B12_MTP = {"b12": True, "b8": False, "b8fast": True, "b12c192": True, "b12l": Tr
            "b12llb16": True, "b12llb18": True, "b12llb20": True, "b12llugb": True, "b12llugbx": True, "b12llu2": True,
            "b12llk8": True, "b12llka80": True, "b12llk10": True, "b12llka100": True, "b12llk8u2": True, "b12llk10u2": True,
            "b12llfoff": True, "b12llfon": True, "b12llox": True, "b12llfx": True, "b12llff": True,
-           "b12llfx2": True, "b12llff2": True, "b12llff3": True, "b12llff4": True, "b12llff4p": True}
-B12_RE = re.compile(r"(b12llff4p|b12llff4|b12llff3|b12llfx2|b12llff2|b12c192|b12llfoff|b12llfon|b12llox|b12llfx|b12llff|b12llugbx|b12llugb|b12llu2|b12llk10u2|b12llk8u2|b12llka100|b12llka80|b12llk10|b12llk8|b12llb16|b12llb18|b12llb20|b12ll|b12l|b12|b8fast|b8)(g?)((?:\.r\d+)?)")   # = model
+           "b12llfx2": True, "b12llff2": True, "b12llff3": True, "b12llff4": True, "b12llff4p": True,
+           "b12llff4t0c": False, "b12llff4t0h": False}
+B12_RE = re.compile(r"(b12llff4t0c|b12llff4t0h|b12llff4p|b12llff4|b12llff3|b12llfx2|b12llff2|b12c192|b12llfoff|b12llfon|b12llox|b12llfx|b12llff|b12llugbx|b12llugb|b12llu2|b12llk10u2|b12llk8u2|b12llka100|b12llka80|b12llk10|b12llk8|b12llb16|b12llb18|b12llb20|b12ll|b12l|b12|b8fast|b8)(g?)((?:\.r\d+)?)")   # = model
 
 
 F24_RE = re.compile(r"f24(b16|b18|b20|nat)((?:\.r\d+)?)")   # = model.F24_RE
@@ -197,7 +202,7 @@ def gpu(args, why, need_gb, timeout_s):
     elif SHARE:
         lease, t_ask = int(min(180, timeout_s / 60 + 15)), time.time()
         while True:                                      # exit 3 = a quiet lock runs: wait, then ask again
-            r = subprocess.run(["peer", "lock", "share", f"{lease}m", "--cpu", "300", "--gpu", "60", f"evalsuite: {why}"],
+            r = subprocess.run(["peer", "lock", "share", f"{lease}m", "--cpu", "300", "--gpu", "60", f"evalsuite: MEM {need_gb} GB: {why}"],
                                capture_output=True, text=True)
             if r.returncode == 0:
                 say(f"shared lock: {why} (lease {lease} min): {(r.stdout + r.stderr).strip().splitlines()[-1:]}")
@@ -265,6 +270,9 @@ def gpu(args, why, need_gb, timeout_s):
         if ship:                                   # one small-RAM config per process: its switches go in the env
             base, guard = ship[0]
             env.update(SHIP_AR, EVALSUITE_SHIP="1", **B12_ENV[base], **(SHIP_MTP if B12_MTP[base] else {}))
+            if base in T0_POP_BASES:              # T0 (PREREG_t0): Fit12's gate leaves these to the live file's defaults
+                for k in T0_POP:
+                    env.pop(k, None)
             if not guard:                          # the verdict: guard off on both sides (it derails long math)
                 env["BIGMOE_LOOP_GUARD"] = "0"
         with open(os.path.join(RESULTS, "gpu_stage.log"), "a") as out:

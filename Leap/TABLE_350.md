@@ -5156,6 +5156,15 @@ shapes, since latency does not depend on the values.
   KILL < 0.2 ms.
 - **Prediction:** exact 95 %. D -0.4..-0.8 ms per cycle at 12 layers: the commit replay (~0.75 ms at 12 layers) overlaps
   the draft if MLX's second stream runs concurrently on the GPU. PASS 45 %.
+- **Result (Tue 15:00-15:01, share lock "MEM 21 GB" as the one big job; data/d_commit_screen.txt): KILL, exact.**
+  - Exactness: the draft on the second stream == the default stream (tokens).
+  - 5 rounds x 8 cycles per arm, none dropped; every commit landed; 20.5 GB active.
+  - Per-cycle wall (median of rounds; 12 layers + the drafter): SB 50.56 ms, G1 51.77, D 51.66.
+  - Paired: G1 - D **0.06 ms** per cycle (the KILL line is < 0.2; ~0.2 ms at 48 layers). SB - G1 -0.06, SB - D -1.10:
+    all three arms sit within the ~1 ms noise of 5 rounds.
+  - Reading: the commit replay is either already overlapped (the engine's SB submits it asynchronously), or MLX's
+    second stream does not run concurrently with it on this GPU. Hiding the draft behind the commit by stream assignment
+    buys nothing measurable. Prediction (-0.4..-0.8 ms) wrong.
 - **Quiet confirmation of H-1c (FAST, the orchestrator's ask 23:0x), pre-registered for the same Tuesday slot:**
   the compact hybrid (one-pair groups on 3c via tier_glu_pairs, the rest on NAX6) vs NAX6 at S 16 / 8 / 32, quiet lock,
   dependent chains. Line: confirm >= +8 % at S 16 (the shared run read +10.4 %), else drop it from the FAST stack.
@@ -5216,6 +5225,22 @@ shapes, since latency does not depend on the values.
     on == NAX6-H + combine (S 16 and S 1), counted once per call; ref2.self_test PASS with it off. In both checked cases
     on == off bitwise.
   - The quiet confirmation (pre-registered under D-COMMIT) stays for Tuesday.
+- **Quiet confirmation (Tue 15:01, quiet lock; data/h1i_screen.txt): PASS, +9.1 % at S 16** (the line: >= +8 %).
+
+  | S | NAX6 ms | NAX6-H | H-1c (compact split) |
+  |---|---|---|---|
+  | 16 | 0.795 | **0.722 (+9.1 %)** | 0.707 (+11.0 %) |
+  | 8 | 0.511 | 0.458 (+10.4 %) | 0.431 (+15.7 %) |
+  | 32 | 1.197 | 1.104 (+7.8 %) | 1.119 (+6.5 %) |
+  | 4 | 0.343 | 0.303 (+11.7 %) | 0.281 (+17.9 %) |
+  | 2 | 0.235 | 0.203 (+13.8 %) | 0.178 (+24.4 %) |
+  | 1 | 0.151 | 0.123 (+18.3 %) | 0.136 (+10.0 %) |
+
+  - Bits: hybrid off == NAX6, 64 / 64. Quality = NAX6's: 0-1 % of pair rows differ from NAX6, max 7e-3 x RMS.
+  - Quiet, H-1c's compact split reads +11.0 % at S 16 (+3.7 % in Monday's shared run). That also passes H-1c's own
+    pre-registered line (>= +8 % at S 16, under D-COMMIT). But H-1c needs its pair split and separate 3c dispatches
+    wired into OOO, while NAX6-H is already the ref2 switch (nax_hybrid) and the base of NAX6-NH. So NAX6-H stays the
+    FAST stack's hybrid. H-1c's extra ~2 % at S 16 (more at S 2-8) is noted for later.
 
 ## N7-12 kernel-A register trim (Leap, pre-registered Mon 2026-11-02 23:1x EET; Fable C's audit flag via the orchestrator 23:0x; scripts/n7_trim.py, data/n7_trim.txt)
 
@@ -5285,6 +5310,26 @@ shapes, since latency does not depend on the values.
   - **Tue 00:30 check: deferred to Tue night**, by the pre-registered condition. Chrome and Telegram were running (the
     screen was locked), and swap was already at 9.06 GB. Under real pressure Chrome may discard tabs, which could lose
     Kamen's state, so the balloon waits for a window with his apps closed.
+  - **Result (Tue 15:05, quiet lock; the orchestrator's gates: Kamen's apps closed, HID idle 2 h 11 min, no process
+    over 1 GB, a 5-minute hard stop; data/purge_balloon.txt): PASS.** The run took 21 s.
+    - All 64 volatile slabs emptied at a 36.75-38.75 GB balloon, within 0.5 s, right after the file cache was taken
+      (free 0.1 GB). At that point: compressions +367 MB over the idle rate (line <= 2 GB), swap-outs +0 (line <= 0.25
+      GB), pressure still normal.
+    - Toggle under the balloon: median 2.0 us (line <= 20), max 64 us over 157 steps.
+    - After the slabs were gone, the next step compressed +28 GB in 2.7 s (pressure warning), and swap began (+196 MB).
+      Swap ended at +314 MB after the stop (inside the +1 GB stop).
+    - **What it means:** the order of reclaim is file cache, then volatile purgeable buffers, then compression, then
+      swap. An expert cache in volatile slabs would give itself back before anything of Kamen's or the engine's gets
+      compressed or swapped. That is the elastic cache the idea needs (the loader's toggles cost ~1-2 us).
+  - **Accounting (NewIdeas 15:09 for vm_allocate purgeable memory; Leap 15:2x for MTLBuffers,
+    native/purge_footprint_mtl.swift):** volatile memory is invisible to phys_footprint and to the lifetime peak
+    (RUSAGE_INFO_V4).
+    - A touched 256 MB shared MTLBuffer counts 259.7 MB non-volatile and 3.7 MB volatile.
+    - A buffer written while volatile is never charged, and the lifetime peak stays at the non-volatile high-water mark.
+    - **So a volatile expert tier must have its full size reported separately, and it counts in full for the 24 / 12 GB
+      lines.** With per-layer pinning, the lifetime peak would otherwise see only about one pinned slab.
+    - NewIdeas ranked PURGE-1 top of the exact 45 GB queue (RANKED row 33: C 300 / 320 without a free-memory night),
+      routed to BigMoE for the engine tier, with Leap as mechanism owner.
 
 ## N7-13 a fragment-native code layout for the expert records (Leap, pre-registered Mon 2026-11-02 23:2x EET; the cloud auditor via the orchestrator 23:3x; scripts/tierglu_nax6n.py, n7_native.py; data/n7_native.txt)
 
@@ -5493,10 +5538,10 @@ shapes, since latency does not depend on the values.
   - **What it means:**
     - The key split adds nothing: fs2 / fs4 / fs8 match fatt16 at the SDPA level. R-66's "one latency-bound walk" is not
       the limit at long context.
-    - The limit is the K / V re-read per query head: the 12 query heads of a kv head each read the same K / V. Stacking
-      2 heads (R 8) gave 1.66x.
-    - **Next lever (new, untested): GQA packing.** All 12 query heads of a kv head share each K / V block load: 192 rows
-      = 12 MMA row tiles per load.
+    - ~~The limit is the K / V re-read per query head~~ **CORRECTED Tue 15:1x (B6-G):** the R 8 form's 1.66x came from
+      computing half the query rows (12 tiles instead of 24), not from shared K / V loads. B6-G then loaded each K / V
+      block once for all 12 heads and was SLOWER (0.84x). K / V re-reads are not the limit.
+    - ~~Next lever: GQA packing~~ (B6-G: KILL).
     - At the layer level, fs4 beats ref2t and single because of the strided K / V reads: unsplit fatt16 copies the
       cache slices and pays 4.6 ms at 10K.
     - The 3x line is out of reach at the layer level. The call's other work at 10K is ~0.6 ms (fs4's 1.141 minus its
@@ -5505,3 +5550,484 @@ shapes, since latency does not depend on the values.
       equal at 2K.
   - **Prediction check:** I predicted the SDPA at 5-8x vs the 12 chunks; it was 2.06x, so that was wrong. I predicted
     2-2.7x at the layer level; it was 1.70x. BETWEEN, as predicted (60 %).
+
+## B6-G FATT16-G, GQA packing for long-context attention (Leap, pre-registered Tue 2026-11-03 15:1x EET; B6's next lever, routed by the orchestrator 15:0x; FAST-K; scripts/fatt16g.py, b6g_screen.py; data/b6g_screen.txt)
+
+- **Why:** B6 showed fatt16s bound by K / V re-reads. The 12 query heads of a kv head each read the same 32-key blocks;
+  stacking 2 heads gave 1.66x. Published fix (TensorRT-LLM's XQA, FlashInfer's GQA head-group fusion): load each K / V
+  block once and serve all of that kv head's query heads from it.
+- **What:**
+  - A threadgroup = (kv head, head group of HG tiles, key split s), one simdgroup per 16-row tile.
+  - Each absolute 32-key block b = s, s + KS, ... is loaded once into threadgroup memory: K + V = 32 KB, the M5 Pro's
+    limit (queried: 32768 B). FATT16's QK^T / online softmax / PV then run unchanged from it for every tile.
+  - Blocks that no row sees are skipped.
+  - Partials (O, m, l) per (split, head, row) go to a second kernel, which folds them in split order and normalizes.
+    INV holds by construction (absolute b mod KS, fixed fold order).
+  - Compile check done (xcrun metal, CPU only).
+- **Test (b6g_screen.py, share lock, < 5 GB):**
+  - (1) SDPA level, synthetic with the indexer's mask shape: accuracy vs fp64; INV (a)-(e) at 2K / 10K / 20K with R 16
+    and R 8 for the primary config; INV (a) and (c) at 10K for every other config.
+  - ms per call vs fs4 (and the 12 chunks, MLX's one call). Configs (HG, KS) = (12, 8) primary, plus (12, 4), (12, 16),
+    (6, 8), (4, 6). R 8 at 10K.
+  - (2) Layer level, R-72's harness: ref2t, single, fs4, fg (12, 8), and the best SDPA config if it differs (post-hoc).
+- **Lines:** PASS = INV PASS and fg (12, 8) >= 2.0x faster than fs4 at 10K at the SDPA level (<= ~0.26 ms per call).
+  KILL < 1.3x or INV FAIL. BETWEEN otherwise.
+- **Prediction:**
+  - K / V traffic drops 12x. The SDPA becomes compute-bound: ~1.5 G MAC per call at 10K (with skipping), ~0.11 ms at 14
+    T MAC/s, plus softmax, the load barriers and the merge's ~10 us.
+  - So ~0.15-0.25 ms at 10K, 2-3.5x vs fs4. Layer level at 10K: 1.14 -> ~0.8-0.85 ms (~2.3x vs ref2t).
+  - INV PASS 90 %; PASS 55 %, BETWEEN 30 %, KILL 15 %.
+- **Result (Tue 15:09-15:12, share lock, Mac otherwise idle; data/b6g_screen.txt): KILL.** fg (12, 8) is 0.84x vs fs4
+  at 10K at the SDPA level, i.e. slower, in every config. INV PASS everywhere.
+  - Accuracy vs fp64 = fs4's (same per-row arithmetic). INV (a)-(e) PASS at 2K / 10K / 20K, R 16 and R 8. (a) and (c)
+    PASS for every config.
+  - SDPA ms per call:
+
+    | N | 12 chunks | one call | fs4 | fg (12, 8) | (12, 4) | (12, 16) | (6, 8) | (4, 6) |
+    |---|---|---|---|---|---|---|---|---|
+    | 2K | 0.349 | 0.108 | 0.137 | 0.171 | 0.170 | 0.200 | 0.194 | 0.183 |
+    | 10K | 1.060 | 0.487 | 0.514 | **0.609** | 0.670 | 0.629 | 0.660 | 0.695 |
+    | 20K | 1.531 | 1.166 | 0.983 | 1.158 | 1.294 | 1.174 | 1.253 | 1.345 |
+
+    R 8 at 10K: 0.431 ms, 1.41x faster than its R 16 (half the rows).
+  - Layer level (layer 3), ms per 16-row call: ref2t 0.736 / 1.909 / 2.792, single 0.483 / 1.312 / 2.345, fs4 0.493 /
+    1.104 / 1.839, fg (12, 8) 0.532 / 1.240 / 2.120 at 2K / 10K / 20K. fg is 0.87-0.93x of fs4. fs4 reproduced B6.
+  - **What it means:**
+    - Staging K / V once per threadgroup costs more than the L2 re-reads it saves: two barriers per block, a load
+      not overlapped with compute, and 32 KB of threadgroup memory, so one threadgroup per core.
+    - With fs2 = fs4 = fs8 (B6) as well, the limit of FATT16's walk is neither the K / V traffic nor the simdgroup count.
+      Most likely it is each simdgroup's serial chain per block (operand loads -> 16 QK MMAs -> softmax -> 16 PV MMAs).
+      NAX6 showed the same "op.run blocks" pattern; the M5's matrix units reach ~21 % of peak here.
+    - Finding the real limit needs a profile (Metal GPU counters), not another layout guess.
+    - At the layer level, the call's other work (~0.6 ms at 10K: projections, the indexer, mask build, ~80-110 kernel
+      launches) is now as large as fs4's SDPA. It is the next attention lever.
+  - **Prediction check:** I predicted 2-3.5x faster (PASS 55 %); it was 0.84x. Wrong, because of the mistaken B6
+    attribution above.
+
+## H-1p the H-1c port into NAX6-H: an ILP ALU dot (Leap, pre-registered Tue 2026-11-03 15:3x EET; the orchestrator's routing 15:1x; FAST; scripts/tierglu_nax6h.py ilp=True, h1p_screen.py; data/h1p_screen.txt)
+
+- **Why:** H-1i's quiet confirmation put H-1c's compact split at +11.0 % vs NAX6-H's +9.1 % at S 16, and further ahead at
+  S 2-8. H-1c itself needs a GPU pair split, separate 3c dispatches and a combine to run sync-free, and its screen
+  precomputed the split on the host.
+  - The likely difference is in the singleton path. NAX6-H's lane computes one output column as ONE serial FMA chain:
+    64 per quant group, each waiting on the last. 3c's lanes split K into short independent chains and reduce at the
+    end.
+- **What:** tier_glu_nax6h / tier_glu_nax6nh(..., ilp=True) (template ILP_C, off by default). The ALU dot becomes 8
+  independent chains (one per decoded word, 8 FMAs each), summed in a fixed tree. Nothing else changes.
+  - Still row-invariant per pair, and still FAST.
+  - ilp=False compiles the shipped NAX6-H's dot unchanged, so BigMoE's fastBEh arm is untouched.
+- **Test (h1p_screen.py, shared, small):**
+  - Bits: ilp=False == the shipped NAX6-H (the pre-change module) and hybrid off == NAX6, on 4 traces x S 1 / 8 / 16 /
+    32.
+  - Quality vs fp64, and the deviation vs NAX6 (ilp on).
+  - Speed of the whole call + combine in dependent chains at S 16 / 8 / 32 / 4 / 2 / 1: NAX6, NAX6-H, NAX6-H ilp, H-1c.
+- **Lines (FAST speed):** PASS = NAX6-H ilp >= +2.0 % faster than NAX6-H at S 16 (H-1c's quiet lead was +2.1 %), with
+  the bits checks passing and quality = NAX6's. KILL < +0.5 %.
+- **Prediction:** if the serial chain bounds the singleton path, 8x ILP speeds that part up a lot: ~+2-4 % at S 16
+  (singletons are part of the work) and ~+8-15 % at S 2-4. PASS 55 %.
+- **Result (Tue 15:13-15:14, share lock, Mac otherwise idle; data/h1p_screen.txt): KILL, +0.1 % vs NAX6-H at S 16.**
+  - Bits: hybrid off == NAX6, 64 / 64. ilp=False == the shipped NAX6-H (git cf507df, kernels renamed), 64 / 64.
+  - Quality with ilp on = NAX6's (0-1 % of pair rows differ, max 3e-6 x RMS).
+  - Speed vs NAX6-H: S 16 +0.1 %, S 8 +0.2, S 32 +0.3, S 4 +0.1, S 2 0.0, S 1 -0.1. H-1c in the same run: S 16 0.703
+    vs NAX6-H 0.717; S 8 0.429 vs 0.454; S 2 0.179 vs 0.203.
+  - **What it means:** the serial FMA chain does not limit NAX6-H's singleton path (fast-math reassociation or occupancy
+    already hides it). H-1c's lead comes from elsewhere. Candidates: 3c's mapping (per pair 160 + 320 small
+    threadgroups, lanes splitting K), and its screen's host-precomputed split.
+    - The remaining gap is ~14 us per layer call at S 16 (~0.7 ms per check) and ~20-25 us at S 4-8 (chat-sized
+      checks, ~1 ms per check).
+    - A second port would be a mapping change for singleton groups. Not started: diminishing returns next to the
+      attention layer's ~7 ms per check of other work at 10K.
+  - The ilp code was committed as tested, then reverted: the shipped NAX6-H stays the plain version.
+
+## ATT-PARTS where a long-context attention call's time goes (Leap, Tue 2026-11-03 15:1x EET; the orchestrator's routing 15:1x; scripts/att_parts.py, data/att_parts.txt; shared, rough)
+
+- **Method:** knockouts in R-72 / B6's harness: layer 3's real weights, 16-row calls, fs4 as the SDPA. Each was run
+  with the live K-73 prep fusions (att_rope + idx_prep) on and off. The arms:
+  - fs4: the whole call;
+  - stub: the SDPA replaced by zeros that still depend on q / k / v / mask, so everything else runs;
+  - stub-nosel: the stub with the indexer's selection off.
+- **Chained, 8 calls per eval (B6's method), K-73 on, ms per call:**
+
+  | keys | whole | SDPA | selection + mask | rest |
+  |---|---|---|---|---|
+  | 2K | 0.428 | 0.123 | 0.003 | 0.302 |
+  | 10K | 1.070 | 0.501 | 0.088 | 0.481 |
+  | 20K | 2.036 | ~1.0-1.27 | 0.109 | 0.657 |
+
+- **Unchained, each call evaluated on its own, K-73 on, ms per call:**
+
+  | keys | whole | SDPA | selection + mask | rest |
+  |---|---|---|---|---|
+  | 2K | 0.811 | 0.291 | 0.001 | 0.519 |
+  | 10K | 1.668 | 1.022 | 0.120 | 0.526 |
+  | 20K | 2.681 | 1.990 | 0.160 | 0.531 |
+
+- **Finding 1, a harness artifact:**
+  - The chained "rest" grows with N (0.30 -> 0.66 ms); unchained it does not (0.52-0.53). Chaining 8 cache updates in
+    one graph defeats MLX's in-place slice update: each call's mlx_lm KVCache write finds the cache still referenced by
+    the previous call's attention, so it copies the whole cache, O(N).
+  - The live engine updates each layer's cache once per check, after the previous check was evaluated, so it should not
+    pay this.
+  - So B6 / B6-G's layer-level times include an O(N) copy in every arm, which compresses their factors toward 1, and
+    my "~0.6 ms of other work at 10K" was inflated.
+- **Finding 2:** unchained single calls inflate the SDPA (1.02 vs 0.50 ms at 10K), likely from GPU clocks dropping
+  between synced calls or cold caches. The live check keeps the GPU busy, so the chained SDPA numbers are the
+  representative ones.
+- **Live estimate per 10K call:** SDPA ~0.50 + selection ~0.09-0.12 + a fixed ~0.30 (projections, RoPE, cache writes,
+  launches; constant in N) = ~0.9 ms. K-73's prep fusions save ~0.04-0.06 ms per call.
+  - The cost that grows with context is almost all the SDPA walk: ~0.047 ms per 1K keys per call, ~0.57 ms per 1K
+    keys per check over 12 layers. The selection adds ~0.13 ms per 1K keys per check.
+  - So the next long-context lever is the SDPA walk's efficiency (fs4 runs at ~21 % of matrix peak), which needs the
+    GPU-counter profile, not the non-SDPA work.
+
+## B6-D fs4 without the register spill: output dims split across simdgroups (Leap, pre-registered Tue 2026-11-03 15:2x EET; from the fs4 GPU profile the orchestrator routed 15:1x; FAST-K; scripts/fatt16d.py, b6d_screen.py; data/b6d_screen.txt)
+
+- **The profile (Tue 15:19-15:21, three xctrace captures under quiet locks; temp files deleted by exact path):**
+  - With --attach, the 'Metal GPU Counters' instrument records no counters. With --launch and GPU + Metal GPU Counters,
+    the counter tables are still empty (0 rows), but the trace carries the GPU intervals (2,136 rows), the shader list
+    (fatt16s present) and **graphics-compiler-spill-events: 1,660 rows, one per command buffer, 544 bytes each.**
+  - The workload's command buffers hold fatt16s and a few small MLX copies, so the spill is fatt16s's.
+  - 544 B = 136 fp32 values, close to the 128 fp32 accumulators per lane (8 output tiles x 16) that fs4 / FATT16 keep
+    beside the S tile, x[16] and the operands. A spilling accumulator makes every block's rescale (o *= f) and PV
+    accumulation go through stack memory.
+  - That fits everything seen so far: ~21 % of the matrix peak, no gain from more simdgroups (B6) and none from fewer
+    K / V reads (B6-G).
+- **What (fatt16d):** fs4 with each simdgroup holding HALF the output dims: 4 tiles, 64 accumulators per lane.
+  - The two halves of a (head, key split) each recompute S = QK^T (16 MMAs, duplicated) and the identical online softmax.
+    Each does its 4 PV tiles, and the per-half partials merge in the same fixed order.
+  - Every output element sees the same MMA ops in the same order as in fs4, so **bitwise == fs4 is expected** (checked
+    directly; INV as B6 if not).
+- **Lines:** PASS = bits == fs4 (or INV PASS) and >= 1.5x faster than fs4 at 10K at the SDPA level. KILL < 1.15x.
+- **Prediction:** if the spill dominates, 1.5-2.5x despite the duplicated QK. PASS 50 %.
+- **Bits (Tue 15:24, share lock beside ojox-99, correctness only): fatt16d == fs4 bitwise** at N 2K / 10K / 20K, R 16
+  and R 8, all outputs. fs4's INV properties carry over as they are. The speed part waits for a quiet lock: MTP Head's
+  shared walk ran until ~15:48, and the peer hook blocked timing beside it.
+- **Speed (Tue 15:33, quiet lock): KILL, 0.87x vs fs4 at 10K** (slower; bitwise == fs4).
+  - ms per call: 10K fs4 0.512, fd KS 4 0.592, KS 2 0.525, KS 8 0.645. 20K fs4 0.983, fd 1.170 (0.84x). R 8 at 10K: fs4
+    0.309, fd 0.285 (1.08x).
+  - The 2K line (fs4 0.243 vs fd 0.139, "1.75x") is a first-arm artifact: fs4 was measured first in a fresh process
+    and normally reads 0.135-0.137.
+  - **What it means:** halving the accumulators per lane does not pay for the duplicated QK MMAs. Either the 544 B spill
+    is not what limits fs4, or this split recovers less than it adds.
+  - Three restructurings of fs4's walk (B6 key split, B6-G GQA staging, B6-D output split) all failed to beat it. Its
+    per-block chain is ~32 MMAs whose operands are assembled lane by lane (device vec4 loads -> 16 cooperative-tensor
+    element moves per MMA), at ~4x below the per-core matrix rate.
+  - The remaining idea (new, untested, a larger rewrite): feed the MMAs from MPP tensor views, so operands go straight
+    from memory or threadgroup memory without per-element assembly, as NAX6 does with its B operand.
+  - Parked unless routed. fs4 stays the FAST-K attention: +14 % vs att_single at 10K, +26 % at 20K on the layer.
+
+## NATIVE-3C the safety net for the native-layout disk conversion (Leap, pre-registered Tue 2026-11-03 15:4x EET; the orchestrator's routing 15:3x for Kamen's pending NAX6-N disk decision; scripts/native_sample.py, tierglu_3cn.py, native3c_screen.py; data/native3c_screen.txt)
+
+- **Question:** if the 45 GB route's records were converted to NAX6-N's native layout, can 3c (REF2-T's exact
+  reference kernel) still serve experts from them bit for bit?
+- **Expectation:** stock 3c cannot read them; its lanes split K within a row, so on native records it would read
+  garbage. The fallback is **3c-N**: 3c's kernels A / B with only the address arithmetic swapped to the native layout.
+  - The swap is applied to `_A` / `_B` before the BC (combine) and AP / BP (OOO phase) variants are derived. Those are
+    the kernels REF2-T uses: tier_glu, tier_glu with scores, tier_glu_phase.
+  - The same values reach the same ops in the same order, so 3c-N == 3c bitwise by construction. It will be slower:
+    lanes reading different groups land 768 B apart instead of 6.
+- **Test (small jobs, < 5 GB at a time, share lock):**
+  - (1) Convert layers 3, 20 and 44 of records3 into a scratch dir (data/native_sample/, ~4.5 GB): the same record
+    layout and piece offsets, each piece permuted by native_map. The real records are not touched.
+  - (2) Pools from the sample files (the disk format end to end) vs pools from records3. Then on real routing, S 1 / 8
+    / 16, for each layer, bitwise:
+    - 3c-N(native) vs 3c(row-major): tier_glu, tier_glu + scores, and tier_glu_phase's two phases + combine_phase;
+    - NAX6-N(native) vs NAX6(row-major).
+  - (3) Speed on layer 20 (dependent chains): 3c vs 3c-N, NAX6 vs NAX6-N, at S 16 / 8 / 1.
+- **Lines:** PASS (the fallback exists) = every comparison bitwise, every layer and width. FAIL = any mismatch. Then the
+  fallback must be an adapter or dual files: +70.4 GB for a second records3, below the 110 GB floor at today's ~174 GB
+  free. Speed is reported, with no line.
+- **Prediction:** bitwise 95 %. 3c-N 10-30 % slower than 3c (scattered loads). NAX6-N +18.6 % as before.
+- **Result (Tue 15:38, share lock, Mac otherwise idle; data/native3c_screen.txt): PASS, the fallback exists.**
+  - Sample (layers 3 / 20 / 44, 3 x 1.50 GB in data/native_sample/, written in 6.7 s): every piece of every expert ==
+    native_map(records3), for all three layers.
+  - Bitwise, per layer (4 traces x S 1 / 8 / 16 x 3 windows = 36 calls each): 3c-N(native) == 3c(row-major) for tier_glu,
+    tier_glu + scores (BC) and tier_glu_phase x 2 + combine_phase. NAX6-N(native) == NAX6(row-major). 36 / 36 in every
+    case, on all three layers.
+  - Speed on layer 20 (chained):
+
+    | S | 3c | 3c-N | NAX6 | NAX6-N |
+    |---|---|---|---|---|
+    | 16 | 1.394 | 1.458 (-4.3 %) | 0.824 | 0.680 (+21.1 %) |
+    | 8 | 0.698 | 0.750 (-7.0 %) | 0.520 | 0.426 (+22.1 %) |
+    | 1 | 0.095 | 0.096 (-0.7 %) | 0.156 | 0.135 (+15.6 %) |
+
+  - Peak RSS was 11.1 GB, not the "< 5 GB" pre-registered: the memory-mapped files (~3 GB) plus transient numpy copies
+    plus ~3 GB of pools. No other job was running.
+  - **For Kamen's decision:**
+    - A one-way conversion of the records to the native layout keeps the exact reference: REF2-T's 3c paths run as 3c-N
+      on the converted records, bit for bit, at a 1-7 % cost on the expert call.
+    - No second copy is needed (a dual-file fallback would be +70.4 GB, which the disk floor rules out).
+  - **Still needed before converting:**
+    1. A ref2 switch that routes REF2-T's 3c calls to 3c-N when the records are native. Small, like nax_native.
+    2. Every other reader of records3 must read the new layout. In particular, BigMoE's prefill read_rebuilt (CPU,
+       records -> MLX 4-bit rows) needs the inverse gather. Other tools reading records3 directly (e.g. Breakthrough /
+       EvalSuite scripts) need it too.
+    3. 3c's pair kernels (AS / BS) and BigMoE's LP1 patch: same swap, not yet built.
+    4. records3m (M01's packed fields) is a separate format for BigMoE.
+- **Conversion prep (Tue 15:42, share lock; the orchestrator 15:4x; data/native3c_check.txt): both pieces built,
+  default off, N3C check PASS.**
+  - tierglu_3cn now also has the pair kernels (tier_glu_pairs_n, tier_glu_split_n). It re-derives its native sources
+    from tierglu's current ones on every call: if BigMoE's LP1 patch rewrites them, 3c-N follows. Kernel names carry a
+    source hash.
+  - ref2 CFG["native_3c"] (off) sends tier_call's 3c branch and _tier_slots to _tier_glu_3cn, and OOO to _ooo_3cn
+    (BigMoE's _ooo_call step for step). A guard raises on native_3c + tier_nax4, and on native_3c + tier_nax_ooo
+    without nax_native.
+  - Bitwise on layers 20 / 44 (24 windows each, S 1 / 8 / 16), 24 / 24 for every item:
+    - pairs and split;
+    - ref2's selector with the switch on, with and without scores;
+    - _ooo_3cn vs BigMoE's original _ooo_call, with a stand-in gate and random residency.
+  - COUNTS native_3c = 144. Switch off = BigMoE's own 3c. Guards raise. ref2.self_test PASS. Peak RSS 4.4 GB.
+
+## DISK-PLAN converting the 45 GB route's records to the native layout (Leap, Tue 2026-11-03 15:5x EET; the orchestrator's ask 15:4x; written for Kamen's decision; nothing converted)
+
+- **What it buys:**
+  - NAX6-N reads the experts +16-22 % faster than NAX6, with zero load-time cost; the at-load GPU repack (N7-15)
+    keeps only ~half.
+  - The exact reference survives: REF2-T runs as 3c-N on the converted records, bit for bit, at 1-7 % on the 3c expert
+    call (NATIVE-3C, N3C).
+- **The store:** records3 = 48 files x 1.50 GB = 72.1 GB, the 45 GB route's default. records3m (68.0 GB,
+  Breakthrough's 12 GB line) stays as it is. Free disk today: 182.5 GB; the floor is 110 GB.
+- **Options:**
+  - **A, in place, layer by layer (recommended).** scripts/convert_records_native.py records3 --yes. Per layer:
+    permute, write a temp file, fsync, re-read and compare bitwise, atomic rename, mark the layer's layout in
+    index.json.
+    - Extra disk: one layer (1.5 GB) at a time.
+    - Time: ~2.4 s per layer measured, so **~2 min for all 48 layers.**
+    - Resumable (marked layers are skipped) and reversible (--inverse, ~2 min, lossless).
+    - It refuses to run if free disk would fall under 112 GB, or if any process has a records3 file open.
+    - Tested on a scratch copy of layer 20: the converted copy == the native sample, and the inverse == the original,
+      both bitwise.
+  - **B, a temporary second copy, then a swap:** +72.1 GB for the duration, leaving ~110 GB free, i.e. at the stop line.
+    Rejected.
+  - **C, keeping both layouts:** +72.1 GB permanently. Rejected for the same reason.
+  - **D, no conversion:** at-load repack (N7-15 GPU repack, ~50 % of the gain at the default's miss rate) or BigMoE's
+    CPU gather.
+- **Before A runs:**
+  1. The engine switches: ref2 CFG native_3c for REF2-T's 3c calls (built, bitwise, off); nax_native (+ nax_hybrid)
+     for the NAX paths (built, off).
+  2. BigMoE's ext:
+     - read_rebuilt (prefill, records -> MLX 4-bit rows on the CPU) needs the inverse permutation;
+     - pool loads need nothing (native file -> native pool);
+     - a guard: refuse row-major readers (stock 3c, NAX6, tier_nax4, TIER_GLU=3b, read_rebuilt without the inverse)
+       on layers marked native;
+     - the LP1 patch: 3c-N re-derives itself after it.
+  3. The other readers: 205 files in other sessions reference records3 (BigMoE 50 including the engine, Breakthrough
+     51, MoonShots 45, Fit12 39, TrainLab 11, FableGod 8, SpecDecode 1), plus 32 of Leap's. List:
+     data/records3_readers.txt.
+     - After A, a script that reads rows directly gets permuted data silently, unless it checks index.json's per-layer
+       "layout".
+     - Needed: a heads-up to every session, and the active consumers checked or switched to the inverse view (the
+       inverse of tierglu_nax6n.native_map, as in convert_records_native.py's permute).
+  4. A smoke test after conversion: BigMoE's residency check, plus a short REF2-T decode compared token for token
+     with the pre-conversion reference.
+
+## WHOLE-CHIP CPU (SME / NEON) and Neural Engine beside the GPU's expert kernel (Leap, pre-registered Tue 2026-11-03 17:1x EET; BREAKTHROUGH PUSH bet "use the whole chip", the orchestrator's routing 17:0x; ~/FableGod/push/BREAKTHROUGH_PUSH.md; scripts/wc_screen.py, native/wc_cpu.c, scripts/wc_ane.py; data/wc_screen.txt)
+- **Question:** the CPU's matrix units and the Neural Engine sit idle while the GPU checks. Can either take a share of a
+  16-row check's routed experts at the same time and add >= 20 % expert throughput while the GPU slows < 5 %?
+- **Why it might work [K]:** at S 16 NAX6 holds ~171-175 GB/s, 60-66 % of the 258-287 GB/s the M5 Pro streams (C2,
+  DAY9); NAX6-N is ~+21 % on top (~210 GB/s). So ~80-110 GB/s of read bandwidth is unused during the expert kernel.
+  ANE-1 [K]: the GPU's expert proxy slowed x1.070 with the Neural Engine drafting back to back (shared GPU).
+  ANE-2 [K]: the Neural Engine runs int8 weights at ~79 G weights/s; int4 blockwise falls back to the CPU.
+- **Prior art (tags):**
+  - Published: HeteroLLM (arXiv 2501.14794) splits tensors across a mobile GPU and NPU at once and reports that each
+    unit alone under-uses the SoC's bandwidth. NPUMoE (arXiv 2604.18788) runs MoE prefill on Apple's NPU with static
+    capacity tiers and grouped experts, keeping dynamic ops on the CPU / GPU. llama.cpp + Arm KleidiAI run int4 GEMV /
+    GEMM on SME2 (CPU only). llama.cpp's tensor overrides, kTransformers and Fiddler put MoE experts on the CPU beside
+    a discrete GPU.
+  - Adapted here (untested on Apple unified memory): split ONE layer's routed experts between the GPU and the CPU (or
+    the Neural Engine) at the same time, during a 16-row verify check, using the bandwidth the GPU leaves.
+- **Arms (layer 20, real routing from expA traces, S 16, code + chat windows):**
+  - G, the GPU alone: NAX6-N on data/native_sample (the push's planned layout; the stricter reference, since it uses
+    the most bandwidth), dependent chains of 16 calls; the windows' unique-expert bytes at the PLAN 4433333333 tiers
+    give its GB/s and experts/ms.
+  - CPU, at most 4 threads (this session's CPU rule; a production engine could use more, noted as [P] where it matters):
+    - C-BW: pure streaming reads of a private 2 GB buffer, 1 / 2 / 4 threads. A bound: no CPU kernel streams more.
+    - C-Q4: a 4-bit expert kernel on the same windows' row-per-expert pattern (gate + up, SiLU, down, scores),
+      int8 dot products (i8mm USDOT), activations Q8 per 64-group, fp16 scales / biases; synthetic 4-bit experts of
+      the real shapes (speed does not depend on the values). FAST-only numerics (not bitwise to 3c / NAX6). Correctness
+      check: cos >= 0.999 vs a float64 reference of the same synthetic experts.
+    - C-SME: Accelerate's cblas_sgemm (SME) on the dense 16-row expert shape, fp32 weights: SME's dense rate on our
+      shape, measured alone only.
+  - A, the Neural Engine: one Core ML call computing 32 experts' gate / up / down for all 16 rows, int8 per channel
+    (ANE-2's encoding), placement checked with MLComputePlan.
+- **Measure:** each unit alone; then the GPU chain in phases alternating "GPU alone" with "GPU + one unit running
+  back to back"; the GPU's time per call gives its slowdown s, the unit's own log gives its rate R_u' during the phase.
+- **Effective gain** of a split that gives the unit its best share (time-balanced): gain = R_u' / R_g + 1 / (1 + s) - 1,
+  with R in experts per ms of the same windows (for the Neural Engine, which computes all 16 rows of an expert it
+  holds, experts per ms of its 32-expert call).
+- **Lines (the orchestrator's suggestion, adopted):**
+  - PASS: one unit's gain >= +20 % with s < 5 %, measured in the same phase.
+  - KILL: every unit's gain < +10 %, or s >= 5 % in every phase where a unit's gain would reach +10 %.
+  - BETWEEN: otherwise.
+  - C-BW is a bound, not a kernel: if even its gain at s < 5 % stays under +20 %, no CPU kernel can pass.
+- **Not covered by a PASS (would be the next step):** the Neural Engine runs only compiled weights, so it could hold a
+  fixed expert subset only as an int8 copy (memory at 45 / 24 GB), with a per-layer handoff (48 per check); a CPU
+  share needs a CPU-side 4-bit layout or kernel for records3's 3 + 1-bit pieces, and a same-scores test for its Q8
+  numerics.
+- **Prediction [G]:** G ~0.65-0.75 ms per call at ~190-220 GB/s. C-BW 4 threads alone ~90-130 GB/s; beside G the GPU
+  slows 10-25 % at full CPU streaming. C-Q4 4 threads ~30-60 GB/s-equivalent, gain +10-25 % at s 3-10 %. The Neural
+  Engine ~16 experts/ms (gain ~+20-25 % before its slowdown), s ~5-7 %. Verdict odds: BETWEEN 55 %, KILL 30 %, PASS 15 %.
+- **Budget:** <= 10 min of runs, by day as a small job: share lock, MEM ~4 GB, after the GPU is free (one GPU job at a
+  time by day). Swap guard +2 GB.
+- **Results (Tue 17:18-17:21, share lock, GPU otherwise idle, Kamen on PowerPoint; data/wc_screen.txt):**
+  - Alone:
+    | unit | rate alone |
+    |---|---|
+    | C-BW 1 / 2 / 4 threads | 68.5 / 129.8 / 220.6 GB/s |
+    | C-Q4, 4 threads | 22.3 experts/ms (61.5 GB/s of 4-bit expert bytes); check cos 0.99990 (min row 0.99990) |
+    | C-SME (Accelerate sgemm, fp32 weights) 1 / 4 threads | 2.2 / 5.2 experts/ms (352 / 821 GFLOP/s; 44 / 103 GB/s of fp32 weights) |
+    | ANE a8 (int8 per channel) | 14.4 experts/ms |
+    | **ANE a4 (4-bit LUT per 16-channel group)** | **26.2 experts/ms** (1.25 ms per 32-expert call, 126 G weights/s; MLComputePlan: all 96 linears + SiLU / mul / add on the Neural Engine) |
+  - G alone: NAX6-N 0.761 ms per call (mean of the alone phases), 81.1 experts/ms, 190 GB/s of tier bytes, 62.1 unique
+    experts per 16-row window.
+  - Beside G (s per phase vs the two neighbouring alone phases; gain = R_u' / R_g + 1 / (1 + s) - 1):
+    | unit | phase 1: s, gain | phase 2: s, gain | mean |
+    |---|---|---|---|
+    | **ANE a4** | +6.4 %, +24.7 % (24.8 experts/ms) | **+2.4 %, +23.0 %** (20.6 experts/ms) | s +4.4 %, gain **+23.8 %** |
+    | C-Q4, 4 threads | +4.9 %, +16.0 % (16.7 experts/ms) | +0.7 %, +16.5 % (13.9) | s +2.8 %, gain +16.3 % |
+    | ANE a8 | +4.6 %, +12.6 % (13.8) | - | |
+    | C-BW 1 / 2 / 4 (bounds) | +0.9 % at 42.6 GB/s (bound +21.5 %); +3.7 % at 71.9 GB/s (bound +34.3 %); +22.8 % at 106.4 GB/s | | |
+  - **Verdict on the pre-registered line: PASS for the Neural Engine with 4-bit LUT weights**, at the line's edge: one
+    of its two phases met both clauses (s +2.4 %, gain +23.0 %); the other had gain +24.7 % but s +6.4 %; mean s +4.4 %.
+    The CPU kernel is BETWEEN (+16 % at s <= 4.9 %); ANE int8 BETWEEN (+12.6 %). Prediction was BETWEEN 55 / KILL 30 /
+    PASS 15 %, so the Neural Engine came out better than I expected: LUT4 runs natively and twice as fast as int8.
+  - **Confound:** G's alone time drifted up through the run, 0.684 -> 0.837 ms (+22 %, monotonic), most likely heat
+    from the arms (C-BW 4 threads at 220 GB/s, sgemm) at day fan settings. s is taken against the neighbouring alone
+    phases, but a sustained load's thermal cost is not in it. A quiet re-run with longer phases (3 x 20 s each) is needed
+    before building anything.
+  - **Bandwidth headroom is real [K]:** 2 streaming threads took 72 GB/s beside G for s +3.7 %. My C-Q4 is compute-bound
+    (~15 GB/s per thread), so a better CPU kernel (SME2 int8 dot, or 6 P-cores in an engine that owns the Mac) has room
+    up to the ~+34 % bound [P]. SME through Accelerate on fp32 weights is useless here (5 experts/ms).
+  - **Structural cost for the Neural Engine (the next question, not in the line):**
+    - It runs compiled weights only, so it can hold a FIXED set of experts per layer, and each call computes its whole
+      set for all 16 rows.
+    - Measured on the traces [K]: a hot set taken from OTHER domains covers only 3-16 % of a window's experts at 64 per
+      layer. A session-adaptive set (the same text's first half -> its second half) does much better: at 16 experts
+      per layer, a window uses 52-89 % of the set (mean ~71 %), = 10-25 % of the window's experts; at 32, 47-81 % (mean
+      ~63 %), = 18-46 %.
+    - So the useful Neural Engine rate is ~0.7 x 25 = ~18 experts/ms, gain [P] ~+18 % before handoffs, ~+9 % halved.
+      Each layer needs a GPU -> ANE -> GPU handoff (48 per check, ~0.1-0.2 ms each if not hidden), and the hot set has
+      to be recompiled per session (~2 s per layer model on the CPU). It is FAST-only (LUT4 per 16 channels is not our
+      affine 3 / 4-bit tiers, and the Neural Engine computes in fp16). Memory is roughly neutral if the LUT4 copies
+      replace those experts' GPU pool slots.
+  - **Also unchecked:** a4 re-runs one 79 MB model, so on-chip caching on the Neural Engine side could flatter it; the
+    re-run should alternate several models with different weights, as 48 layer models would.
+  - **Next, if routed:** (1) the quiet sustained re-run (longer phases, ANE a4 + C-Q4 together too); (2) the per-layer
+    handoff cost: a native GPU -> ANE -> GPU round trip on MTLSharedEvent + Core ML with zero-copy inputs (the decisive
+    cost for any per-layer split); (3) a CPU kernel on the real 3 + 1-bit pool format, reading the GPU's slots in place.
+
+## P11 11-bit packed scales inside 3c-N and NAX6-N (Leap, pre-registered Tue 2026-11-03 17:2x EET; Kamen approved the combined conversion, the orchestrator's order 17:3x; MoonShots M-27 / M-27b; format pinned with BigMoE 17:2x; scripts/p11.py, tierglu_3cn.py, tierglu_nax6n.py, p11_check.py, convert_records_p11.py; data/p11_check.txt)
+- **Format (scripts/p11.py, the reference):** per s3 / b3 / b piece, native order, then 11-bit codes
+  sign << 10 | (exp - base) << 7 | mantissa7 (base = the piece's minimum exponent; no zero code), 32 codes per 11 u32
+  words LSB-first, base in word 8800, 8804 words = 35,216 B. Record "native+p11": MSB 2,064,384 + LSB 720,896 =
+  2,785,280 B (today 2,932,736). Reference self-test on layer 20 [K]: row-major -> native+p11 -> row-major == the file
+  for all 512 records, the native pieces == data/native_sample's.
+- **Kernels:** pools whose s3 / b3 / b are uint32 [C, 8804] switch 3c-N (all seven kinds) and NAX6-N to P11P reads:
+  a view of the expert's piece whose [] returns as_type<float>(bf16 bits << 16), i.e. exactly (float) of the bf16
+  value. bf16 pools take the unchanged path (inert by default).
+- **Line:** PASS = every compared output bitwise equal to the same kernel on bf16 native pools, on two full layers (20,
+  44) with every expert read at a 4-bit rank and at 3-bit ranks (all s3 / b3 / b pieces), through 3c-N's tier_glu /
+  scores / phases / pairs / split, ref2's native_3c selector and OOO path, and NAX6-N; plus ref2.self_test. FAIL = any
+  mismatch. Speed (rough, no line): p11 vs bf16 on layer 20, S 16.
+- **Prediction [G]:** PASS (the reads change only where the floats come from). Speed: 3c-N p11 +5-20 % slower (one
+  11-bit decode per scale read, 3c is ALU-bound), NAX6-N +2-8 %.
+- **Results (Tue 17:29-17:35; share lock; data/p11_check.txt, p11_check_run{,2,3}.log):**
+  - **PASS, every comparison bitwise**, three times: v1, v2 and v3 below. On layers 20 and 44, all 512 experts were read
+    at a 4-bit rank and at 3-bit ranks; 16 / 16 for each of tier_glu_n, + scores, phases, pairs, split, ref2
+    native_3c tier_glu, ref2 native_3c OOO, and NAX6-N. ref2.self_test PASS.
+  - Speed of the p11 read (layer 20, S 16, rough):
+    | version | 3c-N bf16 -> p11 | NAX6-N bf16 -> p11 |
+    |---|---|---|
+    | v1: every s3[gi] decoded in place | 1.597 -> 2.716 ms (**+70 %**) | 0.782 -> 0.833 (+6.4 %) |
+    | v2: each simdgroup decodes its 4 rows x groups once into threadgroup memory | 1.644 -> 1.950 (+18.6 %) | 0.685 -> 0.737 (+7.6 %) |
+    | **v3: v2 + a lane keeps one row's bit offset, two-word reads, no branch (NAX6-N: P11R)** | **1.597 -> 1.615 (+1.2 %)** | **0.684 -> 0.699 (+2.2 %)** |
+  - My prediction (+5-20 % / +2-8 %) was right only after v3. v1's in-place decode doubles 3c's ALU work per scale
+    read: 3c is ALU-bound, and a lane reads 2 scales per 16 weights.
+- **ref2 per-layer routing (BigMoE's proposal 17:3x, agreed; scripts/layout_router_check.py PASS):**
+  - _tier_glu_sel / _ooo_sel route by t["layout"] or bigmoe.tier._LAYOUT[0]: 0 -> BigMoE's 3c, 1 / 2 -> 3c-N (p11 from
+    the pools' dtype).
+  - Without a router, CFG native_3c decides as before, so this is inert until BigMoE's patch lands (Wed after FLOOR).
+  - Guards: native_3c on layout 0 raises; layout 1 / 2 with tier_nax4, or with tier_nax_ooo without nax_native, raises.
+  - Plumbing: _tier_slots sets _LAYOUT[0]; apply() sets LAYOUT_ROUTER = True; _native_repack skips p11 pools.
+  - ref2.self_test PASS.
+  - Fix after BigMoE's review (17:4x): with REF2 removed (r57_screen toggles it around drafts), a converted layer used
+    to fall through to BigMoE's row-major 3c silently. Now layout 1 / 2 takes 3c-N whether REF2 is on or off;
+    layout_router_check.py covers it (PASS), self_test PASS. The commit for EvalSuite's snapshot is the one after
+    2b3fc63.
+- **Combined tool (scripts/convert_records_p11.py) on MY scratch copy of records3 L00 / L20 / L47 (data/scratch_p11):**
+  - Read-only check: 0 pieces fail to pack (2 s).
+  - md5 of the 3 files: 5 s.
+  - Forward: 3.5-3.7 s per layer, temp + fsync + re-read + inverse compare included. **The files == BigMoE's
+    independent reference converter's (~/BigMoE/scratch/r3p11), cmp identical; the index entries match.**
+  - --inverse: 3.5 s per layer; **the md5s match the originals, the files cmp equal to records3, and the index entries
+    are restored exactly** (a native+p11 entry keeps its row-major entry under "rowmajor" for this).
+  - So for all 48 layers: ~3 min, plus ~80 s of md5.
+
+### DISK-PLAN addendum: the combined format (native + p11), Kamen approved Tue 17:2x (not before Thu 15:00, after RELAX; 1 h heads-up)
+- One in-place pass: scripts/convert_records_p11.py records3 --md5 data/records3_md5_rowmajor.txt --yes (it supersedes
+  convert_records_native.py for this store).
+  - Per layer: native order + 11-bit s3 / b3 / b pieces; 1.50 -> 1.43 GB per layer; the store shrinks 72.1 -> 68.5 GB.
+  - Peak extra disk: one temp layer (1.43-1.50 GB). It refuses under 112 GB free, while lsof shows a records3 file open,
+    or if any piece does not pack (the read-only check covers all 48 layers before anything is written).
+  - --inverse restores the exact original bytes; checked by md5 on the scratch copy.
+- Kernels: 3c-N and NAX6-N read the p11 pools natively (bitwise, +1-2 %). REF2-T's exact path keeps its bits through
+  ref2's native_3c / per-layer router.
+- BigMoE's side: the readers are done and bitwise (761cb3d: read_rebuilt_layout, the pool sizes from the index); the
+  router plumbing is applied Wed after FLOOR.
+- Still to do before the real run: the heads-up to the sessions that read records3 (data/records3_readers.txt), and
+  BigMoE's end-to-end decode on a part-converted scratch store.
+
+## WHOLE-CHIP-2 the handoff cost and the sustained re-run (Leap, pre-registered Tue 2026-11-03 17:4x EET; the orchestrator's order 17:3x after WHOLE-CHIP's edge PASS; native/wc_handoff.swift, scripts/wc_screen.py; runs at night or with Kamen away, never while he is on the Mac)
+- **Why:** WHOLE-CHIP's edge PASS (the Neural Engine with LUT4 weights, +23.8 % expert throughput at s +4.4 %) is worth
+  ~+18 % [P] after the fixed-set loss. A per-layer split needs a GPU -> ANE -> GPU round trip in each of the 48 layers of
+  a check. The orchestrator: "if 48 handoffs per check eat the gain, we stop there".
+- **H, the handoff (native Swift: Metal + Core ML, no Python in the loop):**
+  - Setup: one Metal command buffer per check of 48 "layers". Each layer: a GPU kernel writes x (16 x 2560 fp16) into
+    a shared buffer; the command buffer signals an MTLSharedEvent; the GPU then runs its own share; it waits on the
+    event's next value; a combine kernel reads the Neural Engine's output.
+  - A CPU thread waits for each signal (spin on signaledValue), runs the Core ML predict, and signals back. The predict
+    uses the a4 expert model (K = 8 / 16 experts), with x and the output as MLMultiArrays over the Metal buffers'
+    memory (zero copy, output backings).
+  - Arms per layer:
+    - (a) GPU only: the share kernel sized to NAX6-N's full layer (~0.68 ms, a bandwidth-bound read at its rate).
+    - (b) the split: the GPU's share sized to its part + the ANE's K experts in parallel.
+    - (c) handoff only: empty GPU work + an ANE call of K experts, to isolate the round trip.
+    - (d) the ANE call alone from Swift, same IO.
+  - Overhead per layer = (c) - (d): the event round trip + predict overhead beyond its compute. Hidden-ness: (b)
+    against max(the GPU part, (c)).
+- **Lines (per layer; 48 per check):**
+  - KILL: the round-trip overhead (c) - (d) >= 135 us. 48 x 135 us = ~6.5 ms, all of the [P] gain at 16 rows.
+  - PASS: <= 50 us (<= 2.4 ms per check, so >= +12 % net remains [P]) AND (b) <= 0.9 x (a) at the best K.
+  - BETWEEN otherwise.
+- **S, the sustained re-run (wc_screen.py, quiet):**
+  - G alone, then G + ANE a4, then G + C-Q4, then G + both; each 20 s, alternated 3 times, after a 60 s warm-up to
+    steady temperature.
+  - The ANE arm cycles 4 different 32-expert models, so no weights are reused within 4 calls, against on-chip caching.
+  - Lines as WHOLE-CHIP (PASS: gain >= +20 % with s < 5 %, now as the 3-phase mean); plus "both": the sum's gain and s.
+- **Prediction [G]:**
+  - H: (d) ~0.65 ms at K 16; overhead ~60-150 us (Core ML's predict path ~50-100 us + two event hops ~10-30 us each),
+    so BETWEEN-to-KILL.
+  - S: the ANE a4 holds +18-24 % at s 4-7 % sustained, so BETWEEN / edge. Both together: s >= 8 %.
+- **Budget:** H ~3 min, S ~6 min, each under a quiet lock at night (after 00:30) or with Kamen away; MEM ~4 GB.
+- **Build + functional smokes (Tue 17:4x-17:58, short share locks; NOT the measurement):**
+  - native/wc_handoff.swift (+ wc_bridge.h) and wc_ane.py build4 (a4 models of K 4 / 8 / 12 / 16, and four 32-expert
+    models with different weights for S).
+  - Found while building, [K]: **a running GPU kernel never sees a CPU store to shared memory on this M5 Pro**
+    (native/wc_spintest.swift). Volatile loads, relaxed-atomic loads, atomic RMW, and a write-combined buffer all spin to
+    their cap (4 M iterations, 140-400 ms); a store made before the kernel starts is seen at once. So CPU -> GPU must be
+    an event the CPU signals; a GPU spin on a CPU flag is out (the first smoke with it hung and was stopped by PID).
+  - Protocols: E1, a GPU-signalled event in the buffer, and E2, BigMoE's post kernel + a CPU spin on shared memory + a
+    CPU-signalled wait, both cost ~135-155 us per round trip when nothing hides it.
+  - With E1, the GPU's own share did not overlap the Neural Engine call (smoke 1: the split 2.2x slower). With E2 it
+    does.
+  - A Neural Engine call costs ~130 us fixed + ~33 us per expert (K 4: ~0.24 ms, K 16: ~0.65-0.71 ms), so even K 8
+    takes about as long as the GPU's whole layer.
+  - Smoke 3 (stand-in at 0.70 ms): best split K 8 at B / A = 0.934; sync overhead ~104-137 us per layer. Smoke 6
+    (stand-in reading at a full 288 GB/s): B / A 0.99-1.04. So the stand-in is throttled to NAX6-N's ~200 GB/s for the
+    run.
+  - S's code paths smoke (2 s phases): a4x4, which cycles four different-weight models, slowed the GPU +11.2 % at
+    26.2 experts/ms (gain +18.5 %). The single-model a4 was +2.4 / +6.4 % in WHOLE-CHIP, so on-chip reuse may have
+    flattered it. A4x4 + C-Q4 together: s +34 %, gain +22 %. A hint only; the quiet run decides.
+  - Armed: scripts/run_wc2_night.sh (attached; waits for 00:30, no PAUSE / HOLD, then a quiet lock in the FIFO; H then
+    S; swap guard; unlock). Logs: data/wc2_night.log, wc2_handoff.txt, wc2_sustained.log.

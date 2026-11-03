@@ -171,7 +171,7 @@ Why it matters at 24 GB too (R-43, BigMoE b43): there each extra checked row cos
 | M-18 | MoonShots (CPU replay, DAY9 conditions 1-2; no slot) | BAND45 [bytes side of ROUTE_350 Q1 / Q2 (NEW-1); the flips are Breakthrough's map. Pre-registered Mon 10:4x, before any result]: SSD reads and MB per kept token at C 256 + the M-17 per-layer sizes when drafter-sure rows of the check verify with fewer experts. Replay ~/MoonShots/scripts/band45.py: cap45's six prompts chained (real check rows incl. rejected ones), LRU + 30 x popularity (one fixed prior per seed), strict; drafter confidence = real DFlash2 cf vectors of D-23 checks (arm dfl, C 224) transplanted by type and kept (6 seeds), the engine's t 0.3 row cut; row j gated by cf[j] (the token it verifies), the last row of a full check exact. Rules: Q1 top-2 (ranks 0-1 at today's tier, own gate weights) at cf >= 0.9 / 0.95 / 0.99 / 0.999; Q2 bands >= 0.999 top-2, 0.99-0.999 top-4, 0.9-0.99 top-8 with ranks 0-3 at 4 bits, < 0.9 exact. Tok/s: C50's c45l_256 per prompt (63.6 steady = median) with each cycle cut by the saved SSD bytes at 12 GB/s (fully exposed) and, as the upper bound, also by the saved expert-union RAM bytes at the GPU rate M-16's beta implies. Lines vs ROUTE_350's bytes assumption [P] (code SSD x0.55 with Q1; Q2 a further x0.85): Q1 at cf >= 0.99 on code SSD MB per kept token <= x0.65 = PASS (the route's SSD term holds), > x0.85 = KILL (overstated > 3x), BETWEEN otherwise; Q2 <= x0.90 of Q1 0.99 on code = holds. Then the same replay on Breakthrough's capture (realizable gate on its windows) when it lands. | **Mon 10:5x RESULT (commit 4b4d084; data/band45_capture.txt, band45.txt)**: Q1 at cf >= 0.99 on code: SSD MB per kept token x0.60 (-40.3 %) on Breakthrough's capture (12 code windows, 391 checks, realizable DFlash2 gate) -> **PASS** (<= x0.65); x0.68 on cap45 + D-23 transplant (BETWEEN there; real rejected-row routing, thin code). Reads per check 260 -> 186 (base 142 -> 68, rank 0-1 sidecar 118 unchanged), expert union -41 %. Implied steady (C50 63.6): 70.2 SSD-only / 76.2 +GPU (six-prompt median); HE91 62.1 -> 74.7 / 88.9, HE68 84.7 -> 114.5 / 125.8. cf >= 0.999: -28.3 %, 68.1 / 71.3. IFEval -10.5 %, multi -8.4 % (drafter sure on 21 / 18 % of chat rows vs 67 % code). Q2 (DAY9 bands): code x0.63 (-37.3 %) = x1.05 of Q1 0.99 -> the route's 'a further x0.85' FAILS on bytes (the 0.9-0.99 band's ranks 0-3 at 4 bits add sidecar reads, LSB +23 %); with that band at today's tiers x0.57 (-42.6 %). Lead: sure rows at the resident 3-bit part (no LSB read): code x0.46 (-53.8 %), median 72.1 / 79.3 (needs a flip arm). **M-18b LAYSZ-Q1 (pre-registered Mon 11:0x, before the run)**: re-fit M-17's per-layer C_m / C_l split (Lagrangian, FLOOR C_m >= 160, C_l >= 32, C 256 pool bytes) for Q1 0.99's needs; cross-set held-out: fit on cap45 (transplant, seed 0) -> score on the capture, and the reverse; vs the adopted M-17 sizes. PASS = code SSD MB per kept token under Q1 0.99 <= -8 % vs M-17's sizes held-out in both directions; KILL = > -3 % in both; BETWEEN otherwise (scripts/laysz_q1.py). **Flips (Breakthrough 11:0x, ~/FableGod/decision_map/out/DAY9_q1.txt)**: cf >= 0.99 gated code rows 0.09 % (2/2211), IFEval 0.59 %, multi 1.26 %; cf >= 0.999 0.00 %; all code rows 1.34 % / 1.25 % -> Q1 PASS both sides (sent to the orchestrator with these tok/s). The two tier arms (3-bit sure rows; top-8 at today's tiers) need a ~2 h exact build in the map (BigMoE's tier path works at decode widths only); decide after M-18b. **M-18b RESULT (Mon 11:1x, commit ad221f5, data/laysz_q1.txt): KILL** - the per-layer split re-fitted for Q1 0.99's needs is +0.6 % (fit on the capture, scored on cap45) / -2.1 % (fit on cap45, scored on the capture) on code vs M-17's sizes held-out (in-sample -0.9 / -5.3 %); MSB share 87-89 % vs M-17's 90.3 %; Q1-fitted sizes cost EXACT +1-5 %. M-17's sizes stay; after Q1 the rank 0-1 sidecar reads drop only by reading less (the 3-bit sure-row arm, x0.46; the orchestrator's call on Breakthrough's ~2 h build). **Q2 flips (Breakthrough 11:2x, ~/FableGod/decision_map/out/DAY9_read.txt, DAY9_q2_attrib.txt)**: KILL by the line as written (0.9-0.99 top-8 band 1.07 %, 5/467), but that band flips the same 1.07 % when left exact (its own cut net 0 on code); with no byte gain over Q1 0.99 (x1.05) Q2 adds nothing on either side. Mon 15:59: the 3-bit arm is queued at Breakthrough behind E2 + A6 (wait_t3b.sh). |
 > (a quote from the project owner, kept private)
 | M-18c | MoonShots (CPU replay; no slot) | WIDE-Q1 [pre-registered by NewIdeas Mon 20:48, before any run; carried by band45.py]: does Q1 (top-2 on drafter-sure rows, cf >= 0.99) make 32-row checks pay on code? (D32: dense x1.24 for 32 rows vs 16; NAX6 pays only at wide checks.) Rows 1-16 as M-18; rows 17-32 = the next positions of the 125B's own answer; kept per check from MTP Head's MATCH 32-row replay (a2086f2: HumanEval+ x1.204 at 32 rows, 12.35 kept); rows gated by the drafter's cf where it exists, else MATCH-copied rows treated as sure; same C 256 pools with M-17 sizes, LRU + prior; cost: dense x1.24 (D32), a block-32 draft (MoonShots' estimate), SSD at 12 GB/s fully exposed. Line on code implied steady tok/s, 32 rows + Q1 vs 16 rows + Q1: >= +10 % = PASS (wide checks + NAX6 earn an engine slot, Leap / BigMoE); <= +3 % = KILL; BETWEEN otherwise. Per prompt (HumanEval/68-like prompts sit at the 16-row cap). **RESULT Mon 22:4x (scripts/wide45.py, data/wide45.txt; 4 seeds, guarded run, peak 171 MB): KILL** - 32 rows + Q1 vs 16 rows + Q1, both with the engine's t 0.3 cut, pooled code tok/s: -1.3 % (today's kernels) / -0.6 % (NAX6) (line <= +3 % KILL). Kept 7.98 -> 9.08 per check, rows 10.61 -> 14.30, Q1 SSD MB per kept token 29.0 -> 28.2. Without the cut (always 16 / 32): -16.8 / -14.0 %. Optimistic variant (rows 16-31 all top-2, NewIdeas' 'MATCH-copied rows sure'): +4.3 / +3.8 % (BETWEEN). Per window: only cap-bound prompts gain (HumanEval/136 kept 13.25 -> 21.20, +13 %; HE135 / 103 / 146 +3-4 %); median -0.4 / +0.1 %. EXACT alone: -0.2 / 0.0 %. Replay check: the 16-row cut walk gives 46.5 MB per kept token EXACT / 29.0 Q1 (M-18: 47.0 / 28.1); '16 always' reproduces the real uncut walk on 373 / 391 checks. Width chosen per check is M-21's question. |
-| M-18d | MoonShots (CPU replay; no slot) | Q1-24 [pre-registered by NewIdeas Mon 22:00 (its message), before any run; the 24 GB line's new bet]: does Q1 (top-2 experts on drafter-sure verify rows, cf >= 0.99, kept weights not renormalised) cut the 24 GB line's SSD bytes as much as at 45 GB? Replay at the 24 GB default (BigMoE fast24.py / bigmoe_ext.cpp): plan4433333333 (v3), C_m 147 + C_l 46 per layer, decayed LFU 0.99 per gated call, narrow verify passes; arms v3 exact and b16 (bigmoe/budget.py: the 16 experts with the largest summed w^2 per pass). Option A (MoonShots 22:21, NewIdeas did not choose B by 22:55): Breakthrough's 12 code windows, 4-row checks, acceptance coupled to the real DFlash2 walk, the Q1 gate on DFlash2's cf as the stand-in for MTP's (no per-row MTP confidences exist), b16 weights ~1 / (rank + 1) (the capture has no gate weights). scripts/q1_24.py, 4 seeds. Line (NewIdeas'): code SSD MB per kept token, Q1 vs the same replay without Q1: <= x0.70 = PASS (Q1 joins the 24 GB FAST version's same-scores test), > x0.90 = KILL, else BETWEEN. **RESULT Mon 23:0x, option A (scripts/q1_24.py, data/q1_24.txt; 4 seeds, guarded, peak 171 MB)**: v3 exact verify 175.0 -> 115.2 SSD MB per kept token = **x0.658 -> PASS** (line <= x0.70; within 0.05 of it, so option B, MTP Head's per-row MTP probabilities, is requested to confirm); b16 81.8 -> 88.2 = **x1.079 -> KILL** (the budget already caps the union at 16, and Q1 only changes which 16 fill it, toward less cached experts). Kept per 4-row check 3.52 (DFlash2's walk; conservative for MTP). |
+| M-18d | MoonShots (CPU replay; no slot) | Q1-24 [pre-registered by NewIdeas Mon 22:00 (its message), before any run; the 24 GB line's new bet]: does Q1 (top-2 experts on drafter-sure verify rows, cf >= 0.99, kept weights not renormalised) cut the 24 GB line's SSD bytes as much as at 45 GB? Replay at the 24 GB default (BigMoE fast24.py / bigmoe_ext.cpp): plan4433333333 (v3), C_m 147 + C_l 46 per layer, decayed LFU 0.99 per gated call, narrow verify passes; arms v3 exact and b16 (bigmoe/budget.py: the 16 experts with the largest summed w^2 per pass). Option A (MoonShots 22:21, NewIdeas did not choose B by 22:55): Breakthrough's 12 code windows, 4-row checks, acceptance coupled to the real DFlash2 walk, the Q1 gate on DFlash2's cf as the stand-in for MTP's (no per-row MTP confidences exist), b16 weights ~1 / (rank + 1) (the capture has no gate weights). scripts/q1_24.py, 4 seeds. Line (NewIdeas'): code SSD MB per kept token, Q1 vs the same replay without Q1: <= x0.70 = PASS (Q1 joins the 24 GB FAST version's same-scores test), > x0.90 = KILL, else BETWEEN. **RESULT Mon 23:0x, option A (scripts/q1_24.py, data/q1_24.txt; 4 seeds, guarded, peak 171 MB)**: v3 exact verify 175.0 -> 115.2 SSD MB per kept token = **x0.658 -> PASS** (line <= x0.70; within 0.05 of it, so option B, MTP Head's per-row MTP probabilities, is requested to confirm); **Option B run pre-registered Tue 11:1x, same line, before running** (MTP Head's export ~/TrainLab/data/mtp_map_code/, 06:57: the native MTP chain's own right / wrong per depth walks the 4-row checks and its top-1 probability gates Q1; scripts/q1_24.py with Q124_GATE=mtp -> data/q1_24_mtp.txt); **Option B RESULT Tue 11:1x: v3 175.5 -> 100.4 = x0.572 -> PASS (confirms A with margin); b16 82.0 -> 86.8 = x1.058 -> KILL**; MTP's 4-row checks keep 3.75 per check (the DFlash2 stand-in 3.52); **re-check Tue 17:0x on MTP Head's aligned v2 export (v1 was one row late): v3 x0.574 PASS, b16 x1.058 KILL, kept 3.74 - unchanged** (data/q1_24_mtp_mtp_map_code_v2.txt); b16 81.8 -> 88.2 = **x1.079 -> KILL** (the budget already caps the union at 16, and Q1 only changes which 16 fill it, toward less cached experts). Kept per 4-row check 3.52 (DFlash2's walk; conservative for MTP). |
 | M-20 | MoonShots (SSD + CPU timing, ~2 min, quiet lock; no slot) | SSDWAKE [new-idea ask: Kamen 21:5x via the orchestrator, 'genuinely new' aimed at the 45 GB SSD stack. Not in TRIED (power-state / APST / keepalive absent; GPU idle-gap DVFS was measured: #3 KILL, R-04 BETWEEN). Prior-art check 22:0x: no MoE / LLM-offload work on SSD idle states, no published Apple Silicon wake-latency numbers; PC NVMe pays 2-60 ms after deep idle (entered after 10s-100s of ms), so my prior is low (~25 %) for the route's ~1 ms gaps. Pre-registered Mon 22:0x, before any timing]: does the internal SSD charge a wake-up penalty on the first reads after the short idle gaps the 45 GB route leaves between layers (each layer's demand misses go out as one burst after its router: ~3.6 misses x 9 pieces; the SSD idles ~1 ms per layer while the GPU computes, ~10-15 ms around draft + commit), and does a trickle of 4 KB keepalive reads (every ~200 us, ~20 MB/s) remove it? Screen: scripts/ssdwake.py, F_NOCACHE preads of fresh random experts' MSB parts from records3 (read-only), bursts of 4 x 9 pieces and single 2.16 MB reads after busy-waited gaps 0 / 0.25 / 0.5 / 1 / 2 / 5 / 10 / 20 ms, plain vs keepalive alternating within each of 40 rounds, default QoS. Line: PASS if the burst after a 1 ms gap is >= 15 % and >= 50 us slower than back to back AND the keepalive removes >= 70 % of that penalty; KILL if the 1 ms-gap penalty is < 5 % or < 20 us for bursts and single reads; BETWEEN otherwise. Exact either way (no model change). If PASS: ~48 bursts per check x the penalty is the prize, and the keepalive goes to BigMoE's loader. **RESULT Mon 22:09 (quiet lock; scripts/ssdwake.py, data/ssdwake.txt): BETWEEN by the line** - the 1 ms-gap burst penalty is +64 us (+7.5 %, line 15 %) and the pre-registered 4 KB / 200 us keepalive removes 44 % (line 70 %). The effect is real and starts at short gaps: single 2.16 MB reads +16 % after 0.25 ms, +18 % (+54 us) after 1 ms, +33 % after 20 ms (back to back 296 us; bursts 847 us). Exploratory follow-up (not pre-registered): a busy CPU core with no I/O changes nothing (the SSD path, not host wake-ups); a 4 KB read every 50 us (~80 MB/s) removes all of it (burst -3 us, single -6 us at 1 ms) without slowing back-to-back bursts. Prize: ~48 bursts per check x ~60 us = ~3 ms per check at 45 GB (~+3 % at C50's 96.8 ms cycle, ~9 % at a 34 ms cycle), exact; the engine's real gaps are unverified -> next is a keepalive thread in BigMoE's loader and an engine A/B in a quiet slot. |
 | M-21 | MoonShots (CPU replay; no slot) | BWIDTH [EXACT. The orchestrator 22:5x from Fable A's ASSUMPTION_HUNT (mission 31): consecutive checks' accepted lengths correlate 0.60 on code (P(long | long) 0.74 vs 0.25 after a short one; math 0.24, IFEval 0.34). Not in TRIED (CALSTOP / the t 0.3 cut / AdaEDL size by the drafter's confidence, not by the outcome history). Pre-registered Mon 22:3x, before any run]: a branch predictor for the check width. 'last2' = 8 rows after two short checks, 32 after two long ones, else 16; 'sat2' = a 2-bit saturating counter (start 1; long +1, short -1; 0 -> 8, 1-2 -> 16, 3 -> 32). long = the check verified its full width with no cut and kept every row; short = kept <= width / 4. The t 0.3 cut stays on inside the chosen width. Replay (scripts/bwidth45.py on wide45.py's machinery): Breakthrough's 12 code windows, right / wrong per position from the real uncut walk, MTP Head's per-depth rates where unknown (base16 for 8 / 16-row checks, base32 for 32; variant match16 / match32), 4 seeds (one uniform draw per position, shared by all widths); a myopic oracle (the best width per check in hindsight) as the ceiling. Cost (the orchestrator's): ms per check = M0 + 2.0 ms x verified rows + draft (block 8 / 16 / 32: 5.4 / 6.3 / 8.2 ms), M0 so that fixed 16 + cut = C50's 96.8 ms cycle; beside it the SSD-aware model from M-18c's byte replay (C 256 + M-17 sizes, EXACT). Line (the orchestrator's): pooled code tok/s (kept per check-ms) of the better predictor vs fixed 16 + cut, flat cost model: >= +2 % = PASS, < +0.5 % = KILL, BETWEEN otherwise (the replay stands in for Fable's halved napkin, +1-2 %). **RESULT Mon 22:4x (scripts/bwidth45.py, data/bwidth45.txt; 4 seeds, guarded, peak 198 MB): KILL, borderline** - the better predictor (last2) gains +0.49 % on code (flat model; line < +0.5 % KILL), +0.2 % / +0.4 % SSD-aware (today / NAX6); sat2 -0.6 %. With MATCH's rates (variant) last2 +0.88 % (BETWEEN), sat2 +0.7 %. The room exists but the history doesn't find it: the hindsight oracle (best width per check) is +10.5 % flat / +9.0 % SSD-aware and picks 8 rows on 64 % of checks (last2 on 18 %, sat2 43 %), so the gain is in foreseeing short checks, which the acceptance history barely signals. Fixed 32: +1.4 % flat but -1.9 % SSD-aware. Per window (last2): only cap-bound prompts gain (HumanEval/136 +9.9 %, /135 +8.1 %, /103 +4.2 %), the rest -1.6 .. +0.5 %. |
 | M-21b | MoonShots (CPU replay; no slot) | STOPCLS [EXACT. The orchestrator 22:5x after M-21's oracle (+9.0 % SSD-aware, mostly short checks). Published form: DISCO's continue-drafting classifier, SpecDec++'s acceptance head. TRIED: CALSTOP (a calibrated per-depth keep model) was KILL in substance; new here are the history features and tuning on the SSD-aware objective. Pre-registered Mon 22:4x, before any run]: a logistic model of P(draft j accepted | drafts 1..j-1 accepted) on logit cf_j, log cumprod(cf), depth, depth^2, the last two checks' kept, and logit cf_j x depth (the walks carry no top-2 margin). Trained on the real uncut walks of half the windows, 2 folds by window, never by row. The check verifies while the predicted survival S_j >= mu, i.e. expected kept per row-cost; mu is tuned on the train fold (SSD-aware). Widths 1-16 (today's block-16 drafter). Beside it: t* = the t-cut threshold re-tuned on the same folds (to separate retuning from learning) and the hindsight oracle (the ceiling). Harness: bwidth45's (coupled walks, per-domain acceptance rates from the capture's own uncut walks where unknown, C 256 + M-17 sizes byte replay, EXACT). Line (the orchestrator's): pooled code SSD-aware tok/s on the test folds vs fixed 16 + t 0.3: >= +2 % PASS, < +1 % KILL, else BETWEEN; chat (IFEval, multi) reported separately. **RESULT Mon 23:0x (scripts/stop45.py, data/stop45.txt; 2 folds by window, 2 seeds, guarded, peak 277 MB): KILL on code** - the learned stop is -1.5 % (today's kernels) / -1.0 % (NAX6) vs t 0.3; the re-tuned t* -0.2 / -0.4 %; the hindsight oracle +12.3 / +9.4 %. Chat: IFEval learned +2.3 % / 0.0 %, t* (0.4) +2.6 / +0.7 %, oracle +21.7 / +16.0 %; multi learned +2.4 / +0.2 %, t* +1.4 / -0.5 %, oracle +17.1 / +12.3 %. Reading: the history and calibration add nothing beyond the threshold; on chat a shorter cut (t ~0.4) gains ~2 % at today's per-row cost and ~0 once NAX6 makes rows cheaper; the oracle room (where the first wrong draft is) is not visible in cf, depth or the history. |
@@ -179,7 +179,9 @@ Why it matters at 24 GB too (R-43, BigMoE b43): there each extra checked row cos
 | M-23 | MoonShots (CPU replay; runs after MTP Head's DUALDRAFT writes per-row drafts from both drafters, Tue ~14:15; no slot) | FIRSTMISS [EXACT. The orchestrator (Mon ~23:0x) after M-21 / M-21b / M-22: cf- and history-based width / stop rules sit within +-3 % of t 0.3 on code while hindsight shows +9-12 %, so the missing piece is foresight of the first wrong draft. TRIED: no disagreement-as-stop entry; cloud task 2's committee result bounds the signal (when L1-20 misses, the second drafter also misses 61-66 %). QUEUED Mon 23:0x, pre-registered before any run]: does the two drafters' disagreement at a row, plus the row's token class (newline, identifier start, punctuation, other), predict the first miss better than cf? Model: M-21b's logistic acceptance head plus the disagreement and class features, against its cf-only twin as the control; 2 folds by window; the rule verifies while the predicted survival >= mu, tuned on the train fold. Harness: stop45.py's (coupled walks, C 256 + M-17 sizes byte replay, EXACT). Input: DUALDRAFT's per-row drafts on windows aligned with the capture's (or the capture re-walked on DUALDRAFT's windows). Line (the orchestrator's): code SSD-aware tok/s vs t 0.3 on the test folds: >= +3 % PASS, < +1 % KILL, else BETWEEN; chat reported separately. **Spec update (the orchestrator, Mon 23:3x): use Fable B's pre-registered screen, ~/FableGod/fableb/FIRST_MISS.md section 5** - stop45's acceptance head with the content signals (token class, copy state, 3-gram and unigram novelty, line position, last kept) plus the disagreement flag, against its cf-only twin; same folds and line. Key diagnostic: disagreement must mark >= 30 % of the cf >= 0.99 misses while flagging <= 5 % of those rows. Fable B's own read: content signals lift the row AUC 0.80 -> 0.89 on code but width / cut rules cash only ~+1 %. |
 | M-25 | MoonShots (CPU replay; no slot) | SIDECAR SIZES [EXACT, residency only. The orchestrator Mon 23:2x: Fable A, Fable C and cloud task 18 find the rank 0-1 LSB sidecar pool missing ~15.8 times per kept token at every C (~12 MB, a third of the bytes at C 320). Note: M-17's adopted sizes already size the sidecar per layer jointly with the base pool (C 256: C_l average 89 vs uniform 112), so both baselines are reported. Pre-registered Mon 23:2x, before any run]: replay (wide45 / band45 machinery: LRU + 30 x popularity, strict, prompts as uncounted prefill) on Breakthrough's capture, code (12 windows) and chat (IFEval + multi, 24), the union per 16-row block (the uncut walk's checks); per-layer miss curves of both pools over size grids. Arms at C 256 and C 320, base pool held at its baseline: (1) per-layer sidecar sizes at the same sidecar RAM (M-17's Lagrangian on the sidecar curves); (2) the sidecar at 1.5x and 2x slots (+2.07 / +4.14 GB at 112 -> 168 / 224); (3) both (per-layer sizes at 1.5x / 2x RAM); control: the same extra RAM allocated jointly over both pools. Allocation on one half of the windows, scored on the other (2 folds by window). Baselines: uniform (C 256: 287 + 112, C 320: 369 + 112) and M-17's per-layer sizes. Line (the orchestrator's): PASS = arm (1) cuts code SSD MB per kept token >= 5 % vs the uniform baseline at equal RAM; KILL < 2 %; BETWEEN otherwise; MB per kept token (total and sidecar) and each arm's pool GB reported, chat separately. **RESULT Mon 23:3x (scripts/sidecars45.py, data/sidecars45.txt; held-out by window, 110 s, peak 335 MB): arm (1) KILL at C 256 (-1.1 %), BETWEEN at C 320 (-2.1 %)** on code (chat -2.2 / -3.5 %). Code MB per kept token, uniform 53.12 / 26.68 (sidecar 8.70 = a third at C 320): sidecar x1.5 / x2 uniform (+2.07 / +4.14 GB) -7.0 / -10.7 % (C 256), -14.0 / -21.2 % (C 320); per-layer sidecar x1.5 / x2 -8.0 / -11.4 %, -15.9 / -22.7 %; M-17's adopted sizes -12.8 / -14.3 %; a joint re-fit of both pools at equal RAM -14.7 / -18.1 %; joint +2.07 GB -27.6 / -32.2 %, +4.14 GB -38.8 / -43.7 %. Reading: the sidecar is not a sizing problem at equal RAM; extra RAM buys 2-4x more when allocated jointly (a base miss costs 2.16 MB vs 0.77), so the sidecar's share of bytes is a symptom, not the place to spend. Caveat: 16-row blocks (uncut), as asked; the t 0.3 cut shrinks the unions. |
 | M-25b | MoonShots (CPU replay + size files for BigMoE; no slot) | JOINT SIZES [EXACT, residency only. The orchestrator Mon 23:3x after M-25 (spend RAM jointly over both pools). Pre-registered Mon 23:3x, before any run]: per-layer (C_m, C_l) sizes from M-17's joint Lagrangian (+ greedy fill, FLOOR C_m >= 160, C_l >= 32, P30 pools) at C 256 and C 320, at equal RAM and +2.07 / +4.14 GB. Fits: (i) cap45 only (M-17's data: at equal RAM this reproduces M-17, an identity check; the extra-RAM sizes are new) and (ii) cap45 + the capture's training windows (code + chat, pooled bytes per pooled kept token), scored on the capture's held-out windows (2 folds by window, 16-row blocks, as M-25). Files: data/joint45_<C>_<extra>.json in M-17's BIGMOE_TIER_SIZES format, fitted on cap45 + all capture windows. Line (the orchestrator's): PASS if fit (ii) beats M-17's adopted sizes by >= 2 % code SSD MB per kept token at equal RAM on the held-out windows; KILL < 1 %; BETWEEN otherwise; chat and the extra-RAM gains reported. **RESULT Mon 23:4x (scripts/joint45.py, data/joint45.txt, curves data/joint45_curves.npz; 322 s, guarded, peak 405 MB)**: identity check passes (fit (i) at equal RAM = M-17's sizes on 48 / 48 layers at both C). Fit (ii) vs M-17 at equal RAM, code held-out: **C 256 -1.4 % (BETWEEN), C 320 -2.8 % (PASS)**; IFEval / multi -2.0 to -2.3 % (C 256), -1.4 to -2.0 % (C 320). Extra RAM vs M-17: +2.07 GB -16.1 % (C 256) / -20.0 % (C 320), +4.14 GB -29.3 / -33.8 % (fit (ii); cap45-only fits a point or two less). Files for BigMoE (M-17's format, BIGMOE_TIER_SIZES; fitted on cap45 + all 36 windows): data/joint45_{256,320}_{0,2070,4140}.json (pools 33.93 / 36.00 / 38.07 GB at C 256, 42.45 / 44.51 / 46.58 GB at C 320). |
-| M-26 | MoonShots (CPU replay; no slot) | SIDECARDROP [bytes side of the 45 GB shrink path; quality is Breakthrough's t3_all (Tue). The orchestrator Mon 23:4x. Pre-registered Mon 23:4x, before any run]: plan 3333333333 (all ranks 3-bit, no LSB sidecar pool, no LSB reads); the whole pool RAM (uniform C 256: 33.93 GB, C 320: 42.45 GB) goes to the base pools with a base-only per-layer fit (M-17's Lagrangian, FLOOR C_m >= 160, P30) on cap45 + the capture's training windows. Compared with M-17's sizes and the M-25b joint fit (both on plan 4433333333 with the sidecar) at C 256 and C 320, code and chat, SSD MB per kept token, without Q1 and with Q1 (top-2 on rows with DFlash2 cf >= 0.99; MSB only under 3333333333). Harness: M-25b's (capture held-out by window, 2 folds; 16-row blocks of the uncut walk), plus the same on the capture's cut rows (the engine's t 0.3 checks) reported beside it. Files: data/sidedrop45_<C>.json (C_l = 0). Line (the orchestrator's): PASS = the 3333333333 arm <= 33 MB per kept token on code at C 256 (the 45 GB line) with Q1 on the 16-row harness; KILL > 40; BETWEEN otherwise. **RESULT Tue 00:0x (scripts/sidedrop45.py, data/sidedrop45.txt; 19 min, guarded, peak 372 MB): PASS** - SIDECARDROP with Q1 at C 256: 11.78 MB per kept token on code (16-row harness; cut rows 11.85). Code, C 256: no Q1 M-17 46.31 / joint 45.67 / SIDECARDROP 24.46 (-47 %); Q1 27.83 / 27.15 / 11.78 (-58 %). C 320: no Q1 22.85 / 22.22 / 8.13; Q1 14.96 / 14.14 / 4.62. Chat (IFEval / multi) at C 256: no Q1 30.2 -> 17.0 / 18.1; Q1 27.0-27.7 -> 14.5 / 16.3. Why: no LSB reads at all (the sidecar was 23 % of M-17's bytes) and its RAM (3.3-4.1 GB) moves to the base pools (C_m sum 14,168 -> 15,690 at C 256). Implied steady (C50's six prompts, SSD fully exposed, the capture's code ratio on math too): 63.6 -> 75.8 tok/s without Q1, 85.3 with Q1 (Q1 alone 73.5). NOT exact: ranks 0-1 at 3 bits; quality = Breakthrough's t3_all (Tue). Files: data/sidedrop45_{256,320}.json (C_l = 0; plan 3333333333). |
+| M-26 | MoonShots (CPU replay; no slot) | SIDECARDROP [bytes side of the 45 GB shrink path; quality is Breakthrough's t3_all (Tue). The orchestrator Mon 23:4x. Pre-registered Mon 23:4x, before any run]: plan 3333333333 (all ranks 3-bit, no LSB sidecar pool, no LSB reads); the whole pool RAM (uniform C 256: 33.93 GB, C 320: 42.45 GB) goes to the base pools with a base-only per-layer fit (M-17's Lagrangian, FLOOR C_m >= 160, P30) on cap45 + the capture's training windows. Compared with M-17's sizes and the M-25b joint fit (both on plan 4433333333 with the sidecar) at C 256 and C 320, code and chat, SSD MB per kept token, without Q1 and with Q1 (top-2 on rows with DFlash2 cf >= 0.99; MSB only under 3333333333). Harness: M-25b's (capture held-out by window, 2 folds; 16-row blocks of the uncut walk), plus the same on the capture's cut rows (the engine's t 0.3 checks) reported beside it. Files: data/sidedrop45_<C>.json (C_l = 0). Line (the orchestrator's): PASS = the 3333333333 arm <= 33 MB per kept token on code at C 256 (the 45 GB line) with Q1 on the 16-row harness; KILL > 40; BETWEEN otherwise. **RESULT Tue 00:0x (scripts/sidedrop45.py, data/sidedrop45.txt; 19 min, guarded, peak 372 MB): PASS** - SIDECARDROP with Q1 at C 256: 11.78 MB per kept token on code (16-row harness; cut rows 11.85). Code, C 256: no Q1 M-17 46.31 / joint 45.67 / SIDECARDROP 24.46 (-47 %); Q1 27.83 / 27.15 / 11.78 (-58 %). C 320: no Q1 22.85 / 22.22 / 8.13; Q1 14.96 / 14.14 / 4.62. Chat (IFEval / multi) at C 256: no Q1 30.2 -> 17.0 / 18.1; Q1 27.0-27.7 -> 14.5 / 16.3. Why: no LSB reads at all (the sidecar was 23 % of M-17's bytes) and its RAM (3.3-4.1 GB) moves to the base pools (C_m sum 14,168 -> 15,690 at C 256). Implied steady (C50's six prompts, SSD fully exposed, the capture's code ratio on math too): 63.6 -> 75.8 tok/s without Q1, 85.3 with Q1 (Q1 alone 73.5). NOT exact: ranks 0-1 at 3 bits; quality = Breakthrough's t3_all (Tue). Files: data/sidedrop45_{256,320}.json (C_l = 0; plan 3333333333). Quality so far (Breakthrough's t3_all map, Tue lounge, SCOREBOARD 8b3d8e5): code BETWEEN (+0.59 pts over the t4 control; sure rows 0 / 2922 flips), chat +4-5 pts (mid rows flip ~5 % vs 0.4 %); EvalSuite's same-scores (IFEval first) decides. |
+| M-27 | MoonShots (CPU measurement + pricing; no slot) | LOSSLESS45 [BREAKTHROUGH PUSH bet (Kamen-approved push, the orchestrator Tue 17:0x): lossless compression of expert bytes, EXACT. TRIED (mostly mine, 10-18..10-27): W24-floor (3-bit copy floor 2.98 of 3.5 b / weight, -15 % MSB), W24-sp (11-bit lossless scales, -10.9 % at 24 GB), R-16 W24-ec (GPU rANS 46 GB/s of codes, 2.72 b; KILL at 24 GB for GPU contention), C1 (net <= +6 % after decode), R-23 (cross-expert context 0.0035 b), LSB planes uniform. New here: the 45 GB line's price (C 256 + M-17 sizes, the sidecar ~23 % of bytes), a per-layer sample over all 48 layers, an explicit shared-base / delta test, and the decode-time balance. Pre-registered Tue 17:0x, before the run]: sample 4 experts x 48 layers of records3 (both parts): per layer the order-0 entropy and Huffman length of the 3-bit codes, the LSB planes' entropy, the scales / biases' 16-bit entropy; shared base + delta = H(codes of expert e | codes of expert e' at the same position) and H(e - e' mod 8) for every pair in a layer vs H0. Formats priced on band45's capture reads at C 256 (M-18: code 142.2 base + 118.2 sidecar reads per check): today; fixed-width (11-bit scales, cheap decode); entropy floor (rANS codes at H0 + 0.016 b, entropy-coded scales); 16 KB-aligned parts. Lines: bytes - PASS if the entropy-coded store saves >= 12 % SSD MB per kept token on code at C 256, KILL < 8 % (the orchestrator's suggestion), BETWEEN otherwise; time (decides whether bytes convert) - the GPU rANS decode of a check's missed codes at the measured 46 GB/s must take less than the SSD time it saves at 12 GB/s, else flagged 'no net gain' (CPU decode reported as a judgment). **RESULT Tue 17:1x (scripts/lossless45.py, data/lossless45.txt; 192 records over all 48 layers, 25 s): bytes PASS (13.1 % code, 12.8 / 13.1 % chat, entropy store), time NO NET GAIN** - per code check 52.0 MB fewer SSD bytes = 4.33 ms at 12 GB/s, but the GPU rANS decode of the missed codes takes 5.20 ms at the measured 46 GB/s (net -0.87 ms). Measured: 3-bit codes H0 2.724 b (per layer 2.700-2.731), Huffman 2.765, rANS ~2.740 of 3; the LSB plane 1.00000 b (incompressible); scales / biases ~8 of 16 b (11-bit fixed width lossless); shared base + delta: none (H0 - H(e | e') -0.0003 b over 288 pairs; deltas cost +0.229 b). Fixed-width 11-bit scales alone: -5.0 %. **EXPLORATORY LEAD (not pre-registered)**: the fixed-width form held packed in RAM as well (bit unpacking inside the dequant kernels, no separate decode) fits ~4.6 % more parts in the same pools: held-out code -17.6 % vs M-17 at C 256 (-24.5 % at C 320), chat -14 to -16 %; exact; implied 63.6 -> ~66.9 tok/s. R-16 folded this pack into rANS (killed for decode contention), so it was never built alone. Needs Leap's kernels (11-bit scale reads) and a converted store (BigMoE; ~63 GB vs the disk floor). **Tue 17:1x, NewIdeas' pipelining question** (decode each landed record in the gate-spin shadow, only the last-landing one exposed, ~2.3 ms per check): on the entropy store alone vs today that would net ~+2 ms per check, but (1) stacked on the 11-bit pack the rANS layer adds only 38.16 -> 34.93 MB per kept token (-24.6 % vs M-17 in total), ~2.2 ms of SSD per check, against ~2.3 ms of exposed decode -> ~0; (2) R-16's live b42 measured a concurrent GPU decode costing the check +9-12 ms per pass at 6 GB/s (24 GB) - the shadow is not free (it contends with the OOO compute of resident experts); at ~2 GB/s here that is a few ms. So the entropy store stays BETWEEN; worth a live gate-pipeline micro-test only after M-27b. |
+| M-27b | Leap (kernels) + BigMoE (store, live A/B); MoonShots (sizes, line) | PACKED11 [EXACT. From M-27's exploratory lead; the orchestrator Tue 17:0x: pre-register before any build. Pre-registered Tue 17:0x, before any build or run]: records3's s3 / b3 (MSB parts) and b (LSB parts) stored as 11-bit fixed-width fields (W24-sp: all 221,184 pieces round-trip bitwise) in the SSD store AND held packed in the RAM pools; Leap's dequant kernels (3c-N / NAX6-N) unpack them in place; ONE in-place conversion with the native layout (BigMoE plans; disk floor 100 GB). Parts 2,064,384 / 720,896 B (16 KB-aligned); pool sizes re-fitted at equal RAM (M-25b's joint fit with the packed part sizes; MoonShots supplies the files). Replay prediction (M-27, held-out): code SSD MB per kept token -17.6 % at C 256 (-24.5 % at C 320), chat -14..-16 %; implied C50 steady +5 %. Gate before the A/B: a kernel unit test - packed-scale dequant gives the bf16-scale path's weights bitwise on every piece of a full layer. Live A/B (BigMoE, C50-style: cap45's six prompts at C 256, today's default = records3 + M-17 sizes vs packed store + packed pools + re-fitted sizes, same RAM, separate passes per arm, quiet lock): PASS = every token bitwise identical AND code SSD MB per kept token <= -10 % AND the six-prompt median steady tok/s >= +3 %; KILL = any token differs, or MB per kept token > -5 %, or median steady < +1 %; BETWEEN otherwise; C 320 reported if run. Size files ready (Tue 17:1x): ~/MoonShots/data/packed45_{256,320}.json (C 256: C_m sum 14,752, C_l 4,824 at 33.93 GB; C 320: 17,984 / 7,376 at 42.44 GB; key part_bytes). **Tue 17:1x: Kamen approved the combined conversion (native layout + 11-bit packed scales, one in-place change); M-27b's live A/B = BigMoE's pre-registered before / after A/B, reported against both lines; packed45 files feed the after-arm.** C 224 file for BigMoE's A/B (Tue 17:3x, BigMoE's ask: the night's memory likely limits the A/B to C 224): data/packed45_224.json at laysz45_224.json's pool RAM (29.677 GB; C_m sum 12,976 vs 12,466, C_l 4,008 vs 3,528), md5 11309e04c5f9e901916542aa81047ae0; held-out prediction vs M-17 at C 224: code -15.0 %, chat -14.2 / -14.6 %. |
 Parked seed, OPENED as R-54 (NewIdeas 20:48) (NewIdeas 19:3x, published, untested here): EXPERT-AWARE DRAFT SELECTION for the 24 GB line, where an extra checked row costs ~12 ms of SSD waiting (~108 reads, R-43). Pick draft rows / tree nodes by acceptance per marginal expert READ (non-resident experts not already loaded for this pass), not per row: EcoSpec (arXiv 2607.12696, marginal expert cost in draft selection, up to 1.62x on Qwen3-235B / DeepSeek-V3.1 / GPT-OSS-120B), S2-MoE (2608.15018, routing-aware tree expansion on edge devices), EVICT (2605.00342, cost-justified tree truncation). Cheapest screen: from real 24 GB verify passes' per-row expert ids, how unevenly marginal reads fall across rows (a heavy tail = room). Owner when opened: BigMoE after R-44, or Fit12 on account-2.
 PRIOR ART (Kamen's r/macmini lead, relayed by the orchestrator Wed 23:2x; NewIdeas Thu 15:5x): someone ran the 125B on a 24 GB M4 Pro Mac mini with ISTA-DASLab's GSQ-RCO IQ3_XXS (~76 GB on disk): 11 tok/s on short prompts, 8.5 long, 180 tok/s prefill, '9.5 GB peak runtime' (the post's numbers as relayed; the post itself not re-read). GSQ = Gumbel-Softmax scalar quantization per tensor (arXiv 2604.18556); RCO = Riemannian constrained optimization of the per-tensor type mix under a size budget (2605.00649); plain GGUF for llama.cpp (model card as listed by third parties). Their Flash-Next IQ3_XXS scores -0.55 points on the makers' task average, about T3R's size class (FOR_KAMEN 3, Tue). The 9.5 GB is almost surely llama.cpp's own allocations: the weights are mmapped, clean file-backed pages live in macOS's file cache outside the process footprint, so the whole 24 GB machine is their expert cache (my inference, unverified). Not comparable to our lifetime phys_footprint: our engines pread with F_NOCACHE into counted pools (bigmoe/stream.py, ext). Speed context: our exact 4-bit lines ~29 tok/s at 24 GB and ~16 at 12 GB on an M5 Pro (SSD ~2x an M4 Pro's). Nothing to adopt: non-exact, and mmap only moves memory out of the count.
 Parked seeds: on-policy distillation (AdaFlash OPD: +26 % in-domain on code; needs ~1M on-policy tokens from the 125B, ~5-9 h of **Priced by MTP Head Thu 15:5x**: 1M tokens = 44x L1-20's 22.5K anchors = 5.5 doublings; at D-09's log-linear slope (optimistic) code 9.57 -> ~10.1, math 7.00 -> ~8.0, for ~7 h of decode + ~10 h of training (~17 GPU-h, not laptop-sized). A 1/4 version (250K tokens: ~9.9 / ~7.6) costs ~2 h decode + ~2.6 h training. Parked: revisit only if the design study needs data that only the 125B can make.
@@ -479,3 +481,465 @@ block 32 (net ~+2 % under this cost model unless the drafter nears the oracle); 
 - Tue 03:01: T3ALL in EvalSuite's RELAX PREREG rev 2 (plan 3333333333, exact acceptance, IFEval first then HumanEval+ / math;
   decision 4 vs REF2-T; the code-only fallback reads its math + HumanEval+ lines). Thu order: control, A, B, E, T3ALL, F, C, G
   (drop G, C, F if short); ~7 h with replays after BigMoE. Morning: refresh SUMMARY_FOR_KAMEN with the night's results.
+- Tue 06:3x-06:4x (main): night routed. Breakthrough 03:19: Q1-UNION cf 0.9 PASS (all-row flips below Q1 0.99 on
+  every domain), 3-bit sure rows PASS (free), domain-adaptive PASS (not over cf 0.8). IFX STOP PASS 06:37 -> FOR_KAMEN
+  decision 8 (REF2c-T). BigMoE's night never ran (memory). MTP Head's night_1102 went on at 06:00.
+  NewIdeas CPU replays (scripts/union_theta.py, union_oea.py; ~18 s, 0.05 GB): union per check code x0.720 (cf 0.99)
+  / x0.618 (0.9). CORRECTION 06:4x: I wrote that the orchestrator's 'x0.595' had no source; it has one (MoonShots
+  data/band45.txt: Q1 0.9 code SSD MB per kept token 66.3 vs 111.4 on cap45). Mine is the union per map block, a
+  different quantity; both are kept, labelled. Prior art: Q1-UNION's union step = OEA (arXiv
+  2511.02237, ICML 2026): tag adapted. OEA k8 x0.83 (= top-8's bytes, rows keep 9.0 of 10), stack sure k0 2 + unsure
+  k0 8 code x0.527 / chat x0.76, unsure k0 6 code x0.435 / chat x0.60. Masks (scripts/dm_oea_masks.py, self-check
+  bit-equal to q1u_cf09) -> Breakthrough wired 4 arms (78ccef8, ~20-25 min, MEM 17 GB; slot: the orchestrator).
+  Proposed RELAX rev 3 to EvalSuite: Q1-UNION 0.9 in A / B / C. Orchestrator told (uds 88684).
+- Tue 06:4x: orchestrator 06:4x: RELAX rev 3 APPROVED (Q1-UNION 0.9 + copy in A / B / C); the map's OEA arms get a
+  memory-gated slot (NO-SWAP >= 25 GB, to 14:30, with Breakthrough's 4 two-pass arms); Wed 00:30 narrowed FLOOR + the
+  best passing OEA arm at scale. The union stack's SSD side (scripts/band45_oea.py = MoonShots' band45 + 6 rules, writes
+  only data/band45_oea; 54 s, 0.5 GB), all six cap45 prompts, SSD MB per kept token vs EXACT 63.1 (implied tok/s
+  SSD-only / + GPU, model): Q1 0.9 -34.9 % (72.2 / 84.3); OEA k8 -18.6 % (67.9 / 72.1); OEA k6 -36.3 % (72.9 / 83.3);
+  HYB 0.9 u8 -44.4 % (75.0 / 91.4; code -47.2 %); HYB 0.9 u6 -52.7 % (77.7 / 99.1); HYB 0.99 u8 -35.7 % (72.7 / 84.1);
+  HYB 0.9 u8 + 3-bit sure rows -55.8 % (79.6 / 100.2; code -60.2 %). Quality: the map arms. OEA's venue confirmed on
+  icml.cc (ICML 2026 poster 62958).
+- Tue 06:5x PRE-REGISTERED (before any run) U-32, the union stack at 32 rows (NewIdeas, CPU): do 32-row checks pay on code
+  once sure rows cost ~no new experts? Same replay as M-18c (MoonShots' wide45 copied to scripts/wide45_oea.py, writes only
+  data/band45_oea: Breakthrough's 12 HumanEval windows, MATCH's 32-row rates, C 256 + M-17, cost model today / NAX6).
+  Rules: EXACT, Q1 0.9 (= Q1-UNION's bytes), HYB 0.9 u8, HYB 0.9 u8 3b, HYB 0.9 u8 3b deep sure (rows 16-31 as sure, as
+  M-18c's deep sure); arms 16 cut and 32 cut; 2 seeds. Line (M-18c's): pooled code implied steady tok/s, 32 cut vs 16 cut
+  under the same rule: >= +10 % PASS, <= +3 % KILL, else BETWEEN. Reported too: each rule's 16 cut vs EXACT 16 cut.
+- Tue 06:5x U-32 RESULT = KILL on its pre-registered line (data/band45_oea/wide45_oea.log, 2 seeds, 19 s): 32 cut vs 16 cut
+  under the same rule, pooled code, today / NAX6: EXACT -0.4 / -0.2 %, Q1 0.9 -1.0 / -0.5 %, HYB 0.9 u8 -1.3 / -0.8 %,
+  HYB 0.9 u8 3b -1.3 / -0.9 %; deep sure +3.8 / +3.3 % (BETWEEN, as M-18c's +4.3 / +3.8). Kept 8.00 -> 9.09 per check for
+  10.6 -> 14.3 rows: the union stack doesn't change that 32 rows buy too few kept tokens; only cap-bound prompts gain
+  (HumanEval/136 +18 %). 32 rows stays copy-driven only. Side result, the stack at 16 cut on code (wide45's cost model,
+  model tok/s today): EXACT 86.3, Q1 0.9 130.2 (+51 %), + 3-bit sure rows 146.6 (+70 %), HYB 0.9 u8 139.9 (+62 %),
+  HYB 0.9 u8 3b 158.9 (+84 %); all six cap45 prompts (band45, SSD-only / + GPU): Q1 0.9 72.2 / 84.3, Q1 0.9 3b
+  76.4 / 91.8, HYB 0.9 u8 3b 79.6 / 100.2. So 3-bit sure rows (map-tested only at cf 0.99 / 0.999) are worth more than
+  OEA's unsure-row cut; proposed to Breakthrough: 2 optional arms, q1u_cf09 and hyb_0.9_u8 with sure rows' ranks 0-1 at 3
+  bits.
+- Tue 06:5x: Breakthrough 06:54 added both 3-bit combos (hyb_0.9_u8_t3, q1u_cf09_t3: sure rows' ranks 0-1 from records3 at
+  3 bits, union members at 4), pre-registered on my line (SCOREBOARD 8c917f0); its mask builder reproduces my 5 arms bit for
+  bit (tonight's 78-window FLOOR masks come from it). Load order: oea_k8, oea_k6, hyb_0.9_u8, hyb_0.9_u6, then the 2 combos,
+  then its 4 two-pass arms; waiting for memory (NO-SWAP >= 25 GB, window to 14:30). My 24 GB price of the stack
+  (scripts/q1_24_oea.py, v3 pools C_m 147 + C_l 46, 4-row MTP checks) waits on fanwatch's heat PAUSE (06:54).
+- Tue 06:5x-07:0x: correction: my labels 07:0x-07:4x this morning ran ahead of the clock (real 06:35-06:58); fixed in
+  the files (messages already sent keep them). 24 GB price of the stack (scripts/q1_24_oea.py, the M-18d windows and v3
+  pools, 2 seeds, 230 s): SSD MB per kept token no Q1 175.0, Q1 0.99 115.2 (x0.658 = M-18d), Q1 0.9 103.4 (x0.591),
+  + 3-bit sure rows 93.8 (x0.536), OEA k8 134.3 (x0.767), HYB 0.9 u8 83.5 (x0.477), + 3b 73.9 (x0.422); b16 was 81.8.
+  Sent to MoonShots (97727). MTP Head 06:57: D-23x done (426234f): the first check after a 9K prefill reads 2-3x the
+  records of later checks at 4-10x the time per read (agent 2.5-3.1 s vs 0.2-0.26) -> pool warm-up (BigMoE mission 20);
+  KWALL (b) BETWEEN (depth-1 mid 0.860, top-3 0.982); ANCHORCOV KILL as stated (chat 0.21; 0.78 / 0.80 with first-miss-
+  probability anchors). EvalSuite 07:00: RELAX rev 3 in (Q1-UNION 0.9 + copy in A / B / C, G stays Q1 0.999; mask =
+  dm_q1u_masks' rule on 200 random checks, posts exactly Q1's union); T0 running since 06:58 (VOID gate passed).
+- Tue 07:11: chat SSD price of the stack (band45 capture mode on the map's 12 code / 12 IFEval / 12 multi windows, C 256
+  + M-17, my copy; waited for the heat PAUSE to clear at 07:03; 437 s). SSD MB per kept token, code / IFEval / multi:
+  Q1 0.9 -50.3 / -19.7 / -16.4 %; Q1 0.9 3b -67.1 / -27.8 / -21.7 %; OEA k8 -21.0 / -17.8 / -20.8 %; OEA k6 -39.9 /
+  -33.6 / -38.5 %; HYB 0.9 u8 -56.2 / -32.4 / -32.4 %; HYB 0.9 u6 -61.2 / -43.2 / -45.2 %; HYB 0.9 u8 3b -73.0 / -40.5 /
+  -37.7 %. Implied six-prompt median steady tok/s (SSD-only / + GPU, model): HYB 0.9 u8 76.8 / 92.3, + 3b 80.5 / 99.8.
+  Chat rows are mostly unsure (cf < 0.9 on 59-66 %), so OEA's unsure-row cut is chat's lever; chat is ~79 % constant
+  per check, so its tok/s moves less than code's.
+- Tue 09:09: P1-OEA PRE-REGISTRATION (12 GB, FAST; my new bet for the 12 GB line). Pass 1 of the two-pass check reads
+  the union of the 16 block rows' top experts. That pass-1 read is the binding resource (PLAN_12GB_TWOPASS: on the per-layer chain,
+  'no forecast or residency removes' it). OEA (arXiv 2511.02237) lets every row also use its ranks that are already in that
+  union, for zero extra reads. Two designs:
+  * P1-K1 = top-1 + union members. CPU (scripts/pass1_bytes.py = Breakthrough's dm_rankcache replay, LRU, C 51, wrong-draft
+    stand-ins; its k1 = 2 row reproduces Breakthrough's 0.708): code pass-1 0.708 -> 0.329 GB per check (x0.465; read time
+    54 -> 25 ms at 13 GB/s; hit rate 64.1 -> 69.4 %), IFEval 0.279 -> 0.137, multi 0.154 -> 0.077. Experts per row 2.44 vs
+    2.00; mean gate mass 0.357 vs top-2's 0.358 (estimate: scripts/pass1_mass.py, Breakthrough's measured mean rank profile),
+    but wider (P10 0.212: some row-layers keep only rank 0).
+  * P1-K2 = top-2 + union members: today's reads (union identical, checked), 3.98 experts per row, mass 0.529 vs 0.358.
+  Masks (36 windows, prompt rows exact, checked: OEA keeps the base ranks; OEA k2 is a superset of the control):
+  ~/NewIdeas/data/dm_masks/{top_k2, oea_k2, oea_k1} (scripts/dm_oea_masks.py, new top_k<k> control arm).
+  GPU ask (Breakthrough's map, ~4 min each, all-rows teacher-forced runs, PERT rmask=<absolute dir>, renorm False):
+  top_k2 (the control: the map's own topk2 also cuts prompt rows, so it is not comparable), oea_k2, oea_k1.
+  Read-out: dm_cert_read's CPU columns with each run as the certificate source: certified share, blocks needing pass 2,
+  pass-1-alone certified-row flips (Wilson 95 %), all-row flips; code at theta 0.8 decides, 0.9 / 0.95 and chat reported.
+  Lines (code, theta 0.8, vs top_k2):
+  * P1-K1 PASS: certified flips <= the control's 95 % upper bound AND blocks needing pass 2 <= control + 10 points. KILL:
+    certified flips > 2x the control's upper bound, or blocks needing pass 2 > control + 20 points. Else BETWEEN.
+    Breakeven model: ~29 ms of pass-1 reads saved vs ~110-120 ms per pass 2 (Fit12's T3: pass 1 145 of 211 ms, pass 2 in
+    55-59 % of code blocks) = ~+25 points.
+  * P1-K2 PASS: blocks needing pass 2 <= control - 5 points with certified flips <= the control's upper bound (a better
+    certificate at today's bytes). Else KILL as a lever.
+  * A PASS goes to the mixed runs (two-pass flips through the context, Breakthrough's harness), then Fit12's timing. The
+    quality verdict stays EvalSuite's. If P1-K1 passes, the 12 GB code cycle is ~211 -> ~182 ms (+16 %, model).
+- Tue 09:11: orchestrator: P1-OEA slot APPROVED, right after the map's 10 arms in Breakthrough's same run (~11:15-11:30),
+  before EvalSuite's RELAX smoke; it told Breakthrough. GPU one big job at a time to 15:00 (heat); Kamen OK'd fans to 7000
+  (boost on since 09:05). Read-out ready: scripts/p1_cert_read.py (self-test = Breakthrough's topk2 columns exactly).
+- Tue 10:16: MAP RESULT, the 6 union-stack arms (Breakthrough's load, 09:34-09:55; read with a private copy of
+  dm_oea_read.py, Breakthrough's OEA_read.txt untouched). Lines as pre-registered: per domain all-row flips vs Q1 at
+  0.99's level (code 1.34 / IFEval 5.42 / multi 3.69 %), PASS <= 1x, BETWEEN <= 1.5x, KILL above. Rows 3,366 / 3,397 /
+  3,553. All-row flips code / IFEval / multi:
+  * oea_k8 0.62 / 3.83 / 3.07 % = PASS / PASS / PASS
+  * oea_k6 0.71 / 6.06 / 5.38 % = PASS / BETWEEN / BETWEEN
+  * hyb_0.9_u8 1.34 / 6.18 / 4.08 % = PASS / BETWEEN / BETWEEN
+  * hyb_0.9_u6 1.28 / 8.01 / 5.71 % = PASS / BETWEEN / KILL
+  * hyb_0.9_u8_t3 1.19 / 6.68 / 4.39 % = PASS / BETWEEN / BETWEEN
+  * q1u_cf09_t3 1.19 / 5.06 / 3.24 % = PASS / PASS / PASS (q1u_cf09 at 4 bits: 0.98 / 4.92 / 3.04)
+  Gated code flips (cf >= 0.99): 0-1 of 2,211 in every arm. Paired (McNemar, scripts/union_paired.py), vs Q1 at 0.99:
+  q1u_cf09_t3 z -0.78 / -0.88 / -1.33 (no worse anywhere); vs q1u_cf09 +7 / +5 / +7 flips net (z <= 1.4). On code
+  every hybrid ties Q1 at 0.99 (u8_t3 z -0.85, u6 -0.32); on IFEval the unsure-row cut costs (u8_t3 +2.83, u6 +5.44).
+  Reading:
+  (1) q1u_cf09_t3 (Q1-UNION 0.9, sure rows' ranks 0-1 at 3 bits) is the best arm that passes every domain. SSD MB per
+      kept token: cap45 -46.3 % (code -53.5 %; 76.4 / 91.8 tok/s SSD-only / + GPU, model) vs Q1-UNION 0.9's -34.9 %
+      (72.2 / 84.3); map capture code / IFEval / multi -67.1 / -27.8 / -21.7 % vs -50.3 / -19.7 / -16.4 %; 24 GB
+      x0.536 vs x0.591. My pick for Wed's FLOOR at scale (Breakthrough's run (4), 'the best one'). The engine version
+      (3 bits only for experts no unsure row in the check uses) has the same bytes and keeps more 4-bit math than
+      the map arm, which forced sure rows to 3 bits even where the LSB was loaded.
+  (2) Every union arm passes on code, so a code-only stack is open: hyb_0.9_u8_t3 code SSD MB per kept token -60.2 % on
+      cap45 and -73.0 % on the capture, 24 GB x0.422. Chat keeps its unsure rows at 10.
+  (3) OEA k8 alone (published) passes everywhere and needs no drafter signal: the chat-switch candidate (-18 / -21 %
+      chat SSD bytes).
+  (4) KILL: hyb_0.9_u6 on multi (5.71 % > 5.54). Not a verdict on code.
+- Tue 10:23: P1-OEA RESULT (3 all-rows map runs, 10:07-10:18 in Breakthrough's load; scripts/p1_cert_read.py ->
+  data/P1OEA_read.txt; paired: scripts/p1_paired.py). Pre-registered lines (37f8e37): code, theta 0.8, vs p1_top_k2.
+  * P1-K1 (top-1 + union members, x0.465 pass-1 reads) = PASS. Certified 89.0 % (control 89.7 %). Blocks needing pass 2
+    52 % (205/391) vs 53 % (207/391); paired 7 vs 9 discordant blocks (z -0.50). Certified-row flips 0.23 % (7/2997)
+    [0.11-0.48] = the control's 0.23 % (7/3019). So the same certificate on code at x0.465 pass-1 reads. At theta 0.9:
+    +2.0 points of pass-2 blocks (z +2.1). Chat is weaker: IFEval / multi +1.4 / +3.1 points of pass-2 blocks at 0.8,
+    IFEval certified flips 2.51 vs 1.54 %. Chat runs pass 2 in 81-93 % of blocks anyway.
+  * P1-K2 (top-2 + union members, today's reads) = PASS, by 0.1 point on the blocks line. Pass 2 in 48 % (187/391) vs
+    53 %; paired 27 vs 7 (z -3.43). Certified flips 0/3068 vs 7/3019. Bigger on chat: multi pass-2 blocks 81 -> 66 %
+    (z -14.9), IFEval 92 -> 88 %; certified flips multi 3.66 -> 1.53 %, IFEval 1.54 -> 0.50 %. Code time model: ~-4 ms
+    per check (pass 2's 38 ms x 48/53). The GPU cost of ~4.0 vs 2.0 experts per row in pass 1 is unpriced.
+  Next for P1-K1, the read lever:
+  (a) End-to-end mixed runs, PRE-REGISTERED here before any run. p1c_oea_k1_p08 = P1-K1's mask on rows whose p1 in
+      p1_oea_k1 is >= 0.8, the rest exact (Breakthrough's cert gate with my mask as the cut). Control p1c_top_k2_p08 =
+      top-2 on rows whose p1 in p1_top_k2 is >= 0.8 (cert_top2_p08 stands in if the slot is short). Masks
+      ~/NewIdeas/data/dm_masks/p1c_{oea_k1,top_k2}_p08 (scripts/p1_mixed_masks.py; certified rows = the read-out's
+      2997 / 3019 on code). Read-out scripts/p1_mixed_read.py; its self-test reproduces CERT_read's cert_top2_p08
+      (code 0.27 % (8/2976), uncertified 12.05 %). Line (code, theta 0.8): two-pass certified-row flips <= 1 % and <=
+      the control's Wilson upper bound = PASS; > 5 % or > 2x the bound = KILL; else BETWEEN. Chat reported.
+  (b) Fit12 timing: P1-K1 as T3's pass 1, beside t80ck2 (same prompts, one quiet lock). Time model: bandwidth only
+      (54 -> 25 ms of reads at 13 GB/s) gives 211 -> ~182 ms per code check (+16 %); if pass 1's 145 ms scales with
+      its misses, up to ~-70 ms (+50 %). T3P's wait / gap split (Fit12, 15:07) says which. Proposed line: code tok/s
+      >= 1.10x t80ck2 = PASS, <= 1.03x = KILL.
+- Tue 10:26: slots (orchestrator 10:2x; Breakthrough 10:25):
+  * P1-OEA mixed runs: p1c_oea_k1_p08, then p1c_top_k2_p08, right after EvalSuite's RELAX smoke. Start window
+    11:00-11:35, hard stop 11:45; T0 waits for them. Breakthrough checked the masks: code certified rows 2997 / 3019;
+    uncertified and prompt rows all kept in 36/36 windows. Read-out: scripts/p1_mixed_read.py.
+  * P1-K1 timing (Fit12): inside Fit12's 15:07 quiet lock after T3P, or before 15:00 if MTP Head's chain ends by
+    ~14:40; lock <= ~25 min.
+  * Kamen: the 45 GB map result (Q1-UNION + 3-bit passes everywhere, -46 % SSD bytes, model 92 tok/s) is in his 10:22
+    summary. P1-OEA's PASS goes to him as a promising lead, labelled a model with timing pending.
+  * RELAX rev 4 (Q1-UNION + 3-bit sure rows) is EvalSuite's feasibility call; rev 3 stays if rev 4 costs the slot.
+  * Breakthrough skips hyb_0.9_u8_t3 at scale tonight (the night is past ~10 h; the deadline would cut it).
+- Tue 10:38: LIVE-CUT CAVEAT on every union arm, and two map arms PRE-REGISTERED (before any run).
+  The map's union masks (mine and Breakthrough's, bit-equal) put all 16 rows of each walk check in the union: realized
+  rows plus wrong-draft stand-ins. The live default ends a check once the product of the drafts' cf falls below 0.3
+  (dm_gate's caveat). Emulated on the walks (scripts/dm_oea_masks.py <arm>_live): checks cut before their first miss
+  code 8.4 / IFEval 6.8 / multi 4.1 % (doc: 4-8 %); rows per live check code 9.74 (cap45 capture 9.10), IFEval 3.70,
+  multi 2.97, vs 15.7 on the map. So live sure rows find fewer union members. Experts kept per realized row-layer
+  under Q1-UNION 0.9: code 6.17 -> 6.00, IFEval 8.73 -> 8.24, multi 9.05 -> 8.65 (about 1.3 fewer per sure row on
+  chat). OEA k8 barely moves (8.97 / 8.60 / 8.54). The members carry Q1-UNION's chat PASS: plain Q1 0.9 is 8.86 %
+  IFEval and 7.60 % multi on the map vs Q1-UNION's 4.92 / 3.04. So the map's union-arm verdicts can be optimistic on
+  chat. SSD prices (band45 on live cap45 checks) are not affected; RELAX measures the live engine directly.
+  Arms (36 windows; masks ~/NewIdeas/data/dm_masks/<arm>, rmask, renorm False):
+  * q1u_0.9_live: Q1-UNION 0.9 on live-cut checks. Unions: code x0.519, IFEval x0.816, multi x0.857 of the live exact
+    union.
+  * reach_0.9_0.5_live: plus REACH-CUT. An unsure row whose chance of being reached (the product of the drafts' cf
+    before it) is < 0.5 also keeps only its top-2 + union members: rows past the first miss are discarded, so their
+    experts are pure cost. Adapted from AcceptMoE's offline per-position commitment weights (arXiv 2608.02989), made
+    per row and online. Unions x0.450 / 0.655 / 0.715 = -13 / -20 / -17 % vs q1u_0.9_live. CPU screen
+    (scripts/reach_screen.py, p1_oea_k2's flips on the band's realized rows as a pessimistic proxy): est. all-row flips
+    1.13 / 6.59 / 3.88 % at tau 0.5, 1.04 / 5.45 / 3.49 % at tau 0.4.
+  Lines (the union arms', unchanged): per domain all-row flips <= Q1 at 0.99's level (code 1.34 / IFEval 5.42 / multi
+  3.69 %) = PASS, <= 1.5x = BETWEEN, above = KILL. q1u_0.9_live failing where q1u_cf09 passed means the map's
+  union-arm verdicts are optimistic on that domain, and the FLOOR at scale should use live-cut unions. REACH is worth
+  keeping only if it PASSES where q1u_0.9_live passes (paired cost reported via scripts/union_paired.py).
+- Tue 10:40: orchestrator 10:4x:
+  * The live-cut arms (q1u_0.9_live, reach_0.9_0.5_live) run in today's slot right after the P1 mixed runs, from ~10:45;
+    the GPU has been idle since EvalSuite's smoke ended at 10:26.
+  * Kamen gets the caveat now.
+  * If q1u_0.9_live fails on chat, tell the orchestrator at once: Thursday's RELAX rev 3 runs Q1-UNION at 4 bits on
+    chat too.
+  * EvalSuite: t3 in RELAX is not small (it needs a per-row 'no LSB' mask in the engine's tier call). Rev 3 stays for
+    Thursday; rev 4 is off.
+  Note: the live-cut caveat does not touch P1-OEA. Fit12's T3 runs pass 1 on all 16 rows with no running-confidence
+  cut (PLAN.md T3), so the map's 16-row unions are the right model there.
+- Tue 10:40: Fit12 10:40: P1-K1 wired and pre-registered (Fit12 PLAN.md 'T3P amendment').
+  * Arm t80ck1u runs beside t80ck2 inside T3P's quiet lock: 14:3x if MTP Head's chain ends by ~14:40, else 15:07.
+  * My line is taken as is. C 47 is the verdict, C 51 a replicate. HumanEval 156 / 42 / 68 / 91, 256 tokens, arm order
+    alternating per prompt.
+  * Engine: each wide pass-1 call posts only U = the rows' rank-0 ids. Each row's ranks in U are compacted to KU = 4
+    columns, all 4-bit, weights p / top-10 mass with no renorm. Calls of <= 2 rows stay top-2. Unit tests pass.
+  * Costs it measures that my model left out: tier_glu has no zero-skip, so 4 columns are ~2x K2's pass-1 MoE compute
+    (~+10 ms per check, its estimate); and pass 2 may miss more, since rank 1 is no longer warmed.
+  * KU 4 vs the map's uncapped mask (my CPU check on the oea_k1 masks, Breakthrough's rank profile): 4.7 % of code
+    row-layers keep > 4 experts. The cap drops their lowest union members, ~0.081 of gate mass each. Mean kept mass on
+    code 0.3574 -> 0.3536 (-1.1 %), still about top-2's 0.358; IFEval -0.8 %, multi -1.1 %. Likely inside the
+    certificate's noise. If the timing passes, one KU-4 mask run on the map (4 min) confirms it before adoption.
+- Tue 10:42: P1-REACH rapid screen = KILL (CPU model; scripts/p1_reach_screen.py, pass1_bytes' replay with p1_oea_k1's
+  certificate). Pass 1 skips the rank-0 reads of rows unlikely to be reached, with those rows forced uncertified
+  (pessimistic). Code pass-1 GB per check 0.327 -> 0.294 / 0.265 / 0.239 at tau 0.2 / 0.4 / 0.6. Blocks needing pass 2
+  52.4 -> 53.5 / 56.3 / 62.1 %. Net -1.3 / -0.2 / +4.9 ms per check (pass 2 at ~120 ms per block). Even with no
+  certificate loss the ceiling is ~5 ms (~2.5 %). Not worth a GPU run.
+- Tue 10:44: Fit12 10:4x:
+  * Every per-prompt line and each arm's TOTAL line report pass-2 / exact ms and misses per check beside pass 1's.
+  * Two INFO arms added, no line: t80ck2m3 (top-2) and t80ck1um3 (P1-K1). Both use Breakthrough's 3-bit pass-1 lever
+    (M-18): pass 1 at 3 bits from the MSB-3 pool, no sidecar post.
+  * t80ck1u's line and its balanced order are unchanged: 1st on two prompts and 4th on the other two, as t80ck2.
+  * So P1-K1 at 3 bits gets timed too. Its certificate would need its own map run if the timing makes it worth it.
+- Tue 10:52: P1-OEA MIXED RESULT (end to end; Breakthrough's map 10:44-10:51; scripts/p1_mixed_read.py ->
+  data/P1OEA_mixed.txt). Pre-registered line: code, theta 0.8.
+  * P1-K1 = PASS. Two-pass certified-row flips 0.23 % (7/2997) [0.11-0.48] = the control's 0.23 % (7/3019).
+  * All code rows 1.52 % vs 1.96 % (control); uncertified rows through the context 11.9 vs 17.0 %; windows with a flip
+    9 vs 10 of 12. Breakthrough's cert_top2_p08 (certificate from topk2): 0.27 % (8/2976), all rows 1.63 %.
+  * Chat is weaker, as the CPU columns said. IFEval certified flips 2.43 vs 1.40 %, all rows 9.48 vs 8.86 %; multi
+    4.22 vs 3.45 %, all rows 7.06 = 7.06 %. T3 runs chat through the cf gate / exact check anyway.
+  So on code, P1-K1's certificate equals today's top-2 end to end, at x0.465 pass-1 reads. Speed is Fit12's t80ck1u
+  (14:3x or 15:07); a KU-4 mask run confirms the engine's 4-column cap if the timing passes.
+- Tue 11:01: LIVE-CUT RESULT (Breakthrough's map 10:51-10:59; scripts/live_read.py -> data/LIVE_read.txt). Lines as
+  pre-registered (7a0339d). All-row flips, code / IFEval / multi:
+  * q1u_0.9_live: 1.25 / 6.45 / 3.77 % = PASS / BETWEEN / BETWEEN. Paired vs the 16-row q1u_cf09: z +2.18 / +4.30 /
+    +2.55, worse everywhere, so the 16-row unions were optimistic. Paired vs Q1 at 0.99 (the line): z -0.51 / +2.47 /
+    +0.25. So with live-length checks, Q1-UNION 0.9 is a CODE lever. On chat it is BETWEEN: IFEval significantly over
+    the line; multi over by 0.08 points, a statistical tie.
+  * reach_0.9_0.5_live: 1.28 / 6.80 / 4.31 % = PASS / BETWEEN / BETWEEN. Paired vs q1u_0.9_live: z +0.21 / +1.03 /
+    +1.84. By the pre-registered rule, REACH passes where q1u_0.9_live passes (code): a code-only add-on with the live
+    code union -13 % (x0.450 vs x0.519). Its SSD price needs band45 with a reach rule (next, CPU).
+  Consequences:
+  * RELAX rev 3's Q1-UNION arms (A / B / C) run HumanEval+, math, agent and AT14 only; IFEval / multi run in E / F
+    (gate off) and G (cf 0.999). So Thursday is not exposed on chat. Code passes live; math and agent have no map
+    windows.
+  * A chat FAST mode needs a stricter cutoff. Q1 at 0.99 is the line itself, and the union only adds experts, so
+    Q1-UNION 0.99 sits at or below it (capture chat SSD -10.5 / -8.4 %, vs 0.9's -19.7 / -16.4 %).
+  * This morning's 'passes everywhere' for q1u_cf09_t3 was on 16-row unions. Live it would sit about at the code line
+    and BETWEEN on chat (3 bits added +0.1-0.2 points per domain on 16 rows).
+  * FLOOR step C tonight should build q1u masks on live-cut checks; Breakthrough told (11:00), with live_segments().
+  * Orchestrator told at once (11:00), with the correction for Kamen's 10:22 line.
+- Tue 11:02: Breakthrough 11:01: data/floor1/LIVE_CUT is set, so FLOOR step B builds q1u_cf09 and q1u_cf09_t3 on
+  live-cut checks. It copied live_segments(); its live masks equal my q1u_0.9_live on 36/36 windows. oea_k8 stays
+  16-row (orchestrator). The t3 double-serve is fixed: the t3 arms take their 3-bit rows from the mask (rows with rank
+  0 dropped), so a live cut's exact bonus row is exact in both mask and gate (checked: 36 windows, 5,140 t3 rows).
+  REACH on HumanEval-24 is skipped tonight (the night is full).
+- Tue 11:05: REACH-CUT SSD price (scripts/band45_oea.py with a position-aware reach rule; BAND45_RULES subset,
+  BAND45_TAG _reach -> data/band45_oea/band45_reach.txt and band45_capture_reach.txt; full tables untouched).
+  * cap45 live checks, SSD MB per kept token: code 61.3 (-45.0 %) vs Q1 0.9's 66.3 (-40.5 %), i.e. x0.925; all six
+    prompts 36.9 vs 41.0 (x0.90), model 74.1 / 90.1 tok/s vs 72.2 / 84.3. With 3-bit sure rows: 29.7 vs 33.9, model
+    78.5 / 98.5 vs 76.4 / 91.8. The math prompts' quality is unmeasured: no math map windows.
+  * Map capture windows: code 22.7 vs 23.4 MB (x0.97); IFEval / multi x0.97 / x0.98. The expert union shrinks more:
+    code 2.77 vs 2.96 GB per check (-6 %), IFEval -13 %, multi -10 %. Deep rows' experts are often already
+    cached, so the GPU side gains more than the SSD side. Median model 75.9 / 91.1 tok/s vs 73.9 / 85.6.
+  Verdict: a small code-only add-on (code PASS on the map at no measured cost; ~3-8 % fewer code SSD bytes, ~6 %
+  smaller union). It ranks below the main levers and goes to FAST_TRACK 2d as an option, not a bet.
+- Tue 11:08: PRE-REGISTERED (before any run) TOPK8-BOUND, for the chat switch. OEA k8 is the one chat lever that needs
+  no drafter signal: -18 / -21 % chat SSD on the capture, PASS on 16-row unions. Live chat checks are 3-4 rows, and the
+  45 GB chat switch drafts with the MTP head in short checks. There OEA k8's members thin out (kept 9.0 -> 8.6 per
+  realized row-layer live) toward plain top-8 (8.0). Arm top_k8 = plain top-8 on the realized rows, prompt exact (masks
+  ~/NewIdeas/data/dm_masks/top_k8, 36/36 checked; bytes = OEA k8's). It is the worst case for OEA k8 at any check
+  length. Line (the union arms'): per domain all-row flips <= Q1 at 0.99's level = PASS, <= 1.5x BETWEEN, above KILL.
+  PASS on IFEval and multi => OEA k8 is a safe chat-switch FAST lever at any check length. Slot: the next free map
+  slot, not tonight (FLOOR is full); 4 min.
+- Tue 14:51: peers since 11:08:
+  * Breakthrough 11:08: top_k8 is wired for its next free map slot (not tonight).
+  * MoonShots 11:09: M-18d option B PASS. Using MTP Head's export (the native MTP chain's acceptance per depth, and
+    its top-1 probability as the Q1 gate), the 24 GB default's code SSD MB per kept token goes 175.5 -> 100.4 =
+    x0.572 (line <= x0.70; option A x0.658). MTP keeps 3.75 per 4-row check. It prices Q1 at 0.99, the safe 24 GB form.
+  * Breakthrough 11:10: 3-bit pass 1 PASSes at theta 0.8. Certified code flips 4/2970 vs 4-bit 8/2976; pass 2 in 57 vs
+    55 % of blocks (SCOREBOARD 73836a3). Stacked with P1-K1: ~0.25 GB of pass-1 reads per check at C 51 (projected;
+    the stack is not map-tested). Offered as its next arm.
+  * MTP Head: KWALL (a) PASS (mid rows top-3 0.888, union 0.903); DIVERSE2 not finished, resumable.
+- Tue 14:51: P1-K1 TIMING (Fit12 14:39-14:46, one quiet lock; ~/Fit12/PLAN.md 'T3P + P1-K1 RESULT').
+  * KILL AS REGISTERED: summed tokens / summed decode s, t80ck1u / t80ck2 = x0.849 (C 51 replicate x0.848).
+  * Pass 1 per check 145.9 -> 103.9 ms; pass-1 bytes 950 -> 461 MB = x0.485 (my CPU x0.465). The 4 columns add 7.9 ms
+    of GPU gap.
+  * But kept per check 11.88 -> 10.11, and pass 2 / exact 37.7 -> 84.1 ms per check. Per prompt: /68 x1.31, /42 x1.02,
+    /156 x0.96, /91 x0.60.
+  * The confound (Fit12, post hoc): on /91, t80ck2 diverged from ex at token 117 and stopped at EOS at 177. ex and
+    t80ck1u ran to the 256 cap through a hard stretch (ex kept 4.72 per check there), so t80ck2 skipped 80 hard tokens.
+  * On the 630 tokens all arms share (each prompt up to t80ck2's divergence from ex), the arms take the same checks,
+    paths and draft cf (kept 14.32 vs 13.91). Time ratios there: t80ck1u x1.100 (C 51 x1.098), exactly my line;
+    3-bit top-2 x1.122; 3-bit P1-K1 x1.195 (x1.156). Excluding /91, the registered metric gives x1.07.
+  * T3P's split: pass 1 = 57 % SSD wait (bandwidth-bound, ~11 GB/s; 950 MB per pass = 1.29x the replay) + 43 % GPU gap
+    (~1.3 ms per layer at 16 rows). Pass 2's <= 4-row exact calls are bandwidth-bound too. Open: the commit phase reads
+    49-137 MB from disk per check with 0 loader misses (9-18 ms).
+  The verdict stands as registered (KILL). The flaw is in the metric: a FAST arm changes the text, so summed tok/s over
+  different texts measures the texts. Hence a new, pre-registered test (below).
+- Tue 14:51: PRE-REGISTERED (before any run) P1-K1 TIMING RE-TEST, shared-text metric (Fit12's proposal, my call:
+  queue it; the slot is the orchestrator's).
+  * Arms: t80ck2 (control), t80ck1u (P1-K1, KU 4), t80ck2m3 and t80ck1um3 (3-bit pass 1).
+  * Prompts: 8+ HumanEval (the 4 above + 4 or more new, chosen before the run). 256 tokens, C 47 verdict, C 51
+    replicate, balanced arm order, one quiet lock (~10 min).
+  * Metric: per prompt, S = the longest prefix on which every compared arm's committed tokens equal ex's. Each arm's
+    decode time over S = its checks' times, prorated by tokens for the check that straddles S's end. Ratio = sum over
+    prompts of the control's time / the arm's time. The registered summed metric is reported beside.
+  * Line (as before): t80ck1u >= 1.10x = PASS, <= 1.03x = KILL, else BETWEEN. t80ck1um3 is judged on the same line
+    only if Breakthrough's stacked map arm (P1-K1 KU 4 at 3 bits) clears its certificate. If S covers < 50 % of the
+    generated tokens, the run is VOID for the verdict.
+- Tue 14:52: AMENDMENT before any run. The P1-K1 timing re-test adopts Fit12's pre-registration as written (Fit12
+  PLAN.md 'T3R', screen scr_t3r; my OK given).
+  * One C 47 process, quiet, ~10 min, MEM 12 GB.
+  * Prompts: T3P's 4 (HumanEval 156 / 42 / 68 / 91) + the next 4 code keys in suite order (16, 6, 79, 19).
+  * Arms: ex, t80ck2, t80ck1u, t80ck2m3, t80ck1um3.
+  * Metric (scripts/t3_shared.py): shared-text tok/s, cut per prompt at the first token where the two compared arms'
+    outputs differ (pairwise vs t80ck2). This replaces my 'every arm equals ex' S, which is stricter and shares less text.
+  * Line unchanged: >= 1.10x PASS, <= 1.03x KILL. No verdict if shared text covers < 50 % of tokens.
+  * On T3P's data the script gives x1.100 (C 51 x1.098): a coin flip at the line.
+  * For t80ck1um3's verdict: Breakthrough's stacked map arm, P1-K1 with Fit12's KU 4 cap at 3 bits. Masks
+    ~/NewIdeas/data/dm_masks/oea_k1_ku4: oea_k1 capped to each row's first 4 kept ranks; 4.3 % of masked row-layers
+    capped; rank 0 always kept; a subset of oea_k1. Read-out: p1_cert_read.py p1_top_k2 <run>; the line is P1-K1's.
+- Tue 14:53: EvalSuite 11:12: RELAX smoke PASS (cb2f778); T0 (the 12 GB same-scores test) is held to Thursday.
+  Breakthrough 11:10-11:11: 3-bit pass 1 PASS; plan = two quality-cleared pass-1 levers (3-bit, P1-K1), stacked
+  ~0.25 GB [P] (73836a3).
+- Tue 14:54: orchestrator 14:5x: both set for tonight. (1) Fit12's T3R 00:30-00:45, first in line, quiet; BigMoE's
+  turns follow from ~00:45 (<= ~41 GB peak). (2) At the head of Breakthrough's FLOOR after BigMoE (~03:45): the stacked
+  arm p1_oea_k1_ku4_t3 (P1-K1, KU 4, 3 bits; all rows), then top_k8 if room. Exact arm list sent to Breakthrough
+  (14:54). Not BIG (agreed); T3P's 57 / 43 split puts Leap's dense work on the 12 GB board.
+- Tue 14:56: P2-PREFETCH (12 GB, EXACT lever on top of the two-pass check; CPU screen scripts/p2_prefetch_screen.py).
+  Fit12's T3P: pass 1 is 57 % SSD wait + 43 % GPU gap (~1.3 ms per layer), so the SSD idles in every layer's gap. Pass
+  2's exact calls are bandwidth-bound (78 ms of wait per pass). Idea: in pass 1's gap at layer l, read layer l's
+  experts (ranks 1-9 not in pass 1's union) for rows predicted to fail the certificate, up to B per layer. Pass 2
+  then finds them resident. Only timing changes, so tokens stay identical to the arm without prefetch (exact).
+  Prior art: draft-phase prefetch of the target's experts (MoE-SpeQ 2511.14102, SP-MoE 2510.10302). Ours: the
+  window is pass 1's GPU gap, and rows are picked by drafter certainty. Tag: adapted.
+  Replay: Breakthrough's dm_rankcache LRU at C 51 on code, P1-K1 pass 1, p1_oea_k1's certificate at 0.8; B = 6 per
+  layer (1.3 ms x 11 GB/s / 2.2 MB). Pass-2 misses per check 156.3 -> 81.0 with cf < 0.99 (oracle 56.3). Pass-1
+  misses +12.4 (evictions). Prefetch reads 279, of which 85 used. Model -12.6 ms per check (oracle -20.0; B 3 -8.1;
+  reach gating adds nothing). On P1-K1's ~170 ms check that is ~x1.08. Stacked with 3-bit P1-K1 (x1.16-1.20 on shared
+  text), the 12 GB code check models at ~x1.25-1.30 vs t80ck2: ~70-73 tok/s, at T3's 70 line.
+  Caveats: the replay's single LRU vs Fit12's two pools (C_m 47 / C_l 32, MSB-3 + LSB parts); pass 2's real row set
+  (option (a): rows n..j) is larger than 'uncertified rows'; prefetches must finish inside the gap without delaying
+  the next layer's demand reads.
+  PROPOSED to Fit12 (pre-registration text, its call to wire): arm t80ck1u_pf = t80ck1u + prefetch for rows with
+  drafter cf < 0.99, ranks 1-9 not in U, B 6 per layer, issued after U's posts in each wide pass-1 call, lower
+  priority than demand reads. Gate: tokens and lsha equal t80ck1u's (exact). Line (on identical text, so no
+  confound): tok/s >= 1.05x t80ck1u = PASS, <= 1.01x = KILL. Also report pass-2 misses and ms per check, prefetch
+  reads used, and pass-1 misses.
+- Tue 14:56: Breakthrough 14:54: both arms head FLOOR night 1 (step S0, after BigMoE): p1_oea_k1_ku4_t3, then top_k8;
+  JSONs as decision_map/out/<name>.json. The stack arm's cut rows take their kept ranks from records3 at 3 bits
+  (routed_topk K 10 with my rank mask; test_t3 vs a dequantize reference 1.9e-2, ok); uncut rows exact. My lines are
+  in its SCOREBOARD ceeda3f. Fit12 14:54: T3R armed for 00:30-00:45; t80ck1um3 stays INFO until the stack arm's
+  certificate clears; results by ~00:50.
+- Tue 15:02: Fit12 15:0x: P2-PREFETCH wired and pre-registered with my line (Fit12 PLAN.md 'T3R-PF').
+  * Slot: a second ~3-min process after T3R tonight, only if T3R ends by 00:38 with the SSD <= 62 C; else the next slot.
+  * Mechanism (no ext change): pass 1's base-pool post carries up to 6 extra ids with the loader's late flag (bit 21;
+    BIGMOE_DEFER 8 in T3's env). The loader frees the GPU for the waited ids, then reads the late ones; pass 1 never
+    uses their slots.
+  * Ids: ranks 1-9 of rows with draft cf < 0.99, minus ids already posted, in row then rank order, deduped, base pool
+    only (rank-1 LSB parts are not prefetched).
+  * Arms: t80ck1upf vs t80ck1u (primary) and t80ck2pf vs t80ck2 (second verdict), each in the same process. Prompts
+    156 / 42 / 68 / 91, balanced 2:2.
+  * Gate: tokens + lsha equal to the base. Line: >= 1.05x PASS, <= 1.01x KILL.
+  * Synthetic tests pass: late ids follow my rule, and output with prefetch on equals off bitwise, for K2 and K1U.
+  * The run reports gap overrun per layer, loader late reads, late ids forced to wait (must be 0), pass-2 ms and misses,
+    and pass-1 misses.
+- Tue 15:09: RANKED Leap's PURGE-1 (orchestrator's ask, 15:0x). Measured (Leap, 15:05): volatile purgeable slabs are
+  reclaimed after the file cache and before any compression or swap; toggles cost 0.2-2 us.
+  * Value: it lets RANKED #4's C 300 / 320 caches (blocked on a 55 GB free-memory night) run any night as 'C 256
+    resident + an elastic volatile tier', and partly by day. MoonShots' replays: C 320 roughly halves code SSD MB per
+    kept token vs C 256 (no Q1 46.3 -> 22.9; with Q1 27.8 -> 15.0). SSD wait is ~half of today's 84 ms check, so the
+    model is +15-30 % by night when the tier fills to ~+8.5 GB, less by day. Exact (cache only).
+  * Prior art: published OS practice. Apple's 'Caching and Purgeable Memory' guide and Metal's MTLPurgeableState on
+    buffers / heaps; OS-reclaimable weight caching also exists as mmap'd weights in the page cache (llama.cpp). No
+    LLM / MoE expert tier found. Tag: adapted.
+  * ACCOUNTING (my measurement, scripts/native/purge_footprint.c): volatile memory is invisible to the RAM-budget
+    metric. 256 MB touched: phys_footprint 257 MB; set volatile: 1.1 MB; memory written while volatile is never
+    charged, not even to ri_lifetime_max_phys_footprint. So the tier must be reported separately (tier peak beside the
+    footprint). For the 24 / 12 GB lines it counts or stays off. For 45 GB it is allowed ('more RAM OK'), reported.
+  * By day the tier outlives Kamen's apps' file cache under pressure (file cache goes first), so cap it by day.
+  * Rank: top of the exact 45 GB queue with NAX6, as the enabler of #4 (new row 33). Routed to BigMoE + Leap.
+- Tue 15:42: peers 15:1x-15:4x:
+  * Leap: PURGE-1's footprint blind spot confirmed for MTLBuffers (256 MB shared buffer 259.7 MB non-volatile -> 3.7 MB
+    volatile; written-while-volatile never charged; the lifetime peak keeps the non-volatile high-water). TABLE_350
+    carries the rule: the tier counts in full for the 24 / 12 GB lines.
+  * BigMoE: the volatile expert tier is its job, first on Wed by day (the orchestrator's order; then the no-LSB mask).
+    Design: per-layer purgeable MTLBuffer victim slabs behind the LRU pools. Evictions copy in, misses copy out, slabs
+    are pinned only during the layer's service, and the tier peak is reported beside the footprint. Armed for Wed
+    00:45 at C 224 (<= 41 GB): mission 20 -> combination.
+  * MTP Head 15:37: TRIED corrections (an off-by-one reading D-24's MTP rows). KWALL (b) mid 0.855 / tie 0.340 (BETWEEN
+    stands); KWALL (a) union 0.796 (PASS stands on top-3). MTPPICK = KILL on paper (exact loop: kept +7 % code, est.
+    tok/s x0.93); TOP3-USE desk = KILL. TRIED re-merged.
+  * EvalSuite 15:13: T0 (the 12 GB two-pass same-scores test) still 28/289 rows; the rest needs ~3.5-4 h of one-job GPU
+    at MEM 14. It asks me (I order the 12 GB queue): Wed by day after FLOOR, or Thu after RELAX. My call: Thu by day
+    after RELAX, as planned. 45 GB work goes first, BigMoE's volatile tier is first on Wed by day, and T0's result
+    doesn't feed RELAX. Wed by day only if the orchestrator finds an idle one-job gap after FLOOR and BigMoE's tier.
+- Tue 15:43: MTP Head 15:42: DEPTH32 = KILL (HYB+G 12.60 / 6.10 per 32-row check vs line 14 / 7.5; MTP-32 alone 12.55
+  beats the hybrid). T3's commit-phase disk reads (49-137 MB per check, 0 loader misses): the embed memmap is not it
+  (<= 8 rows per pass). My guess for Fit12 (lounge note, low priority): swap-ins of the process's own pages; vm_stat
+  swapins / pageins deltas per check would show it.
+- Tue 15:46: PRICE of the elastic tier (PURGE-1) on live cap45 checks. scripts/band45_oea.py with BAND45_SIZES =
+  MoonShots' per-layer FLOOR sizes laysz45_300 / _320 (39.75 / 42.45 GB of pools vs C 256's 33.93); data/band45_oea/
+  band45_c300.txt / _c320.txt. SSD MB per kept token, all six prompts (code / math):
+  * EXACT: C 256 63.1 (111.4 / 51.4); C 300 46.3 (92.6 / 35.1) = -26.6 %; C 320 40.7 (86.9 / 29.6) = -35.5 %. Code gains
+    less than math (-22 vs -42 % at C 320).
+  * Q1 0.9 at C 320: 29.3 (-54 % vs C 256 EXACT); + 3-bit sure rows: 24.1 (-62 %); REACH 0.9 0.5: 27.3.
+  * Model, SSD-only (SSD ~42 of 84.2 ms per check, bytes fully exposed): +5.8 GB of tier (C 300) ~+17 % (74 tok/s); +8.5
+    GB (C 320) ~+21.5 % (77 tok/s); with Q1-UNION 0.9 at C 320 ~+36 % (87); + 3-bit sure rows ~+45 % (92).
+  Caveat: a victim tier behind C 256's pools is not the same policy as per-layer-fitted C 300 / 320 pools, so treat these
+  as the target, not the floor. Sent to BigMoE as the tier's priced target.
+- Tue 15:47: VICTIM-TIER replay (scripts/victim_tier.py: band45's machinery; C 256's resident pools + a per-layer
+  LRU victim tier; a tier hit costs no SSD read and moves the record back; 2 seeds). SSD MB per kept token, all six
+  cap45 prompts:
+  * EXACT: C 256 62.5; + tier sized to C 300's extra 45.8 (-26.8 %; fitted C 300 -26.4 %); + tier sized to C 320's
+    extra 40.2 (-35.7 %; fitted -35.2 %).
+  * Q1 0.9: + tier(320) 29.1 (-53.4 %; fitted -53.2 %).
+  So BigMoE's planned victim design gets the full benefit of bigger fitted pools.
+  * PREDICTION for BigMoE's tier smoke tonight (vt1_224 = C 224 + 64 base / 32 sidecar slots per layer, ~7.8 GB, ~04:00;
+    tier assumed never purged): 79.2 -> 52.1 (-34.2 %) vs C 224 alone (C 256 alone: 62.5); with Q1 0.9 50.4 -> 34.9.
+    Sent to BigMoE as a lounge note.
+
+- Tue 17:01: PRE-REGISTRATION, Q1-ON-MISS ON LIVE-CUT CHECKS (FAST, 45 GB; before any GPU run). Fable C's C1-2
+  (SCOREBOARD 00d485c, Mon 23:0x), superseded then by Q1-UNION because the outputs depend on the cache state. Revived
+  because Q1-UNION 0.9 is BETWEEN on chat at live lengths: its union members nearly vanish on 3-4-row chat checks.
+  * Arm: rows whose drafter cf >= theta keep ranks 0-1, the check's union members, and every rank 2-9 expert that is
+    resident in the base pool after the check's loads. Only the rank 2-9 experts that would MISS are dropped (weight 0,
+    no renorm). So the SSD reads equal Q1's at the same theta by construction. GPU work is about exact's union minus
+    the dropped misses, so the gain is SSD-only.
+  * Masks (CPU, built): scripts/dm_oea_masks.py arm qom_<theta>, suffix _live; data/dm_masks/qom_{0.9,0.5,0}_live
+    (+ qom_0.99_live spare).
+    - Replay: plain LRU per layer at laysz45_256's C_m (mean 295 of 512), carried across a domain's windows, warmed by
+      the prompt rows' top-10. Each check loads its union, then the kept resident experts are touched.
+    - Self-check: QOM_C=0 reproduces Breakthrough's q1u_cf09 bit for bit (36/36 windows).
+    - The replay is conservative: base-pool misses per check run ~1.05-1.25x band45's LRU + popularity (code 6.4 %
+      of loads, chat 2.1-2.3 %), so the masks drop slightly more than the engine would.
+  * Kept share of sure rows' rank 2-9 pairs (code / IFEval / multi):
+    - qom_0.9_live: 94.5 / 97.7 / 97.9 % (q1u_0.9_live keeps 37 / 43 / 47 %);
+    - qom_0.5_live: 93.8 / 97.0 / 97.4 %;
+    - qom_0_live (every row with a draft): 93.6 / 96.8 / 97.2 %.
+  * Price: SSD MB per kept token on Breakthrough's capture (live-cut checks), reads = Q1's.
+    data/band45_oea/band45_capture_qom.txt; vs EXACT 47.0 / 31.1 / 30.7:
+    - theta 0.9: -50.3 / -19.7 / -16.4 %;
+    - theta 0.5: -60.4 / -36.9 / -33.4 %;
+    - theta 0: -64.3 / -58.5 / -62.4 %.
+    - Code SSD-only tok/s model (C50's HE68 / HE91, bytes fully exposed): EXACT 84.7 / 62.1; 0.9: 125.4 / 78.7;
+      0: 144.9 / 85.0 [P, halve when deciding].
+    - Chat checks are less SSD-bound, so chat tok/s gains are smaller than chat byte cuts.
+    - After QOM, code reads are mostly the ranks 0-1 LSB sidecar (118 of 142 reads per check at theta 0). The matching
+      'LSB-on-miss' (serve a rank 0-1 at 3 bits when its LSB part misses) is the next step and needs a per-(row, layer)
+      bit-depth mask in the harness.
+  * SLOT (the orchestrator 17:1x): Wed after 15:00, not tonight's FLOOR.
+  * Runs (Breakthrough's map, ~4 min each, priority order): qom_0.9_live, qom_0.5_live, qom_0_live. Harness as for the
+    union arms: PERT.update(rmask=<absolute dir>, renorm=False).
+  * Lines, per domain (the union arms'): all-row flips <= Q1 at 0.99's level (code 1.34 / IFEval 5.42 / multi 3.69 %) =
+    PASS; <= 1.5x = BETWEEN; above = KILL.
+    - Paired McNemar vs gate_top2_cf099 and vs q1u_0.9_live.
+    - Read-out: scripts/qom_read.py -> data/QOM_read.txt.
+    - A theta passes only where its domain passes. The lowest passing theta per domain is the FAST candidate.
+  * FLAG FOR KAMEN (with the result): outputs depend on the cache state, so two runs with different histories are not
+    token-identical. Within one engine process the same history gives the same tokens.
+- Tue 17:57: BREAKTHROUGH PUSH, shortlist sent to the orchestrator 17:51 (research/PUSH_SHORTLIST.md, e4b6953): all four
+  thinker files priced on our data and ranked. Two checks of my own:
+  * Per-call SSD latency share under FAST stacks (scripts/calls_count.py; cap45, C 256, Fable A's fit 0.283 ms per call +
+    MB / 12.7 GB/s): EXACT 39 %, U3 51 %, HYB u8 + t3 54 %, QOM theta 0 54 %. JOINT cuts loader calls 70.8 -> 41.9 per
+    check. So Fable A's D1 is worth more on top of the FAST stack. QOM-full (theta 0 + LSB-on-miss) = 10.4 ms busy per
+    check (9.6 with JOINT) vs EXACT 51.4.
+  * Fable B's LSB-adjacency merge (ROW_WALL sec 4) is overstated (scripts/lsb_both.py). Only 11.1 % of LSB misses
+    coincide with an MSB miss of the same expert, so it saves 5.0 % of reads (3.9 % under U3), not 25-30 %.
+- Tue 17:57: ROUTE-W REPLAY (the Lunatic's Route W, LUNACY2 sec 2, pre-registered there: PASS <= 60 expert groups per kept
+  token, KILL > 80 at 8 streams, Q1-UNION, mixed domains). scripts/route_w.py -> data/ROUTEW_read.txt: merged passes of S
+  random map windows (36: 12 code, 24 chat), blocks = live-cut checks.
+  * Groups per kept token:
+    - 1 stream: EXACT 465.6, Q1U 0.9 356.3;
+    - 8 streams: EXACT 236.9, Q1U 0.9 162.5, Q1U 0.5 128.9, HYB 0.9 u8 140.3;
+    - 12 streams: Q1U 0.9 144.6, Q1U 0.5 117.3.
+    - Verdict: KILL at today's drafter (8 streams with Q1-UNION 0.9 = 2x the KILL line).
+    - The walk16 shape (all 16 rows, no cut) is worse: 291.4 at 8 streams. The extra rows are mostly rejected.
+  * Aggregate tok/s by the Lunatic's own pass model (whole model in RAM, draft hidden, no SSD) [P]:
+    - 1 mixed stream: EXACT 78, Q1U 0.9 85;
+    - 8 streams: EXACT 302, Q1U 0.9 391, Q1U 0.5 451;
+    - 12 streams: EXACT 358, Q1U 0.9 451, Q1U 0.5 515.
+  * Reading:
+    - Width is worth x4-5 in aggregate even at today's drafter, at ~50 tok/s per stream. ~1000 needs ~3x more kept per
+      row (the 'horizon fix', 32-row blocks at agreement ~0.95), which is the same drafter wall as single stream.
+    - Chat blocks keep only 1.9-2.3 tokens, and they dominate the groups.
+    - Whether an aggregate over parallel sessions counts is Kamen's call (shortlist decision 1).

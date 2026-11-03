@@ -11,6 +11,7 @@ WIRED (Breakthrough, Mon 2026-11-02; Fable's original in dm_ablations.py.orig):
 - shared_zero, moe reuse / fake-quant: inside the MoE block wrapper (routed part only for reuse and quant).
 - *_q4 on att / gdn / hc: 4-bit fake quantisation of the layer OUTPUT (per row, max-abs scale), as Fable wrote it:
   an activation test, not the weight test HC4 was at 12 GB."""
+import os
 import mlx.core as mx
 import mlx.nn as nn
 from dm_common import ACTIVE, PREV, LAYERS, PERT, _shift, _fq
@@ -132,6 +133,22 @@ def q1_union(tag):
     def setup(): PERT.update(rmask=tag, renorm=False)
     return setup
 ABLATIONS["q1u_cf099"] = q1_union("q1u_cf099"); ABLATIONS["q1u_cf09"] = q1_union("q1u_cf09")
+for _arm in ("oea_k8", "oea_k6", "hyb_0.9_u8", "hyb_0.9_u6"):   # NewIdeas Tue 07:0x: OEA (arXiv 2511.02237) and the union stack
+    ABLATIONS[_arm] = q1_union(_arm)                      # OUT/<arm>: dm_q1u_masks.py <arm> (= NewIdeas' masks bit for bit)
+def hyb_t3(arm, thr):
+    """<arm>_t3 (the orchestrator Tue 07:1x, FLOOR step 5): the hybrid's sure rows (cf >= thr) take ranks 0-1 from records3
+    at 3 bits (dm_t3, the gate ("t3", thr)) and their union-member ranks 2-9 at 4 bits (OUT/<arm>_t3 masks, ranks 0-1
+    off on sure rows: dm_q1u_masks.py <arm>:t3); the other rows as the hybrid."""
+    def setup(): PERT.update(rmask=arm + "_t3", gate=("t3mask",), t3=3, t3k=2, renorm=False)   # t3 rows from the mask
+    return setup
+ABLATIONS["hyb_0.9_u8_t3"] = hyb_t3("hyb_0.9_u8", 0.9); ABLATIONS["q1u_cf09_t3"] = hyb_t3("q1u_cf09", 0.9)   # NewIdeas 07:3x
+for _arm in ("top_k2", "oea_k2", "oea_k1"):            # NewIdeas Tue 09:10 (37f8e37, QUEUE.md "P1-OEA"): all-rows pass-1 arms
+    ABLATIONS["p1_" + _arm] = q1_union(os.path.expanduser(f"~/NewIdeas/data/dm_masks/{_arm}"))   # its masks, read-only
+for _arm in ("p1c_oea_k1_p08", "p1c_top_k2_p08", "q1u_0.9_live", "reach_0.9_0.5_live", "top_k8"):   # NewIdeas 10:24 / 10:38 / 11:08
+    ABLATIONS[_arm] = q1_union(os.path.expanduser(f"~/NewIdeas/data/dm_masks/{_arm}"))
+for _arm in ("qom_0.9_live", "qom_0.5_live", "qom_0_live"):   # NewIdeas Tue 17:01 (QUEUE 554dfe0): Fable C's Q1-ON-MISS, live-cut checks
+    ABLATIONS[_arm] = q1_union(os.path.expanduser(f"~/NewIdeas/data/dm_masks/{_arm}"))
+ABLATIONS["res_c256"] = q1_union("res_c256")   # Tue 17:3x (SCOREBOARD 4229db8): the resident-only picker, dm_res_masks.py
 def t3_all(bits):
     """t3_all / t4_all (the orchestrator 23:3x; 45 GB's plan 3333333333 = the 1-bit sidecar dropped): EVERY row (prompt and
     answer) takes all ten routed experts from records3 at `bits` (3: MSB-3; 4: the control, rebuilt 4-bit through the
@@ -139,6 +156,24 @@ def t3_all(bits):
     def setup(): PERT.update(gate=("t3all",), renorm=False, t3=bits, t3k=10)
     return setup
 ABLATIONS["t3_all"] = t3_all(3); ABLATIONS["t4_all"] = t3_all(4)
+def t3_top2_all():
+    """The 3-bit pass 1's certificate run (Tue 10:5x; Fit12's item 4): every row's top-2 from records3 at 3 bits (the
+    stock routed output zeroed), as topk2 is for the 4-bit pass 1 (all rows cut, mass)."""
+    def setup(): PERT.update(gate=("t3all",), renorm=False, t3=3, t3k=2)
+    return setup
+ABLATIONS["t3_top2_all"] = t3_top2_all()
+def t3cert(thr):
+    """The 3-bit two-pass mixed run: rows whose own p1 under the 3-bit top-2 cut (t3_top2_all) is >= thr take their top-2
+    from records3 at 3 bits; the rest exact (4-bit, all ten)."""
+    def setup(): PERT.update(gate=("t3cert", "t3_top2_all", thr), renorm=False, t3=3, t3k=2)
+    return setup
+ABLATIONS["t3cert_top2_p08"] = t3cert(0.8)
+def p1_t3(mask_dir):
+    """The 12 GB pass-1 stack (NewIdeas 14:52, the orchestrator 14:5x): every row the mask cuts takes its KEPT ranks from
+    records3 at 3 bits (dm_t3 routed_topk K 10 with the mask's ranks), nothing from the stock path; uncut rows exact."""
+    def setup(): PERT.update(rmask=mask_dir, gate=("t3keep",), t3=3, t3k=10, t3keep=True, renorm=False)
+    return setup
+ABLATIONS["p1_oea_k1_ku4_t3"] = p1_t3(os.path.expanduser("~/NewIdeas/data/dm_masks/oea_k1_ku4"))
 for g in range(4):                                   # per-group MoE reuse (12 layers each), then per layer on night 2
     ABLATIONS[f"moe_reuse_prev_g{g}"] = reuse_prev("moe", set(range(12 * g, 12 * g + 12)))
 for L in range(48):
@@ -152,8 +187,18 @@ def ablation(name):
     = the same with a refresh so no output is reused more than S rows on (stage 2); _topk<k> stacks top-k (mass) on
     every row and layer; e.g. moe_reuse_prev_L12_35, moe_reuse_lag4_L12_35, moe_reuse_chain1_L08_35_topk2."""
     if name in ABLATIONS: return ABLATIONS[name]
-    g = re.fullmatch(r"gate_top(\d+)_cf(0\d+)", name)       # DAY9 Q1: e.g. gate_top2_cf099 (cf >= 0.99), _cf0999
-    if g: return gate_k(("top", float("0." + g.group(2)[1:]), int(g.group(1))))
+    if "+" in name:                                      # FLOOR night stacks (Tue 07:0x): a+b runs both setups in order
+        parts = [ablation(p) for p in name.split("+")]
+        def stack():
+            for p in parts: p()
+        return stack
+    g = re.fullmatch(r"gate_top(\d+)_cf(0\d+)(?:_L(\d+)_(\d+))?", name)   # DAY9 Q1: gate_top2_cf099; _L08_35: those layers only
+    if g:
+        base = gate_k(("top", float("0." + g.group(2)[1:]), int(g.group(1))))
+        if not g.group(3): return base
+        lay = set(range(int(g.group(3)), int(g.group(4)) + 1))
+        def layered(): base(); PERT.update(k_layers=lay)  # e.g. gate_top0_cf0999_L08_35: skip (k 0) the sure rows there
+        return layered
     c = re.fullmatch(r"cert_top(\d+)_p(0\d+)", name)          # mission 20's two-pass check: e.g. cert_top2_p099, cert_top5_p09
     if c: return gate_k(("cert", "topk" + c.group(1), float("0." + c.group(2)[1:]), int(c.group(1))))
     c = re.fullmatch(r"acert_top(\d+)_p(0\d+)_p(0\d+)_cf(0\d+)", name)   # the adaptive certificate: e.g. acert_top2_p07_p09_cf099

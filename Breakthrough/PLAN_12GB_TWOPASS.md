@@ -67,9 +67,15 @@ evidence in ~/FableGod/decision_map/out/ (CERT_read.txt, RANKCACHE_read.txt, DEF
   BETWEEN, 0.708 -> 0.493 GB per check but kept -6 %, judged 0.524 raw / 0.40 calibrated. The live engine's own
   running-confidence cut (0.3) already does most of the trimming; the new levers are C 64 (x0.85, cold misses do not
   scale as 1/C) and prefetch (oracle, -5 %): 60.2 MB per kept token = 0.52 GB per check at kept 8.6.
-- The single biggest lever on pass-1 bytes is SMALLER RECORDS for ranks 0-1: M-18's MSB-3 records (bytes x ~0.75 of
-  4-bit; cloud v5: -5.3 ms), quality-defined: the 3-bit arm on the map Tuesday, then a 3-bit all-rows pass-1 run for
-  its certificate.
+- Two quality-cleared levers on pass-1 bytes (Tue 11:1x, map):
+  - 3-BIT PASS 1 (M-18's MSB-3 records, bytes x ~0.75): PASS. The 3-bit certificate (t3_top2_all) and its two-pass mixed
+    run at theta 0.8: certified code flips 0.13 % (4-bit: 0.27 %), pass 2 in 57 vs 55 % of code blocks, all rows inside
+    the 4-bit run's CI.
+  - P1-K1 (NewIdeas: pass 1 = each row's top-1 + the experts its check's union already reads; OEA, arXiv 2511.02237):
+    PASS end to end (certified code flips 7/2997 = plain top-2's 7/3019), pass-1 reads x0.465 (0.708 -> 0.329 GB per
+    check at C 51).
+  - Stacked [P]: ~0.25 GB of pass-1 reads per check at C 51 (the stack is not map-tested yet). Fit12 times both (and
+    the 3-bit variants) in its 14:3x trace lock.
 
 ## 3. What a check does (engine semantics)
 1. The drafter proposes 15 tokens (with each draft's cf).

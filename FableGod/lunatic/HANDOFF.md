@@ -26,3 +26,11 @@ Round 1, think-first additions (00:5x):
 - **CPU attention and Neural Engine dense layers as co-processors** inside S1's multi-stream pipeline: they fill the GPU's latency gaps across streams. <= 30 %.
 - **MTP head for the first 1-3 block positions, DFlash2 for depth**: the MTP head gets close calls 86 % right at depth 1 (KWALL b) vs DFlash2's 66 %. A hybrid draft aimed at both halves of S2 (MTP Head).
 - **Footprint audit**: today's 8.5 GB non-pool lifetime peak (BigMoE HANDOVER:607) is ~17 % of the night budget; every GB returned is ~8 more cache units per layer.
+
+Round 2 (Tue 3 Nov 2026, 17:3x; from LUNACY2.md, gains unhalved):
+- **Int8 (or ANE) trunk for wide passes:** at 256-384 rows per pass the trunk's compute is 40-60 % of the pass (0.32 ms per row in bf16 at 60 %); int8 gives +18-22 % at 8-12 merged streams (lu_1000 D). Matters only once checks merge streams.
+- **Batched drafting throughput:** the 1000 line needs >= ~2,000 draft tokens/s from the ANE for 8-12 streams, fully overlapped; today it is 16 tokens per 12 ms serial.
+- **Schedule merged streams by domain:** mixed domains cost +20 % union at 8 streams (283.4 vs 236.9 per layer, lu_union B). Group same-domain streams per pass.
+- **Speculative edits for file writes (published):** 37.3 % of the lines Kamen's agents write into files were already seen in the session (Write 35.3 %, Edit 49.0 %; lu_copyshare), x1.35 on file writes. It is only 6.2 % of all agent output, and copy tokens carry no new information.
+- **Agent prefill is compute-bound:** 5.05 G MAC per prompt token, so <= 1,663 tok/s in bf16 at 60 % or 2,661 in int8. At 1000 tok/s decode a 3K-token tool output is ~80 % of a turn. The exact prefix-state cache (TRIED:780) is the only exact lever; position-independent reuse (CacheBlend) is FAST.
+- **Exact references diverge on most chat prompts:** REF2-T vs REF2-CT differ on 200 of 220 IFEval prompts after a mean 39 shared tokens, and a single flip rewrites the rest (only 28 % re-draftable; lu_resync). Any EXACT re-base changes nearly every chat answer. EvalSuite must compare scores, not texts.

@@ -75,7 +75,8 @@ B12 = {"b12": 0.10, "b8": 0.05, "b8fast": 0.05,      # load_b12(frac); the confi
        "b12llox": 0.10, "b12llfx": 0.10, "b12llff": 0.10,   # the fold confirmation (R-41): old shipped / fold-exact / fold-fast
        "b12llfx2": 0.10, "b12llff2": 0.10,        # R-41D: fold-exact / fold-fast (FFX) + R-45's fix (B12_FRS_NOCYCLE)
        "b12llff3": 0.10,                          # decision 5: b12llff2 on v3o + B12_PFR_MIN 512
-       "b12llff4": 0.10, "b12llff4p": 0.10}       # PMIN12: fold-fast on bt_b12 8db71cc537 (v3p), without / with B12_PMIN 0.5
+       "b12llff4": 0.10, "b12llff4p": 0.10,       # PMIN12: fold-fast on bt_b12 8db71cc537 (v3p), without / with B12_PMIN 0.5
+       "b12llff4t0c": 0.10, "b12llff4t0h": 0.10}  # T0 (PREREG_t0): Fit12's top-2 two-pass at theta 0.8 / 0.95, MTP off
 FOLD_ENGINE = {"b12llfoff": ("v3l", "1", "0"),    # (B12_ENGINE, B12_TRIMS, B12_FOLD) of the fold verdict's arms: bt_b12's
                "b12llfon": ("v3m", "1", "1"),     # shipped engine and trims, pinned (cli.B12_ENV), not the v3f verdict pin
                "b12llox": ("v3l", "1", "0"), "b12llfx": ("v3m", "1", "1"), "b12llff": ("v3m", "1", "1"),
@@ -93,19 +94,24 @@ BT_B12_SHA = {"b12llfoff": "664b010b0d", "b12llfon": "664b010b0d",   # sha256[:1
               "b12llox": "c3f957cba6", "b12llfx": "c3f957cba6", "b12llff": "c3f957cba6",   # the code each arm's rows
               "b12llfx2": "ce6d4c63d2", "b12llff2": "ce6d4c63d2",   # R-41D: Breakthrough's swap with R-45's fix
               "b12llff3": "677c6558b6",   # decision 5: the live file with v3o + B12_PFR_MIN
-              "b12llff4": "8db71cc537", "b12llff4p": "8db71cc537"}   # PMIN12: Breakthrough 3676db3 (v3p default + B12_PMIN)
+              "b12llff4": "8db71cc537", "b12llff4p": "8db71cc537",   # PMIN12: Breakthrough 3676db3 (v3p default + B12_PMIN)
+              "b12llff4t0c": "8db71cc537", "b12llff4t0h": "8db71cc537"}   # T0: Fit12's gate file (= the live sha)
 #                                                  are made on (31b63af changed the defaults: the old arms mean other code)
 B12_MTP = {"b12": True, "b8": False, "b8fast": True, "b12c192": True,   # B8 (eager) was judged as Breakthrough measured it; B12L / B12LL:
            "b12l": True, "b12ll": True,           # MTP (late writes fixed under MTP: ad8779c + 1a5eee1)
            "b12llb16": True, "b12llb18": True, "b12llb20": True, "b12llugb": True, "b12llugbx": True, "b12llu2": True,
            "b12llk8": True, "b12llka80": True, "b12llk10": True, "b12llka100": True, "b12llk8u2": True, "b12llk10u2": True,
            "b12llfoff": True, "b12llfon": True, "b12llox": True, "b12llfx": True, "b12llff": True,
-           "b12llfx2": True, "b12llff2": True, "b12llff3": True, "b12llff4": True, "b12llff4p": True}
+           "b12llfx2": True, "b12llff2": True, "b12llff3": True, "b12llff4": True, "b12llff4p": True,
+           "b12llff4t0c": False, "b12llff4t0h": False}   # T0 has no drafter
 FRS_NOCYCLE = ("b12llfx2", "b12llff2", "b12llff3", "b12llff4", "b12llff4p")   # R-41D: R-45's fix on, asserted at load
 PFR_MIN = {"b12llff3": "512", "b12llff4": "512", "b12llff4p": "512"}   # decision 5: B12_PFR_MIN, asserted at load
 PMIN = {"b12llff4p": "0.5"}               # PMIN12 (Breakthrough 11-01): B12_PMIN, asserted at load (unset elsewhere)
-R53A = {"b12llff4": "0", "b12llff4p": "0"}   # PMIN12: v3p's R-53 part a off (F12_R53A, bt_b12's default since 12:4x)
-B12_RE = re.compile(r"(b12llff4p|b12llff4|b12llff3|b12llfx2|b12llff2|b12c192|b12llfoff|b12llfon|b12llox|b12llfx|b12llff|b12llugbx|b12llugb|b12llu2|b12llk10u2|b12llk8u2|b12llka100|b12llka80|b12llk10|b12llk8|b12llb16|b12llb18|b12llb20|b12ll|b12l|b12|b8fast|b8)(g?)((?:\.r\d+)?)")   # g = guard
+R53A = {"b12llff4": "0", "b12llff4p": "0"}
+T0 = {"b12llff4t0c": 0.8, "b12llff4t0h": 0.95}   # T0's theta per arm (PREREG_t0: Breakthrough's code / chat settings)
+T0_ENV = {'MTPLX_PREFILL_CHUNK_SIZE': '512', 'BIGMOE_TIER_PF_GROUP': '64', 'BIGMOE_RESET_GEN': '0', 'EVALSUITE_SHIP': '1', 'B12_LATE3': '2,10', 'B12_NORM': 'mass', 'BIGMOE_PF_GROUP': '64', 'BIGMOE_ASYNC_EVERY': '1', 'B12_TRIMS': '1', 'B12_PFR': '1', 'B12_ALLWAIT': '0', 'B12_CACHE_MB': '64', 'BIGMOE_LOOP_GUARD': '0', 'MTPLX_NGRAM_PREWARM': 'off', 'MTPLX_COMPILED_VERIFY': '0', 'MTPLX_QWEN4EXP_COMPILE': '0', 'MTPLX_COMPILE_AR_FORWARD': '0', 'MTPLX_COMPILED_TARGET_PREFIX': '0', 'BIGMOE_SPARE': '0', 'BIGMOE_PF_NOPUBLISH': '1'}   # Fit12's T0 gate env (21:43), asserted at load
+T0_POP = ('B12_ENGINE', 'B12_FOLD', 'B12_PFR_GRID', 'B12_CM', 'B12_CL', 'B12_FOLD_CM', 'B12_FOLD_AW', 'B12_W', 'B12_PMIN')   # unset: the live file's fast defaults   # PMIN12: v3p's R-53 part a off (F12_R53A, bt_b12's default since 12:4x)
+B12_RE = re.compile(r"(b12llff4t0c|b12llff4t0h|b12llff4p|b12llff4|b12llff3|b12llfx2|b12llff2|b12c192|b12llfoff|b12llfon|b12llox|b12llfx|b12llff|b12llugbx|b12llugb|b12llu2|b12llk10u2|b12llk8u2|b12llka100|b12llka80|b12llk10|b12llk8|b12llb16|b12llb18|b12llb20|b12ll|b12l|b12|b8fast|b8)(g?)((?:\.r\d+)?)")   # g = guard
 F24_RE = re.compile(r"f24(b16|b18|b20|nat)((?:\.r\d+)?)")   # BigMoE's 24 GB fast mode (scripts/fast24.py); nat = the v3
 #                                                    tier plan's natural routing (exact-to-v3), the speed-up's baseline
 
@@ -126,7 +132,7 @@ def variant(name):
     if m:                                         # the verdict runs guard-off (it derails long math: 10-22 15:43)
         base = m.group(1)
         return dict(model="b12", sorted=False, plan=None, frac=B12[base], mtp=B12_MTP[base], guard=bool(m.group(2)),
-                    base=base, name=name)
+                    base=base, name=name, t0=T0.get(base))
     m = re.fullmatch(r"plan([234]{2,16})", name)
     if m:
         return dict(model="ref", sorted=True, plan=m.group(1), name=name)
@@ -490,7 +496,14 @@ def load(v, C=128):
                 "b12c192": {"B12_CM": "192", "B12_NORM": "mass"}}[v["base"][:5] if v["base"].startswith("b12ll") else v["base"]]
         for k in ("B12_LATE3", "B12_W", "B12_CM", "B12_CL", "B12_HC", "B12_LATE1", "B12_PRE", "B12_PF", "B12_NORM"):
             assert os.environ.get(k) == want.get(k), f"{v['name']}: {k}={os.environ.get(k)!r}, want {want.get(k)!r}"
-        if v["base"] in FOLD_ENGINE:              # the fold verdict: both arms in bt_b12's shipped engine + trims
+        if v.get("t0") is not None:               # T0 (PREREG_t0): Fit12's gate env exactly, on the pinned live file
+            bad = {k: os.environ.get(k) for k, x in T0_ENV.items() if os.environ.get(k) != x}
+            bad.update({k: os.environ[k] for k in T0_POP if k in os.environ})
+            assert not bad, f"{v['name']}: env differs from Fit12's T0 gate: {bad}"
+            import hashlib
+            sha = hashlib.sha256(open(os.path.expanduser("~/Breakthrough/scripts/bt_b12.py"), "rb").read()).hexdigest()[:10]
+            assert sha == BT_B12_SHA[v["base"]], f"{v['name']}: bt_b12.py is {sha}; T0 is gated on {BT_B12_SHA[v['base']]}"
+        elif v["base"] in FOLD_ENGINE:            # the fold verdict: both arms in bt_b12's shipped engine + trims
             got = tuple(os.environ.get(k) for k in ("B12_ENGINE", "B12_TRIMS", "B12_FOLD"))
             assert got == FOLD_ENGINE[v["base"]], f"{v['name']}: (B12_ENGINE, B12_TRIMS, B12_FOLD) = {got}, want {FOLD_ENGINE[v['base']]}"
             if v["base"] in FOLD_SWITCHES:
@@ -533,6 +546,10 @@ def load(v, C=128):
             else:
                 rt, st = load_b12ll_budget(v["base"][5:])
         else:
+            if v.get("t0") is not None:           # T0: Fit12's t0_twopass patches bt_b12's decode block before load_b12
+                sys.path.insert(1, os.path.expanduser("~/Fit12/scripts"))   # (t0_hook.load, keeping the streamer)
+                import bt_b12, t0_twopass
+                t0_twopass.apply(bt_b12)
             rt, st = load_b12(v["frac"], mtp=v["mtp"])
             if v["base"] in FOLD_ENGINE:          # PMIN12: spec125.generate takes B12_PMIN's p_min iff the arm sets it
                 import spec125

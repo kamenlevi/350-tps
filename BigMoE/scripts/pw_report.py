@@ -57,7 +57,9 @@ def tokens(tags):
             bad.add(k)
     return eq, nn, sorted(bad), sorted(own)
 say(f"== mission 20 PREFILL_WARM (Fable, CACHE.md 5): misses in the first three checks, warm vs ctl (mean of two passes)")
-for C in (160, 256):
+CS = [int(c) for c in os.environ.get("PW_CS", "160 256").split()]   # the line is on the largest C (11-03: 224 when 256
+LINE_C = max(CS)                                       # did not fit the memory)
+for C in CS:
     c_, w_ = [per_prompt(f"pwc_{C}"), per_prompt(f"pwc_{C}r")], [per_prompt(f"pww_{C}"), per_prompt(f"pww_{C}r")]
     keys = [k for k in (c_[0] or c_[1]) if any(k in x for x in w_)]
     if not keys:
@@ -83,5 +85,5 @@ for C in (160, 256):
     v = ("FAIL (a token differs)" if bad or not nn else "PASS" if d <= -0.08 else "KILL" if d > -0.03 else "BETWEEN")
     say(f"  total: {a:.0f} -> {b:.0f} ({100 * d:+.1f} %); tokens: {eq} / {nn} runs equal (REF2-T chat23"
         f"{'; ' + ', '.join(own) + ' across its runs' if own else ''}){'; differ: ' + ', '.join(bad) if bad else ''} -> {v}"
-        f"{' (the line is on C 256)' if C != 256 else ''}")
+        f"{f' (the line is on C {LINE_C})' if C != LINE_C else ''}")
 open(OUTF, "w").write("\n".join(L) + "\n")

@@ -42,3 +42,6 @@ DS / DS2 (data, steps: a slow lever, a plateau), L5 (block 16 fine-tune), L1-20 
 
 ## 6. Reproducibility
 depth_wall.py → depth_wall.out (0.3 s): the 16-row tables for code and math and the decomposition; the 32-row rates are in ~/TrainLab/data/d02b_walk_m_base32.txt and d02b_walk_m_match32.txt; the kept arithmetic uses the chain formula (a − a^(B+1)) / (1 − a) for the flat cases and the real walks elsewhere.
+
+## 7. Measured follow-up (MTP Head, Tue 3 Nov 2026 15:42; relayed by the orchestrator)
+DEPTH32 = KILL. The best realizable 32-row arm (DFlash2 rows 1-8 + MTP rows 9-31 + COPYGATE) kept 12.60 on HumanEval+ and 6.10 on MBPP, against the line of 14 / 7.5 (15:40-15:42, MLX peak 10.1 GB). The MTP chain alone at 32 rows (12.55 / 6.23) beats the hybrid, and MBPP barely moves on any arm. Even a PASS would run ~x0.66 of the shipped chain at 45 GB costs: rows 17-32 keep ~0.28 tokens per row, and at 7.82 ms per verify row a row must keep ~0.40 to pay. Same conclusion as MTP Head's TOP3-USE: deep and wide drafts both wait on a cheaper verify row. Details: ~/TrainLab REPORT 'DEPTH32 RESULT' and 'TOP3-USE'; alignment fix in REPORT 'ALIGNMENT FIX'.

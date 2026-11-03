@@ -24,8 +24,8 @@ import numpy as np
 import mlx.core as mx
 from . import env, data as D, model as EM
 from .decode import diskread_bytes, footprint_now_gb, footprint_peak_gb
-from .relax_core import (R, R1, R2, COPY_N, CodeScan, comment_rows, committed, gate_rows, keep_mask, kept_rows,
-                         prompt_grams, union_bytes)
+from .relax_core import (R, R1, R2, COPY_N, CodeScan, comment_rows, committed, gate_keep_mx, gate_rows, keep_mask,
+                         kept_rows, prompt_grams, union_bytes)
 
 LEAP = os.path.expanduser("~/Leap")
 K = 16                                                   # drafter candidates per position (live16b's K)
@@ -40,13 +40,14 @@ OOO_ENV = {"BIGMOE_TIER": "4433333333", "BIGMOE_TIER_GLU": "3c", "BIGMOE_TIER_CL
 SETS = ("math", "ifeval", "humaneval", "multi", "agent")
 
 
-def S_(thr=None, copy=False, rules=(), loop=None):
-    """a set's setting: the cf gate's threshold, the copy gate, the relaxed rules every row may use, the comment rule"""
-    return dict(thr=thr, copy=copy, rules=tuple(rules), loop=loop)
+def S_(thr=None, copy=False, rules=(), loop=None, union=False):
+    """a set's setting: the cf gate's threshold, the copy gate, the relaxed rules every row may use, the comment rule,
+    and whether the gate is Q1-UNION (a sure row keeps its rank >= 2 experts that are in the check's union) or Q1"""
+    return dict(thr=thr, copy=copy, rules=tuple(rules), loop=loop, union=union)
 
 
 OFF = S_()
-G99 = dict(thr=0.99, copy=True)
+G99 = dict(thr=0.9, copy=True, union=True)              # revision 3: Q1-UNION at cf 0.9 + copy (was Q1 at 0.99)
 ARMS = {                                                 # PLAN_relax sec 9 (cloud task 14 merged), PREREG revision 1
     "control": dict(hc8=False, sets={s: OFF for s in SETS}),
     "A": dict(hc8=False, sets=dict(humaneval=S_(**G99), math=S_(**G99), agent=S_(**G99))),            # the gate alone
@@ -60,7 +61,7 @@ ARMS = {                                                 # PLAN_relax sec 9 (clo
 }
 REF_TIER = "4433333333"                                  # REF2-T's tiers: the step-0 rows and the replay's E
 STEP0 = "humaneval/HumanEval/27"
-GATE = dict(verify=False, keep=None, mode="route", cap=None)   # read by the streamed switch's wrapper
+GATE = dict(verify=False, sure=None, union=False, mode="route", cap=None)   # read by the streamed switch's wrapper
 sha = lambda toks: hashlib.sha256(json.dumps([int(x) for x in toks]).encode()).hexdigest()[:16]
 med = lambda v: float(np.median(v)) if len(v) else float("nan")
 
@@ -130,7 +131,8 @@ def install_gate(model):
 
     def call(self, x, indices, *a, **kw):
         if GATE["verify"] and indices.ndim >= 2 and indices.shape[-2] == R:
-            i0, keep = indices, GATE["keep"]
+            i0, sure = indices, GATE["sure"]
+            keep = gate_keep_mx(indices, sure, GATE["union"]) if sure is not None else None   # Q1 / Q1-UNION
             if keep is not None:
                 t = self._bm["tier"]
                 assert t.get("scores") is not None, "the gate needs the fused combine's scores (BIGMOE_TIER_COMBINE)"
@@ -308,7 +310,7 @@ def main(rt, st, a, log):
 
     def run(ids, cap, cfg, hashes=False):
         """one prompt, free-running: (tokens, per-check records, timings)"""
-        thr, copy, rules0, loop = cfg["thr"], cfg["copy"], tuple(cfg["rules"]), cfg["loop"]
+        thr, copy, rules0, loop, union = cfg["thr"], cfg["copy"], tuple(cfg["rules"]), cfg["loop"], cfg.get("union", False)
         grams = prompt_grams(ids) if copy else None
         scan = CodeScan() if loop else None
         pause_wait()
@@ -356,13 +358,13 @@ def main(rt, st, a, log):
             ref2.apply()
             snap = CS.snapshot_untrimmable_cache_lazy(cache)
             tap_reset(); TAP["on"] = True
-            GATE.update(verify=True, keep=mx.array(km) if km is not None else None, cap=[])
+            GATE.update(verify=True, sure=mx.array([x > 0 for x in g]) if km is not None else None, union=union, cap=[])
             try:
                 with ref2.verify_scope(model):
                     lg = model(mx.array([[tok] + dr]), cache=cache)
             finally:
                 cap_ = GATE["cap"]
-                GATE.update(verify=False, keep=None, cap=None)
+                GATE.update(verify=False, sure=None, cap=None)
             TAP["on"] = False
             l0 = lg[0].astype(mx.float32)
             am = mx.argmax(lg[0], axis=-1)

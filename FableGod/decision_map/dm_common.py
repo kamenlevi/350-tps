@@ -165,6 +165,7 @@ def _row_k(n):
     row k, 10 = exact), in window order: CUR['kpos'] counts each layer's rows since the window started."""
     li = CUR["L"]; p0 = CUR["kpos"].get(li, 0); CUR["kpos"][li] = p0 + n
     kk = np.full(n, 10, np.int32); kr = CUR["k"]
+    if PERT.get("k_layers") is not None and li not in PERT["k_layers"]: return kk   # the gate acts on these layers only
     m = max(0, min(n, len(kr) - p0)); kk[:m] = kr[p0:p0 + m]
     return kk
 
@@ -174,6 +175,8 @@ def _row_rm(n):
     li = CUR["L"]; p0 = CUR["kpos"].get(li, 0); CUR["kpos"][li] = p0 + n
     kp = np.ones((n, 10), bool); rm = CUR["rm"]
     m = max(0, min(n, rm.shape[0] - p0)); kp[:m] = rm[p0:p0 + m, li]
+    if PERT.get("t3keep") and CUR.get("k") is not None:   # rows served from records3 (dm_t3) post nothing on the stock path
+        kr = CUR["k"]; mm = max(0, min(n, len(kr) - p0)); kp[:mm][kr[p0:p0 + mm] == 0] = False
     return kp
 
 def _pert_scores(scores):
@@ -324,7 +327,11 @@ def _t3_add(block, li, x):
     kk = np.full(n, 10, np.int32); m = max(0, min(n, len(kr) - p0)); kk[:m] = kr[p0:p0 + m]
     G = np.flatnonzero(kk == 0)
     if not G.size: return None
-    yg = dm_t3.routed_topk(block, li, rows[mx.array(G.astype(np.int32))], bits=PERT["t3"], K=int(PERT.get("t3k", 2)))
+    keep = None
+    if PERT.get("t3keep"):                                # the gated rows' own rank mask at this layer (rank-sorted)
+        rm = CUR["rm"]; keep = np.ones((len(G), 10), bool); gi = p0 + G; ok_ = gi < rm.shape[0]
+        keep[ok_] = rm[gi[ok_], li]
+    yg = dm_t3.routed_topk(block, li, rows[mx.array(G.astype(np.int32))], bits=PERT["t3"], K=int(PERT.get("t3k", 2)), keep=keep)
     pos = np.full(n, len(G), np.int32); pos[G] = np.arange(len(G))       # ungated rows take an appended zero row
     return mx.take(mx.concatenate([yg, mx.zeros((1, yg.shape[-1]), yg.dtype)]), mx.array(pos), axis=0)
 
@@ -370,6 +377,8 @@ def _gate_k(nm, n):
     spec, k = PERT["gate"], np.full(n, 10, np.int32)
     if spec[0] == "cert": k[_cert(nm, n, spec[1]) >= spec[2]] = spec[3]; return k
     if spec[0] == "acert": k[_acert(nm, n, *spec[1:5])] = spec[5]; return k
+    if spec[0] == "t3cert": k[_cert(nm, n, spec[1]) >= spec[2]] = 0; return k   # 3-bit pass 1: certified rows via dm_t3
+    if spec[0] in ("t3mask", "t3keep"): return k        # set from the rank mask in measure()
     g = _gate(nm, n)
     if spec[0] == "top": k[g >= spec[1]] = spec[2]
     elif spec[0] == "t3": k[g >= spec[1]] = 0           # dm_t3 adds their top-2 (records3, PERT['t3'] bits)
@@ -409,6 +418,12 @@ def measure(model, windows, name, setup):
             sa = np.zeros(len(ids), bool); sa[a:len(ids) - 1] = True; CUR["skip_all"] = bound_runs(sa, int(PERT.get("chain_max") or 0))
         CUR["k"] = _gate_k(nm, len(ids)) if PERT.get("gate") else None
         CUR["rm"] = np.load(os.path.join(OUT, PERT["rmask"], nm))["keep"] if PERT.get("rmask") else None
+        if PERT.get("gate") == ("t3keep",):                 # P1-K1 at 3 bits (Tue 15:0x): the rows the mask cuts at all
+            kk = np.full(len(ids), 10, np.int32); r = CUR["rm"]; m = min(len(kk), r.shape[0])
+            kk[:m][~r[:m].all(axis=(1, 2))] = 0; CUR["k"] = kk
+        if PERT.get("gate") == ("t3mask",):                 # the t3 rows = the rows whose mask drops rank 0 (Tue 11:0x): a
+            kk = np.full(len(ids), 10, np.int32); r = CUR["rm"]; m = min(len(kk), r.shape[0])   # live cut's exact bonus
+            kk[:m][~r[:m, :, 0].any(axis=1)] = 0; CUR["k"] = kk                                 # rows are not served twice
         tk, lp = run_window(model, ids)
         res[nm] = dict(dom=dom, a=int(a), off=int(off), tk=tk[a:].tolist(), lp=lp[a:].tolist())
         extra = ""

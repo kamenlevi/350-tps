@@ -61,6 +61,9 @@ struct Layer {
   std::vector<int32_t> pred; int32_t pred_seq = -1;
   int rec_fmt = 1;                                  // 1 = records/ (9 pieces), 3 = records3 [MSB-3 | LSB-1] (DESIGN_3bit.md)
   int64_t msb_sz = 0;
+  // records3 converted in place (fmt 3 readers only; docs/PLAN_records3_convert.md): 0 row-major, 1 native, 2 native+p11;
+  // rows per projection, the record's 15 piece offsets (index msb_piece_off + lsb_piece_off), today's row-major sizes
+  int layout = 0; int64_t rows3[3] = {0, 0, 0}, loff[15] = {}, rm_msb = 0, rm_len = 0;
   int64_t part_off = 0, part_len = 0;              // fmt 1 on a part of a record (tier pools: records3 MSB or LSB part)
   int pom_fd = -1; int64_t pom_recsz = 0, seg1 = 0, seg2 = 0;   // R-44 b (BIGMOE_POM): records3p beside the records3m part
   int pom_r2 = 0, lp1 = 0, rank_k = 0;              // POM's R2 (base pool) / LP1 (sidecar); ids per routing row (gate ranks)
@@ -76,6 +79,17 @@ struct Layer {
   // S10 forecast log: per expert, the pass it was last forecast for and at which distances (bit d-1), the pass a read
   // was reserved for it and from which distance; fpass = last pass any row forecast this layer
   std::vector<int32_t> fseq, rseq; std::vector<uint8_t> fmask, rdist; int32_t fpass = -1;
+  // BIGMOE_VTIER (BigMoE 11-03; Leap's PURGE-1 PASS: purgeable Metal memory goes back before compression or swap): a victim
+  // tier behind the LRU pool in one purgeable shared MTLBuffer (set_vtier). An evicted expert's bytes stay in its slot as a
+  // ghost until a demand load reuses the slot; then they go into the tier (its own LRU), and a later miss on that expert is
+  // copied back instead of read from the SSD. The slab is non-volatile only while a call uses it; a previous state of Empty
+  // at the pin means macOS purged it, and the tier index is dropped. Exact: a cache only. Every other taker of a free slot
+  // (prefetch, JIT reserve, admission) clears the slot's ghost, since it overwrites the bytes.
+  std::vector<int32_t> ghost;                    // slot -> evicted expert whose bytes are still in it, or -1
+  MTL::Buffer* vt_buf = nullptr; uint8_t* vt_mem = nullptr; int vt_n = 0; int64_t vt_slot = 0;
+  std::vector<int32_t> vt_table, vt_owner, vt_free; std::list<int32_t> vt_lru;
+  std::vector<std::list<int32_t>::iterator> vt_where; bool vt_pinned = false;
+  int64_t vt_h = 0, vt_i = 0;                       // this layer's tier hits / copies in (NewIdeas' per-layer replay)
 };
 static int32_t g_cur_seq = -1;                      // pass being served (for the miss split)
 
@@ -90,6 +104,7 @@ static Stats g_st;
 // demand bursts and the SSD's idle gap before each (MoonShots' open question: do the engine's bursts follow idle gaps?)
 static std::atomic<double> g_last_rd_end{0.0};
 static std::atomic<int64_t> g_bursts{0}, g_burst_g025{0}, g_burst_g1{0};
+static std::atomic<int64_t> g_vt_hits{0}, g_vt_ins{0}, g_vt_purged{0}, g_vt_drops{0};   // BIGMOE_VTIER
 // S10 read / coverage trace (BIGMOE_TRACE): every expert read (demand or prefetch, issue -> bytes in place) and, per gated
 // call, how its experts were found (resident, prefetched on time / late, queued read cancelled into demand, demand miss
 // predicted-but-unissued / unpredicted). Read with ext.trace_reads() / ext.trace_cov().
@@ -315,6 +330,72 @@ static inline int32_t pub_slot(const Layer& ly, int64_t e) {   // the slot a res
   const int32_t s = ly.table[e];
   return (s >= 0 && !ly.two.empty() && ly.two[s]) ? -1 : s;
 }
+// records3 converted in place (Leap's format, 11-03): every piece in NAX6-N's native order, chunk (t*KG + g)*32 + r = the
+// row-major chunk (t*32 + r)*KG + g (a chunk = one group of 64 weights: 6 w3 words, 2 l1 words, or one scale). Under p11
+// (layout 2) the s3 / b3 / b pieces hold 11-bit codes: block b = t*KG + g is 11 words (32 codes, LSB-first, code r at
+// bits 11r..11r+10), word 11 * blocks = the piece's base exponent; bf16 = (c & 0x400) << 5 | ((c & 0x3FF) + (base << 7)).
+// native_rowmajor rebuilds today's row-major record (MSB per projection w3 s3 b3, LSB from rm_msb per projection l1 b,
+// zero padding), so the rebuild in read_expert stays as it is.
+static void unnative(const uint8_t* src, uint8_t* dst, int64_t O, int64_t KG, int64_t chunk) {
+  for (int64_t t = 0; t < O / 32; t++)
+    for (int64_t g = 0; g < KG; g++)
+      for (int64_t r = 0; r < 32; r++)
+        memcpy(dst + ((t * 32 + r) * KG + g) * chunk, src + ((t * KG + g) * 32 + r) * chunk, chunk);
+}
+static void unp11(const uint8_t* src, uint16_t* dst, int64_t O, int64_t KG) {
+  const uint32_t* w = (const uint32_t*)src;
+  const int64_t nb = O / 32 * KG;
+  const uint32_t hdr = w[11 * nb];
+  if (hdr >> 8) { fprintf(stderr, "bigmoe: a p11 piece without its header (the store is not native+p11?)\n"); abort(); }
+  const uint32_t base = hdr << 7;
+  for (int64_t b = 0; b < nb; b++) {
+    const uint32_t* q = w + 11 * b;
+    uint16_t* o = dst + (b / KG) * 32 * KG + b % KG;
+    for (int r = 0; r < 32; r++) {
+      const int bit = 11 * r, wi = bit >> 5, sh = bit & 31;
+      uint32_t c = q[wi] >> sh;
+      if (sh > 21) c |= q[wi + 1] << (32 - sh);
+      o[r * KG] = (uint16_t)(((c & 0x400) << 5) | ((c & 0x3FF) + base));
+    }
+  }
+}
+static void native_rowmajor(const Layer* lp, const uint8_t* rec, uint8_t* out) {
+  int64_t om = 0, ol = lp->rm_msb;
+  for (int p = 0; p < 3; p++) {
+    const int64_t w4 = lp->pieces[3 * p].per, sb = lp->pieces[3 * p + 1].per, w3 = w4 / 4 * 3, l1 = w4 / 4;
+    const int64_t O = lp->rows3[p], KG = sb / 2 / O;
+    unnative(rec + lp->loff[3 * p], out + om, O, KG, w3 / (O * KG)); om += w3;
+    for (int q = 1; q <= 2; q++, om += sb) {
+      if (lp->layout == 2) unp11(rec + lp->loff[3 * p + q], (uint16_t*)(out + om), O, KG);
+      else unnative(rec + lp->loff[3 * p + q], out + om, O, KG, 2);
+    }
+    unnative(rec + lp->loff[9 + 2 * p], out + ol, O, KG, l1 / (O * KG)); ol += l1;
+    if (lp->layout == 2) unp11(rec + lp->loff[10 + 2 * p], (uint16_t*)(out + ol), O, KG);
+    else unnative(rec + lp->loff[10 + 2 * p], out + ol, O, KG, 2);
+    ol += sb;
+  }
+  memset(out + om, 0, lp->rm_msb - om);
+  memset(out + ol, 0, lp->rm_len - ol);
+}
+// a converted layer's layout for the fmt 3 readers: rows per projection + the 15 piece offsets; today's row-major sizes
+static void set_layout_(Layer& ly, int layout, const std::vector<int64_t>& rows, const std::vector<int64_t>& offs) {
+  if (layout < 0 || layout > 2 || (layout && (rows.size() != 3 || offs.size() != 15)) || (layout && g_m01)) {
+    fprintf(stderr, "bigmoe: bad records3 layout %d (rows %zu, offsets %zu; not with BIGMOE_M01)\n", layout, rows.size(),
+            offs.size());
+    abort();
+  }
+  ly.layout = layout;
+  if (!layout) return;
+  int64_t m = 0, l = 0;
+  for (int p = 0; p < 3; p++) {
+    const int64_t w4 = ly.pieces[3 * p].per, sb = ly.pieces[3 * p + 1].per;
+    ly.rows3[p] = rows[p];
+    if (rows[p] % 32 || (sb / 2) % rows[p]) { fprintf(stderr, "bigmoe: layout rows %lld do not tile\n", (long long)rows[p]); abort(); }
+    m += w4 / 4 * 3 + 2 * sb; l += w4 / 4 + sb;
+  }
+  for (int i = 0; i < 15; i++) ly.loff[i] = offs[i];
+  ly.rm_msb = (m + 16383) / 16384 * 16384; ly.rm_len = ly.rm_msb + (l + 16383) / 16384 * 16384;
+}
 // One expert from its record into 9 destinations (gate/up/down x w/s/b, 4-bit layout) via a pooled aligned bounce.
 static void read_expert(const Layer* lp, int e, uint8_t* const* dst, bool par = true) {
   int64_t len = lp->part_len ? lp->part_len : lp->recsz;
@@ -332,10 +413,13 @@ static void read_expert(const Layer* lp, int e, uint8_t* const* dst, bool par = 
   // par = false when many experts load at once (b5: nested dispatch_apply under a wide verify miss list starved the
   // loader into spin-gate timeouts): the job's own thread rebuilds all 3 projections.
   const uint8_t* rb = buf;
+  int64_t msb = lp->msb_sz;
+  std::unique_ptr<Bounce> rmb;                     // a converted layer: back to today's row-major record first
+  if (lp->layout) { rmb.reset(new Bounce(lp->rm_len)); native_rowmajor(lp, buf, rmb->p); rb = rmb->p; msb = lp->rm_msb; }
   auto proj = ^(size_t p) {
     int64_t w4 = lp->pieces[3 * p].per, sb = lp->pieces[3 * p + 1].per, w3 = w4 / 4 * 3, l1 = w4 / 4;
     const uint8_t* m = rb + (int64_t)p * (w3 + 2 * sb);
-    const uint8_t* l = rb + lp->msb_sz + (int64_t)p * (l1 + sb);
+    const uint8_t* l = rb + msb + (int64_t)p * (l1 + sb);
     rebuild_w4((const uint32_t*)m, (const uint32_t*)l, (uint32_t*)dst[3 * p], w4 / 16);
     halve_bf16((const uint16_t*)(m + w3), (uint16_t*)dst[3 * p + 1], sb / 2);
     memcpy(dst[3 * p + 2], l + l1, sb);
@@ -344,14 +428,21 @@ static void read_expert(const Layer* lp, int e, uint8_t* const* dst, bool par = 
   else for (size_t p = 0; p < 3; p++) proj(p);
 }
 
+static void vt_copy(const Layer& ly, int s, int t, bool to_tier);   // BIGMOE_VTIER (below, with the tier's helpers)
 // modes (R-44 b POM, base pools only): per job 0 = the record part as before, 1 = 2-plane read, 2 = upgrade in place
-static void load_jobs(Layer& ly, const std::vector<std::pair<int, int>>& jobs, const std::vector<uint8_t>* modes = nullptr) {
+static void load_jobs(Layer& ly, const std::vector<std::pair<int, int>>& jobs, const std::vector<uint8_t>* modes = nullptr,
+                      const std::vector<std::pair<int, int>>* vtj = nullptr) {
   if (ly.rec_fd >= 0) {                             // record path: one read per expert
-    Layer* lp = &ly; const auto* jp = &jobs; const std::vector<uint8_t>* mp = modes;
+    Layer* lp = &ly; const auto* jp = &jobs; const std::vector<uint8_t>* mp = modes; const auto* vp = vtj;
     static bool direct = getenv("BIGMOE_RECORDS_DIRECT") != nullptr;   // preadv straight into the 9 pool slots
     const int tag = t_rd_tag, Li = (int)(lp - g_layers.data());
     dispatch_apply(jobs.size(), dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^(size_t j) {
       auto [e, s] = (*jp)[j];
+      if (vp) {                                     // BIGMOE_VTIER: the slot's ghost into the tier first; a hit copies back
+        auto [ts, tv] = (*vp)[j];
+        if (tv >= 0) vt_copy(*lp, s, tv, true);
+        if (ts >= 0) { vt_copy(*lp, s, ts, false); return; }
+      }
       const double t_r0 = g_rtrace ? now_s() : 0;
       int n = (int)lp->pieces.size();
       if (direct && lp->rec_fmt == 1 && !(g_m01 && lp->part_len)) {   // (M-01 parts unpack from the bounce)
@@ -569,6 +660,38 @@ static void make_room(Layer& ly, const std::vector<int32_t>& need) {
     else while (it != ly.lru.begin()) { --it; if (!in(need, *it)) { found = true; break; } }
     if (!found) break;                               // everything resident is needed now: the pf-drop path frees a slot
     int v = *it; ly.lru.erase(it); int s = ly.table[v]; ly.table[v] = -1; ly.slot_owner[s] = -1; ly.free_slots.push_back(s);
+    if (ly.vt_n) ly.ghost[s] = v;                     // BIGMOE_VTIER: v's bytes stay in s until the slot is reused
+  }
+}
+static void vt_pin(Layer& ly) {                     // BIGMOE_VTIER: non-volatile for this call; purged -> drop the index
+  if (!ly.vt_n || ly.vt_pinned) return;
+  if (ly.vt_buf->setPurgeableState(MTL::PurgeableStateNonVolatile) == MTL::PurgeableStateEmpty) {
+    for (int32_t e : ly.vt_lru) ly.vt_table[e] = -1;
+    ly.vt_lru.clear(); ly.vt_free.clear();
+    for (int t = ly.vt_n - 1; t >= 0; t--) { ly.vt_owner[t] = -1; ly.vt_free.push_back(t); }
+    g_vt_purged++;
+  }
+  ly.vt_pinned = true;
+}
+static void vt_unpin(Layer& ly) {
+  if (!ly.vt_pinned) return;
+  ly.vt_buf->setPurgeableState(MTL::PurgeableStateVolatile); ly.vt_pinned = false;
+}
+static int vt_take(Layer& ly, const std::vector<int32_t>& busy) {   // a tier slot: a free one, else drop the tier's
+  if (!ly.vt_free.empty()) { int t = ly.vt_free.back(); ly.vt_free.pop_back(); return t; }   // oldest not copied now
+  for (auto it = ly.vt_lru.end(); it != ly.vt_lru.begin();) {
+    --it; int e = *it, t = ly.vt_table[e];
+    if (std::find(busy.begin(), busy.end(), t) != busy.end()) continue;
+    ly.vt_lru.erase(it); ly.vt_table[e] = -1; ly.vt_owner[t] = -1; g_vt_drops++; return t;
+  }
+  return -1;
+}
+static void vt_copy(const Layer& ly, int s, int t, bool to_tier) {   // pool slot s <-> tier slot t, piece by piece
+  uint8_t* base = ly.vt_mem + (int64_t)t * ly.vt_slot;
+  for (const auto& pc : ly.pieces) {
+    uint8_t* slot = pc.pool + (int64_t)s * pc.per;
+    if (to_tier) memcpy(base, slot, pc.per); else memcpy(slot, base, pc.per);
+    base += pc.per;
   }
 }
 
@@ -628,13 +751,15 @@ static void ensure(int L, const int32_t* ids, int n, int32_t* out) {
   }
   std::vector<std::pair<int, int>> jobs;
   std::vector<uint8_t> modes;                     // POM: per job 0 full, 1 2-plane, 2 upgrade
+  std::vector<std::pair<int, int>> vtj;           // BIGMOE_VTIER: per job (tier slot copied back, tier slot the ghost goes to)
+  std::vector<int32_t> vt_busy, vt_out;           // tier slots copied this call (no other copy may take them) / freed after
   int n_miss = 0, c_hit = 0, c_rdy = 0, c_late = 0, c_pu = 0, c_un = 0;
   for (size_t j = 0; j < need.size(); j++) {
     const int e = need[j];
     const bool full = !ly.pom_r2 || mr[j] < ly.pom_r2;   // POM: a use at rank < R2 needs all three planes
     if (ly.table[e] >= 0) {
       c_hit++;
-      if (ly.pom_r2 && full && ly.two[ly.table[e]]) { jobs.push_back({e, ly.table[e]}); modes.push_back(2); }
+      if (ly.pom_r2 && full && ly.two[ly.table[e]]) { jobs.push_back({e, ly.table[e]}); modes.push_back(2); vtj.push_back({-1, -1}); }
       continue;
     }
     if (ly.lp1 && rk && mr[j] >= 1 && !ly.pf.count(e)) continue;   // LP1: rank-1 uses only -> no read, no insert
@@ -648,7 +773,7 @@ static void ensure(int L, const int32_t* ids, int n, int32_t* out) {
       make_room(ly, need);
       ly.table[e] = s; ly.slot_owner[s] = e; ly.lru.push_front(e); ly.where[e] = ly.lru.begin();
       g_st.pf_used++;
-      if (ly.pom_r2 && full && ly.two[s]) { jobs.push_back({e, s}); modes.push_back(2); }   // a 2-plane prefetch
+      if (ly.pom_r2 && full && ly.two[s]) { jobs.push_back({e, s}); modes.push_back(2); vtj.push_back({-1, -1}); }   // a 2-plane prefetch
       continue;
     }
     make_room(ly, need);
@@ -663,6 +788,21 @@ static void ensure(int L, const int32_t* ids, int n, int32_t* out) {
       if (ly.free_slots.empty()) { fprintf(stderr, "bigmoe: no free slot at layer %d\n", L); abort(); }
     }
     int s = ly.free_slots.back(); ly.free_slots.pop_back();
+    int ts = -1, tv = -1;
+    if (ly.vt_n) {                                  // BIGMOE_VTIER: a tier hit copies back; the slot's ghost goes in first
+      vt_pin(ly);
+      if (ly.vt_table[e] >= 0) {
+        ts = ly.vt_table[e]; ly.vt_table[e] = -1; ly.vt_owner[ts] = -1; ly.vt_lru.erase(ly.vt_where[e]);
+        vt_busy.push_back(ts); vt_out.push_back(ts); g_vt_hits++; ly.vt_h++;
+      }
+      const int v = ly.ghost[s];                     // (never one needed now: this call loads those itself)
+      if (v >= 0 && ly.table[v] < 0 && ly.vt_table[v] < 0 && !in(need, v) && (tv = vt_take(ly, vt_busy)) >= 0) {
+        ly.vt_table[v] = tv; ly.vt_owner[tv] = v; ly.vt_lru.push_front(v); ly.vt_where[v] = ly.vt_lru.begin();
+        vt_busy.push_back(tv); g_vt_ins++; ly.vt_i++;
+      }
+      ly.ghost[s] = -1;
+    }
+    vtj.push_back({ts, tv});
     if (ly.pred_seq == g_cur_seq && in(ly.pred, e)) { g_st.miss_pred_unissued++; c_pu++; } else { g_st.miss_unpred++; c_un++; }
     ly.table[e] = s; ly.slot_owner[s] = e; jobs.push_back({e, s}); modes.push_back(ly.pom_r2 && !full ? 1 : 0);
     if (ly.pom_r2) ly.two[s] = !full;
@@ -674,9 +814,10 @@ static void ensure(int L, const int32_t* ids, int n, int32_t* out) {
   if (!jobs.empty()) {
     double t = now_s(), gap = t - g_last_rd_end.load(std::memory_order_relaxed);   // the SSD's idle time before this burst
     g_bursts++; if (gap >= 250e-6) g_burst_g025++; if (gap >= 1e-3) g_burst_g1++;
-    load_jobs(ly, jobs, ly.pom_r2 ? &modes : nullptr);
+    load_jobs(ly, jobs, ly.pom_r2 ? &modes : nullptr, ly.vt_n ? &vtj : nullptr);
     double t1 = now_s(); g_st.io_ns += (int64_t)((t1 - t) * 1e9); g_last_rd_end.store(t1, std::memory_order_relaxed);
   }
+  if (ly.vt_n) { for (int t : vt_out) ly.vt_free.push_back(t); vt_unpin(ly); }   // BIGMOE_VTIER: volatile again
   if (ly.pom_r2)
     for (size_t k = 0; k < jobs.size(); k++) {
       if (modes[k] == 2) ly.two[jobs[k].second] = 0;
@@ -710,7 +851,7 @@ static void prefetch(int L, const int32_t* ids, int n, int seq, bool victim_ok =
       if (!freed) return;
     }
     int s;
-    if (!ly.free_slots.empty()) { s = ly.free_slots.back(); ly.free_slots.pop_back(); }
+    if (!ly.free_slots.empty()) { s = ly.free_slots.back(); ly.free_slots.pop_back(); if (ly.vt_n) ly.ghost[s] = -1; }
     else if (victim_ok && g_pf_victim > 0 && !ly.lru.empty()) {
       int v = ly.lru.back(); ly.lru.pop_back(); s = ly.table[v]; ly.table[v] = -1; ly.slot_owner[s] = -1;
       table_remove(L, seq, v); g_st.pf_victims++;
@@ -997,7 +1138,7 @@ static bool reserve(int X, int32_t e, int32_t seq, int cls, int d, uint8_t mode 
     if (!freed) { g_st.pf_nofit++; return false; }
   }
   int s = -1;
-  if (!ly.free_slots.empty()) { s = ly.free_slots.back(); ly.free_slots.pop_back(); }
+  if (!ly.free_slots.empty()) { s = ly.free_slots.back(); ly.free_slots.pop_back(); if (ly.vt_n) ly.ghost[s] = -1; }
   else if (!ly.lfu.empty()) {                     // BIGMOE_EVICT_LFU: the lowest-score expert not predicted for this pass
     auto it = lfu_victim(ly, nullptr, seq);
     if (it != ly.lru.end()) { int v = *it; ly.lru.erase(it); s = ly.table[v]; ly.table[v] = -1; ly.slot_owner[s] = -1; g_st.pf_victims++; }
@@ -1293,7 +1434,7 @@ static int joint_side(int L, int32_t seq) {
     }
     make_room(ly, need);
     if (ly.free_slots.empty()) break;              // everything resident is needed: ensure() takes it from here
-    int s = ly.free_slots.back(); ly.free_slots.pop_back();
+    int s = ly.free_slots.back(); ly.free_slots.pop_back(); if (ly.vt_n) ly.ghost[s] = -1;
     ly.pf[e] = s; ly.pf_order.push_back(e); (*ly.ready)[s].store(0);
     start(e, s);
   }
@@ -1619,7 +1760,7 @@ NB_MODULE(bigmoe_ext, m) {
       if (ly.table[e] >= 0) continue;
       int s;
       int extra = std::max(0, (int)ly.pf.size() - ly.spare);
-      if ((int)ly.lru.size() + extra < ly.C_main && !ly.free_slots.empty()) { s = ly.free_slots.back(); ly.free_slots.pop_back(); }
+      if ((int)ly.lru.size() + extra < ly.C_main && !ly.free_slots.empty()) { s = ly.free_slots.back(); ly.free_slots.pop_back(); if (ly.vt_n) ly.ghost[s] = -1; }
       else if (pr) {
         auto it = lfu_victim(ly, &used, -1);
         if (it == ly.lru.end()) break;
@@ -1668,6 +1809,26 @@ NB_MODULE(bigmoe_ext, m) {
     ly.pom_fd = fd; ly.pom_recsz = recsz; ly.seg1 = seg1; ly.seg2 = seg2; ly.pom_r2 = r2; ly.rank_k = k;
     ly.two.assign(ly.slot_owner.size(), 0);
   });
+  m.def("set_vtier", [](int L, int slots) -> long long {   // BIGMOE_VTIER: a purgeable victim tier of `slots` records at layer
+    std::lock_guard<std::mutex> lk(g_mu);              // L (record pools only); returns its bytes (0 = not set)
+    Layer& ly = g_layers.at(L);
+    if (ly.rec_fd < 0 || slots <= 0 || ly.vt_n) return 0;
+    int64_t sb = 0; for (auto& pc : ly.pieces) sb += pc.per;
+    MTL::Buffer* b = metal::device(Device::gpu).mtl_device()->newBuffer((size_t)(sb * slots), MTL::ResourceStorageModeShared);
+    if (!b) { fprintf(stderr, "bigmoe: vtier: no %lld bytes at layer %d\n", (long long)(sb * slots), L); return 0; }
+    b->setPurgeableState(MTL::PurgeableStateVolatile);  // empty and reclaimable until a call pins it
+    ly.vt_buf = b; ly.vt_mem = (uint8_t*)b->contents(); ly.vt_slot = sb;
+    ly.vt_table.assign(ly.E, -1); ly.vt_owner.assign(slots, -1); ly.vt_where.resize(ly.E);
+    ly.vt_free.clear(); for (int t = slots - 1; t >= 0; t--) ly.vt_free.push_back(t);
+    ly.ghost.assign(ly.C, -1);
+    ly.vt_n = slots;                                    // last: ensure() / make_room() key on it
+    return (long long)(sb * slots);
+  });
+  m.def("vtier_purge", [](int L) {                   // test only: discard layer L's tier the way a macOS purge does
+    std::lock_guard<std::mutex> lk(g_mu);
+    Layer& ly = g_layers.at(L);
+    if (ly.vt_n && !ly.vt_pinned) ly.vt_buf->setPurgeableState(MTL::PurgeableStateEmpty);
+  });
   m.def("set_prior", [](int L, std::vector<float> p) {   // BIGMOE_EVICT_PRIOR: layer L's popularity, E values in [0, 1]
     std::lock_guard<std::mutex> lk(g_mu);
     Layer& ly = g_layers.at(L);
@@ -1695,10 +1856,13 @@ NB_MODULE(bigmoe_ext, m) {
     std::lock_guard<std::mutex> lk(g_mu);
     Layer& ly = g_layers.at(L); ly.rec_fd = fd; ly.recsz = recsz; ly.rec_fmt = 1; ly.part_off = part_off; ly.part_len = part_len;
   });
-  m.def("read_rebuilt", [](std::string path, int64_t recsz, int64_t msb_sz, std::vector<int64_t> pers4,
-                           std::vector<int32_t> ids, std::vector<int32_t> rows, std::vector<array> dst) {
-    // plan-mode exact prefill: experts ids[k] from records3, rebuilt to the 4-bit pieces, into row rows[k] of the 9
-    // caller-owned arrays dst (GPU must be done with them). Parallel over experts; same rebuild as BIGMOE_RECORDS=3.
+  // plan-mode exact prefill: experts ids[k] from records3, rebuilt to the 4-bit pieces, into row rows[k] of the 9
+  // caller-owned arrays dst (GPU must be done with them). Parallel over experts; same rebuild as BIGMOE_RECORDS=3.
+  // read_rebuilt_layout: the same on a converted layer (layout 1 native / 2 native+p11, rows per projection, the index's
+  // 15 piece offsets), rebuilt through today's row-major record, so the 4-bit rows are today's bit for bit.
+  static auto rebuilt = [](std::string path, int64_t recsz, int64_t msb_sz, std::vector<int64_t> pers4,
+                           std::vector<int32_t> ids, std::vector<int32_t> rows, std::vector<array> dst, int layout,
+                           std::vector<int64_t> rows3, std::vector<int64_t> offs) {
     static std::unordered_map<std::string, int> fds;
     int fd;
     { std::lock_guard<std::mutex> lk(g_mu);
@@ -1707,6 +1871,7 @@ NB_MODULE(bigmoe_ext, m) {
       else fd = it->second; }
     Layer ly; ly.rec_fd = fd; ly.recsz = recsz; ly.rec_fmt = 3; ly.msb_sz = msb_sz;
     for (auto p : pers4) ly.pieces.push_back({-1, 0, p, nullptr});
+    set_layout_(ly, layout, rows3, offs);
     std::vector<uint8_t*> d;
     for (auto& a : dst) { a.eval(); d.push_back(a.data<uint8_t>()); }
     const Layer* lp = &ly; const auto* idp = &ids; const auto* rp = &rows; const auto* dp = &d;
@@ -1715,6 +1880,34 @@ NB_MODULE(bigmoe_ext, m) {
       for (size_t i = 0; i < lp->pieces.size(); i++) t[i] = (*dp)[i] + (int64_t)(*rp)[k] * lp->pieces[i].per;
       read_expert(lp, (*idp)[k], t, false);
     });
+  };
+  m.def("read_rebuilt", [](std::string path, int64_t recsz, int64_t msb_sz, std::vector<int64_t> pers4,
+                           std::vector<int32_t> ids, std::vector<int32_t> rows, std::vector<array> dst) {
+    rebuilt(path, recsz, msb_sz, pers4, ids, rows, dst, 0, {}, {});
+  });
+  m.def("read_rebuilt_layout", [](std::string path, int64_t recsz, int64_t msb_sz, std::vector<int64_t> pers4,
+                                  std::vector<int32_t> ids, std::vector<int32_t> rows, std::vector<array> dst, int layout,
+                                  std::vector<int64_t> rows3, std::vector<int64_t> offs) {
+    rebuilt(path, recsz, msb_sz, pers4, ids, rows, dst, layout, rows3, offs);
+  });
+  m.def("layout_max", [] { return 2; });   // the highest records3 layout the fmt 3 readers take (Python's guard)
+  m.def("record_rowmajor", [](std::string path, int64_t recsz, int64_t msb_sz, std::vector<int64_t> pers4, int layout,
+                              std::vector<int64_t> rows3, std::vector<int64_t> offs, int e, array out) {
+    // test: expert e's record of a converted layer, back to today's row-major record, into out (uint8, >= rm_len bytes)
+    int fd = open(path.c_str(), O_RDONLY);
+    if (fd < 0) abort();
+    fcntl(fd, F_NOCACHE, 1);
+    Layer ly; ly.rec_fd = fd; ly.recsz = recsz; ly.rec_fmt = 3; ly.msb_sz = msb_sz;
+    for (auto p : pers4) ly.pieces.push_back({-1, 0, p, nullptr});
+    set_layout_(ly, layout, rows3, offs);
+    out.eval();
+    if (!layout || (int64_t)out.nbytes() < ly.rm_len) abort();
+    Bounce bb(recsz);
+    struct iovec one = {bb.p, (size_t)recsz};
+    read_record(fd, (int64_t)e * recsz, &one, 1);
+    close(fd);
+    native_rowmajor(&ly, bb.p, out.data<uint8_t>());
+    return ly.rm_len;
   });
   m.def("rebuild_test", [](array w3, array l1, array out) {   // unit test of the records3 rebuild (CPU arrays)
     w3.eval(); l1.eval(); out.eval();
@@ -1741,7 +1934,7 @@ NB_MODULE(bigmoe_ext, m) {
       if (ly.table[e] >= 0) continue;
       int s;
       int extra = std::max(0, (int)ly.pf.size() - ly.spare);
-      if ((int)ly.lru.size() + extra < ly.C_main && !ly.free_slots.empty()) { s = ly.free_slots.back(); ly.free_slots.pop_back(); }
+      if ((int)ly.lru.size() + extra < ly.C_main && !ly.free_slots.empty()) { s = ly.free_slots.back(); ly.free_slots.pop_back(); if (ly.vt_n) ly.ghost[s] = -1; }
       else if (pr) {
         auto it = lfu_victim(ly, &used, -1);
         if (it == ly.lru.end()) break;
@@ -1829,6 +2022,13 @@ NB_MODULE(bigmoe_ext, m) {
     d["slow_calls"] = g_st.slow_calls.load(); d["slow_s"] = g_st.slow_ns.load() * 1e-9; d["pf_victims"] = g_st.pf_victims.load();
     d["ka_reads"] = g_ka_reads.load(); d["bursts"] = g_bursts.load(); d["burst_gap025"] = g_burst_g025.load();   // M-20
     d["burst_gap1"] = g_burst_g1.load();
+    d["vt_hits"] = g_vt_hits.load(); d["vt_ins"] = g_vt_ins.load(); d["vt_purged"] = g_vt_purged.load();   // BIGMOE_VTIER
+    d["vt_drops"] = g_vt_drops.load();
+    { int64_t vb = 0, vr = 0; std::lock_guard<std::mutex> lk(g_mu);
+      for (auto& ly : g_layers) if (ly.vt_n) { vb += (int64_t)ly.vt_n * ly.vt_slot; vr += (int64_t)(ly.vt_n - (int)ly.vt_free.size()) * ly.vt_slot; }
+      d["vt_bytes"] = vb; d["vt_used_bytes"] = vr;        // the tier's size / its filled part (volatile: not in phys_footprint)
+      std::vector<int64_t> hl, il; for (auto& ly : g_layers) { hl.push_back(ly.vt_h); il.push_back(ly.vt_i); }
+      d["vt_hits_layer"] = hl; d["vt_ins_layer"] = il; }  // per ext layer (cumulative; the harness takes run deltas)
     d["pf_ontime"] = g_st.pf_ontime.load(); d["pf_late"] = g_st.pf_late.load(); d["miss_pred_unissued"] = g_st.miss_pred_unissued.load(); d["miss_unpred"] = g_st.miss_unpred.load();
     d["pf_reserved"] = g_st.pf_reserved.load(); d["pf_cancel"] = g_st.pf_cancel.load(); d["pf_qdemand"] = g_st.pf_qdemand.load();
     d["pf_gated_off"] = g_st.pf_gated_off.load(); d["pf_nofit"] = g_st.pf_nofit.load(); d["pub_jit"] = g_st.pub_jit.load();
@@ -1836,7 +2036,7 @@ NB_MODULE(bigmoe_ext, m) {
     for (int c = 0; c < NCLS; c++) cls.push_back({(double)g_cls_res[c], g_cls_iss[c], g_cls_used[c], cls_prec(c)});
     d["pf_cls"] = cls; return d;
   });
-  m.def("reset_stats", []() { g_ka_reads = 0; g_bursts = 0; g_burst_g025 = 0; g_burst_g1 = 0; g_st.uses = 0; g_st.misses = 0; g_st.stalled = 0; g_st.gated = 0; g_st.io_ns = 0; g_st.wait_ns = 0; g_st.proc_ns = 0; g_st.pf_issued = 0; g_st.pf_used = 0; g_st.pf_waited_ns = 0; g_st.slow_calls = 0; g_st.slow_ns = 0; g_st.pf_victims = 0; g_st.pf_ontime = 0; g_st.pf_late = 0; g_st.miss_pred_unissued = 0; g_st.miss_unpred = 0;
+  m.def("reset_stats", []() { g_ka_reads = 0; g_bursts = 0; g_burst_g025 = 0; g_burst_g1 = 0; g_vt_hits = 0; g_vt_ins = 0; g_vt_purged = 0; g_vt_drops = 0; g_st.uses = 0; g_st.misses = 0; g_st.stalled = 0; g_st.gated = 0; g_st.io_ns = 0; g_st.wait_ns = 0; g_st.proc_ns = 0; g_st.pf_issued = 0; g_st.pf_used = 0; g_st.pf_waited_ns = 0; g_st.slow_calls = 0; g_st.slow_ns = 0; g_st.pf_victims = 0; g_st.pf_ontime = 0; g_st.pf_late = 0; g_st.miss_pred_unissued = 0; g_st.miss_unpred = 0;
     g_st.pf_reserved = 0; g_st.pf_cancel = 0; g_st.pf_qdemand = 0; g_st.pf_gated_off = 0; g_st.pf_nofit = 0; g_st.pub_jit = 0;
     for (int c = 0; c < NCLS; c++) g_cls_res[c] = 0; });   // the class precisions keep learning across resets
 }

@@ -2313,7 +2313,7 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   -> the wall is real IF the near-copy's mid is >= 0.90 (that half needs the near-copy's per-row predictions, not in my
   data); between -> BETWEEN. Prediction: MTP mid ~0.75-0.80 (D-24: depth 1 on code 0.978 overall; mids are the hard 12 %).
 
-### KWALL (b) RESULT, the MTP half: BETWEEN (Mon 11-02 20:56; CPU on D-24's stored ranks; sticky/kwall_mtp.py, data/kwall_mtp.txt)
+### KWALL (b) RESULT, the MTP half: BETWEEN [numbers corrected Tue 11-03 15:35: 'ALIGNMENT FIX'] (Mon 11-02 20:56; CPU on D-24's stored ranks; sticky/kwall_mtp.py, data/kwall_mtp.txt)
 - The native MTP head b5 at depth 1 (teacher-forced: the trunk's state at the previous row + the true token), at the 12 code
   map windows' rows by the 125B's class: sure 2,922 rows 0.985 (top-3 0.999); mid 394 rows 0.860 (top-3 0.982); tie 50 rows
   0.800 (top-3 0.920); all 3,366 0.968. DFlash2 at the same rows (its draft at the row's depth in the official loop, so
@@ -2375,3 +2375,238 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   as such by its owner). L1-20's cf stands in for the early-tap drafter's.
 - EARLYTAP addendum (the orchestrator 21:4x, cloud's extra lines, report only): kept >= 0.97 x the control with early taps
   (the h3 / h4 rows of et_read), the ANE's 12.4 ms under a busy GPU, a sync-free hand-off (Leap's halves).
+
+### D-23x RESULT: the first-check stall is a cold pool after the prefill, plus slow reads (Tue 11-03 06:56; run 06:37-06:53 quiet, C 192, read trace; data/d23x_read.txt, d23x_runs.jsonl)
+- 11 traced runs (4 agent + 2 chat prompts x 2 arms; one short). The prefill's reads go through the staging path and are
+  not in the pool trace (0 reads); no prefetch or joint reads in this preset (all demand).
+- Mean per check, first check vs checks 2-6:
+  | set, arm | base MSB-3 reads | LSB-1 sidecar reads | read s (summed) | check ms | rows |
+  |---|---|---|---|---|---|
+  | agent, DFlash2 | 1,074 vs 489 | 325 vs 171 | 5.76 vs 1.13 | 2,526 vs 205 | 7.5 vs 6.2 |
+  | agent, MTP | 1,528 vs 717 | 534 vs 245 | 8.97 vs 1.76 | 3,078 vs 255 | 15.0 vs 11.0 |
+  | multi bg0, DFlash2 / MTP | 865 / 995 vs ~220 | 266 / 333 vs ~78 | 2.3-2.8 vs 0.33 | 297 / 342 vs ~110 | 6-8 vs 4.4 |
+  | IFEval 1220 | 271-478 vs ~258 | 82-151 vs ~85 | 0.4-1.0 vs 0.4 | 351-355 vs ~121 | 1-2 vs 2-3 |
+- Per layer (agent): the first check's base reads spread over all 48 layers (by quarter 360 / 334 / 324 / 250 vs 181 / 151 /
+  129 / 125 later): a pool cold everywhere, not a few layers. Both tiers are cold (NewIdeas' question: base and sidecar alike).
+- Reads are also slower, not only more: agent text23's first check (9 rows) read 776 records over a 3.2 s span (later
+  checks ~550 in 0.3 s); edit00 2,428 records in 2.3 s. So ~2-3x the reads at ~4-10x the wall time per read: a cold pool
+  AND a slow I/O path right after the long prefill (page cache state or the prefill's I/O tail; not measured here).
+- Lead for BigMoE / Leap (exact): warm the decode pools at the end of the prefill (read the base + sidecar records of the
+  experts the last prefill rows routed to, while the prompt's last chunk finishes), which removes most of the extra reads;
+  the latency half needs a timed look at the I/O queue after prefill. TRIED's PARKED pool warm-up is this; the trace says it
+  pays most on long prompts (agent: ~2.3 s per turn).
+
+### EARLYTAP RESULT: KILL (Tue 11-03 09:30; extraction Mon 19:22-19:52, trainings Tue 06:53-09:23 shared, walks 09:23-09:26; data/et_read.txt, d02b_walk_et_<v>.txt)
+- Self-check: the 5-tap re-extraction equals L1-20's stored h bit for bit on 109 / 109 windows. The retrained control
+  (h5, D-09's recipe) keeps 9.66 on HumanEval+ vs L1-20's 9.57 (seed noise +0.09).
+- Kept per check (block 16): | set | h5 control | h4 (taps <= 35) | h3 (taps <= 25) |
+  code 9.66 | 7.04 (x0.729) | 5.43 (x0.562); MBPP 5.88 | 3.92 (x0.667) | 3.00 (x0.510); agent 3.00 | 1.91 (x0.637) | 1.68 (x0.560).
+- LINE (HumanEval+ vs the control: h4 >= 0.95 alive, < 0.93 KILL; h3 >= 0.90 alive): h4 x0.729 -> KILL; h3 x0.562 not alive.
+  Cloud's report-only line (>= 0.97 x): no for both.
+- Reading: the last tap (layer 45 of 48) carries a large share of what DFlash2 drafts from: without it a quarter of code's
+  kept is gone. This is the frozen-fc version (dropped taps zeroed before the base drafter's fc): a lower bound; a trained fc
+  (and wider layers on the early taps) could recover part, but at x0.73 the ANE pipeline needs that as its own test.
+  Prediction was h4 -4 % / h3 -10 % (KILL 25 %).
+
+### DUALDRAFT RESULT: KILL (Tue 11-03 09:30; run 09:26-09:29 shared; data/dd_read.txt, d02b_walk_dd_*.txt)
+- Self-check (L1-20 twice): 9.57 / 7.00 and 0 % second-drafter depths: OK.
+- Joint-chain ensemble L1-20 + E2's x2: code 9.82 (x1.026 vs L1-20, x1.003 vs x2 alone 9.79), math 7.12 (x1.017); x2
+  proposed 60 % / 51 % of the reached depths. LINE (>= x1.08 PASS, < x1.04 KILL): x1.026 -> KILL.
+- Why (teacher-forced at HPD-0's anchors, all 15 depths): L1-20 right 0.752, x2 right 0.757 per position on code, and
+  q = P(x2 wrong | L1-20 wrong) = 0.866 (math 0.892): two drafters trained on overlapping data with the same recipe are
+  wrong at the same places (the orchestrator's hpdU / hpdH figure was 0.61 / 0.66 on another position set). This is
+  DIVERSE2's baseline: its weighted members have to bring q from ~0.87 toward 0.50.
+  Prediction was KILL 40 %.
+- D-23x note (09:30): BigMoE already has the fix built: mission 20, R57_A6=warm (PREFILL_WARM: the prompt's routed experts
+  into the base + sidecar pools by frequency at prefill end; C 160 / 256, 3 code + 3 agent prompts); last night's 45 GB
+  runs were memory-blocked, so its measurement is pending. D-23x is the trace that says where the time goes.
+
+### KWALL (a) RESULT: PASS -- the mid rows are a selector problem [union corrected 15:35: 'ALIGNMENT FIX'] (Tue 11-03 11:46; sticky/kw_read.py, data/kw_read.txt; written 15:12)
+- At the 125B's mid rows of the 12 code map windows (positions the official loop reached at HPD-0's anchors): the 125B's
+  token is inside DFlash2 L1-20's top-3 (its teacher-forced selector softmax over the 16 candidates) at 0.888; the union
+  (DFlash2's pick right or the MTP chain's, b5 teacher-forced) 0.903. LINE (top-3 >= 0.85 or union >= 0.80 PASS): PASS.
+- With KWALL (b) (the MTP head's depth-1 top-3 holds it at 0.982 of mid rows) the knowledge wall is not in the candidates:
+  the right token is almost always proposed, and the pick is what fails. Fable's reading: one learned picker is worth a
+  test despite L1-21 / SD-sel's +1.2 % (its lattice was top-64 with a 12M picker).
+
+### DIVERSE2 RESULT: KILL -- re-weighting does not make a second drafter wrong elsewhere (Tue 11-03 15:12; conf-out 11:46-11:51 (micro-batched, 281 s), trainings 11:51-13:20, walks to 13:24, all shared; data/dv_read.txt)
+- Members from incoai, L1-20's recipe (179 steps each): teacher-forced at HPD-0's anchors on code (9,750 positions) / math:
+  | member | own (L1-20 0.752) | q = P(wrong given L1-20 wrong) | either right | ensemble kept (code) |
+  |---|---|---|---|---|
+  | M2-0 control | 0.750 | 0.901 | 0.776 | 9.67 (x1.010) |
+  | M2-W (x4 on L1-20's misses) | 0.734 | 0.890 | 0.779 | 9.64 (x1.007) |
+  | M2-WS (+ x4 at live block starts) | 0.735 | 0.893 | 0.778 | 9.60 (x1.003) |
+  Math: q 0.889 / 0.885 / 0.883; ensembles x1.010 / x0.994 / x0.991.
+- LINE (q <= 0.50 with own >= 0.90 PASS; both weighted arms q >= 0.60 KILL): q 0.890 / 0.893 -> KILL. (The own >= 0.90 bar was
+  out of reach on this measure, all 15 depths teacher-forced, where L1-20 itself is 0.752; q decides.)
+- Reading: even an independently trained twin (M2-0) is wrong at 90 % of L1-20's misses, so the misses belong to the data
+  (the 125B's wording choices), not to the training run; x4 weights move q by one point and cost 1.7 points of own accuracy.
+  With KWALL (a): the drafters' candidates already hold the right token at mid rows; a second drafter adds the same
+  candidates. The remaining lever is the pick (a learned re-ranker over the top-3 / top-16 at mid rows), not a second member.
+  Prediction was BETWEEN 55 % / KILL 25 %.
+
+### WITHDRAWN 15:35 (off-by-one, see 'ALIGNMENT FIX' and 'MTPPICK aligned'): MTPPICK (lead, CPU): DFlash2 and the native MTP head are wrong at different places; a per-depth confidence pick keeps +23 % (code) / +46 % (math) per check (Tue 11-03 15:15; sticky/mtp_overlap.py + the pick simulation, data/mtp_overlap.txt)
+- Both teacher-forced at HPD-0's anchors, depths 1-15 (exact up to the first miss): DFlash2 L1-20's pick (HPD-0 walks) and the
+  MTP head b5's draft (D-24). Per position: code DFlash2 0.751 / MTP 0.861, q = P(MTP wrong | DFlash2 wrong) 0.301 (DFlash2
+  twins 0.87-0.90), either 0.925, the higher-confidence pick (DFlash2's tcf vs MTP's top-1 p) 0.888; math 0.682 / 0.838,
+  q 0.240, either 0.924, pick 0.862; multi 0.213 / 0.438, q 0.606; IFEval 0.281 / 0.450, q 0.585.
+- Kept per 16-row check at the same anchors (the chain takes at each depth the more confident drafter's token and stops at its
+  first wrong pick): code DFlash2 9.54 (its real walk 9.57) / MTP 10.13 / pick 11.70 / oracle 12.73; math 6.97 / 8.01 /
+  10.17 / 12.01; multi 2.05 / 3.03 / 3.38 / 4.15; IFEval 2.44 / 2.93 / 3.63 / 4.48.
+- The pick needs no extra rows (one chain is verified); its cost is running both drafters: DFlash2's block pass (~12 ms) and
+  the MTP chain's 15 sequential steps fed the picked tokens (~2.2 ms each today, 33 ms; <= 1 ms each in Leap's fused /
+  ANE target). At C 192's measured checks: code 9.54 per 202 ms -> 11.70 per ~235 ms (+5 %), math 6.97 / 130 ms -> 10.17 /
+  ~163 ms (+16 %); at a 1 ms step the gain is most of the kept gain.
+- TRIED: not there. D-05 MTPHYB split depths (near MTP, far DFlash2: <= +1 %); D-18 MTP at positions 1-2 (KILL); L1-06 verified
+  both chains as rows (KILL on rows); D-19 / TYPERULE switch per prompt; DUALDRAFT / DIVERSE2 paired DFlash2 twins (q ~0.9,
+  KILL). New: a per-position confidence pick between two architecturally different drafters (q 0.24-0.30), no extra rows.
+- Next: a live, exact A/B in the D-23 harness (an arm drafting with both and picking per depth), timed, at C 192 / 224
+  (a 45 GB-route quiet ticket); pre-registration next.
+
+### ALIGNMENT FIX: four cross-drafter read-outs read D-24's MTP rows one position late (found Tue 11-03 after the 15:15 MTPPICK commit; CPU re-runs 15:35)
+- The bug: D-24's tables (data/d24/<set>_b5.npz) index the MTP anchor s = a0 + r, whose depth d predicts ids[s + d + 1]
+  (d22_ttt.chain; D-24's own walk used anchor gen + p - 2, which is right). The scripts that put the MTP chain beside a DFlash2
+  check at anchor A (drafts predict ids[A + 1 ..]) or a map row t (predicts t + 1) used r = A - a0, i.e. s = A; the live chain
+  there is s = A - 1. The wrong rows predicted one token later, from the trunk's hidden at A, which the loop does not have yet.
+- Test (CPU, HPD-0's checks, depth 1): P(MTP wrong | DFlash2 wrong) = 0.237 / 0.112 (code / math) with s = A and 0.615 /
+  0.543 with s = A - 1: two drafters share hard tokens, so the right alignment shows the overlap.
+- Affected, re-run aligned: sticky/mtp_overlap.py (the MTPPICK lead: withdrawn, next section); sticky/kwall_mtp.py (KWALL (b):
+  sure 0.985 -> 0.998, mid 0.860 -> 0.855 (top-3 0.982 -> 0.975), tie 0.800 -> 0.340; still BETWEEN); sticky/kw_read.py (KWALL
+  (a): MTP chain right at mid rows 0.786 -> 0.707, union 0.903 -> 0.796; the PASS stands on DFlash2's top-3 0.888); MoonShots'
+  export data/mtp_map_code (v2 = data/mtp_map_code_v2 by sticky/mtp_map_export.py; v1 marked WRONG_ALIGNMENT.txt; the
+  per-row depth-1 flags agree on 0.84-1.00 of rows, so per-row decisions built on v1 moved by one row). Fixed before any run:
+  sticky/d23h_sim.py (DEPTH32's HYB arm). Not affected: D-24's and D-23's MTP-only numbers, everything DFlash2-only.
+
+### MTPPICK aligned: KILL on paper -- the pick keeps +7 % (code) / +11 % (math) per check, the MTP chain's 33 ms per cycle costs more (Tue 11-03 15:35; sticky/mtp_overlap.py fixed, sticky/mtppick_sim.py; data/mtp_overlap.txt, data/mtppick_sim.txt)
+- Aligned overlap at HPD-0's anchors, depths 1-15: code DFlash2 0.752 / MTP 0.859, q 0.436 (the bug said 0.301), either 0.892,
+  pick 0.852; math 0.682 / 0.835, q 0.400, either 0.873, pick 0.808; multi q 0.676; IFEval q 0.702 (DFlash2 twins 0.87-0.90).
+- Exact official loop (new tables: DFlash2 at every position, turns/every_walk.sh 15:23-15:33 shared, MLX ~2 GB; each arm runs
+  its own loop), 16-row checks, kept DFlash2 / MTP / pick / oracle: code 9.58 / 10.20 / 10.28 (x1.073) / 11.74; math 7.01 /
+  7.73 / 7.78 (x1.110) / 9.34; multi 2.06 / 2.92 / 2.72; IFEval 2.45 / 2.74 / 2.70.
+- Est. tok/s (D-24's model: F + 7.82 ms x rows, + 12 ms DFlash2 block pass, + 2.2 ms per MTP step): code 43.3 / 42.1 / 40.4
+  (pick x0.933), math 34.5 / 34.5 / 32.9 (x0.955); with the shipped cut (t 0.3): code 51.0 / 48.7 / 46.8 (x0.916 vs dfl), math
+  44.3 / 44.7 / 39.3 (x0.887); on chat the pick loses to the MTP chain it already runs (multi x0.804).
+- At 1 ms per MTP step the code pick is flat (x1.005 at 16 rows): it gains only if the second drafter is nearly free.
+  Verdict: KILL (on paper). The 15:15 'lead' (+23 % / +46 %) was the alignment bug; nothing was sent on it.
+
+### TOP3-USE: tree-of-top-3 vs a learned picker vs MTPPICK, prior art + paper price on the 16-row checks (the orchestrator's item 2, Tue 11-03 15:35; desk + the CPU tables above) -- none pre-registered
+- Question: KWALL (a) puts the 125B's token in DFlash2's top-3 at 0.888 of mid rows (top-1 0.659). The published ways to use
+  it: verify several candidates per position (a tree), or pick a better single candidate (a learned picker); the third is a
+  second drafter's opinion (MTPPICK). Priced on the 45 GB route: check = F(type) + 7.82 ms x rows (F code 84.1 ms), DFlash2
+  block pass 12 ms, MTP step 2.2 ms; base = the shipped DFlash2 chain (cut t 0.3): code 9.24 kept at 10.9 rows, ~51 tok/s
+  est.; at a fixed 16 rows 9.58 kept, ~43 tok/s.
+- Prior art, trees (tag published): Medusa (arXiv 2401.10774: per-offset heads, a calibrated sparse Cartesian tree, tree
+  attention), SpecInfer (ASPLOS 2024: trees merged from several small drafters, topology-aware mask), EAGLE-2 (arXiv
+  2406.16858: dynamic trees, expand by path confidence, rerank, keep the top m), Sequoia (arXiv 2402.12374: DP-optimal tree
+  per budget, hardware-aware size), SpecExec (arXiv 2406.02532: offloaded dense models, thousands of nodes because the verify
+  cost is flat when weight streaming dominates). That premise fails for a routed MoE: every row brings new experts
+  (DraftExpert arXiv 2607.24434: expert-set expansion; ours 7.82 ms per row), and OEA sharing is small: a sibling row adds
+  2.35-2.55 new experts per layer vs 2.79 for a late chain row (TRIED M-10, 0.84-0.91x).
+- Prior art, pickers (tag published; L1-21 adapted): DFlash2's selector chain over its top-16 is already a learned
+  first-order picker; higher-order selectors (SD-sel, LiLiCorr-style) publish about level with it; L1-21's 12 M-param
+  lattice picker: +1.2 % kept (9.54 -> 9.65) against an oracle pick of 14.11. KWALL (a)'s top-3 headroom is that oracle gap.
+- Prior art, two drafters (MTPPICK tag adapted): TAPS (arXiv 2603.27027, ICML 2026) routes each request to one of two
+  drafters by mean tree-node confidence; its best arm verifies both drafts as one merged tree (rows); HedgeSpec (arXiv
+  2510.20064) picks a drafter online; multi-draft speculative sampling (arXiv 2410.18234) selects among verified drafts.
+- Price, code, vs the shipped chain at equal cost:
+  - tree of top-3 over DFlash2's lattice (EAGLE-2 / Sequoia-style best-first; TRIED L1-22, TREES): 10.43 kept at 16 rows
+    (+9 % vs the 16-row chain) but -10.1 .. +2.1 % vs the best chain at equal cost under 5 cost models incl. D-23's measured;
+    L1-22 294 vs 311 tok/s vs the cut chain. Needs a tree check on the Gated DeltaNet layers: per-node recurrent states
+    (~50 MB per layer) + per-row key gathers (TRIED 'Exact tree checks'; Bole / TreeWY reorder the recurrence, not bitwise,
+    FAST at best). Not built.
+  - learned picker over DFlash2's top-3 / top-16 (L1-21): +1.2 % kept, no rows; ~+0.3 % tok/s after its own cost.
+  - MTPPICK (aligned, above): +7 % kept, x0.93 (16 rows) / x0.92 (cut).
+- Pick: none. The tree is the only one that uses the top-3 headroom, and it does so by verifying more rows, which is
+  where the 45 GB route pays (7.82 ms per row, siblings 0.84-0.91x); the picker is ~0 (+0.3 %), and a live A/B resolves
+  ~+-3 % at best (order w 0.97-0.99), so a pre-registered run of either would be inside its noise. The top-3 lever is the
+  row cost, not the pick: revisit the tree when a verify row gets much cheaper (warm pools, sidecar drop, the FAST row-cost
+  work), where D-24's oracle width 2-3 headroom (chat 3.6-4.05 vs 2.3-2.5 tokens per pass) opens.
+
+### DEPTH32 amendment 1 (Tue 11-03 15:35, before any run of steps 1 and 3)
+- Step 2 (DFlash2 at every position, code + MBPP) ran today 15:23-15:33 as a small shared job (turns/every_walk.sh, also math /
+  multi / IFEval for MTPPICK); turns/d23h_job.sh skips it. sticky/d23h_mtp31.py also writes the top-1 p (p1_<i>, D-24's
+  definition). sticky/d23h_sim.py: the MTP row is r = A - 1 - a0 ('ALIGNMENT FIX'; the first version read one position late).
+  Left: step 1 (the MTP head to depth 31 on 24 HumanEval+ and 100 MBPP answers, ~5-8 min, MLX ~7-11 GB as D-24) + step 3 (CPU).
+
+### CUTSWEEP (information, CPU): the shipped DFlash2 cut t 0.3 is within 0-2 % of the per-type best -- no knob to turn (Tue 11-03 15:38; sticky/cut_sweep.py, data/cut_sweep.txt)
+- DFlash2's own running-confidence cut swept t 0-0.5 in the exact official loop (every-position tables: own picks and own cf,
+  so the rows are exact), D-24's cost model. Best t vs t 0.3, est. tok/s: code 0.40 x1.003, math 0.40 x1.018, MBPP 0.35
+  x1.000, multi 0.40 x1.012, IFEval 0.35 x1.009; the curve is flat over 0.3-0.4 (code 51.0 / 51.1 / 51.2). Agrees with S45d
+  (t 0.5 -1.1 % on D-23's measured checks). A per-type t would buy <= +1.8 % (math), inside a live A/B's noise: not pursued.
+
+### DEPTH32 RESULT: KILL -- the best realizable 32-row arm keeps 12.60 (HumanEval+) / 6.10 (MBPP) per check, line 14 / 7.5 (Tue 11-03 15:40-15:42 shared, MEM 12 GB; turns/d23h_job.sh; data/d23h/, data/d23h_read.txt; written 15:42)
+- Step 1 (the MTP head b5, teacher-forced to depth 31): depth-1 right code 0.977, MBPP 0.935; 29 s + 107 s; MLX peak 9.7 /
+  10.1 GB (the pre-registration said ~7-15). Step 2 = turns/every_walk.sh (15:23-15:33). Step 3 (CPU, the official loop at
+  32 rows on the aligned tables, amendment 1).
+- Kept per 32-row check: code DFlash2-32 10.26 (the real walk), MTP-32 12.55 (+G 12.85), HYB (DFlash2 1-8 + MTP 9-31) 12.19
+  (+G 12.60); MBPP 6.00 / 6.23 (+G 6.21) / 6.11 (+G 6.10). LINE (hyb+g): 12.60 / 6.10 -> KILL (< 13 or < 6.5).
+- The MTP chain alone beats the hybrid at 32 rows: DFlash2's shallow depths add nothing once the deep half is the MTP head.
+  On MBPP no arm moves much (6.0-6.2): the deep half is not where MBPP's misses are.
+- Priced (D-24's model): even the PASS line would run ~34 tok/s vs the shipped chain's ~51 on code; rows 17-32 keep ~0.15-0.2
+  tokens each here (code (12.6 - 9.6) / 16), against ~0.40 needed at 7.82 ms per row. Prediction: BETWEEN 50 %, PASS 25 %,
+  KILL 25 % (came KILL).
+
+### HEADBENCH (information, < 1 GB GPU, shared): the MTP draft step's lm_head costs 1.47 ms of ~2.2 ms, at 242 GB/s = 85-94 % of the M5 Pro's streaming bandwidth (Tue 11-03 15:45; sticky/head_bench.py, data/head_bench.txt)
+- The live step (MTPHead.draft_cut): embed, the MTP layer, the HC mixer, the full 248,320 x 2560 lm_head (4-bit g64, 358 MB),
+  argmax + f32 softmax max, one mx.eval sync. The head alone with the same post-ops and sync: median 1.475 ms (p1 by
+  logsumexp 1.473, argmax only 1.509; an empty op + sync 0.146 ms). So ~0.6 ms is the rest of the step (layer, HC, embed).
+- 358 MB / 1.475 ms = 242 GB/s, against 258-287 GB/s measured streaming on this M5 Pro (Leap / FableGod probes): a faster
+  matvec kernel has <= ~10-15 % to give. Only fewer head bytes help (draft-side only, so outputs stay exact): a 2-bit draft
+  copy (~0.75 ms), a vocab subset (FR-Spec: dropped at the desk 11-01, 32K covers only 0.53 of multilingual answer tokens),
+  or a trained low-rank head. Priced on D-23d's chat checks (draft 8.9 of 86 ms, ~3.5 steps): saving 0.7-1.1 ms per step =
+  chat +3-4.5 %, agent on MTP ~+3 % over DFlash2. Under a live A/B's noise; not pursued unless bundled.
+
+### ROUTEPRED: a learned expert-route predictor for prefetch (the orchestrator's item, Tue 11-03 15:57; steps 1-2 on the CPU; step 3 not pre-registered) -- KILL on paper for the next-check predictor
+- Step 1, prior art. Layer-ahead gate predictors (published): Pre-gated MoE (a pre-gate picks the next layer's experts),
+  HOBBIT (arXiv 2411.01433: next-layer prediction from gating inputs; mixed precision makes wrong guesses cheap), AdapMoE
+  (current gating inputs through later gates), ProMoE (a learned classifier, sliding window, on the CPU), MoE-Infinity
+  (request-level activation tracing). Draft-driven verifier-expert prediction (published): SP-MoE (arXiv 2510.10302: draft
+  attention outputs through the target's gates, a cutoff-layer policy, async batched prefetch), MoE-SpeQ (a quantized draft
+  model's multi-step expert look-ahead), DraftExpert (arXiv 2607.24434: router-agreement distillation predicts the
+  verifier's expert sets; a secondary summary reports 86-88 % prefetch hits). Ours would be adapted. TRIED: V1 look-ahead
+  ADOPTED (64 GB era), CORR PASS +2.9 % (24 GB), S10b / S10c M1a (mine) KILL at 24 GB (+0.3-0.9 %), R-57 / R-57b KILL at
+  45 GB (wrong guesses evict, late reads), R-70D draft-window prefetch PARKED, P2-PREFETCH (12 GB two-pass) PASS on its CPU
+  model (Fit12's T3R-PF tonight).
+- Step 2, headroom (BigMoE's ~/BigMoE/data/c50/c45l_256.txt, median check at C 256): cycle 96.8 ms = draft 12.0 (SSD idle)
+  + check 84.2 (demand SSD busy 42.0, gate spin on misses 42.6), 171 misses. Full-hiding ceiling (every read early, the
+  check -> max(GPU ~42, SSD 42)): ~x1.5-1.8. Draft-window ceiling (a perfect next-check predictor: 12 ms x 11.7 GB/s = 88
+  reads of ~1.6 MB): 51 % of 171 misses -> ~x1.28 on short checks; on HumanEval/68's 1.45 GB checks ~x1.07.
+- Step 2, predictability (sticky/nextcheck_pred.py on BigMoE's 45 GB-route capture ~/BigMoE/data/cap45: 199 checks of the
+  same 6 prompts, every row's top-10 and MoE input; router self-check 345 / 400 rows reproduce the captured top-10 set).
+  Check p + 1's misses from what the draft window knows (check p), budget B reads per check, candidates not served in
+  checks p and p - 1: the router on check p's last row, precision 0.136 / 0.084 / 0.066 at C 160 (measured flags) / 224 /
+  256 (LRU replay) at B 88 = recall 1.6-1.7 % of the misses; the rows' mean the same; popularity 0.00-0.02. The perfect
+  predictor at B 88: recall 0.13 / 0.21 / 0.25. Realized at C 256: ~6 of ~356 misses per check -> ~+0.5 % cycle. A learned
+  model would need ~7x the precision for +10 %; S10b's learned correction gave x1.35 at lead 2.
+- The within-check look-ahead on the same capture (sticky/lead1_recall.py): L+1's router on L's MoE input, per-row recall@10
+  0.611 / @16 0.738; the rows' union of top-10 names 0.505 of the check's misses at L+1 at 3.49 reads per miss (top-16: 0.670
+  at 6.83). The predictive information is one layer ahead, inside the check, where the SSD is busy (R-57's failure: the
+  wrong reads compete and evict). That is BigMoE's lane tonight (pre-route on the partial sum, la45 look-ahead +
+  keepalive at C 224); a learned lead-1 correction adds little there (S10b: lead 1 +2.4 points).
+- Verdict: the next-check (draft-window) predictor = KILL on paper (the window is SSD-idle but the information is not
+  there). Not pre-registered. Follow-up only if tonight's pre-route misses its recall line: a learned correction of the L+1
+  forecast on cap45 (x, ids on disk).
+
+### TREE3 + STAGED (the Breakthrough Push, Tue 11-03 17:03-17:12; the orchestrator's ask: aligned top-3 tree data for Breakthrough's staged verification, then pricing)
+- Data (turns/tree3_job.sh 17:03-17:07, one GPU job: DFlash2 walk MLX 2.03 GB, MTP head 12.7 GB; turns/kw2_job.sh 17:10-17:11,
+  1.99 GB): data/tree3_map/<code|ifeval|multi>/<window>.npz + README (the 36 decision-map windows; every anchor A, depths
+  0-14 = map rows A + j): DFlash2's top-3 + selector probabilities (teacher-forced), its own chain, the MTP head's top-3 +
+  probabilities (aligned: its chain at anchor A starts from the trunk's hidden at A - 1), the 125B's top-3 (the map's
+  baseline.json). Breakthrough's own format at HPD-0's anchors: data/d02b_walk_kw_ifeval.npz / _multi.npz (checks
+  identical to HPD-0's on 2850 / 2850 and 3294 / 3294; chain k from the tsm top-1 = HPD-0's k on every check).
+- Caveat: the every-position walk chunks the drafter's context differently from a live loop: at HPD-0's anchors 1.3 /
+  2.2 / 2.5 % of its teacher-forced picks differ from the per-check walk (code / IFEval / multi; k differs on ~1 % of
+  checks): near-ties. For an exact replay of a given loop use a walk at that loop's anchors (TL_WALK_ANCHORS).
+- Coverage, all depths, the 125B's token in the top-3: DFlash2 code 0.885 / IFEval 0.430 / multi 0.301; MTP head 0.965 /
+  0.646 / 0.580; either 0.974 / 0.683 / 0.609 (depth 0: DFlash2 0.995 / 0.875 / 0.699, MTP 0.996 / 0.917 / 0.903). The map's
+  baseline top-1 equals the window token on 0.996 / 0.977 / 0.984 of rows.
+- STAGED (sticky/staged_sim.py; a map run as the cheap pass, teacher-forced = exact along the true path; each arm its own
+  loop; kept per check / exact rows): code shipped cut 8.39 / 10.1 (MTP chain cut 8.54 / 9.9); oracle trees DFlash2 11.41,
+  MTP 12.55, union 13.61. Cheap = topk2: beam (a pick at every depth) DFlash2 9.47 / 10.1, MTP 10.06 / 10.5, union 10.33 /
+  10.8; cat (one tree pass, the path ends at the first sibling) DFlash2 8.30 / 9.2, MTP 8.73 / 9.7. Cheap = topk5: beam
+  union 12.01 / 12.4, MTP 11.18 / 11.6; cat MTP 9.57 / 10.3. Cheap = p1_top_k2: beam union 10.90 / 11.3. Multi: shipped
+  mcut 2.50 / 3.2 -> MTP beam topk5 3.52 / 4.5; IFEval mcut 2.37 / 3.1 -> 3.73 / 4.7 (data/staged_sim.txt).
+- Reading [G]: the kept gains (+23-43 % on code) need one cheap step per depth (10-15 sequential cheap forwards); one
+  cheap tree pass (cat) gets +2-14 %; a static EAGLE-2-style tree sits between. Whether it pays is the cheap row's cost
+  (Fable B's ROW_WALL) plus the cheap pass's fixed cost; the exact pass's rows stay at ~10-12. Sent to Breakthrough and
+  the orchestrator; the static-tree arm next if Breakthrough wants it.
