@@ -87,6 +87,9 @@ struct Stats { std::atomic<int64_t> uses{0}, misses{0}, stalled{0}, gated{0}; st
 static std::vector<Layer> g_layers;
 static std::mutex g_mu;
 static Stats g_st;
+// demand bursts and the SSD's idle gap before each (MoonShots' open question: do the engine's bursts follow idle gaps?)
+static std::atomic<double> g_last_rd_end{0.0};
+static std::atomic<int64_t> g_bursts{0}, g_burst_g025{0}, g_burst_g1{0};
 // S10 read / coverage trace (BIGMOE_TRACE): every expert read (demand or prefetch, issue -> bytes in place) and, per gated
 // call, how its experts were found (resident, prefetched on time / late, queued read cancelled into demand, demand miss
 // predicted-but-unissued / unpredicted). Read with ext.trace_reads() / ext.trace_cov().
@@ -668,7 +671,12 @@ static void ensure(int L, const int32_t* ids, int n, int32_t* out) {
   g_st.uses += need.size(); g_st.misses += n_miss; g_st.stalled += !jobs.empty();
   if (g_rtrace) { std::lock_guard<std::mutex> lk(g_rmu);
                   g_cov.push_back({L, g_cur_seq, (int)need.size(), c_hit, c_rdy, c_late, cov_q, c_pu, c_un, now_s()}); }
-  if (!jobs.empty()) { double t = now_s(); load_jobs(ly, jobs, ly.pom_r2 ? &modes : nullptr); g_st.io_ns += (int64_t)((now_s() - t) * 1e9); }
+  if (!jobs.empty()) {
+    double t = now_s(), gap = t - g_last_rd_end.load(std::memory_order_relaxed);   // the SSD's idle time before this burst
+    g_bursts++; if (gap >= 250e-6) g_burst_g025++; if (gap >= 1e-3) g_burst_g1++;
+    load_jobs(ly, jobs, ly.pom_r2 ? &modes : nullptr);
+    double t1 = now_s(); g_st.io_ns += (int64_t)((t1 - t) * 1e9); g_last_rd_end.store(t1, std::memory_order_relaxed);
+  }
   if (ly.pom_r2)
     for (size_t k = 0; k < jobs.size(); k++) {
       if (modes[k] == 2) ly.two[jobs[k].second] = 0;
@@ -714,6 +722,7 @@ static void prefetch(int L, const int32_t* ids, int n, int seq, bool victim_ok =
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(g_oplay ? g_odelay_us : 0) * 1000),
                    dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
       load_jobs(*lp, {{e, s}});
+      g_last_rd_end.store(now_s(), std::memory_order_relaxed);
       (*lp->ready)[s].store(1, std::memory_order_release);
       // additive update of this pass's published table: before the GPU reads it -> fast path
       // with the spare slot; after -> slow path as before. Never removes or moves an entry.
@@ -1185,6 +1194,35 @@ static int32_t* g_reg = nullptr;     // spin mode: release regions (pairs of 128
 static int64_t g_reg_n = 0, g_pairs = 0;
 static std::thread g_thread;
 static std::atomic<bool> g_run{false};
+// BIGMOE_SSD_KEEPALIVE_US=n (MoonShots M-20 SSDWAKE, ~/MoonShots/data/ssdwake.txt e6f2cd6; the orchestrator 11-02 22:1x): the
+// internal SSD charges +50-65 us on the next read burst after idle gaps of only 0.25-1 ms, and one 4 KB F_NOCACHE read every
+// ~50 us removes it. A thread issues one such read (a random 4 KB block of a random record file) every n us while the loader
+// served a call in the last 50 ms (decoding), and naps otherwise. Reads only: exact. 0 = off (the default).
+static int g_ka_us = getenv("BIGMOE_SSD_KEEPALIVE_US") ? atoi(getenv("BIGMOE_SSD_KEEPALIVE_US")) : 0;
+// BIGMOE_IDLE_MS=n (Breakthrough 11-02 22:3x: a process waiting in pausewait spins the loader at ~1 core): after n ms with
+// no served call the idle loader naps 200 us per pass instead of only yielding (calls within a request come far less than
+// 50 ms apart, so decoding never sees it; the first call after a long idle waits <= ~0.2 ms). 0 = always spin (default).
+static double g_idle_s = (getenv("BIGMOE_IDLE_MS") ? atof(getenv("BIGMOE_IDLE_MS")) : 0.0) * 1e-3;
+static std::atomic<double> g_last_serve{0.0};
+static std::atomic<int64_t> g_ka_reads{0};
+static std::thread g_ka_thread;
+static void keepalive_main() {
+  while (g_run.load(std::memory_order_relaxed) && g_last_serve.load() == 0.0) usleep(1000);   // every layer exists by then
+  std::vector<std::pair<int, int64_t>> fl;          // (fd, 4 KB blocks) of each layer's record file
+  { std::lock_guard<std::mutex> lk(g_mu);
+    for (auto& ly : g_layers) if (ly.rec_fd >= 0 && ly.recsz > 0) fl.push_back({ly.rec_fd, (int64_t)ly.E * ly.recsz / 4096}); }
+  void* buf = nullptr;
+  if (fl.empty() || posix_memalign(&buf, 16384, 4096)) return;
+  uint64_t x = 0x9E3779B97F4A7C15ull;
+  while (g_run.load(std::memory_order_relaxed)) {
+    if (now_s() - g_last_serve.load(std::memory_order_relaxed) > 0.05) { usleep(2000); continue; }
+    x ^= x << 13; x ^= x >> 7; x ^= x << 17;
+    const auto& f = fl[x % fl.size()];
+    if (pread(f.first, buf, 4096, (int64_t)((x >> 16) % (uint64_t)std::max<int64_t>(1, f.second)) * 4096) == 4096) g_ka_reads++;
+    usleep(g_ka_us);
+  }
+  free(buf);
+}
 static int g_delay_us = getenv("BIGMOE_DELAY_US") ? atoi(getenv("BIGMOE_DELAY_US")) : 0;
 
 // JOINT (port of Fit12 B1 v2, ~/Fit12/patches/b1v2_joint_v3f.diff, to v3's plain rows): each tier layer posts two gate
@@ -1311,6 +1349,7 @@ static void loader_main() {
       __atomic_thread_fence(__ATOMIC_ACQUIRE);
       any = true; last[L] = seq;
       double t_seen = now_s();
+      g_last_serve.store(t_seen, std::memory_order_relaxed);   // BIGMOE_SSD_KEEPALIVE_US: decoding
       g_st.wait_ns += (int64_t)((now_s() - t_idle) * 1e9);
       int n = row[1];
       bool slow_call = false, victim_done = false;
@@ -1427,7 +1466,8 @@ static void loader_main() {
       if (g_jit && g_pq_n.load(std::memory_order_relaxed) > 0 && pq_ready()) {
         std::lock_guard<std::mutex> lk(g_mu); pump();   // a speculative read finished: issue the next one
       }
-      __builtin_arm_yield();
+      if (g_idle_s > 0 && now_s() - t_idle > g_idle_s) usleep(200);   // BIGMOE_IDLE_MS: idle for a while: nap
+      else __builtin_arm_yield();
     }
   }
 }
@@ -1745,8 +1785,9 @@ NB_MODULE(bigmoe_ext, m) {
     g_pub.assign(nl, -1); g_srv.assign(nl, -1);
     while ((int)g_events.size() < g_nl) { auto* e = metal::device(Device::gpu).mtl_device()->newSharedEvent(); e->setSignaledValue(0); g_events.push_back(e); }
     g_run = true; g_thread = std::thread(loader_main);
+    if (g_ka_us > 0) g_ka_thread = std::thread(keepalive_main);
   });
-  m.def("stop", []() { g_run = false; if (g_thread.joinable()) g_thread.join(); });
+  m.def("stop", []() { g_run = false; if (g_thread.joinable()) g_thread.join(); if (g_ka_thread.joinable()) g_ka_thread.join(); });
   m.def("gate", &gate);
   m.def("flush", &flush_enc);
   m.def("post_ids", &post_ids);
@@ -1786,6 +1827,8 @@ NB_MODULE(bigmoe_ext, m) {
     d["joint_wait_s"] = g_jt_wait_ns.load() * 1e-9;
     d["stamp_calls"] = g_stamp_calls.load(); d["stamp_rereads"] = g_stamp_rereads.load(); d["stamp_wait_s"] = g_stamp_ns.load() * 1e-9;
     d["slow_calls"] = g_st.slow_calls.load(); d["slow_s"] = g_st.slow_ns.load() * 1e-9; d["pf_victims"] = g_st.pf_victims.load();
+    d["ka_reads"] = g_ka_reads.load(); d["bursts"] = g_bursts.load(); d["burst_gap025"] = g_burst_g025.load();   // M-20
+    d["burst_gap1"] = g_burst_g1.load();
     d["pf_ontime"] = g_st.pf_ontime.load(); d["pf_late"] = g_st.pf_late.load(); d["miss_pred_unissued"] = g_st.miss_pred_unissued.load(); d["miss_unpred"] = g_st.miss_unpred.load();
     d["pf_reserved"] = g_st.pf_reserved.load(); d["pf_cancel"] = g_st.pf_cancel.load(); d["pf_qdemand"] = g_st.pf_qdemand.load();
     d["pf_gated_off"] = g_st.pf_gated_off.load(); d["pf_nofit"] = g_st.pf_nofit.load(); d["pub_jit"] = g_st.pub_jit.load();
@@ -1793,7 +1836,7 @@ NB_MODULE(bigmoe_ext, m) {
     for (int c = 0; c < NCLS; c++) cls.push_back({(double)g_cls_res[c], g_cls_iss[c], g_cls_used[c], cls_prec(c)});
     d["pf_cls"] = cls; return d;
   });
-  m.def("reset_stats", []() { g_st.uses = 0; g_st.misses = 0; g_st.stalled = 0; g_st.gated = 0; g_st.io_ns = 0; g_st.wait_ns = 0; g_st.proc_ns = 0; g_st.pf_issued = 0; g_st.pf_used = 0; g_st.pf_waited_ns = 0; g_st.slow_calls = 0; g_st.slow_ns = 0; g_st.pf_victims = 0; g_st.pf_ontime = 0; g_st.pf_late = 0; g_st.miss_pred_unissued = 0; g_st.miss_unpred = 0;
+  m.def("reset_stats", []() { g_ka_reads = 0; g_bursts = 0; g_burst_g025 = 0; g_burst_g1 = 0; g_st.uses = 0; g_st.misses = 0; g_st.stalled = 0; g_st.gated = 0; g_st.io_ns = 0; g_st.wait_ns = 0; g_st.proc_ns = 0; g_st.pf_issued = 0; g_st.pf_used = 0; g_st.pf_waited_ns = 0; g_st.slow_calls = 0; g_st.slow_ns = 0; g_st.pf_victims = 0; g_st.pf_ontime = 0; g_st.pf_late = 0; g_st.miss_pred_unissued = 0; g_st.miss_unpred = 0;
     g_st.pf_reserved = 0; g_st.pf_cancel = 0; g_st.pf_qdemand = 0; g_st.pf_gated_off = 0; g_st.pf_nofit = 0; g_st.pub_jit = 0;
     for (int c = 0; c < NCLS; c++) g_cls_res[c] = 0; });   // the class precisions keep learning across resets
 }

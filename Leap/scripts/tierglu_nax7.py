@@ -350,3 +350,163 @@ def kernel_a7w(x, xs, msb, lsb, ms, ls, grp, plan, b2=None, ks=4):
                    template=tmpl, grid=(N // 32 * 128 * ks, nseg, 1), threadgroup=(128 * ks, 1, 1),
                    output_shapes=[(M * R, N)], output_dtypes=[x.dtype])
     return h
+
+
+# ---------------------------------------------------------------- NAX7-F (N7-10): NAX6 + combine_phase in three dispatches
+# K0 = gpu_grp's grouping (threadgroup 0, NAX6's _GRP verbatim) + rowsum64(x) + the counters zeroed; K1 = NAX6's kernel A,
+# then the group's last threadgroup (a device counter) computes its pairs' h row sums in rowsum64's order; K2 = NAX6's
+# kernel B, then the 10th pair to finish a (row, 64-column block) does that block's combine in combine_phase's LY order.
+# Release fences before the counters, acquire fences after them; no spin-waits. Bitwise == tier_glu_nax6 + combine_phase.
+_GRP_BODY = N6._GRP[N6._GRP.index("    if ((int)i < P) {"):]
+_K0 = r"""
+    const uint tg0 = threadgroup_position_in_grid.x;
+    const uint lt = thread_index_in_threadgroup;
+    threadgroup int key_s[P_C];
+    threadgroup int skey[P_C];
+    threadgroup int start_s[P_C];
+    if (tg0 == 0) {
+        const int P = P_C;
+        const uint i = lt;
+""" + _GRP_BODY + r"""
+    } else {
+        const uint j = (tg0 - 1) * TGS_C + lt;
+        if (j < (uint)(M_C * KG_C)) {                                  // rowsum64(x), verbatim order
+            const uint r = j / KG_C, gg = j % KG_C;
+            const device T* p = x + (size_t)r * (KG_C * 64) + gg * 64;
+            float s = 0.0f;
+            for (int q = 0; q < 64; ++q) s += (float)p[q];
+            xs[(size_t)r * KG_C + gg] = s;
+        }
+        for (uint z = j; z < (uint)(P_C + M_C * NB_C); z += NXT_C * TGS_C) {
+            if (z < (uint)P_C) cntA[z] = 0; else cntC[z - P_C] = 0;
+        }
+    }
+"""
+_A7F = N6._A4 + r"""
+    // NAX7-F: the group's last threadgroup computes its pairs' h row sums (rowsum64's sequential order)
+    atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    threadgroup int last_s[1];
+    if (sg == 0 && lane == 0) {
+        const int old = atomic_fetch_add_explicit((device atomic_int*)cntA + gq, 1, memory_order_relaxed);
+        last_s[0] = (old == (int)(N / 32) - 1) ? 1 : 0;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (last_s[0]) {
+        atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+        for (uint j = sg * 32 + lane; j < (uint)nq * (N / 64); j += 64 * KS_C) {
+            const uint row = j / (N / 64), gg = j % (N / 64);
+            const device T* p = h + (size_t)pidx[q0 + row] * N + gg * 64;
+            float s = 0.0f;
+            for (int q = 0; q < 64; ++q) s += (float)p[q];
+            hs[(size_t)pidx[q0 + row] * (N / 64) + gg] = s;
+        }
+    }
+"""
+_B7F = N6._B4 + r"""
+    // NAX7-F: the 10th pair to finish a (row, column block) does that block's combine (combine_phase's LY order)
+    atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    threadgroup int dn[16];
+    threadgroup int ndn[1];
+    const uint tid = sg * 32 + lane;
+    const uint blk = threadgroup_position_in_grid.x;
+    if (tid == 0) ndn[0] = 0;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (tid < (uint)nq) {
+        const uint mrow = (uint)pidx[q0 + tid] / NR;
+        const int old = atomic_fetch_add_explicit((device atomic_int*)cntC + mrow * (D / (32 * NSG_C)) + blk, 1, memory_order_relaxed);
+        if (old == NR - 1) {
+            const int k = atomic_fetch_add_explicit((threadgroup atomic_int*)ndn, 1, memory_order_relaxed);
+            dn[k] = (int)mrow;
+        }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (ndn[0] > 0) {
+        atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+        for (int qd = 0; qd < ndn[0]; ++qd) {
+            const uint m = (uint)dn[qd];
+            for (uint c = tid; c < (uint)(32 * NSG_C); c += 32 * NSG_C * KS_C) {
+                const uint d = blk * (32 * NSG_C) + c;
+                T part[LY_C];
+                for (int j = 0; j < LY_C; ++j) part[j] = static_cast<T>(0);
+                for (int rr = 0; rr < NR; ++rr) {
+                    const T yv = y[(size_t)(m * NR + rr) * D + d];
+                    const T prod = TgMultiply()(yv, scores[m * NR + rr]);
+                    part[rr % LY_C] = prod + part[rr % LY_C];
+                }
+                T tot = part[0];
+                for (int j = 1; j < LY_C; ++j) tot = part[j] + tot;
+                out[(size_t)m * D + d] = tot;
+            }
+        }
+    }
+"""
+
+
+@lru_cache(None)
+def _k0f():
+    return mx.fast.metal_kernel(name="tierglu_nax7f_k0", input_names=["msb_slot", "lsb_slot", "x"],
+                                output_names=["pidx", "seg", "nseg", "xs", "cntA", "cntC"], source=_K0, header=N6._HDR4)
+
+
+@lru_cache(None)
+def _ka7f():
+    return mx.fast.metal_kernel(
+        name="tierglu_nax7f_a",
+        input_names=["x", "xs", "w3g", "w3u", "s3g", "s3u", "b3g", "b3u", "b2g", "b2u", "l1g", "l1u", "bg", "bu",
+                     "msb_slot", "lsb_slot", "pidx", "seg", "nseg", "cntA"],
+        output_names=["h", "hs"], source=_A7F, header=N6._HDR4)
+
+
+@lru_cache(None)
+def _kb7f():
+    return mx.fast.metal_kernel(
+        name="tierglu_nax7f_b",
+        input_names=["h", "hs", "w3d", "s3d", "b3d", "b2d", "l1d", "bd", "msb_slot", "lsb_slot", "pidx", "seg", "nseg",
+                     "scores", "cntC"],
+        output_names=["y", "out"], source=_B7F, header=N6._HDR4)
+
+
+def tier_glu_nax7f(x, msb, lsb, msb_slot, lsb_slot, scores, plan="4433333333", b2=None, nsg_b=2, ks=4, ks_b=2, ly=8):
+    """the block's combined experts [M, D] in three dispatches; == combine_phase(tier_glu_nax6(...), all phase 1) bitwise"""
+    M, K = x.shape
+    R = len(plan)
+    m4, m2, r4 = plan_masks(plan)
+    N = msb["gate_proj"]["s3"].shape[1]
+    D = msb["down_proj"]["s3"].shape[1]
+    assert M <= 64 and K % 64 == 0 and N % 64 == 0 and D % (32 * nsg_b) == 0
+    P = M * R
+    assert P <= 1024
+    KG, NB = K // 64, D // (32 * nsg_b)
+    TGS = max(32, (P + 31) // 32 * 32)
+    NXT = max(1, (M * KG + TGS - 1) // TGS)
+    bb = b2 if b2 is not None else {p: msb[p]["b3"] for p in PROJ}
+    if r4:
+        ls = lsb_slot.astype(mx.int32).reshape(-1)
+        L = lsb
+    else:
+        ls = mx.zeros((1,), mx.int32)
+        L = {p: {"l1": msb[p]["w3"], "b": msb[p]["b3"]} for p in PROJ}
+    ms = msb_slot.astype(mx.int32).reshape(-1)
+    pidx, seg, nsg_, xs, cntA, cntC = _k0f()(
+        inputs=[ms, ls, x], template=[("T", x.dtype), ("P_C", P), ("NR_C", R), ("MASK4_C", m4), ("MASK2_C", m2),
+                                      ("R4_C", max(r4, 1)), ("M_C", M), ("KG_C", KG), ("NB_C", NB), ("TGS_C", TGS),
+                                      ("NXT_C", NXT)],
+        grid=(TGS * (1 + NXT), 1, 1), threadgroup=(TGS, 1, 1),
+        output_shapes=[(P,), (P + 1,), (1,), (M, KG), (P,), (M * NB,)],
+        output_dtypes=[mx.int32, mx.int32, mx.int32, mx.float32, mx.int32, mx.int32])
+    g, u, d = (msb[p] for p in PROJ)
+    tmpl = [("T", x.dtype), ("NR_C", R), ("MASK4_C", m4), ("MASK2_C", m2), ("R4_C", max(r4, 1)), ("DIAG_C", 0), ("GS_C", 1)]
+    h, hs = _ka7f()(inputs=[x, xs, g["w3"], u["w3"], g["s3"], u["s3"], g["b3"], u["b3"], bb["gate_proj"], bb["up_proj"],
+                            L["gate_proj"]["l1"], L["up_proj"]["l1"], L["gate_proj"]["b"], L["up_proj"]["b"], ms, ls,
+                            pidx, seg, nsg_, cntA],
+                    template=tmpl + [("K_C", K), ("N_C", N), ("KS_C", ks)],
+                    grid=(N // 32 * 64 * ks, P, 1), threadgroup=(64 * ks, 1, 1),
+                    output_shapes=[(P, N), (P, N // 64)], output_dtypes=[x.dtype, mx.float32])
+    y, out = _kb7f()(inputs=[h, hs, d["w3"], d["s3"], d["b3"], bb["down_proj"], L["down_proj"]["l1"], L["down_proj"]["b"],
+                             ms, ls, pidx, seg, nsg_, scores.astype(x.dtype).reshape(-1), cntC],
+                     template=tmpl + [("N_C", N), ("D_C", D), ("NSG_C", nsg_b), ("KS_C", ks_b), ("LY_C", ly)],
+                     grid=(D // (32 * nsg_b) * 32 * nsg_b * ks_b, P, 1), threadgroup=(32 * nsg_b * ks_b, 1, 1),
+                     output_shapes=[(P, D), (M, D)], output_dtypes=[x.dtype, x.dtype])
+    return out

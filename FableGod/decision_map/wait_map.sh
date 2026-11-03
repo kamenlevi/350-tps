@@ -69,10 +69,14 @@ while ! ls $OUTS > /dev/null 2>&1; do
   fi
   say "go: NO-SWAP $f GB"
   DAY9_NAMES="gate $NAMES" bash run_day9.sh > /dev/null & R=$!
-  bad=0; stopped=0
+  bad=0; stopped=0; pz=0
   while kill -0 $R 2>/dev/null; do
     sleep 30
     w=$(hard)
+    # a heat PAUSE over 5 min stops the map too (Mon 22:3x: a map paused in pausewait still spins one core in
+    # bigmoe_ext, so it heats a Mac that is cooling; short pauses are ridden out as before)
+    if [ -e "$Q/PAUSE" ]; then pz=$((pz + 1)); else pz=0; fi
+    if [ -z "$w" ] && [ $pz -ge 10 ]; then w="PAUSE over 5 min (a paused map spins a core)"; bad=2; fi
     if [ -z "$w" ] && big_others; then w="another job over 5 GB (day rule)"; bad=2; fi   # stop at once (orchestrator 21:3x)
     if [ -n "$w" ]; then bad=$((bad + 1)); else bad=0; fi
     if [ $bad -ge 3 ]; then

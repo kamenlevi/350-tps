@@ -1,30 +1,28 @@
-# MISSION B3 (Fable B): THE FAST DENSE PASS, AND 32 ROWS. What crosses 17 ms?
+# MISSION B3 (Fable B): CLOUD'S TWO DENSE IDEAS, AND THE 32-ROW CROSSOVER
 
-(Draft by the orchestrator for Kamen, Mon 2 Nov 2026 ~21:5x.)
+(Draft by the orchestrator for Kamen, Mon 2 Nov 2026 ~22:1x. This replaces the earlier B3 draft: your BOUNDARIES.md section 4F already priced the FAST dense floor, ~16-17 ms, or ~14-15 with HC8.)
 
-**Why.** Your BOUNDARIES.md proved the EXACT dense pass floors at ~19-21 ms per 16-row check, so <= 17 isn't reachable exactly. You named the two things that cross it: the 32-row check (the dense pass is flat in rows) and reference changes.
-- Kamen's rule since 21:3x tonight: two first-class tracks, EXACT and FAST (judged by same-scores tests), both published.
-- Cloud's ladder (task 15) ranks the dense reference change as the second most critical piece: ~275 tok/s without it, 327-353 with everything at target.
+**Why.** Cloud task 16 (~/FableGod/CLOUD_ANSWER_NEWIDEAS.md) proposed two genuinely new dense-pass ideas:
+1. **#3 the seeded exact argmax for the LM head** (exact; cloud's "speeds up all models" idea): the drafted token seeds a chunked Cauchy-Schwarz bound that prunes the 248K-word vocabulary per row, so most head chunks are skipped while the argmax stays exact. Cloud: head bytes -80-90 %, -1 ms halved per pass.
+2. **#4 predict-then-correct mixers** (a new reference): predict the HC coefficients a layer early, launch the big GEMM, then correct with an exact low-rank term. It breaks the HC read's dependent chain. Cloud: -2.5 ms halved.
+
+The 32-row question is still open:
+- Cloud predicts 32 rows lose on this week's engine (66 vs 78 tok/s).
+- The dense pass is flat in rows, the expert union grows x1.5-1.6 per doubling, and the copy override pays x1.211 at 32 rows vs x1.041 at 16.
 
 **Deliver**
-1. **The FAST dense pass, piece by piece.** For each lever give ms per check (bound, then halved), what changes numerically, and its quality evidence and risk:
-   - att_single, the attention kernel: -5 ms claimed; quality re-test (IFX) runs tonight
-   - HC8: same-scores PASS with a lean
-   - the chunked / WY GDN verify: killed only "for exact modes"
-   - MTPLX's fused GDN prework at 16 rows: 1.09 vs 1.51 ms, killed only for bits
-   - E1 / E3 without the bitwise constraint (reordered sums, a looser megakernel)
-   - anything else in TRIED that died only for bits
-
-   Give the FAST dense floor.
-2. **The 32-row check, on both tracks, at the floor engine.** The dense pass per token halves. Weigh that against:
-   - the expert union growing x1.5-1.6 per doubling (B3: ~2.0 ms per added row at 32 rows today)
-   - kept at 32 rows (the copy override pays x1.211 on HumanEval+ at 32, x1.041 at 16)
-   - BigMoE's caveat: beyond 16 rows the check leaves REF2-T's certified 1-16-row verify, so the token check decides exactness
-
-   Cloud predicts 32 rows lose on this week's engine (66 vs 78 tok/s). Find the crossover: at which dense ms and expert-kernel efficiency do 32 rows win?
-3. **The dense piece of the ladder:** the best FAST combination and its tok/s effect at the floor engine, next to the EXACT one. Order the tests by quality risk, cheapest first.
+1. **#3:**
+   - Is the bound exact in bf16 / fp32 arithmetic (the argmax must equal the full head's, ties included)?
+   - What fraction of the vocabulary does it prune, on real final hidden states (from any capture with the trunk's final stream) and the real head weights? Do a CPU numeric check.
+   - Bytes and ms saved at 1 / 16 rows.
+   - Does it hold for the MTP head's and the drafter's heads too?
+   - Prior art (FR-Spec, vocabulary pruning, sparse softmax / MIPS bounds): is it new?
+2. **#4:** price it from HC_READ.md's math.
+   - How well do layer L-1's states predict layer L's mixer coefficients (CPU, where states exist)?
+   - The correction's cost, and whether the result is row-invariant (FAST-K) or needs a new reference.
+3. **The 32-row crossover, on both tracks, at the floor engine:** at which dense ms, expert-kernel efficiency and kept do 32-row checks beat 16? Use B3's measured per-row costs and the copy override's 32-row gain.
+4. **Verdicts and pre-registered lines** for Leap's screens, and the pick.
 
 **Rules**
-- CPU only; writes only in ~/FableGod/fableb/; no downloads; GPU timing is Leap's.
-- Check TRIED for every lever. Halve gains. Mark every number [K] / [P] / [G].
-- Adopting a FAST lever is Kamen's call. Price them all; drop none for being non-exact.
+- CPU only; writes only in ~/FableGod/fableb/; no downloads. Halve gains. Mark every number [K] / [P] / [G].
+- Two tracks: nothing is dropped for not being bitwise.

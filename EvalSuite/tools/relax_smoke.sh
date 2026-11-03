@@ -22,15 +22,19 @@ stage() {   # label, then the stage's args; env vars for the stage come from the
     >> "$LOG" 2>&1; local rc=$?
   say "$lab: rc=$rc"
   if [ $rc = 5 ]; then say "$lab: VOID (step 0): smoke stops"; exit 5; fi
+  if [ $rc = 76 ]; then say "$lab: exited on a long PAUSE: again after it"; stage "$lab" "$@"; return; fi
   if [ $rc != 0 ] && tail -40 results/gpu_stage.log | grep -q "Traceback"; then say "$lab: stage failed: smoke stops"; exit 4; fi
 }
 say "relax smoke start (pid $$)"
 for arm in control A B E F C G; do
   EVALSUITE_RELAX_TAG=smoke EVALSUITE_RELAX_HASH=1 stage "G $arm" relax ref --arm $arm --keys results/relax/smoke_keys_$arm.txt
 done
+STAGEENV_REF=$STAGEENV; STAGEENV=${STAGEENV/BIGMOE_TIER=4433333333/BIGMOE_TIER=3333333333}
+EVALSUITE_RELAX_TAG=smoke EVALSUITE_RELAX_HASH=1 stage "G T3ALL" relax ref --arm T3ALL --keys results/relax/smoke_keys_T3ALL.txt
+STAGEENV=$STAGEENV_REF
 EVALSUITE_RELAX_TAG=smokemask EVALSUITE_RELAX_HASH=1 EVALSUITE_RELAX_GATE=mask stage "G A mask" relax ref --arm A \
   --keys results/relax/smoke_keys_A.txt
-for arm in control A B; do
+for arm in control A B T3ALL; do
   EVALSUITE_RELAX_TAG=smoke stage "replay $arm" relax-replay ref --arm $arm
 done
 .venv/bin/python tools/relax_smoke_check.py > results/relax_smoke.txt 2>&1; rc=$?

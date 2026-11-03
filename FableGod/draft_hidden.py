@@ -15,7 +15,8 @@ today; a usable candidate 0.3 ms (the hand-off); the fallback 6.3. Bounds: hand-
 import numpy as np, os
 W = os.path.expanduser("~/TrainLab/data")
 SETS = [("code", 16, 10.54), ("math", 10, 6.61), ("ifeval", 4, 2.03), ("multi", 4, 2.03)]
-P2 = dict(code=0.45, math=0.40, ifeval=0.34, multi=0.34)
+P2 = dict(code=0.527, math=0.502, ifeval=0.266, multi=0.181)      # the true token = the drafter's next candidate at its first miss [K lattice_rescue, selector order]
+P3 = dict(code=0.692, math=0.641, ifeval=0.399, multi=0.275)      # within its next two [K]
 ANCH = dict(code=0.782, math=0.672, ifeval=0.799, multi=0.804)
 
 def load(name):
@@ -64,8 +65,8 @@ for name, rows, kept in SETS:
         D.append((label, N, usable, exposed, bound, ane))
     add("A  ANE-3 anchors (cloud's, first-miss-probability anchors) + D", 3, r["allacc"] * pa + (cov3 - r["allacc"]) * p2)
     add("A4 ANE-4 anchors + D", 4, r["allacc"] * pa + (cov4 - r["allacc"]) * p2)
-    add("A5 ANE-5: 3 anchors, #2 and #3 at the two miss anchors + D", 5, r["allacc"] * pa + (cov3 - r["allacc"]) * min(p2 + 0.15, 0.95))
-    add("A7 ANE-7: 4 anchors, #2 and #3 at the three miss anchors + D", 7, r["allacc"] * pa + (cov4 - r["allacc"]) * min(p2 + 0.15, 0.95))
+    add("A5 ANE-5: 3 anchors, #2 and #3 at the two miss anchors + D", 5, r["allacc"] * pa + (cov3 - r["allacc"]) * P3[name])
+    add("A7 ANE-7: 4 anchors, #2 and #3 at the three miss anchors + D", 7, r["allacc"] * pa + (cov4 - r["allacc"]) * P3[name])
     for pl in (0.6, 0.8):
         add(f"L  ANE-3 + a bonus guess at {pl} at the miss anchors (a lens or a better second choice) [G] + D", 3, r["allacc"] * pa + (cov3 - r["allacc"]) * pl)
     add("D  the commit hidden behind the serial draft (no ANE)", 0, 0.0, ane=False, exposed=6.3, bound=6.3)
@@ -75,11 +76,11 @@ for name, rows, kept in SETS:
         tps = 1e3 * kept / c; g = tps / tps0 - 1; gb = (1e3 * kept / cb) / tps0 - 1
         print(f"  | {name} | {label} | {N} | {usable:.2f} | {exposed:.1f} / {bound:.1f} | {base:.1f} -> {c:.1f} ({cb:.1f}) | {tps0:.0f} -> {tps:.0f} ({100 * g:+.1f} %, {100 * gb:+.1f}, halved {100 * g / 2:+.1f} %) |")
 
-print("\n## 3. Sensitivity of A5 + D to the second-choice rate at the miss rows (exposed draft ms, averaged over outcomes)")
+print("\n## 3. Sensitivity of A5 + D to the top-3 rescue rate at the miss rows (measured: code 0.69, math 0.64, ifeval 0.40, multi 0.28) (exposed draft ms, averaged over outcomes)")
 for name, rows, kept in SETS:
     r = R[name]; line = f"  {name}: "
-    for p2 in (0.3, 0.45, 0.6, 0.8, 0.95):
-        u = r["allacc"] * r["d15"] + (r["cov"][3] - r["allacc"]) * min(p2 + 0.15, 0.95)
-        line += f"#2 {p2}: usable {u:.2f}, exposed {u * 0.3 + (1 - u) * 6.3:.1f} ms; "
+    for p3 in (0.3, 0.45, 0.6, 0.8, 0.95):
+        u = r["allacc"] * r["d15"] + (r["cov"][3] - r["allacc"]) * p3
+        line += f"top-3 rescue {p3}: usable {u:.2f}, exposed {u * 0.3 + (1 - u) * 6.3:.1f} ms; "
     print(line)
 print("\n## 4. What <= 1 ms of average exposed draft needs: usable >= (6.3 - 1.0) / (6.3 - 0.3) = 0.88 of outcomes, or a fallback draft <= 1.0 + (1 - u) ... i.e. at u 0.57 a fallback of <= 1.5 ms")

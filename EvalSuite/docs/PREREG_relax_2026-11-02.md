@@ -1,4 +1,4 @@
-# PREREG: RELAX, quality-defined modes on the 16-row live loop (Mon 2026-11-02 21:0x; revision 1 at 21:3x, before any row)
+# PREREG: RELAX, quality-defined modes on the 16-row live loop (Mon 2026-11-02 21:0x; revision 1 at 21:3x, revision 2 Tue 02:44; before any row)
 
 Source: the orchestrator's requests of 16:15, 18:3x, 19:5x and 21:22, built on:
 - Fable's RELAX_350 and mission 25 (COMMENT_LOOPHOLE.md);
@@ -23,18 +23,26 @@ except for its location. Keys: `results/relax/keys_<arm>.txt`.
 
 | arm (cloud 14) | sets (keys) | gate | acceptance | HC8 |
 |---|---|---|---|---|
-| control | HumanEval+ 60, the first 10 math, the first 20 IFEval (90) | off | exact | off |
+| control | HumanEval+ 60, the first 10 math, the first 20 IFEval, AT14 (104) | off | exact | off |
 | A, the gate alone (A) | HumanEval+ 60, math 50, agent 6 (116) | cf >= 0.99 + copy | exact | off |
-| B, the mode (B) | as A | cf >= 0.99 + copy | exact, + the comment rule on HumanEval+ | on |
+| B, the mode (B) | HumanEval+ 60, math 50, AT14 (124) | cf >= 0.99 + copy | exact, + the comment rule on HumanEval+ | on |
 | E (E) | IFEval 100, multi 24 (124) | off | R1(0.5) | off |
 | F (F) | as E | off | R1(0.5) or R2(top-2, 0.25 p1) | off |
 | C (C) | HumanEval+ 60, math 50 (110) | cf >= 0.99 + copy | R1(0.5), + the comment rule on HumanEval+ | on |
 | G (G, optional) | as E | cf >= 0.999 + copy | R1(0.5) | off |
+| T3ALL (NewIdeas) | IFEval 100, HumanEval+ 60, math 50 (IFEval first) | off | exact | off; tiers 3333333333 |
 
 - "math" is decision 4's 50 (math500 25 + gsm8k 25).
 - The agent set is bash17-19 and edit00-02, with 9-12K-token prompts and the items' own max_tokens of 128. Every other
   prompt runs to its item's max_tokens.
-- The order is control, A, B, E, F, C, G. If the slot runs short, drop G first, then C.
+- The order is control, A, B, E, T3ALL, F, C, G. If the slot runs short, drop G first, then C, then F.
+- **T3ALL, revision 2** (NewIdeas 02:42, "your call"): plan 3333333333, every rank at 3 bits (MoonShots' M-26 sidecar
+  drop). It is the largest priced FAST SSD lever: code 24.5 MB per kept token against 46.3, and 11.8 with Q1.
+  - Quality only; no freed-RAM speed is part of the arm.
+  - Its plan has no exact rows, so its step 0 checks that the plan took effect (bigmoe.tier PLAN 3333333333, no 4-bit
+    ranks). Its replay checks itself on the control's step-0 rows, and E is REF2-T (4433333333).
+  - In this harness the rank sort stays on (the combine's slot order); BigMoE's own uniform path keeps the argpartition
+    order. That differs in float order only, so it doesn't matter for a quality arm.
 - Cloud 14's D (8-row chat, exact) is BigMoE's measurement, not an arm here.
 
 ## The harness
@@ -104,6 +112,7 @@ except for its location. Keys: `results/relax/keys_<arm>.txt`.
 | C_E (+ R1 on code) | C | C | E |
 | B_F (chat + R2) | B | B | F |
 | B_G (chat + the gate) | B | B | G |
+| T3ALL (all ranks at 3 bits) | T3ALL | T3ALL | T3ALL |
 
 - **Decision 4 (the contract)** against REF2-T on the mode's 210 rows: `tools/relax_report.py --score` builds
   `results/relax_mode_<m>`, then runs `evalsuite report --variant relax_mode_<m> --decode --ref ref2t` and
@@ -122,6 +131,8 @@ except for its location. Keys: `results/relax/keys_<arm>.txt`.
   - KILL: decision 4 fails.
   - VOID: a step 0 fails. The arm reruns.
 - Deviated tokens are a diagnostic, not a line (cloud 14).
+- T3ALL's code-only fallback (chat stays at 4433333333, NewIdeas) reads T3ALL's math and HumanEval+ lines: the chat
+  rows would then be REF2-T's own.
 
 ## Predictions (information, not lines)
 - **Deviated tokens along G's own prefix (diagnostic):**
@@ -142,9 +153,19 @@ except for its location. Keys: `results/relax/keys_<arm>.txt`.
 - **Cloud 14's engine numbers** (by day / night): gate 0.99 ~96 / ~110 tok/s; + R1 ~100 / ~114.
 - **HC8's own run** (decision 4 against REF2-T): math -4.0, IFEval -1.0, HumanEval+ -3.3, all 5 changed answers losses.
   B and C carry that on top of the gate.
-- **My P(PASS):** ship 50 %, A_E 65 %, C_E 35 %, B_F 30 %, B_G 40 %.
+- **T3ALL** (Breakthrough's map, Mon night):
+  - code BETWEEN: +0.59 pt all-row flips over the 4-bit control, 0/2922 on sure rows;
+  - chat +4-5 pt (mid rows ~5 % against 0.4 %, ~10x), so IFEval is the risk.
+- **My P(PASS):** ship 50 %, A_E 65 %, C_E 35 %, B_F 30 %, B_G 40 %, T3ALL 30 %; T3ALL's code-only lines 60 %.
 
 ## Information
+- **AT14, the agent-turn read-out** (NewIdeas ~01:00: "read-out only, no pass line"): dec_agent's 14 turns with
+  9.1-12K-token prompts (results/relax/keys_at14.txt), in the control (exact) and in B (the mode). B's agent set is
+  AT14; A keeps its 6.
+  - Per turn: prefill s, first-check ms, decode s, answer tokens, turn tok/s = answer tokens / (prefill + decode),
+    prefill share, and TTFT. TTFT equals the prefill time, because the first token comes from the prefill's logits.
+  - Answers cap at the items' 128 tokens; real agent answers run longer. The same keys go to BigMoE for its engine.
+
 For each arm and set:
 - deviated tokens by cause: rule; rule in a comment; gate (cf); gate (copy); other (an ungated row whose context
   differs; with HC8, every row);
@@ -179,7 +200,7 @@ For each arm and set:
     - HC8 is on in B and C.
   - NewIdeas: Tue by day after IFX and BigMoE's small screens, if it can start by ~14:20; else Wed by day.
 - **Night** (quiet lock, C 256): Thu 00:30, after BigMoE's nightly combined run (GO from BigMoE).
-  - Control, A, B, E, F, C, G: ~3 h with loads.
-  - Then the replays of A, B, C and G at C 192: ~1.6 h.
-  - If the slot runs short, drop G first, then C.
+  - Control, A, B, E, T3ALL, F, C, G: ~4.3 h with loads (AT14 included).
+  - Then the replays of A, B, T3ALL, C and G at C 192: ~2.8 h.
+  - If the slot runs short, drop G first, then C, then F.
 - **Report:** `tools/relax_report.py --score`, and a RESULT doc.

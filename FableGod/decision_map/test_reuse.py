@@ -72,6 +72,23 @@ for chunks in ([16], [5, 3, 1, 7], [1, 15], [2, 30, 3]):
     ok = np.array_equal(O, np.where(rank < kr[:, None], S, 0)) and C.CUR["kpos"][7] == T; bad += not ok
     print(f"per-row k chunks {chunks}: {'ok' if ok else 'MISMATCH'}")
 C.clear()
+for chunks in ([16], [5, 3, 1, 7], [1, 15], [2, 30, 3]):   # Q1-UNION: keep-by-rank masks across uneven chunk calls
+    T = sum(chunks); rm = rng.random((T, 48, 10)) < 0.6; rm[:, :, :2] = True
+    C.clear(); C.PERT.update(rmask="x", renorm=False); C.CUR["rm"] = rm; C.CUR["kpos"] = {}; C.CUR["L"] = 7
+    S = rng.random((T, 10)).astype(np.float32); out = []; p = 0
+    for n in chunks:
+        out.append(np.array(C._pert_scores(mx.array(S[p:p + n])))); p += n
+    O = np.concatenate(out); rank = np.argsort(np.argsort(-S, axis=1), axis=1)
+    ok = np.array_equal(O, np.where(np.take_along_axis(rm[:, 7], rank, axis=1), S, 0)) and C.CUR["kpos"][7] == T; bad += not ok
+    C.CUR["kpos"] = {}; out = []; p = 0                    # the same with [1, n, 10] scores (the < 32-row path's shape)
+    for n in chunks:
+        out.append(np.array(C._pert_scores(mx.array(S[p:p + n])[None]))[0]); p += n
+    ok3 = np.array_equal(np.concatenate(out), O); bad += not ok3
+    print(f"rank mask chunks {chunks}: {'ok' if ok else 'MISMATCH'}, 3-D scores {'ok' if ok3 else 'MISMATCH'}")
+C.clear()
+for nm, want in (("q1u_cf099", "q1u_cf099"), ("q1u_cf09", "q1u_cf09")):
+    C.PERT.clear(); ablation(nm)(); ok = C.PERT.get("rmask") == want and C.PERT.get("renorm") is False; bad += not ok
+    print(f"{nm}: rmask {C.PERT.get('rmask')} {'ok' if ok else 'MISMATCH'}")
 for nm, want in (("gate_top2_cf099", ("top", 0.99, 2)), ("gate_top2_cf0999", ("top", 0.999, 2)), ("gate_bands", ("bands",))):
     C.PERT.clear(); ablation(nm)(); ok = C.PERT.get("gate") == want and C.PERT.get("renorm") is False; bad += not ok
     print(f"{nm}: gate {C.PERT.get('gate')} {'ok' if ok else 'MISMATCH'}")
@@ -122,6 +139,15 @@ for dom, wf in dm_gate.WALK.items():                  # the adaptive certificate
         for v in (2, 10): d[v] = d.get(v, 0) + int((kk_ == v).sum())
 for key, d in cnt.items():
     print(f"gate k {key}: " + " ".join(f"k{v} {100 * c / sum(d.values()):.1f} %" for v, c in d.items()))
+for nm_ in ("pframe_map", "pframe_map_q1"):            # the reuse map: masks per layer group on one window
+    C.clear(); ablation(nm_)(); w = base[next(iter(base))]; nm = next(iter(base)); a = w["a"]; n = a + len(w["lp"]) + 1
+    C.CUR["skip"] = C._chain_skip(nm, a, n); sa = np.zeros(n, bool); sa[a:n - 1] = True
+    C.CUR["skip_all"] = C.bound_runs(sa, 1); g = np.nan_to_num(G[nm], nan=-1)
+    ok = (C.CUR["skip_all"][a:n - 1] == (np.arange(n - 1 - a) % 2 == 0)).all() and not C.CUR["skip_all"][:a].any() \
+        and np.array_equal(C.CUR["skip"], C.bound_runs(np.r_[np.zeros(a, bool), g[a:] >= 0.999, False][:n], 1)) \
+        and C.PERT["chain_all"] == set(range(8, 12)) and C.PERT["reuse"] == set(range(8, 36)) \
+        and (C.PERT.get("gate") == ("top", 0.99, 2)) == nm_.endswith("q1")
+    bad += not ok; print(f"{nm_}: all-row mask alternates from a, gated mask = bound_runs(cf >= 0.999, 1): {'ok' if ok else 'MISMATCH'}")
 C.clear(); C.PERT.update(chain=True, chain_gate=0.99, chain_max=0)
 nm = next(iter(base)); w = base[nm]; a = w["a"]; n = a + len(w["lp"]) + 1
 s_ = C._chain_skip(nm, a, n); ok = np.array_equal(s_[a:n - 1], np.nan_to_num(G[nm], nan=-1)[a:] >= 0.99) and not s_[:a].any()

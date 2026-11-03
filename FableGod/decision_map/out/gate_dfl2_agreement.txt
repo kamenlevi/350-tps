@@ -1,7 +1,0 @@
-DFlash2 gate (HPD-0 walk cf) vs the 125B's own class on the measured rows: share of rows per band, and per band the oracle split sure / tie / mid (% of the band's rows)
-code (3366 rows): >=0.999 47.7 % [100 / 0 / 0]; 0.99-0.999 17.9 % [97 / 0 / 3]; 0.9-0.99 13.9 % [82 / 1 / 17]; <0.9 18.0 % [45 / 8 / 48]; none 2.5 % [99 / 0 / 1]
-  drafter-sure (cf >= 0.99): 65.7 % of rows; oracle-sure 86.8 %; of drafter-sure rows 98.9 % oracle-sure; of oracle-sure rows 74.8 % drafter-sure
-ifeval (3397 rows): >=0.999 9.2 % [96 / 0 / 4]; 0.99-0.999 10.8 % [81 / 1 / 18]; 0.9-0.99 18.4 % [39 / 2 / 60]; <0.9 61.5 % [11 / 13 / 76]; none 0.0 % [100 / 0 / 0]
-  drafter-sure (cf >= 0.99): 20.1 % of rows; oracle-sure 31.7 %; of drafter-sure rows 87.7 % oracle-sure; of oracle-sure rows 55.6 % drafter-sure
-multi (3553 rows): >=0.999 7.8 % [98 / 0 / 2]; 0.99-0.999 7.8 % [78 / 0 / 22]; 0.9-0.99 16.3 % [49 / 2 / 49]; <0.9 68.1 % [28 / 10 / 63]; none 0.0 % [0 / 0 / 0]
-  drafter-sure (cf >= 0.99): 15.6 % of rows; oracle-sure 40.5 %; of drafter-sure rows 87.9 % oracle-sure; of oracle-sure rows 33.8 % drafter-sure

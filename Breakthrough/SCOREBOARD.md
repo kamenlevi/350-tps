@@ -2227,3 +2227,125 @@ sure / tie / mid (dmargin), code | IFEval | multi:
   engine's own running cut 0.3 74.2 (already in today's engine), prefetch layers 0-2 (oracle) 77.4. On the engine's own
   trim the new levers (C 64 + prefetch) give 60.2 MB per kept token = 0.520 GB per check raw, 0.40 calibrated: inside
   120's <= 0.66, at 150's <= 0.45 only calibrated, so the 3-bit ranks 0-1 arm decides 150.
+
+## SKETCH-ON-MISS (FAST, 45 / 24 GB lines): PRE-REGISTRATION (Mon 2026-11-02 22:2x; the orchestrator 22:2x, Fable A's
+## NEWIDEAS_SCREEN.md section 2)
+- Idea: a rank-32 RAM shadow of every expert serves a cache miss at once while the exact expert loads behind it.
+- Shadows: rank-32 SVD of each routed expert's three matrices (gate / up 640 x 2560, down 2560 x 640) of the 4-bit
+  model as served (~/BigMoE/models/bare, dequantized), stored int8 with per-row scales (W ~ A B, A = U_r S_r).
+- Map arm (D-02a harness, 36 windows): the shadow set = exactly the experts an LRU at C 256 misses (DAY9's routing
+  capture, the exact scheme's 16-row checks from the HPD-0 walks, wrong-draft rows after the first miss, cache across a
+  domain's windows); for every row of a check that uses a missed expert at that layer, the expert's output is the
+  shadow's (the router's weight kept). Control on the same set: the expert dropped (weight 0, no renorm).
+- Lines (the orchestrator's, flips vs the baseline argmax over ALL rows, whole sequence): PASS if <= 0.1 % on code and
+  <= 0.5 % on chat (IFEval and multi each); KILL if > 0.3 % on code; else BETWEEN. Also KILL (Fable's) if the shadow
+  arm is no better than the drop control. Reported beside, no line: Fable's class lines (code-sure <= 0.1 %, code-mid
+  <= 3 %, chat-sure <= 1 %, chat-mid <= 10 %), the flagged rows' own flips, the shadow's relative error per matrix.
+  Caveat written now: the map's context floor for small all-row perturbations is 0.33 % of code rows (HC8), so the
+  all-row line may sit near or below the floor; the drop control and the class split separate the two. EvalSuite's
+  same-scores is the contract after a PASS.
+- Measured before any map run (22:2x, dm_shadow_build.py --test and a spectrum check, CPU): the routed experts' spectrum
+  is nearly flat. Energy kept at rank 16 / 32 / 64 / 128 / 256 = 6-10 / 12-16 / 22-26 / 38-42 / 63-66 % (layers 0 / 24 /
+  47, gate and down, 6 experts each); the rank-32 shadow's relative Frobenius error is 0.92-0.94 (int8 adds nothing). Plain
+  weight-SVD shadows are near a drop on isotropic inputs; the next step proposed is an activation-aware (whitened)
+  shadow, judged first by the output error on captured MoE inputs (CPU), the map arm only if that clears.
+- KILL, plain weight-SVD shadows (CPU basis; the orchestrator 22:3x): rank 32 keeps 12-16 % of each expert's energy
+  (relative error 0.92-0.94), about a drop; the plain rank-32 map arm is skipped.
+
+## SKETCH-ON-MISS, ACTIVATION-AWARE SHADOWS: CPU LINE PRE-REGISTRATION (Mon 2026-11-02 22:3x, before the capture)
+- Capture (Tue, NewIdeas' slot, the map harness): every layer's MoE input x (the routed experts' input) on the answer
+  rows of the 36 windows, fp16, with the routing capture's ids and router weights. Split: even-indexed windows of each
+  domain fit, odd-indexed windows are held out.
+- Shadows, rank 32 and 64, from the fit windows: gate / up whitened by the layer's input second moment
+  (W C^1/2 -> SVD -> A B C^-1/2, small ridge), down whitened by the expert's own intermediate h = silu(W_g x) * (W_u x)
+  over its routed fit rows (ridge-shrunk toward the layer mean); plain SVD beside.
+- Metric, on held-out (row, expert) pairs as routed: the relative output error ||E(x) - S(x)|| / ||E(x)|| of the whole
+  SwiGLU expert, its router-weighted mean over ranks 0-9 and over ranks 6-9 (the cold experts a miss mostly hits); a
+  drop = 1.0.
+- Line: GO to the map arm (shadow vs drop on the LRU C 256 miss set, the lines of ad1370c) if the whitened error is
+  <= 0.5 at rank 32, or <= 0.5 at rank 64 (then the arm at rank 64 and the RAM doubled, ~5.6 GB, reported); STOP (KILL
+  for whitened shadows too) if > 0.7 at rank 64; else BETWEEN, reported, the orchestrator decides.
+
+## THE LAYER-WISE REUSE MAP (FAST; Fable A's ASSUMPTION_HUNT.md, the orchestrator 22:5x): LINES AND THE CPU BYTES
+- Arm (built 22:5x, test_reuse ALL OK): pframe_map / pframe_map_q1 = the previous position's routed output reused in
+  layers 8-11 on every answer row and in layers 12-35 on drafter-sure rows (cf >= 0.999), both bounded chains (S = 1:
+  consecutive reusers alternate with a fresh row; the unbounded chain is KILLed already), _q1 stacks gate_top2_cf099.
+- Lines (the orchestrator's, 22:5x, before any measurement): PASS = all-row code flips within +0.3 points of the gate's
+  floor (Q1's gated run, 1.34 %) AND expert bytes <= x0.85; KILL = code flips > +1 point.
+- CPU bytes, measured after the lines (dm_pframe_bytes.py; the FLOOR method: union of expert ids per layer over each
+  16-row block, wrong-draft rows after the miss): code exact 7.89 GB per check, Q1 5.68, the map 7.21 (x0.91 of
+  exact), the map + Q1 5.43 (x0.96 of Q1); IFEval / multi x0.97-0.98. Reused row-layers: 50 % in 8-11, 19 % in 12-35 on
+  code (2 % on chat). The bytes condition (<= x0.85) fails against exact and against Q1, so the arm cannot PASS: reads
+  are a union per block, and a skipped row saves only the experts no other row of the block uses. The pairs (compute)
+  cut is ~14 % on code before Q1.
+- KILL on bytes, CPU basis (the orchestrator 22:4x): the layer-wise reuse map's map run is skipped (no flips needed). The
+  ~14 % pairs cut does not rescue it on the tensor kernel either (NAX6 pays per (expert, tier) tile, so only experts
+  that leave the block's union save). Method rule from now on: price bytes and tiles on the union per 16-row block
+  (FLOOR's method), never per row.
+
+## Q1-ON-MISS (FAST; Fable C's C1-2, ~/FableGod/fablec/INVENT.md; the orchestrator 23:0x): PRE-REGISTRATION (Mon 23:0x)
+- Idea: on drafter-sure rows (cf >= theta) keep ranks 0-1 AND every rank 2-9 expert that is resident; drop (weight 0, no
+  renorm) only the rank 2-9 experts that would miss. Q1's SSD bytes by construction; sure rows keep most of their 10.
+- Arm (Tue, the map harness): per-(row, layer, rank) keep masks from a CPU LRU replay at C 256 on DAY9's routing capture
+  (the 45 GB line's slots; cache across a domain's windows, prefill top-10, the HPD-0 walks' 16-row checks, wrong-draft
+  rows after the first miss), simulating the scheme itself: at each layer a check loads the union of what it needs
+  (all ranks of unsure rows, ranks 0-1 of sure rows); a sure row's rank 2-9 expert is kept if resident after those
+  loads. Runs: qom_cf099, qom_cf09, and Q1 at 0.9 (gate_top2_cf09) for the KILL comparison (Q1 at 0.99 exists).
+- Lines (Fable C's): PASS = gated code flips <= 0.05 % at theta 0.99 and <= 0.5 % at 0.9; KILL = gated code flips >= Q1's
+  at the same theta. Reported beside: all-row flips by class and domain, the kept share of rank 2-9 experts on sure rows.
+- FLAG FOR KAMEN (with the result): the outputs depend on the cache state, so runs are not repeatable token for token.
+
+## Q1-UNION (FAST; Fable C's AUDIT_350.md section 4; three sessions converged; the orchestrator 23:2x): PRE-REGISTRATION
+## (Mon 23:2x; SUPERSEDES the Q1-on-miss arm above as the main arm, which becomes the cache-dependent variant)
+- Arm: on drafter-sure rows (cf >= theta) keep top-2 plus every rank 2-9 expert already in the CHECK's union at that
+  layer (another row of the block routes it: all ranks of the unsure rows, ranks 0-1 of the sure rows); drop only the
+  experts that would be new to the check. Deterministic and token-repeatable; bytes and expert groups = Q1's by
+  construction. Masks per (row, layer, rank) from DAY9's routing capture and the HPD-0 walks' 16-row blocks (the rows
+  after a check's first miss enter the union with the wrong-draft stand-in, row p + 97); reported: the share of Q1's
+  dropped pairs kept (Fable C's replay: 52 % at 0.99, 45 % at 0.9).
+- Runs (Tue): q1u_cf099, q1u_cf09, and Q1 at 0.9 (gate_top2_cf09) for the comparison at 0.9. Variant if cheap: + the
+  resident ones (Q1-on-miss, cache-dependent, not repeatable; flag for Kamen).
+- Lines: PASS = gated code flips <= 0.03 % at theta 0.99 (Q1: 0.09 %) and <= 0.5 % at 0.9; KILL = gated code flips >=
+  Q1's at the same theta. All-row flips by class and domain reported beside.
+
+## t3_all (FAST, 45 GB's plan 3333333333 = the 1-bit sidecar dropped; the orchestrator 23:3x): PRE-REGISTRATION (Mon 23:4x)
+- Arm: EVERY row (prompt and answer) takes all ten routed experts from records3 at 3 bits (MSB-3), the model's own
+  weights; control t4_all = the same path at 4 bits (the bit-exact rebuild through dm_t3's summation order). Built:
+  dm_t3.routed_topk (K = 10), gate ("t3all",), names t3_all / t4_all; test_t3.py ALL OK (K = 10 at bits 3 vs a
+  dequantize reference: max rel err 1.6e-2, as top-2's 1.4e-2).
+- Lines (the orchestrator's): PASS if all-row code flips stay within +0.3 points of the t4 control (t4_all) AND code-sure
+  rows flip <= 1 %; KILL if code flips go > +1 point over t4_all; else BETWEEN. Reported: flips by the 125B's own class
+  (sure / tie / mid) on code, IFEval and multi, t3_all vs t4_all, so it reads straight across to 45 GB. EvalSuite's
+  same-scores follows a PASS.
+- RESULT Tue 02:2x (CPU, dm_shadow_fit.py on the xcapture of 02:0x; out/SHADOW_read.txt): STOP, KILL for activation-aware
+  shadows too. Router-weighted mean relative output error of the whole SwiGLU expert on held-out routed pairs (18 fit /
+  18 held-out windows; layers 0 / 8 / 16 / 24 / 32 / 40 / 47, the 48 most-used experts each = 27-50 % of the held-out
+  weight), ranks 0-9 / ranks 6-9, a drop = 1.0: plain r32 0.989 / 0.998, plain r64 0.967 / 0.982, whitened r32 0.920 /
+  0.940, whitened r64 0.892 / 0.917 (line: GO <= 0.5, STOP > 0.7 at r64). Only the end layers compress a little (whitened
+  r64: layer 0 0.80, layer 47 0.70); the middle layers stay at 0.92-0.97. The experts are near full rank in function
+  space too, so no rank-32 / 64 shadow serves a miss better than a drop.
+- RESULT t3_all Tue 02:2x (out/T3ALL_read.txt; t3_all 595 s, t4_all 684 s): BETWEEN on code. All-row code flips t3_all
+  0.92 % (31/3366) vs the t4_all control 0.33 % (11/3366) = +0.59 points (line: PASS <= +0.3 with code-sure <= 1 %,
+  KILL > +1); code-sure rows 0/2922 in both. By class, t3_all vs t4_all: code tie 38.0 vs 18.0 %, mid 3.05 vs 0.51 %;
+  IFEval all rows 7.24 vs 2.15 % (+5.09; tie 47.9 vs 23.1 %, mid 5.27 vs 0.30 %); multi 5.83 vs 1.58 % (+4.25; tie 42.2
+  vs 19.3 %, mid 5.47 vs 0.43 %); sure rows 0 flips everywhere (5,437 rows). The t4 path's own floor (bit-exact 4-bit
+  weights, another summation order) is 0.33 / 2.15 / 1.58 %. Read across to 45 GB's plan 3333333333: sure rows hold,
+  code moves a little, chat's mid rows move ~10x; EvalSuite's same-scores decides (chat is where it can fail).
+- RESULTS Tue 03:1x (map, the night slot):
+  - The 3-bit ranks 0-1 arm (M-18; DAY9_read.txt): PASS. Gated code rows flip 1/2211 at 3 bits = 1/2211 at the 4-bit
+    control (gate_top2t4_cf099); cf >= 0.999 0/1607; all code rows 1.31 vs 1.19 % (+0.12), IFEval 5.50 vs 5.56, multi
+    3.69 vs 3.63; gated multi 7 vs 5 of 554. The 3-bit records on sure rows add nothing beyond Q1's own deviation; the
+    damage of t3_all lives on the uncertain rows. The t4 path vs the stock path: top-1 differs on 156 of 10316 rows.
+  - The domain-adaptive arm (acert_top2_p05_p095_cf099; CERT_read.txt): PASS on its line (code certified 0/2863), pass 2 in
+    59 % of code blocks, all code rows 1.57 % (theta 0.8: 1.63). Against theta 0.8 (b43930c's rule): multi all rows 5.32
+    vs 7.04 % (CIs apart), IFEval 7.27 vs 8.51 % (CIs overlap) -> it does NOT formally beat theta 0.8 as the working point;
+    chat certified-row flips 0.81 / 1.70 % vs 2.55 / 4.63 %. With the chat mode (one exact pass) chat's deviation is moot.
+  - Q1 at 0.9 (gate_top2_cf09) ran; Q1-UNION's two runs failed on a 3-D score shape in the new mask path (fixed, tested,
+    relaunched 03:1x).
+- RESULT Q1-UNION Tue 03:1x (Q1U_read.txt; pre-registered a6dd04e): theta 0.9 PASS (gated code flips 7/2678 = 0.26 %
+  [0.13-0.54] vs Q1 at 0.9 14/2678 = 0.52 %; line <= 0.5 %); theta 0.99 BETWEEN (1/2211 = 0.045 % vs the line 0.03 %
+  and Q1's 2/2211 = 0.09 %; one flip). All rows, Q1-UNION vs Q1: theta 0.99 code 0.74 vs 1.34 %, IFEval 3.36 vs 5.42 %,
+  multi 2.34 vs 3.69 %; theta 0.9 code 0.98 vs 1.78 %, IFEval 4.92 vs 8.86 %, multi 3.04 vs 7.60 %. Bytes and groups =
+  Q1's at the same theta by construction (kept experts ~8.4 per row-layer). Q1-UNION at 0.9 has fewer flips than Q1 at
+  0.99 on every measure while reading Q1-at-0.9's bytes: the lower theta Fable C predicted. Deterministic and
+  token-repeatable (no cache state).

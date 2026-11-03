@@ -842,7 +842,8 @@ try:                                                     # never let the side lo
     json.dump(PC, open(os.path.join(OUT, f"{TAG}_checks.json"), "w"))
     json.dump(RUNS, open(os.path.join(OUT, f"{TAG}_runs.json"), "w"))
     if STALL:
-        json.dump(dict(laymap=LAYMAP, runs=STL), open(os.path.join(OUT, f"{TAG}_stall.json"), "w"))
+        json.dump(dict(laymap=LAYMAP, runs=STL, anchor=[time.time(), time.clock_gettime(time.CLOCK_UPTIME_RAW)]),   # wall
+                  open(os.path.join(OUT, f"{TAG}_stall.json"), "w"))   # clock <-> the trace's UPTIME_RAW (fanwatch's SSD temps)
 except Exception as e:
     say(f"  checks.json / runs.json not written: {e}")
 open(os.path.join(OUT, f"{TAG}_screen.txt"), "w").write("\n".join(lines) + "\n")

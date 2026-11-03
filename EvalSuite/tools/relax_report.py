@@ -29,7 +29,8 @@ MODES = {                                                # mode -> set -> the ar
     "C_E": dict(math="C", humaneval="C", ifeval="E"),    # + R1 on code
     "B_F": dict(math="B", humaneval="B", ifeval="F"),    # chat + R2
     "B_G": dict(math="B", humaneval="B", ifeval="G"),    # chat + the gate
-}
+    "T3ALL": dict(math="T3ALL", humaneval="T3ALL", ifeval="T3ALL"),   # every rank at 3 bits (NewIdeas 02:42); its
+}                                                        # code-only fallback reads the math and HumanEval+ lines
 BARS = {"blunder_per_10k": 1.0, "drift": 1.5}            # math + code; none in agent tool calls; q4 / q1 <= 1.5
 LONG = 512
 
@@ -66,7 +67,8 @@ def load_arm(arm, tag):
 def exact_rows(row):
     """a row whose every check ran REF2-T's own numerics (no gate, no HC8): only the acceptance rule differs"""
     c = row.get("cfg")
-    return isinstance(c, dict) and "thr" in c and c["thr"] is None and not c.get("copy") and not row.get("hc8")
+    return (isinstance(c, dict) and "thr" in c and c["thr"] is None and not c.get("copy") and not row.get("hc8")
+            and row.get("tier", "4433333333") == "4433333333")
 
 
 def self_replay(checks):
@@ -255,6 +257,28 @@ def report(arm_names, tag, modes=False, do_score=False, tok=None, outfile=None):
             say(f"{a:8}{s:10}{q['prompts']:>4}{q['checks']:>8}{q['kept_c']:>7.2f}{q['kept_xc']:>7.2f}{q['gain']:>7.3f}"
                 f"{100 * q['cf']:>7.1f}%{100 * q['copy']:>7.1f}%{q['ub_gb']:>8.2f}{q['ubx_gb']:>8.2f}{q['ssd_gb']:>7.2f}"
                 f"{q['tok_s'] or 0:>8.1f}{q['gbs'] or 0:>7.0f}{(f'x{pr:.3f}' if pr else '-'):>8}")
+    at = os.path.join(ROOT, "results", "relax", "keys_at14.txt")
+    if os.path.exists(at):
+        at14 = open(at).read().split()
+        say("\n== AT14, the agent-turn read-out (no line; answers cap at the items' 128 tokens, real agent answers run longer)")
+        say(f"{'arm':8}{'turn':16}{'prompt':>7}{'prefill s':>10}{'1st chk ms':>11}{'decode s':>9}{'answer':>7}{'turn tok/s':>11}"
+            f"{'prefill %':>10}")
+        for a in ("control", "B"):
+            arm = arms.get(a)
+            if arm is None:
+                continue
+            got = [arm["prompts"][k]["row"] for k in at14 if k in arm["prompts"]]
+            for r in got:
+                pf, dc, n = r.get("prefill_s") or 0.0, r.get("dec_s") or 0.0, len(r["completion_ids"])
+                say(f"{a:8}{r['key'][6:]:16}{r['n_prompt']:>7}{pf:>10.1f}{(r.get('first_check_ms') or 0):>11.0f}{dc:>9.1f}"
+                    f"{n:>7}{n / (pf + dc) if pf + dc else 0:>11.2f}{100 * pf / (pf + dc) if pf + dc else 0:>9.0f}%"
+                    + ("  (paused)" if r.get("paused") else ""))
+            ok = [r for r in got if not r.get("paused")]
+            if ok:
+                pf = sum(r.get("prefill_s") or 0 for r in ok); dc = sum(r.get("dec_s") or 0 for r in ok)
+                n = sum(len(r["completion_ids"]) for r in ok)
+                say(f"{a:8}{'pooled':16}{'':>7}{pf:>10.1f}{'':>11}{dc:>9.1f}{n:>7}{n / (pf + dc):>11.2f}{100 * pf / (pf + dc):>9.0f}%"
+                    f"  ({len(ok)} unpaused turns; TTFT = prefill s)")
     say("\n== quality (REF2-T replay along G's prefix)")
     say(f"{'arm':8}{'set':10}{'n':>4}{'tokens':>8}{'dev':>9}{'rule':>6}{'cmnt':>6}{'cf':>6}{'copy':>6}{'other':>6}{'blund':>6}"
         f"{'/10K':>7}{'long':>5}{'KLD q1':>9}{'q4':>9}{'drift':>7}{'dev q1':>8}{'q4':>8}")
@@ -406,7 +430,7 @@ def selftest():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--arms", default="control,A,B,E,F,C,G")
+    ap.add_argument("--arms", default="control,A,B,E,T3ALL,F,C,G")
     ap.add_argument("--tag", default="")
     ap.add_argument("--modes", action="store_true")
     ap.add_argument("--score", action="store_true")

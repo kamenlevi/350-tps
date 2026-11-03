@@ -50,6 +50,15 @@ groups = collections.OrderedDict()
 for r in rows:
     groups.setdefault(r["key"], []).append(r)
 
+NOV = {}  # novelty.tsv (novelty_tags.py): key -> "tag (prior art)" for ADOPTED / PASS levers
+npath = os.path.join(D, "novelty.tsv")
+if os.path.exists(npath):
+    for line in open(npath, encoding="utf-8"):
+        if line.startswith("# ") or "\t" not in line:  # keys like "#18" are data, not comments
+            continue
+        k, t, note = (line.rstrip("\n").split("\t") + ["", ""])[:3]
+        NOV[k] = t + (f" ({note})" if note else "")
+
 merged = []
 for key, rs in groups.items():
     first = rs[0]
@@ -60,14 +69,17 @@ for key, rs in groups.items():
             f[3] = f[3] + " (also " + "; ".join(f"{r['session']}: {r['fields'][3]}" for r in rs[1:]) + ")"
         f[6] = "; ".join(r["fields"][6] or f"~/TRIED/{r['session']}.md:{r['n']}" for r in rs)
     tag = "+".join(sorted({r["session"] for r in rs}))
+    nov = f" | novelty: {NOV[key]}" if key in NOV else ""
     merged.append(dict(wall=first["wall"], verdict=first["verdict"], key=key,
-                       text=f"- {first['idea']} | " + " | ".join(f[:7]) + f" | [{tag}]"))
+                       text=f"- {first['idea']} | " + " | ".join(f[:7]) + f" | [{tag}]" + nov))
 
 vorder = {v: i for i, v in enumerate(VERDICTS + ["?"])}
 out = ["# TRIED: every idea this project has tried, merged from the sessions' parts (NewIdeas keeps it current)",
        "Check here before proposing or screening an idea. Line shape: idea | wall | line | exact | verdict | the number "
        "that decided it | date | source | [sessions]. Same-ID ideas from several sessions are merged; every source kept.",
-       "Parts: " + ", ".join(f"{s} {counts[s]}" for s in SESSIONS if counts[s]) + f"; merged ideas {len(merged)}.", ""]
+       "Parts: " + ", ".join(f"{s} {counts[s]}" for s in SESSIONS if counts[s]) + f"; merged ideas {len(merged)}.",
+       "ADOPTED / PASS levers end in 'novelty: published / adapted / new / engineering (prior art)' from novelty.tsv; "
+       "the checks and sources are in NOVELTY.md.", ""]
 for w in WALLS:
     ws = sorted([m for m in merged if m["wall"] == w], key=lambda m: (vorder.get(m["verdict"], 9), m["key"]))
     if not ws:

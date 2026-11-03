@@ -1,11 +1,11 @@
 #!/bin/bash
 # EvalSuite runner 40 (DRAFT until the smoke passes; detached, from a live evalsuite session): RELAX's night
-# (docs/PREREG_relax_2026-11-02.md, revision 1). G arms in order control, A, B, E, F, C, G (quiet tickets, C 256, --need
+# (docs/PREREG_relax_2026-11-02.md, revision 2). G arms in order control, A, B, E, T3ALL, F, C, G (quiet tickets, C 256, --need
 # 42: R-56d's 33.4 GB at C 192 + 64 slots x 0.133 GB), each to all its keys (results/relax/keys_<arm>.txt) in 60-min
-# chunks; then the REF2-T replays of the arms with a gate or HC8 (A, B, C, G; shared tickets, C 192, --need 34); then
+# chunks; then the REF2-T replays of the arms with a gate, HC8 or other tiers (A, B, T3ALL, C, G; shared, C 192, --need 34); then
 # tools/relax_report.py --score -> results/relax_report.txt and results/RELAX_DONE.
 # Window: from START once results/relax/GO exists (NewIdeas / the orchestrator assigns the slot), until END: no chunk
-# starts in the last 90 min; what is left (G first, then C: the PREREG's drop order) waits for a new launch.
+# starts in the last 90 min; what is left (G first, then C, then F: the PREREG's drop order) waits for a new launch.
 # Kamen's schedule: big tests weekdays 00:30-15:00 only. NO-SWAP >= peak + 4 GB after the grant (cli). Code pin: the
 # snapshots, MoonShots' planes_engine, evalsuite/ (relax.py, replay.py, relax_core.py), Leap's drafter, the keys,
 # MLX / mtplx; a change stops it (exit 7). Stop it by pid only, and its cli child too.
@@ -23,8 +23,10 @@ unset MTPLX_FUSED_GATE_UP BIGMOE_TIER BIGMOE_TIER_GLU BIGMOE_TIER_CL BIGMOE_TIER
 export EVALSUITE_BIGMOE_CODE="$HOME/EvalSuite/snap/bigmoe-6c64148"
 STAGEENV="BIGMOE_MAXK=160,BIGMOE_EXT_BUILD=build_next,BIGMOE_TIER=4433333333,BIGMOE_TIER_GLU=3c,BIGMOE_TIER_CL=112,BIGMOE_TIER_COMBINE=1,BIGMOE_OOO=1"
 PY=.venv/bin/python
-ARMS="control A B E F C G"
-REPLAY="A B C G"                                  # E, F and the control run REF2-T's own numerics: no replay needed
+ARMS="control A B E T3ALL F C G"
+REPLAY="A B T3ALL C G"                            # E, F and the control run REF2-T's own numerics: no replay needed
+STAGEENV3=${STAGEENV/BIGMOE_TIER=4433333333/BIGMOE_TIER=3333333333}   # T3ALL's G runs (its replay: REF2-T's tiers)
+envof() { [ "$1" = T3ALL ] && echo "$STAGEENV3" || echo "$STAGEENV"; }
 say() { echo "$(date +%H:%M:%S) $*" >> "$LOG"; }
 left() { echo $(( EVALSUITE_DEADLINE - $(date +%s) )); }
 have() {   # G rows of arm $1
@@ -64,6 +66,7 @@ after() {   # label, rc, before, now; returns 1 when the runner must stop
     say "swap guard trip $SWAPTRIPS: waiting 2 min"; sleep 120; return 0
   fi
   [ "$2" = 5 ] && { say "$1: VOID (step 0): runner stops"; exit 5; }
+  [ "$2" = 76 ] && { say "$1: the stage exited on a long PAUSE: waiting it out in bash"; return 0; }
   if [ "$2" != 0 ] && [ "$4" -le "$3" ] && tail -40 results/gpu_stage.log | grep -q "Traceback"; then
     say "$1: the stage failed (results/gpu_stage.log): runner stops"; exit 4
   fi
@@ -81,7 +84,7 @@ for arm in $ARMS; do
     [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }
     [ "$(left)" -gt 5400 ] || { say "deadline near: runner stops (arm $arm at $(have $arm)/$(want $arm))"; exit 6; }
     b=$(have $arm)
-    EVALSUITE_STAGE_ENV="$STAGEENV" ./bin/evalsuite gpu relax ref --arm $arm --keys results/relax/keys_$arm.txt \
+    EVALSUITE_STAGE_ENV="$(envof $arm)" ./bin/evalsuite gpu relax ref --arm $arm --keys results/relax/keys_$arm.txt \
       --chunk-minutes 60 --C 256 --need 42 --minutes 80 >> "$LOG" 2>&1; rc=$?
     say "G $arm: chunk rc=$rc ($(have $arm)/$(want $arm) rows)"
     after "G $arm" $rc $b $(have $arm)

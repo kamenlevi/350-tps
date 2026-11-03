@@ -65,21 +65,25 @@ def _proj(h, W, idx, bits):
     return mx.gather_qmm(h, w, s, W["b"], rhs_indices=idx, transpose=True, group_size=64, bits=4)
 
 def routed_top2(block, L, xg, bits=3):
-    """xg [G, D]: the gated rows' MoE input -> [G, D] = sum over ranks 0-1 of the block's normalised top-10 weight x the
-    expert at `bits` (3: records3's MSB part; 4: the control, rebuilt 4-bit)."""
+    return routed_topk(block, L, xg, bits, 2)
+
+def routed_topk(block, L, xg, bits=3, K=2):
+    """xg [G, D]: the gated rows' MoE input -> [G, D] = sum over ranks 0 .. K-1 of the block's normalised top-10 weight x
+    the expert at `bits` (3: records3's MSB part; 4: the control, rebuilt 4-bit). K = 10 with every row gated is t3_all
+    (Mon 23:3x: 45 GB's plan 3333333333, the 1-bit sidecar dropped)."""
     gates = mx.softmax(block.gate(xg), axis=-1, precise=True)            # the block's own ops (qwen4_exp._prefill_call)
     k = block.top_k
     inds = mx.argpartition(gates, kth=-k, axis=-1)[..., -k:]
     sc = mx.take_along_axis(gates, inds, axis=-1)
     if block.norm_topk_prob: sc = sc / sc.sum(axis=-1, keepdims=True)
-    o = mx.argsort(-sc.astype(mx.float32), axis=-1)[:, :2]
+    o = mx.argsort(-sc.astype(mx.float32), axis=-1)[:, :K]
     top_ids, top_sc = mx.take_along_axis(inds, o, axis=-1), mx.take_along_axis(sc, o, axis=-1)
     ids_np = np.array(top_ids).astype(np.int64)                           # sync: the records to read depend on routing
     uniq, inv = np.unique(ids_np.reshape(-1), return_inverse=True)
     W = read(L, uniq, lsb=(bits == 4))
-    idx = mx.array(inv.astype(np.uint32))                                 # [2G] pair -> its expert in W
-    h = mx.repeat(xg, 2, axis=0)[:, None, :]                              # [2G, 1, D]: row g's pairs are 2g, 2g + 1
+    idx = mx.array(inv.astype(np.uint32))                                 # [KG] pair -> its expert in W
+    h = mx.repeat(xg, K, axis=0)[:, None, :]                              # [KG, 1, D]: row g's pairs are Kg .. Kg + K - 1
     up, gt = _proj(h, W["up_proj"], idx, bits), _proj(h, W["gate_proj"], idx, bits)
-    y = _proj(block.switch_mlp.activation(up, gt), W["down_proj"], idx, bits)[:, 0, :]   # [2G, D]
+    y = _proj(block.switch_mlp.activation(up, gt), W["down_proj"], idx, bits)[:, 0, :]   # [KG, D]
     STATS["calls"] += 1; STATS["rows"] += int(xg.shape[0])
-    return (y.reshape(-1, 2, y.shape[-1]) * top_sc[..., None].astype(y.dtype)).sum(axis=1)
+    return (y.reshape(-1, K, y.shape[-1]) * top_sc[..., None].astype(y.dtype)).sum(axis=1)

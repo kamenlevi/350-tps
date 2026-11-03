@@ -70,6 +70,18 @@ What changes (monkeypatches on MTPLX, read-only):
     (resident pairs, encoded before the spins) and phase 2 (the late pairs) each take NAX6 on a phase-aware GPU grouping,
     then the same combine_phase; the other calls take NAX6 in one call (+ combine_phase when scores come). A pair's bits
     do not depend on its group (INV), so the two phases == one NAX6 call bitwise. New reference (NAX6 != 3c bits).
+  - H-1i (Mon 2026-11-02, FAST, off by default; BigMoE's fastBEh arm): CFG["nax_hybrid"] runs C1's NAX6 calls (both the
+    plain call and OOO's two phases) on NAX6-H (~/Leap/scripts/tierglu_nax6h.py): NAX6's kernels with one-pair groups on
+    the SIMD ALUs (fp32 FMA dot) instead of the 16-row matrix op set. Needs tier_nax_ooo. Outputs differ from NAX6's in
+    ~1 % of pair rows (bf16 last bits), and a pair's bits can depend on its group's size: FAST, not a reference.
+  - N7-13 (Mon 2026-11-02, off by default): CFG["nax_native"] runs C1's NAX6 calls on the fragment-native record layout
+    (~/Leap/scripts/tierglu_nax6n.py; bitwise == NAX6, quiet +18.7 % at S 16). The pools MUST have been converted with
+    tierglu_nax6n.repack (3c cannot read them). With nax_hybrid too: NAX6-NH (== NAX6-H bitwise, +23.3 % at S 16).
+  - N7-15 (Tue 2026-11-03, BigMoE's load path; inert without registered flags): native_flags(base, dirty_m, side,
+    dirty_l) registers a tier layer's per-slot dirty flags (int32; 1 = an in-service demand load left the slot row-major).
+    With CFG nax_native every NAX6-N call first rewrites its dirty slots in place (tierglu_nax6n.repack_slots): in
+    _nax6_glu, in _ooo_nax6 before phase 2, and before phase 1 too with CFG nax_repack_p1 (off: BigMoE gathers every
+    other load native on the CPU, so phase 1 never meets a dirty slot).
 Bits change once vs today's engine (qmm16c / experts_nax round differently); this is the approved reference change.
 REF2b (Fri 2026-10-30, key buckets on) changes REF2's AR bits past 512 keys only; CFG["key_buckets"] = False gives
 REF2's original AR (EvalSuite's results/ref2 rows), whose live loop is exact only below 512 keys.
@@ -100,10 +112,11 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "commit_phase": True, "sdpa_classes": True, "sdpa_bounds": (128,), "key_buckets": True, "kb_from": 512,
        "kb_step": 512, "tiers": True, "gdn_exact": True, "tier_nax4": False, "tier_nax_ooo": False, "att_single": False,
        "gdn_inproj": False, "att_rope": False, "idx_prep": False, "hc_write": False, "hc_gate": False,
-       "gdn_inproj_x": False, "gdn_body": False, "hc_b": False}
+       "gdn_inproj_x": False, "gdn_body": False, "hc_b": False,
+       "nax_hybrid": False, "nax_native": False, "nax_repack_p1": False}
 _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
-              kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0)
+              kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0)
 _ORIG = {}
 _WCAT = {}
 
@@ -273,12 +286,50 @@ def _nax6mod():
         _NAX6[0] = N6
     return _NAX6[0]
 
+def _nax_glu_fn():
+    """the NAX6 call C1 makes: NAX6, NAX6-H (H-1i, FAST) with CFG nax_hybrid, NAX6-N (N7-13, exact, native pools only)
+    with CFG nax_native, NAX6-NH with both"""
+    N6 = _nax6mod()
+    if CFG["nax_native"]:
+        COUNTS["nax_native"] += 1
+        if CFG["nax_hybrid"]:
+            import tierglu_nax6h as NH
+            COUNTS["nax_hybrid"] += 1
+            return NH.tier_glu_nax6nh
+        import tierglu_nax6n as NN
+        return NN.tier_glu_nax6n
+    if CFG["nax_hybrid"]:
+        import tierglu_nax6h as NH
+        COUNTS["nax_hybrid"] += 1
+        return NH.tier_glu_nax6h
+    return N6.tier_glu_nax6
+
+_NATIVE_FLAGS = {}
+def native_flags(base, dirty_m, side=None, dirty_l=None):
+    """N7-15 (BigMoE's ext, BIGMOE_NAX_NATIVE=1): register one tier layer's per-slot dirty flags, int32 MLX arrays the ext
+    owns (it sets 1 after an in-service demand load wrote a slot row-major, before the slot's ready status; only the GPU
+    repack clears them). Call once per tier layer after install_sidecars with t["base"] / t["sideP"]."""
+    _NATIVE_FLAGS[id(base)] = (base, dirty_m, side, dirty_l)
+
+def _native_repack(msb, lsb, msb_slot, lsb_slot):
+    """N7-15: the dirty slots among a call's pairs -> native, in place, before a NAX6-N call reads them; returns the slot
+    arrays the call must take (pools without registered flags, or nax_native off: unchanged)"""
+    f = _NATIVE_FLAGS.get(id(msb)) if CFG["nax_native"] else None
+    if f is None:
+        return msb_slot, lsb_slot
+    import tierglu_nax6n as NN
+    COUNTS["nax_repack"] += 1
+    side = f[3] is not None and lsb_slot is not None
+    sm2, sl2 = NN.repack_slots(msb, lsb if side else None, msb_slot, lsb_slot if side else None, f[1], f[3] if side else None)
+    return sm2, (sl2 if side else lsb_slot)                 # no sidecar flags: the sidecar slots pass through as they are
+
 def _nax6_glu(x, msb, lsb, msb_slot, lsb_slot, plan="4433333333", scores=None, **kw):
     """C1: tierglu.tier_glu's signature on NAX6 with its GPU pair grouping: [M, R, D], or with scores the block's combine
     in 3c's fused order (combine_phase, every pair phase 1)"""
     N6 = _nax6mod()
     M, R = x.shape[0], len(plan)
-    y = N6.tier_glu_nax6(x, msb, lsb, msb_slot, lsb_slot, plan=plan, b2=kw.get("b2"), grp=N6.gpu_grp(msb_slot, lsb_slot, plan))
+    msb_slot, lsb_slot = _native_repack(msb, lsb, msb_slot, lsb_slot)
+    y = _nax_glu_fn()(x, msb, lsb, msb_slot, lsb_slot, plan=plan, b2=kw.get("b2"), grp=N6.gpu_grp(msb_slot, lsb_slot, plan))
     COUNTS["nax6"] += 1
     if scores is None:
         return y
@@ -312,13 +363,17 @@ def _ooo_nax6(x, ids, bm, t, post, sc, shared):
         ok = ok & mx.concatenate([pre_l >= 0, mx.ones((M, K - R4), mx.bool_)], axis=-1)
     phase = mx.where(ok, 1, 2).astype(mx.int32)
     xs = rowsum64(x2)
+    if CFG["nax_repack_p1"]:                       # N7-15 option (c): phase 1's slots too (negative = not resident: skipped)
+        pre_m, pre_l = _native_repack(t["base"], t["sideP"], pre_m, pre_l if R4 else None)
     sl1 = mx.maximum(pre_l, 0) if R4 else None
-    y1 = N6.tier_glu_nax6(x2, t["base"], t["sideP"], pre_m, sl1, plan=PLAN, xs=xs,
+    glu = _nax_glu_fn()
+    y1 = glu(x2, t["base"], t["sideP"], pre_m, sl1, plan=PLAN, xs=xs,
                           grp=N6.gpu_grp_phase(pre_m, sl1 if R4 else pre_m, PLAN, phase, 1)).reshape(M * K, -1)
     after = [y1] + ([shared] if shared is not None else [])
     sm = gate.spin(mx.depends(dep_m, after), L, n_m).reshape(M, K)
     sl = gate.spin(mx.depends(dep_l, after), t["side"], n_l).reshape(M, R4) if R4 else None
-    y2 = N6.tier_glu_nax6(x2, t["base"], t["sideP"], sm, sl, plan=PLAN, xs=xs,
+    sm, sl = _native_repack(t["base"], t["sideP"], sm, sl)   # N7-15: the spin's demand loads -> native before phase 2
+    y2 = glu(x2, t["base"], t["sideP"], sm, sl, plan=PLAN, xs=xs,
                           grp=N6.gpu_grp_phase(sm, sl if R4 else sm, PLAN, phase, 2)).reshape(M * K, -1)
     return TG.combine_phase(y1, y2, phase, sc.reshape(-1, K)).reshape(*x.shape[:-1], -1)
 

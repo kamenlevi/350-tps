@@ -122,6 +122,10 @@ assert D7B in ("", "code", "all"), D7B
 # flat in block length, 2.50 / 2.47 at 16 / 8 rows, while every row costs): the type rule's chat prompts check at most 8
 # rows (MTP chain K 7 with the chat switch; DFlash2's block cut to 7 drafts without it). Exact: block size only.
 CHATROWS = int(os.environ.get("R57_CHATROWS", "0"))
+# R57_CHATTRUNC=t (NewIdeas 11-02 23:31: Fable B's B5 per-row cut and MoonShots' M-21b both point at t ~0.4 on chat): the
+# type rule's chat prompts cut their drafts at running confidence t (the MTP chain's early exit, or DFlash2's L1-14 cut);
+# the rest keep R57_TRUNC. Exact (the check decides): speed only.
+CHATTRUNC = float(os.environ.get("R57_CHATTRUNC", "0"))
 # R57_FAST=<arm> (Kamen 11-02 21:31, two first-class tracks: EXACT + FAST; THE COMBINATION's FAST preset): EvalSuite's RELAX
 # rules, vendored verbatim (scripts/relax_core.py from ~/EvalSuite/pending; PREREG_relax_2026-11-02), per prompt set as its
 # arm has them: the cf gate (a row whose draft the drafter is >= thr sure of keeps its top-2 experts, the dropped ranks routed
@@ -148,6 +152,15 @@ if FAST:
     FASTARMS["BE"] = dict(FASTARMS["B"], **FASTARMS["E"])   # the code mode + chat R1: one process for every domain
     FASTARMS["CE"] = dict(FASTARMS["C"], **FASTARMS["E"])
     assert FAST in FASTARMS and R == 16, (FAST, R)
+# R57_PREROUTE=1 (the orchestrator 11-02 22:2x; Fable A's ~/FableGod/NEWIDEAS_SCREEN.md 1, cloud's pick #1 "pre-route on the
+# partial sum", exact): a capture. At every MoE layer L of a check, OOO's combine runs again with the scores of ranks >= 3
+# (and >= 6) zeroed = L's partial output (+ the shared expert); L+1's HC read and router on the residual written with it ->
+# top-10 ("p3", "p6"); also with L's full output ("full": only L+1's attention skipped) and R-57's forecast ("r57": L+1's
+# router on L's MoE input); each vs L+1's true top-10. Side computations only: tokens stay REF2-T's. Per run: recall@10 per
+# row and of the union (the reads) per variant -> {TAG}_preroute.json. Needs K-73's block and OOO (R57_PRESET=45).
+PREROUTE = os.environ.get("R57_PREROUTE") == "1"
+PR = dict(on=False, cur=None, y={}, blk={}, cap={})     # this check's partial combines / block outputs / pre-routes
+PRS = {}                                                 # this run's samples: variant -> [layer, rows, row recall, union recall]
 # A6 (DAY9 condition 7, start-up; Leap's K-80 read-out 11-02: the first cycle after a ~9K agent prefill pays ~130 ms = a miss
 # burst when the pools hold another prompt's experts + a one-time non-SSD cost in the first check's graph build + the
 # drafter's window prefill). R57_A6 = comma flags, one process per arm, every token still checked:
@@ -206,6 +219,9 @@ import ref2
 if os.environ.get("R57_NAX") == "1":                     # C1 (DAY9 #4; Leap 101573d): NAX6 on every tier call, OOO's two phases
     assert "tier_nax_ooo" in ref2.CFG, "Leap's ref2 has no tier_nax_ooo (needs ~/Leap 101573d)"   # included; a NEW reference:
     ref2.CFG["tier_nax_ooo"] = True                      # tokens != REF2-T, so determinism across NAX processes only
+if os.environ.get("R57_H1C") == "1":                     # H-1c / the in-kernel hybrid (Leap 11-02 23:1x; FAST only: a pair's bits
+    assert os.environ.get("R57_NAX") == "1" and "nax_hybrid" in ref2.CFG, "R57_H1C needs R57_NAX=1 and Leap's ref2 nax_hybrid"
+    ref2.CFG["nax_hybrid"] = True                        # depend on whether it is alone in its group): NAX6's one-pair groups
 import bigmoe.stream as BS
 import bigmoe.gated as BG
 from mtplx import cache_state as CS
@@ -263,14 +279,28 @@ if os.environ.get("K73_EXACT") == "1":                  # K-73 (Leap 11-01, ~/Le
             EM.STATE.capture.setdefault(bm["L"], []).append(inds)
         g, s = shared_cat(self, x)                              # R-74: == shared_expert_gate(x), shared_expert(x), bitwise
         bm["tier"]["scores"], bm["tier"]["shared"] = scores, s   # OOO's spins wait behind the shared expert, as before
+        PR["cur"] = bm["L"] if PR["on"] else None              # R57_PREROUTE: OOO's combine stashes L's partial sums
         try:
             y = self.switch_mlp(x, inds)
         finally:
             bm["tier"].pop("scores", None); bm["tier"].pop("shared", None)
+            PR["cur"] = None
         if y.ndim == inds.ndim + 1:
             y = (y * scores[..., None]).sum(axis=-2)
+        if PR["on"] and bm["L"] in PR["y"]:                     # R57_PREROUTE: L's partial block outputs
+            PR["blk"][bm["L"]] = [moe_tail(yp.reshape(y.shape), g, s, exp="precise") for yp in PR["y"].pop(bm["L"])]
         return moe_tail(y, g, s, exp="precise")                  # R-73: == y + sigmoid(g) * s, bitwise
     _QX.SparseMoeBlock.__call__ = _exact_block
+if PREROUTE:                                             # OOO's combine, once more per partial (same y1 / y2 / phase)
+    assert os.environ.get("K73_EXACT") == "1" and _BT._OOO, "R57_PREROUTE hooks K-73's block and OOO's combine"
+    _TGm = _BT._tier_glu_mod(); _cp0 = _TGm.combine_phase
+    def _cp_pr(y1, y2, phase, scores, *a, **kw):
+        out = _cp0(y1, y2, phase, scores, *a, **kw)
+        if PR["on"] and PR["cur"] is not None:           # scores [M, R] in gate-rank order: keep ranks < 3 / < 6
+            rk = mx.arange(scores.shape[-1])
+            PR["y"][PR["cur"]] = [_cp0(y1, y2, phase, scores * (rk < c_).astype(scores.dtype), *a, **kw) for c_ in (3, 6)]
+        return out
+    _TGm.combine_phase = _cp_pr
 MTP_HEAD, MTP_K = os.environ.get("R57_MTP_HEAD", "b5"), int(os.environ.get("R57_MTP_K", "15"))
 _MTP_MD5 = {"b5": "1f8de68a468b6ae16a9f42c62cbca39f"}   # D-23d's head, pinned like the M-17 sizes
 if CHATSW:                                               # the head's trained parts over the shipped MTP layer (D-22 b5: attention,
@@ -387,8 +417,42 @@ def disk_read_bytes():                                   # ri_diskio_bytesread (
 TAP = {"on": False, "x": [[] for _ in TAPS]}
 TAP_OF = {id(lay[L]): i for i, L in enumerate(TAPS)}
 _layer_call = Q.DecoderLayer.__call__
+PR_IDX = {id(l_): i_ for i_, l_ in enumerate(lay)}
+def _layer_pr(self, hidden, *, input_ids, ssm_mask, cache):   # R57_PREROUTE: qwen4_exp DecoderLayer.__call__ verbatim
+    if "ple" in self:                                         # (REF2's patched HC read / write looked up at call time)
+        hidden = hidden + self.ple(hidden, input_ids, cache)
+    mixed, hyper, inject = self.attn_hyper_connection(hidden)
+    if self.is_linear:
+        block_out = self.linear_attn(mixed, ssm_mask, cache)
+    else:
+        block_out = self.self_attn(mixed, cache)
+    mixed, hyper, inject = self.mlp_hyper_connection(hyper, pending=(block_out, inject))
+    block_out = self.mlp(mixed)
+    hidden = Q._hyper_residual_write(hyper, block_out, inject)
+    i = PR_IDX.get(id(self))
+    if i is not None and i + 1 < NL and not SW_[i]._bm["full"]:   # the capture: L+1's router on four inputs
+        nxt = lay[i + 1]
+        def top(z):                                      # per row top-10, and the ranked unique list of 96 (each expert by
+            lg = nxt.mlp.gate(z).astype(mx.float32)      # its best row log-prob: the look-ahead's PF_RANKED list at PF_B 96)
+            best = (lg - mx.logsumexp(lg, axis=-1, keepdims=True)).reshape(-1, lg.shape[-1]).max(axis=0)
+            return mx.argpartition(-lg, kth=9, axis=-1)[..., :10], mx.argsort(-best)[:96]
+        caps = dict(r57=top(mixed), full=top(nxt.attn_hyper_connection(hidden)[0]))
+        for nm, bo in zip(("p3", "p6"), PR["blk"].pop(SW_[i]._bm["L"], [])):
+            caps[nm] = top(nxt.attn_hyper_connection(Q._hyper_residual_write(hyper, bo, inject))[0])
+        PR["cap"][i] = caps
+    return hidden
+def pr_eval(capd):                                       # R57_PREROUTE: recall@10 of each variant vs L+1's true top-10
+    got = [(i, capd[SW_[i + 1]._bm["L"]][-1], c) for i, c in PR["cap"].items() if capd.get(SW_[i + 1]._bm["L"])]
+    mx.eval([t for _, t, _ in got] + [z for _, _, c in got for zz in c.values() for z in zz])
+    for i, t, caps in got:                               # sample: layer, rows, recall@10 per row, union recall of the
+        T = np.array(t).reshape(-1, 10).tolist(); Tu = {e for r_ in T for e in r_}   # top-10s, precision@96, recall@96
+        for nm, (z, r96) in caps.items():
+            P_ = np.array(z).reshape(-1, 10).tolist(); h96 = len(set(np.array(r96).tolist()) & Tu)
+            PRS.setdefault(nm, []).append([i, len(T), float(np.mean([len(set(a) & set(b)) / 10 for a, b in zip(P_, T)])),
+                                           len({e for r_ in P_ for e in r_} & Tu) / len(Tu), h96 / 96, h96 / len(Tu)])
+    PR["cap"].clear()
 def _layer(self, *a, **kw):
-    out = _layer_call(self, *a, **kw)
+    out = _layer_pr(self, *a, **kw) if PR["on"] else _layer_call(self, *a, **kw)
     i = TAP_OF.get(id(self))
     if TAP["on"] and i is not None:
         o = out if isinstance(out, mx.array) else out[0]
@@ -518,7 +582,8 @@ def prefill(ids, want_w=False, chunk=1024):
         EM.STATE.capture = None
     return cache, lg[0, -1], taps(), ws
 
-def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None):
+def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=None):
+    tcut = tcut or TRUNC                                 # R57_CHATTRUNC: this prompt's confidence cut
     while os.path.exists(PAUSE):
         time.sleep(5)
     mtp = drafter == "mtp"
@@ -553,6 +618,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None):
     if scan is not None:
         scan.feed(_TKZ.decode([tok]))
     fst = dict(rows=0, gated=0, kx=0, k=0)               # R57_FAST per run: rows checked / gated, kept exact / relaxed
+    PRS.clear()
     cst = dict(pos=0, used=0, chg=0, ok=0, ms=0.0)       # R57_COPY per run: drafted positions checked, copies used / that
     if cg is not None:                                   # changed the draft / accepted, host ms (join + propose + learn)
         t_ = time.perf_counter()
@@ -651,7 +717,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None):
         if mtp:
             if pend is not None:                         # the last check's kept rows -> the head's history
                 head.append(*pend)
-            dr, _ = head.draft_cut(min(MTP_K, maxd) if maxd else MTP_K, TRUNC)   # R57_CHATROWS: maxd = rows - 1
+            dr, _ = head.draft_cut(min(MTP_K, maxd) if maxd else MTP_K, tcut)   # R57_CHATROWS: maxd = rows - 1
         else:
             pth, cf = propose(mx.array([[tok] + [MASK] * (R_ - 1)]), ctx[None].astype(mx.bfloat16), dcache)
             dr = np.array(pth[0]).tolist()
@@ -672,7 +738,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None):
                        [c_ if d_ == x_ else 0.0 for c_, d_, x_ in zip(cf_raw, d0_, dr)])   # about another token: no trust
                 fk_ = RXC.keep_mask(RXC.gate_rows(cg_, tl_, dr, fz["thr"], grams))
             if arm in ("gate+t", "gate+t+pf") and not wsp:   # Leap's S45c: L1-14 running-confidence truncation
-                dr = dr[:int((np.cumprod(np.array(cfl)) >= TRUNC).sum())]
+                dr = dr[:int((np.cumprod(np.array(cfl)) >= tcut).sum())]
             if maxd:                                     # R57_CHATROWS on DFlash2: at most maxd drafts
                 dr = dr[:maxd]
             if fk_ is not None:                          # the rows this check verifies
@@ -707,8 +773,12 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None):
                 w_ = n_ or len(dr) + 1
                 snap_ = CS.snapshot_untrimmable_cache_lazy(cache)
                 s_, t_ = stats(), time.perf_counter()
-                with ref2.verify_scope(model):
-                    lg_ = model(inp_[:, :w_], cache=cache)
+                FG.update(on=fk_ is not None, keep=mx.array(fk_[:w_]) if fk_ is not None else None)   # R57_FAST's gate in
+                try:                                     # the warm split too: a gated arm's warm per-row cost (Fable C's
+                    with ref2.verify_scope(model):       # gated expert term, the orchestrator 23:2x)
+                        lg_ = model(inp_[:, :w_], cache=cache)
+                finally:
+                    FG.update(on=False, keep=None)
                 mx.eval(mx.argmax(lg_[0], axis=-1))
                 d_ = stats() - s_
                 rec_ = [w_, round(1e3 * (time.perf_counter() - t_), 2), int(d_[0]), round(1e3 * d_[1], 2), round(1e3 * d_[2], 2)]
@@ -727,11 +797,14 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None):
         if not mtp:
             tap_reset(); TAP["on"] = True
         FG.update(on=fk_ is not None, keep=mx.array(fk_) if fk_ is not None else None)   # R57_FAST (built into the graph)
+        if PREROUTE and not mtp:                         # R57_PREROUTE: this check's capture; EvalSuite's block records
+            PR.update(on=True, cur=None, y={}, blk={}, cap={}); EM.STATE.capture = {}   # each layer's true top-10
         try:
             with ref2.verify_scope(model):
                 lg = model(mx.array([[tok] + dr]), cache=cache)
         finally:
             FG.update(on=False, keep=None)
+            PR["on"] = False
         cb = time.perf_counter()                         # graph built: the sync-free gate waits on each layer's router ids
         TAP["on"] = False
         am = mx.argmax(lg[0], axis=-1)
@@ -744,6 +817,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None):
         ce = time.perf_counter()
         bld_.append(cb - c1); wt_.append(ce - cb)        # K-80's split: graph build vs the eval wait (+ the commit after)
         am = am.tolist()
+        if PREROUTE and EM.STATE.capture is not None:   # R57_PREROUTE: score this check's pre-routes
+            pr_eval(EM.STATE.capture); EM.STATE.capture = None
         k = 0
         while k < len(dr) and dr[k] == am[k]:
             k += 1
@@ -801,7 +876,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None):
     stall = dict(chk=stl_, tr=BG.ext.trace(), rd=BG.ext.trace_reads(), cov=BG.ext.trace_cov()) if STALL else None
     rb, ml, kt = disk_read_bytes() - rb0, float((stats() - sl0)[0]), max(sum(kept), 1)
     px1 = st.stats()
-    pfx = {k_: px1.get(k_, 0) - px0.get(k_, 0) for k_ in ("pf_issued", "pf_used", "pf_victims", "joint_reads", "joint_paired")}
+    pfx = {k_: px1.get(k_, 0) - px0.get(k_, 0) for k_ in ("pf_issued", "pf_used", "pf_victims", "joint_reads", "joint_paired",
+                                                       "ka_reads", "bursts", "burst_gap025", "burst_gap1")}   # (ext/build_la)
     mem += [mx.get_peak_memory() / 1e9, mx.get_active_memory() / 1e9, mx.get_cache_memory() / 1e9, footprint_now_gb(),
             footprint_peak_gb()]
     if S10B_DIR and name:
@@ -829,7 +905,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None):
                         bld=[1e3 * x for x in bld_], wt=[1e3 * x for x in wt_], ws=wsf_), wspl=WSPL,
                 tpsw=sum(kept[2:]) / max(sum(wl[2:]), 1e-9), cut=cut, bad=bad, stall=stall,   # tpsw: steady state, checks >= 2
                 copy=dict(cst, ms=round(1e3 * cst["ms"], 2)) if cg is not None else None,
-                fast=dict(fst, arm=FAST) if fz is not None else None, pf=pfx)
+                fast=dict(fst, arm=FAST) if fz is not None else None, pf=pfx,
+                preroute={k_: list(v_) for k_, v_ in PRS.items()} if PREROUTE else None)
 
 REFTOK, REFARM = {}, None                                # R57_REFTOK=<tokens.json>[:arm]: every run vs those tokens
 if os.environ.get("R57_REFTOK"):
@@ -862,11 +939,12 @@ if os.environ.get("R57_WARM") == "1":                    # warm-up, discarded (N
 RUNS = []                                                # per run: type, drafter, tok/s, kept, ms, misses, MB -> {TAG}_runs.json
 WSALL = []                                               # warm-split samples of every run -> {TAG}_warmsplit.json
 STL = []                                                 # R57_STALL: every run's decode events -> {TAG}_stall.json
+PRALL = []                                               # R57_PREROUTE: every run's samples -> {TAG}_preroute.json
 LAYMAP = [[sw._bm["L"], (sw._bm.get("tier") or {}).get("side")] for sw in SW_] if STALL else []   # ext ids: base, sidecar
 for n_p, (s, key) in enumerate(PICK):
     it = next(x for x in ED.load("dec_" + s) if x["key"] == key)
     ids, want = list(it["prompt_ids"]), REFROWS.get(key, {}).get("completion_ids", [])
-    typ = rule(it) if (CHATSW or COPY or DRAFT4 is not None or CHATROWS) else ""
+    typ = rule(it) if (CHATSW or COPY or DRAFT4 is not None or CHATROWS or CHATTRUNC or FAST) else ""
     drafter = "mtp" if CHATSW and typ == "chat" else "dfl"   # the chat switch; without R57_CHATSW every prompt drafts on DFlash2
     draft = DRAFT4 if DRAFT4 is not None and typ == "code" else DRAFT16   # D7B=code: code prompts draft on the 4-bit drafter
     cpy = bool(COPY) and typ != "math"                   # R57_COPY: off on math (GATE.md 3)
@@ -883,10 +961,14 @@ for n_p, (s, key) in enumerate(PICK):
             say(f"  time budget: stopped before {key} [{arm}]")
             break
         r = run(ids, arm, f"{key.replace('/', '_').replace('.json', '')}_{arm}_{len(TOK.get(key, {}).get(arm, []))}", drafter,
-                cpy, CHATROWS - 1 if CHATROWS and typ == "chat" else 0, s)
+                cpy, CHATROWS - 1 if CHATROWS and typ == "chat" else 0, s, CHATTRUNC if CHATTRUNC and typ == "chat" else None)
         PC.append(dict(key=key, arm=arm, paused="PAUSED" in r["bad"], **r["pc"]))
         if r["stall"]:
             STL.append(dict(key=key, arm=arm, paused="PAUSED" in r["bad"], **r["stall"]))
+        if r["preroute"]:
+            PRALL.append(dict(key=key, arm=arm, typ=typ, samples=r["preroute"]))
+            say("    pre-route recall@10 (per row / of the union): " + ", ".join(
+                f"{nm} {np.mean([x[2] for x in v]):.3f} / {np.mean([x[3] for x in v]):.3f}" for nm, v in r["preroute"].items()))
         if r["wspl"]:
             WSALL.append(dict(key=key, arm=arm, samples=r["wspl"]))
         RUNS.append(dict(key=key, arm=arm, type=typ, bad=r["bad"], cut=r["cut"], P=len(ids),
@@ -920,7 +1002,9 @@ for n_p, (s, key) in enumerate(PICK):
             + (f"; FAST {FAST}: {r['fast']['gated']} of {r['fast']['rows']} rows gated, kept {r['fast']['k']} vs exact "
                f"{r['fast']['kx']}" if r["fast"] else "")
             + (f"; look-ahead: {r['pf']['pf_issued']} reads issued, {r['pf']['pf_used']} used ({r['pf']['pf_victims']} victims)"
-               if r["pf"]["pf_issued"] else "") + (f"; JOINT reads {r['pf']['joint_reads']}" if r["pf"]["joint_reads"] else ""))
+               if r["pf"]["pf_issued"] else "") + (f"; JOINT reads {r['pf']['joint_reads']}" if r["pf"]["joint_reads"] else "")
+            + (f"; demand bursts {r['pf']['bursts']}: after >= 0.25 ms idle {r['pf']['burst_gap025']}, >= 1 ms "
+               f"{r['pf']['burst_gap1']}; keepalive reads {r['pf']['ka_reads']}" if r["pf"]["bursts"] else ""))
         mm = r["mem"]
         say(f"    mem: MLX peak prefill {mm[0]:.1f} / decode {mm[2]:.1f} GB; at the end active {mm[3]:.1f}, cache {mm[4]:.1f}, "
             f"footprint {mm[5]:.1f} GB; lifetime peak after prefill {mm[1]:.1f} -> after decode {mm[6]:.1f} GB")
@@ -1000,7 +1084,8 @@ if WSALL:                                                # per sample: warm ms v
 if os.environ.get("R57_NAX") == "1":
     _c = ref2.counts()
     say(f"  C1 NAX6 (ref2 tier_nax_ooo): engagement nax6_ooo {_c.get('nax6_ooo')} OOO calls, nax6 {_c.get('nax6')} other tier "
-        f"calls (counted at graph build); tokens are NAX6's own reference: compare across NAX processes only")
+        f"calls (counted at graph build); tokens are NAX6's own reference: compare across NAX processes only"
+        + (f"; H-1c nax_hybrid {_c.get('nax_hybrid')} calls" if os.environ.get("R57_H1C") == "1" else ""))
 if CHATSW:
     _nt = {t: sum(1 for x in RUNS if x["type"] == t) for t in ("chat", "code", "math", "agent")}
     say(f"  chat switch: MTP head d22_{MTP_HEAD} (md5 pinned) resident, K{MTP_K}, cut t {TRUNC} with early exit; type rule "
@@ -1011,7 +1096,10 @@ try:                                                     # never let the side lo
     json.dump(PC, open(os.path.join(OUT, f"{TAG}_checks.json"), "w"))
     json.dump(RUNS, open(os.path.join(OUT, f"{TAG}_runs.json"), "w"))
     if STALL:
-        json.dump(dict(laymap=LAYMAP, runs=STL), open(os.path.join(OUT, f"{TAG}_stall.json"), "w"))
+        json.dump(dict(laymap=LAYMAP, runs=STL, anchor=[time.time(), time.clock_gettime(time.CLOCK_UPTIME_RAW)]),   # wall
+                  open(os.path.join(OUT, f"{TAG}_stall.json"), "w"))   # clock <-> the trace's UPTIME_RAW (fanwatch's SSD temps)
+    if PREROUTE:
+        json.dump(PRALL, open(os.path.join(OUT, f"{TAG}_preroute.json"), "w"))
 except Exception as e:
     say(f"  checks.json / runs.json not written: {e}")
 open(os.path.join(OUT, f"{TAG}_screen.txt"), "w").write("\n".join(lines) + "\n")

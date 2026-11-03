@@ -90,7 +90,13 @@ EXACT entries. In the engine it saw pass 1's top-2 entries. The engine's own exa
   - How: top-2 per token; keep the token if p1 >= theta, else re-run the row exact and replace its KV.
   - Configs: theta 0.8 for code, theta 0.95 for chat (the adaptive arm's chat behaviour).
   - EvalSuite scores it against REF (same-scores, decision 4). The adaptive arm needs the drafter, so it waits for T2.
-- T1 engine: pass 1 reads only ranks 0-1 records, with per-row k in the streamed engine.
+- T1 engine: pass 1 reads only ranks 0-1 records, with per-row k in the streamed engine. Fit12's engine facts (Mon
+  23:15): B12's routing row holds at most 92 ids (bigmoe_v3f/gated.py), so pass 1 posts ranks 0-1 only, 2 ids per row
+  and 32 per gate row for 16 rows; pass 2's rows (<= 4 in 93-100 % of blocks) fit B12's 4-row calls; after pass 1's
+  keep-n commit the certified tail's GDN state is gone, so option (a) ends the check at pass 2's last row + its bonus
+  (kept -7.9 % code at theta 0.8, -6.2 % with the adaptive certificate, -2-5 % chat [K map]) and (b) one per-row-k call
+  recovers it later. Chat mode gate: Fit12's history rule (2, 8) measured IFEval 10.4 -> 13.4-13.9 tok/s on MTP with
+  code unchanged; the drafter-cf gate (first draft cf >= 0.9) goes in next.
   - theta > 1 must equal the exact engine bitwise; theta 0 must equal top-2 on every row bitwise.
 - T2 engine: certify, walk, pass 2 on a row subset, KV patching.
   - Token agreement with the map's mixed runs on the 36 windows, reported (no line: the semantics differ in item 3).

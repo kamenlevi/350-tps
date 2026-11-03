@@ -13,6 +13,9 @@ drafter result.
 | DFlash2 L1-20 (E2's base) | - | 9.57 | 7.00 | | | | live 45 GB loop | E2 / D2, 1d8ca7f |
 | DFlash2's top-16 candidates (tree upper bound) | DFlash2 picked 9.5 | 12.8 | | | | | trees KILL at equal cost | TREES, Breakthrough 91b0a56 |
 
+Per-position accuracy (the drafter's horizon, Lunatic round 2, lu_alpha.out): on rows the 125B is sure of, DFlash2 is
+99.6 % right at block position 0 and 88.4 % at positions 12-15. Deep positions are where kept per check is lost.
+
 ## Levers
 | lever | base | code | math | IFEval | multi | agent | verdict | source |
 |---|---|---|---|---|---|---|---|---|

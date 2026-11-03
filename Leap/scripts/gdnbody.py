@@ -145,6 +145,36 @@ _SRC = r"""
         const float gv = g[s * NHV + hv];
         const T bv = beta[s * NHV + hv];
 #endif
+#if G3_C
+        // G3: the same per-element operations, the RPS rows' chains interleaved (decay + dot, reductions, deltas,
+        // update + dot, reductions), so RPS independent chains are in flight per step
+        float kvm[RPS], dl[RPS], ov[RPS];
+        for (int j = 0; j < RPS; ++j) {
+            kvm[j] = 0.0f;
+            for (int i = 0; i < 4; ++i) {
+                auto s_idx = 4 * lane + i;
+                sr[j][i] = sr[j][i] * gv;
+                kvm[j] += sr[j][i] * k_[s_idx];
+            }
+        }
+        for (int j = 0; j < RPS; ++j) kvm[j] = simd_sum(kvm[j]);
+        for (int j = 0; j < RPS; ++j) {
+            auto delta = (vs[s * HD + sg + NSG * j] - kvm[j]) * bv;
+            dl[j] = delta;
+        }
+        for (int j = 0; j < RPS; ++j) {
+            ov[j] = 0.0f;
+            for (int i = 0; i < 4; ++i) {
+                auto s_idx = 4 * lane + i;
+                sr[j][i] = sr[j][i] + k_[s_idx] * dl[j];
+                ov[j] += sr[j][i] * q_[s_idx];
+            }
+        }
+        for (int j = 0; j < RPS; ++j) ov[j] = simd_sum(ov[j]);
+        if (lane == 0) {
+            for (int j = 0; j < RPS; ++j) os[s * HD + sg + NSG * j] = static_cast<T>(ov[j]);
+        }
+#else
         for (int j = 0; j < RPS; ++j) {
             const uint dv_idx = sg + NSG * j;
             float kv_mem = 0.0f;
@@ -168,6 +198,7 @@ _SRC = r"""
                 os[s * HD + dv_idx] = static_cast<T>(out);
             }
         }
+#endif
     }
     for (int j = 0; j < RPS; ++j) {
         const uint base = (hv * HD + sg + NSG * j) * HD + lane * 4;
@@ -193,22 +224,25 @@ _SRC = r"""
 
 
 NSG_DEFAULT = [int(os.environ.get("GDNB_NSG", "8"))]       # simdgroups per head's threadgroup (8 / 16 / 32)
+G3_DEFAULT = [os.environ.get("GDNB_G3") == "1"]             # G3 (row-interleaved recurrence), off unless asked
 
 
 @lru_cache(None)
-def _k(gates_in):
+def _k(gates_in, g3=False):
     gin = ["a", "b", "dtb", "alog"] if gates_in else ["g", "beta"]
     return mx.fast.metal_kernel(
-        name=f"leap_gdn_body{'_gi' if gates_in else ''}",
+        name=f"leap_gdn_body{'_gi' if gates_in else ''}{'_g3' if g3 else ''}",
         input_names=["qkv", "state", "cw", "scale"] + gin + ["dstate", "z", "w", "epsv"],
         output_names=["y", "state_out", "dstate_out", "q_out", "k_out", "v_out"],
-        source=f"#define GATES_IN {int(gates_in)}\n" + _SRC, header=_HDR_G)
+        source=f"#define GATES_IN {int(gates_in)}\n#define G3_C {int(g3)}\n" + _SRC, header=_HDR_G)
 
 
-def gdn_body(qkv, z, a, b, conv_state, conv_w, A_log, dt_bias, state, norm_w, eps, scale_bf16, gates_in=True, nsg=None):
+def gdn_body(qkv, z, a, b, conv_state, conv_w, A_log, dt_bias, state, norm_w, eps, scale_bf16, gates_in=True, nsg=None,
+             g3=None):
     S = qkv.shape[-2]
     assert qkv.shape[-1] == 10240 and 1 <= S <= 16 and state.dtype == mx.float32 and qkv.dtype == mx.bfloat16
     nsg = nsg or NSG_DEFAULT[0]
+    g3 = G3_DEFAULT[0] if g3 is None else bool(g3)
     assert nsg in (8, 16, 32)
     if gates_in:
         assert a.dtype == b.dtype == A_log.dtype == dt_bias.dtype == mx.bfloat16
@@ -216,7 +250,7 @@ def gdn_body(qkv, z, a, b, conv_state, conv_w, A_log, dt_bias, state, norm_w, ep
     else:
         from mlx_lm.models.gated_delta import compute_g
         gin = [compute_g(A_log, a, dt_bias).reshape(-1), mx.sigmoid(b).reshape(-1)]   # mlx_lm's own two ops
-    y, cs, ds, q, k, v = _k(bool(gates_in))(
+    y, cs, ds, q, k, v = _k(bool(gates_in), g3)(
         inputs=[qkv.reshape(-1), conv_state.reshape(-1), conv_w.reshape(-1), scale_bf16.reshape(-1)] + gin
                + [state.reshape(-1), z.reshape(-1), norm_w.astype(qkv.dtype), mx.array([eps], mx.float32)],
         template=[("T", qkv.dtype), ("S_C", S), ("NSG", nsg)], grid=(32 * nsg, 1, 48), threadgroup=(32 * nsg, 1, 1),

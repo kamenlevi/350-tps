@@ -109,4 +109,25 @@ if all(os.path.exists(os.path.join(OUT, n + ".json")) for n in ("gate_top2_cf099
     for nm in a:
         x, y = np.array(a[nm]["tk"])[:, 0], np.array(b[nm]["tk"])[:, 0]; m = min(len(x), len(y)); d += int((x[:m] != y[:m]).sum()); n += m
     say(f"- control: gate_top2t4_cf099 (top-2 4-bit through dm_t3's path) vs gate_top2_cf099 (the stock path): top-1 differs on {d} of {n} rows")
+if os.path.exists(os.path.join(OUT, "gate_top2t4_cf099.json")):      # the 45 GB read-across (orchestrator Mon 23:2x)
+    say("\n## 3-bit ranks 0-1, read across to 45 GB: flips by the 125B's own class, t3 (MSB-3 records) vs the t4 control")
+    say("The arm puts the gated rows' ranks 0-1 at 3 bits (ranks 2-9 dropped, as Q1); t4 runs the same path at 4 bits, so"
+        " t3 - t4 is the 3-bit effect alone. 45 GB's plan 3333333333 puts every rank of every row at 3 bits: these are its"
+        " ranks-0-1-on-sure-rows part, a lower bound.")
+    say("| run | rows | domain | sure | tie | mid | all |")
+    say("|---|---|---|---|---|---|---|")
+    T4 = rows("gate_top2t4_cf099")
+    for name, thr in (("gate_top2t3_cf099", 0.99), ("gate_top2t3_cf0999", 0.999)):
+        if not os.path.exists(os.path.join(OUT, name + ".json")): continue
+        R3 = rows(name)
+        for tag, R in ((name, R3), ("gate_top2t4_cf099 (control)", T4)):
+            for which in ("gated", "all"):
+                for dom in DOMS:
+                    X = [x for x in R if x[0] == dom]
+                    f = np.concatenate([x[1] for x in X]); c = np.concatenate([x[2] for x in X]); g = np.concatenate([x[3] for x in X])
+                    sel = (g >= thr) if which == "gated" else np.ones(len(f), bool)
+                    say(f"| {tag} | {which} (cf >= {thr}) | {dom} | {fmt(*cell(f, sel & (c == 0)))} | {fmt(*cell(f, sel & (c == 1)))} | "
+                        f"{fmt(*cell(f, sel & (c == 2)))} | {fmt(*cell(f, sel))} |" if which == "gated" else
+                        f"| {tag} | all rows | {dom} | {fmt(*cell(f, c == 0))} | {fmt(*cell(f, c == 1))} | {fmt(*cell(f, c == 2))} | "
+                        f"{fmt(*cell(f, sel))} |")
 open(os.path.join(OUT, "DAY9_read.txt"), "w").write("\n".join(lines) + "\n")

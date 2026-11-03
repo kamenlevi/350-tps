@@ -59,6 +59,9 @@ def body_ref(qkv, z, a, b, cs, st):
 
 
 VAR = {"f8": dict(nsg=8), "f16": dict(nsg=16), "f32": dict(nsg=32), "f8_gout": dict(nsg=8, gates_in=False)}
+if os.environ.get("GDNB_TIME_G3") == "1":           # G3 (Mon 22:4x): the row-interleaved recurrence next to its layouts
+    VAR = {"f8": dict(nsg=8), "f8_g3": dict(nsg=8, g3=True), "f16": dict(nsg=16), "f16_g3": dict(nsg=16, g3=True),
+           "f32_g3": dict(nsg=32, g3=True)}
 def body_fused(kw):
     def f(qkv, z, a, b, cs, st):
         return GB.gdn_body(qkv, z, a, b, cs, gdn.conv1d.weight, gdn.A_log, gdn.dt_bias, st, gdn.norm.weight, gdn.norm.eps,

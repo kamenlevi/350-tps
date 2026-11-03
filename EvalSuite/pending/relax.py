@@ -55,7 +55,10 @@ ARMS = {                                                 # PLAN_relax sec 9 (clo
     "F": dict(hc8=False, sets=dict(ifeval=S_(rules=[R1, R2]), multi=S_(rules=[R1, R2]))),             # + R2
     "C": dict(hc8=True, sets=dict(humaneval=S_(**G99, rules=[R1], loop=R2), math=S_(**G99, rules=[R1]))),   # B + R1
     "G": dict(hc8=False, sets=dict(ifeval=S_(0.999, True, [R1]), multi=S_(0.999, True, [R1]))),       # E + the gate
+    "T3ALL": dict(hc8=False, tier="3333333333",                                                       # NewIdeas 02:42:
+                  sets=dict(ifeval=OFF, humaneval=OFF, math=OFF)),   # every rank at 3 bits (M-26), exact acceptance
 }
+REF_TIER = "4433333333"                                  # REF2-T's tiers: the step-0 rows and the replay's E
 STEP0 = "humaneval/HumanEval/27"
 GATE = dict(verify=False, keep=None, mode="route", cap=None)   # read by the streamed switch's wrapper
 sha = lambda toks: hashlib.sha256(json.dumps([int(x) for x in toks]).encode()).hexdigest()[:16]
@@ -70,6 +73,21 @@ def _tick():
         ACT[0] += min(now - last, 3.0)
         last = now
 el = lambda: ACT[0]
+
+
+PAUSED_RC = 76                                           # the stage exited on a long PAUSE (runners: not a failure)
+
+
+def pause_wait(limit_s=300):
+    """wait out a heat PAUSE before a prompt; after limit_s exit instead, so no loaded process (and no bigmoe_ext loader
+    thread, which spins while it waits: Breakthrough 22:3x) keeps the Mac warm. The runner waits in bash and relaunches."""
+    t0 = time.time()
+    while os.path.exists(PAUSE):
+        if time.time() - t0 > limit_s:
+            print(f"RELAX: PAUSE for over {limit_s} s: the process exits (rc {PAUSED_RC}); the runner relaunches after it",
+                  flush=True)
+            raise SystemExit(PAUSED_RC)
+        time.sleep(5)
 
 
 def rowhash(x):
@@ -144,8 +162,9 @@ def main(rt, st, a, log):
         assert k_ not in os.environ, f"{k_} is set"
     assert os.environ.get("BIGMOE_MAXK") == "160" and os.environ.get("BIGMOE_EXT_BUILD") == "build_next", \
         "RELAX runs on the gate: BIGMOE_MAXK=160 and BIGMOE_EXT_BUILD=build_next"
-    got = {k_: os.environ.get(k_) for k_ in OOO_ENV}
-    assert got == OOO_ENV, f"tier env {got}"
+    TIER = ARMS[arm].get("tier", REF_TIER)
+    got, want = {k_: os.environ.get(k_) for k_ in OOO_ENV}, dict(OOO_ENV, BIGMOE_TIER=TIER)
+    assert got == want, f"tier env {got}, arm {arm} wants {want}"
     GATE["mode"] = os.environ.get("EVALSUITE_RELAX_GATE", "route")
     assert GATE["mode"] in ("route", "mask"), GATE["mode"]
     OUT = out_dir(arm)
@@ -292,8 +311,7 @@ def main(rt, st, a, log):
         thr, copy, rules0, loop = cfg["thr"], cfg["copy"], tuple(cfg["rules"]), cfg["loop"]
         grams = prompt_grams(ids) if copy else None
         scan = CodeScan() if loop else None
-        while os.path.exists(PAUSE):
-            time.sleep(5)
+        pause_wait()
         paused, cut = False, False
         arm_on(True)
         ref2.reset_counts()
@@ -393,16 +411,22 @@ def main(rt, st, a, log):
         return dict(out=out[:cap], recs=recs, pf=pf, dec=dec, cyc=1e3 * med(cyc), paused=paused, cut=cut)
 
     # ------------------------------------------------ step 0: the gate and the rule off reproduce REF2-T
-    it0 = items[STEP0]
-    r0 = run(list(it0["prompt_ids"]), it0["max_tokens"], OFF, hashes=True)
-    ok0 = r0["out"] == REF0[STEP0]["completion_ids"]
-    json.dump(dict(key=STEP0, out=r0["out"], recs=r0["recs"], equal=ok0, pid=os.getpid(), t=time.strftime("%H:%M:%S")),
-              open(os.path.join(OUT, "step0", f"{os.getpid()}.json"), "w"))
-    log(f"RELAX {arm} step 0: {STEP0} gate and rule off, {len(r0['out'])} tokens, equal to results/"
-        f"{'ref2th8' if HC8 else 'ref2t'}: {ok0}")
-    if not ok0:
-        log(f"RELAX {arm}: VOID: step 0 does not reproduce {'REF2-T + HC8' if HC8 else 'REF2-T'}")
-        raise SystemExit(5)
+    if TIER != REF_TIER:                          # T3ALL: no exact rows exist for this plan; check the plan took effect
+        assert BT.PLAN == TIER and R4 == 0, (BT.PLAN, R4)
+        log(f"RELAX {arm} step 0: plan {TIER} has no exact rows; the plan is in effect (bigmoe.tier PLAN {BT.PLAN}, "
+            f"4-bit ranks {R4}); the replay checks itself on the control's step-0 rows")
+        ok0 = None
+    it0 = items[STEP0] if TIER == REF_TIER else None
+    if it0 is not None:
+        r0 = run(list(it0["prompt_ids"]), it0["max_tokens"], OFF, hashes=True)
+        ok0 = r0["out"] == REF0[STEP0]["completion_ids"]
+        json.dump(dict(key=STEP0, out=r0["out"], recs=r0["recs"], equal=ok0, pid=os.getpid(), t=time.strftime("%H:%M:%S")),
+                  open(os.path.join(OUT, "step0", f"{os.getpid()}.json"), "w"))
+        log(f"RELAX {arm} step 0: {STEP0} gate and rule off, {len(r0['out'])} tokens, equal to results/"
+            f"{'ref2th8' if HC8 else 'ref2t'}: {ok0}")
+        if not ok0:
+            log(f"RELAX {arm}: VOID: step 0 does not reproduce {'REF2-T + HC8' if HC8 else 'REF2-T'}")
+            raise SystemExit(5)
 
     # ------------------------------------------------ the prompts
     new_rows, gate_, yielded = 0, getattr(st, "gate", None), False
@@ -439,7 +463,7 @@ def main(rt, st, a, log):
             row = dict(key=key, set=it["set"], n_prompt=len(ids), completion_ids=out,
                        finish="eos" if out and out[-1] in EOS else "length",
                        text=tok_.decode([x for x in out if x not in EOS]), seconds=round(time.time() - t0, 2),
-                       arm=arm, cfg=cfg, hc8=HC8, gate_mode=GATE["mode"], sha=sha(out),
+                       arm=arm, cfg=cfg, hc8=HC8, tier=TIER, gate_mode=GATE["mode"], sha=sha(out),
                        ref_sha=sha(REF[key]["completion_ids"]) if key in REF else None,
                        equal_ref=out == REF[key]["completion_ids"] if key in REF else None, checks=len(recs),
                        kept=round(float(np.mean([rec["k"] + 1 for rec in recs])) if recs else 0.0, 3),
@@ -447,7 +471,9 @@ def main(rt, st, a, log):
                        g_cf=round(gs.count(1) / max(len(gs), 1), 4), g_copy=round(gs.count(2) / max(len(gs), 1), 4),
                        comment_rows=sum(len(x["cm"]) for x in recs),
                        tok_s=round(len(out) / r["dec"], 2) if r["dec"] else None, cyc_ms=round(r["cyc"], 1),
-                       prefill_s=round(r["pf"], 2), ub_gb=round(sum(x["ub"] for x in recs) / nc / 1e9, 3),
+                       prefill_s=round(r["pf"], 2), dec_s=round(r["dec"], 2),
+                       first_check_ms=round(sum(recs[0]["t"]), 1) if recs else None,   # AT14's read-out (TTFT = prefill_s)
+                       ub_gb=round(sum(x["ub"] for x in recs) / nc / 1e9, 3),
                        ubx_gb=round(sum(x["ubx"] for x in recs) / nc / 1e9, 3),
                        ssd_gb=round(sum(x["ssd"] for x in recs) / nc / 1e9, 3),
                        misses=round(sum(x["ms"] for x in recs) / nc, 1), io_ms=round(sum(x["io"] for x in recs) / nc, 1),
@@ -462,7 +488,7 @@ def main(rt, st, a, log):
                 f"union {row['ub_gb']:.2f} GB/check (exact {row['ubx_gb']:.2f}), SSD {row['ssd_gb']:.2f} GB/check, "
                 f"{row['tok_s']} tok/s, mem {row['mem']}")
     rec = dict(arm=arm, pid=os.getpid(), start=time.strftime("%H:%M:%S", time.localtime(t_start)), end=time.strftime("%H:%M:%S"),
-               C=C, hc8=HC8, gate_mode=GATE["mode"], ref2_sha=ref2_sha, selftest=selftest, gate_n=gate_n, r4=R4,
+               C=C, hc8=HC8, tier=TIER, gate_mode=GATE["mode"], ref2_sha=ref2_sha, selftest=selftest, gate_n=gate_n, r4=R4,
                b_base=BB, b_side=BSD, dense=DENSE, emb=EMB, step0=ok0, rows=new_rows, running_s=round(el()),
                wall_s=round(time.time() - t_start), life_gb=round(footprint_peak_gb(), 2), swap0=round(swap0, 2),
                swap1=round(swap_gb(), 2), provenance=env.provenance())

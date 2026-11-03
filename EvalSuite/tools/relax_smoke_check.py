@@ -38,10 +38,13 @@ def arm(a, tag="smoke"):
     return dict(rows=rows, checks=chk, replay=rep, step0=s0, replay_chunks=rc)
 
 
-A = {a: arm(a) for a in ("control", "A", "B", "E", "F", "C", "G")}
+A = {a: arm(a) for a in ("control", "A", "B", "E", "F", "C", "G", "T3ALL")}
 A["Amask"] = arm("A", "smokemask")
 for a, x in A.items():
     check(f"{a}: rows written", len(x["rows"]) >= 1, f"{len(x['rows'])} rows")
+    if a == "T3ALL":                              # no exact rows for its plan: the tier took effect instead
+        check("T3ALL: every row at plan 3333333333", all(r.get("tier") == "3333333333" for r in x["rows"].values()))
+        continue
     check(f"{a}: step 0 equal to its reference in every process", x["step0"] and all(z["equal"] for z in x["step0"]),
           f"{len(x['step0'])} process(es)")
 # 2. route == mask
@@ -52,7 +55,7 @@ hm = [h for k in m["rows"] for c in m["checks"].get(k, []) for h in c.get("h", [
 check("A route == mask: tokens", same_tok and set(d["rows"]) == set(m["rows"]))
 check("A route == mask: committed rows bitwise", hd and hd == hm, f"{sum(x == y for x, y in zip(hd, hm))}/{len(hd)} hashes")
 # 3. the replay
-for a in ("control", "A", "B"):
+for a in ("control", "A", "B", "T3ALL"):
     rc = A[a]["replay_chunks"]
     check(f"replay {a}: step 0 bitwise", rc and all(r["step0_bits"][0] == r["step0_bits"][1] > 0 for r in rc),
           str([r["step0_bits"] for r in rc]))

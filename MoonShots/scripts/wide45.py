@@ -16,7 +16,7 @@ M-16's beta) or with NAX6 (B3: 1.41 vs 3.03 ms per added row, x2.15); dense 13.7
 16 / 32); GDN / attention 0.35 x rows (B3); draft 6.3 ms for block 16 (D7b), block 32 x1.3 (8.2 ms, MoonShots' estimate).
 Implied tok/s = kept per check / modeled ms (no other fixed cost: the 16-row model lands at ~100 ms, C50 measures 94-187).
 Line (NewIdeas): code implied steady tok/s, 32 rows + Q1 vs 16 rows + Q1: >= +10 % PASS, <= +3 % KILL, else BETWEEN.
-usage: [BigMoE venv] taskpolicy -b python wide45.py -> data/wide45.txt"""
+usage: [BigMoE venv] taskpolicy -b python wide45.py -> data/wide45.txt (WIDE45_SEEDS=1 for the peak smoke run)"""
 import os
 for v in ("VECLIB_MAXIMUM_THREADS", "OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS"):
     os.environ[v] = "4"
@@ -27,7 +27,7 @@ import band45 as B
 import laysz45 as LZ
 
 NL, MR, LR = LZ.NL, LZ.MR, LZ.LR
-SEEDS = 4
+SEEDS = int(os.environ.get("WIDE45_SEEDS", "4"))               # 1 = the smoke run that measures the peak
 TL = os.path.expanduser("~/TrainLab/data")
 GPU_GBS, NAX6 = 174.0, 3.03 / 1.41
 DRAFT = {16: 6.3, 32: 6.3 * 1.3}
@@ -59,8 +59,8 @@ def walk(z, R, rate, cut, rng):
         right[a + 1:a + k] = 1.0
         if k < r:
             right[a + k] = 0.0
-    a, end, out = ck[0][0], ck[-1][0] + ck[-1][2], []
-    while a < end:
+    a, end, out = ck[0][0], min(ck[-1][0] + ck[-1][2], n), []      # min(): past the last routing row rows = 0 and
+    while a < end:                                                    # the walk looped forever (Mon 21:43 / 22:12 blow-ups)
         R_ = min(R, n - a)
         rows = R_
         if cut and R_ > 1:
@@ -80,31 +80,61 @@ def walk(z, R, rate, cut, rng):
 
 
 def needs_of(z, wk, gate):
+    """per check: base / sidecar needs per layer as compact int16 id arrays (sets are built per call in the workers;
+    Mon 21:43 frozensets for all combos at once reached ~122 GB)"""
     ids, conf = z["ids"], z["conf"].astype(float)
-    out = []
+    out, col = [], np.arange(10)[None, :]
     for a, rows, kept, full in wk:
         cf = conf[a:a + rows].copy()
         if full:
             cf[rows - 1] = np.nan
-        kr = [gate(j, cf[j]) for j in range(rows)]
-        m, s = [], []
-        for l in range(NL):
-            rid = ids[a:a + rows, l]
-            sm, sl = set(), set()
-            for j, (k, r4) in enumerate(kr):
-                sm.update(rid[j, :k].tolist()); sl.update(rid[j, :r4].tolist())
-            m.append(frozenset(sm)); s.append(frozenset(sl))
-        out.append({"m": m, "l": s, "kept": kept, "rows": rows})
+        kr = np.array([gate(j, cf[j]) for j in range(rows)])
+        km, kl = col < kr[:, :1], col < kr[:, 1:2]
+        rid = ids[a:a + rows]
+        out.append({"m": [np.unique(rid[:, l][km]).astype(np.int16) for l in range(NL)],
+                    "l": [np.unique(rid[:, l][kl]).astype(np.int16) for l in range(NL)], "kept": kept, "rows": rows})
     return out
+
+
+def counts_of(z):
+    """laysz45.popularity's inputs from one window's EXACT needs (cut rows, top-10 / top-2): checks using each expert"""
+    ids = z["ids"]
+    cm, cl, lay = np.zeros((NL, 512)), np.zeros((NL, 512)), np.arange(NL)[None, :, None]
+    for a, n, k in z["checks"].tolist():
+        rid = ids[a:a + n]                                       # a window's last check can run past its routing rows
+        for c, r in ((cm, 10), (cl, 2)):
+            m = np.zeros((NL, 512), bool)
+            m[np.broadcast_to(lay, (len(rid), NL, r)), rid[:, :, :r]] = True
+            c += m
+    return cm, cl, len(z["checks"])
+
+
+def prefill_of(z):
+    ids, gen = z["ids"], int(z["gen"])
+    return [([np.unique(ids[i:min(i + 128, gen - 1), l]).astype(np.int16) for l in range(NL)],
+             [np.unique(ids[i:min(i + 128, gen - 1), l, :2]).astype(np.int16) for l in range(NL)]) for i in range(0, gen - 1, 128)]
+
+
+def replay_arr(task):
+    key, K, calls, pops = task
+    return B.replay((key, K, [[(t, frozenset(need.tolist())) for t, need in cl] for cl in calls], pops))
 
 
 def main():
     t0 = time.time()
-    W = B.load_capture(B.CAPDIR)
-    Q0, _, PREW = B.capture_needs(W, {"EXACT": ("conf", B.RULES["EXACT"])})
-    POP = {key: LZ.popularity(Q0["EXACT"], key) for key in ("m", "l")}
-    wi = [i for i, w in enumerate(W) if w[0] == "code"]
-    Z = {i: np.load(os.path.join(B.CAPDIR, W[i][1] + ".npz")) for i in wi}
+    pool = mp.get_context("fork").Pool(4)                        # forked while the parent is still small
+    names = sorted(f[:-4] for f in os.listdir(B.CAPDIR) if f.endswith(".npz"))
+    C = {}
+    for w in names:
+        C[w] = counts_of(np.load(os.path.join(B.CAPDIR, w + ".npz")))
+    tm, tl, tn = (sum(C[w][j] for w in names) for j in range(3))
+    W = [(w,) for w in names if w.startswith("tf_code")]
+    wi = list(range(len(W)))
+    POP = {"m": [[(tm - C[w][0])[l] / (tn - C[w][2]) for l in range(NL)] for (w,) in W],
+           "l": [[(tl - C[w][1])[l] / (tn - C[w][2]) for l in range(NL)] for (w,) in W]}
+    Z = {i: {k: v for k, v in np.load(os.path.join(B.CAPDIR, W[i][0] + ".npz")).items()} for i in wi}
+    W = [(w, w) for (w,) in W]                                   # (domain slot, name) as band45's tuples index [1]
+    PREW = [prefill_of(Z[i]) for i in wi]
     R8 = {a: rates(a) for a in ("base16", "match32")}
     say(f"M-18c WIDE-Q1 on Breakthrough's capture: {len(wi)} code windows; MATCH code rates base16 (15 depths, mean "
         f"{R8['base16'].mean():.3f}), match32 (31 depths, mean {R8['match32'].mean():.3f})")
@@ -114,8 +144,8 @@ def main():
         real = [tuple(x) for x in Z[i]["checks_walk"].tolist()]
         same += sum(1 for x, y in zip(wk, real) if x[:3] == y); tot += len(real)
     say(f"  check: '16 always' reproduces the real (uncut) walk's checks (anchor, rows, kept): {same} / {tot}")
-    jobs, meta, ST = [], [], {}
-    for seed in range(SEEDS):
+    ST, MB, nrep = {}, {}, 0
+    for seed in range(SEEDS):                                    # one (seed, arm, rule) combo in memory at a time
         for name, R, ra, cut in ARMS:
             wks = {i: walk(Z[i], R, R8[ra], cut, np.random.default_rng(1000 * seed + R + cut)) for i in wi}
             for g, gate in GATES.items():
@@ -126,20 +156,16 @@ def main():
                     U = sum(sum(len(c["m"][l]) * MR + len(c["l"][l]) * LR for l in range(NL)) for c in Qw[k])
                     st = ST.setdefault((name, g, W[i][1]), np.zeros(5))
                     st += (len(Qw[k]), sum(c["kept"] for c in Qw[k]), sum(c["rows"] for c in Qw[k]), U, 0)
-                for key in ("m", "l"):
-                    for l in range(NL):
-                        calls = [[(-1, pc[0 if key == "m" else 1][l]) for pc in PREW[i]] + [(t, c[key][l]) for t, c in enumerate(Qw[k])]
-                                 for k, i in enumerate(wi)]
-                        jobs.append((key, B.SIZES["C_m" if key == "m" else "C_l"][l], calls, [POP[key][i][l] for i in wi]))
-                        meta.append((name, g, key))
-    say(f"  {len(jobs)} replays queued ({time.time() - t0:.0f} s)")
-    with mp.get_context("fork").Pool(4) as pool:
-        res = pool.map(B.replay, jobs, chunksize=8)
-    MB = {}
-    for (name, g, key), miss in zip(meta, res):
-        for k, i in enumerate(wi):
-            MB[(name, g, W[i][1])] = MB.get((name, g, W[i][1]), 0.0) + miss[k] * (MR if key == "m" else LR) / 1e6
-    say(f"  {len(jobs)} replays, {time.time() - t0:.0f} s")
+                jobs = [(key, B.SIZES["C_m" if key == "m" else "C_l"][l],
+                         [[(-1, pc[0 if key == "m" else 1][l]) for pc in PREW[k]] + [(t, c[key][l]) for t, c in enumerate(Qw[k])]
+                          for k in wi], [POP[key][k][l] for k in wi]) for key in ("m", "l") for l in range(NL)]
+                for (key, *_), miss in zip(jobs, pool.map(replay_arr, jobs, chunksize=4)):
+                    for k, i in enumerate(wi):
+                        MB[(name, g, W[i][1])] = MB.get((name, g, W[i][1]), 0.0) + miss[k] * (MR if key == "m" else LR) / 1e6
+                nrep += len(jobs)
+                del Qw, jobs
+        say(f"  seed {seed} done: {nrep} replays, {time.time() - t0:.0f} s")
+    pool.close(); pool.join()
 
     def stats(name, g, wins):
         ck, kept, rows, U, _ = sum(ST[(name, g, w)] for w in wins)

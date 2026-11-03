@@ -70,7 +70,7 @@ def passes(run, laymap):
                 d["rd"] += [(x[3], x[4], MB["base" if kind == "b" else "side"]) for x in r]
         if len([l for l in lay if np.isfinite(lay[l]["seen"])]) < 40:
             continue
-        out.append(dict(rows=rows, k=k, wall=ce - c1, lay=lay))
+        out.append(dict(rows=rows, k=k, wall=ce - c1, lay=lay, t0=c1))
     return out
 
 
@@ -78,7 +78,7 @@ def analyse(tag):
     f = os.path.join(D, f"{tag}_stall.json")
     if not os.path.exists(f):
         say(f"\n{tag}: no {f}"); return None
-    S = json.load(open(f)); laymap = S["laymap"]; NL = len(laymap)
+    S = json.load(open(f)); laymap = S["laymap"]; NL = len(laymap); anc = S.get("anchor")
     P = []
     for run in S["runs"]:
         if run.get("paused"):
@@ -159,6 +159,64 @@ def analyse(tag):
     byt = cb_ * np.mean([sum(d["mb"] * MB["base"] + d["ms"] * MB["side"] for L, d in p["lay"].items() if "cad" in d) for p in P])
     say(f"split of the per-check stall by the fit: latency {1e3 * lat:.1f} ms (x {nst:.1f} stalled layers) vs bytes "
         f"{1e3 * byt:.1f} ms -> {'LATENCY-bound (the look-ahead / JOINT road)' if lat > 1.5 * byt else 'BYTES-bound (residency)' if byt > 1.5 * lat else 'MIXED (both)'} (latency share {100 * lat / max(lat + byt, 1e-9):.0f} %)")
+    # demand SSD time split (the orchestrator 23:0x on Fable C's AUDIT c: is it bytes or wake / issue delay?): per read burst
+    # (one layer service's reads, base and sidecar apart) duration = its last read's end - its first read's start; fit
+    # duration = a + MB / BW over the bursts: a = the fixed cost per burst (issue + first byte + any wake), BW = the burst rate
+    bu = []
+    for p in P:
+        for d in p["lay"].values():
+            for kind, mb_ in (("base", MB["base"]), ("side", MB["side"])):
+                r_ = [x for x in d["rd"] if abs(x[2] - mb_) < 1e-9]
+                if r_:
+                    bu.append((len(r_) * mb_, max(x[1] for x in r_) - min(x[0] for x in r_)))
+    if len(bu) > 10:
+        B_ = np.array(bu)
+        a_, b_ = np.linalg.lstsq(np.c_[np.ones(len(B_)), B_[:, 0]], B_[:, 1], rcond=None)[0]
+        nb = len(B_) / len(P); mbc = B_[:, 0].sum() / len(P)
+        say(f"demand SSD time per check {1e3 * B_[:, 1].sum() / len(P):.1f} ms in {nb:.1f} bursts ({mbc:.0f} MB): fit {1e3 * a_:.3f} "
+            f"ms per burst + {1e3 * b_:.4f} ms per MB ({1 / b_ / 1e3 if b_ > 0 else float('nan'):.1f} GB/s) -> bytes "
+            f"{1e3 * b_ * mbc:.1f} ms vs issue / first byte / wake {1e3 * a_ * nb:.1f} ms per check (bursts overlap OOO's compute; "
+            f"the GPU's share is the stall above)")
+    # M-20 SSDWAKE (MoonShots; the orchestrator 11-02 22:1x): the SSD's idle gap before each read burst (a layer service's
+    # first read), i.e. its start minus the latest end of any earlier read in the same check; MoonShots measured +50-65 us
+    # on a burst after a 0.25-1 ms gap
+    g = []
+    for p in P:
+        rs = sorted((r[0], r[1]) for d in p["lay"].values() for r in d["rd"])
+        firsts = sorted(min(r[0] for r in d["rd"]) for d in p["lay"].values() if d["rd"])
+        for f0 in firsts:
+            ends = [b1 for a1, b1 in rs if a1 < f0 - 1e-7]
+            if ends:
+                g.append(max(0.0, f0 - max(ends)))
+    if g:
+        g = np.array(g); n_ = len(g) / len(P)
+        say(f"read bursts per check {n_:.1f}: SSD idle before them median {1e3 * np.median(g):.3f} ms; after >= 0.25 ms "
+            f"{100 * (g >= 25e-5).mean():.0f} %, >= 1 ms {100 * (g >= 1e-3).mean():.0f} % -> at MoonShots' ~60 us each, "
+            f"~{0.06 * n_ * (g >= 25e-5).mean():.1f} ms per check a keepalive could recover")
+    # per-miss service ms on the wall clock vs fanwatch's SSD temperature (the orchestrator 23:2x, the cloud auditor's
+    # SSD-heat idea: +15 % per miss above 65 C?); the dump's anchor maps UPTIME_RAW to the wall clock
+    if anc:
+        import datetime
+        fw = {}
+        for ln in open(os.path.expanduser("~/Library/Logs/fanwatch.log"), errors="ignore"):
+            f_ = ln.split()
+            if len(f_) > 9 and f_[1] == "die" and "ssd" in f_:
+                h, m_, s_ = (int(x) for x in f_[0].split(":")); fw[h * 3600 + m_ * 60 + s_] = float(f_[f_.index("ssd") + 1])
+        ks = sorted(fw); bins = {}
+        for p in P:
+            svc_m = sum(d["svc_b"] + d["svc_s"] for d in p["lay"].values() if d["mb"] + d["ms"])
+            n_m = sum(d["mb"] + d["ms"] for d in p["lay"].values())
+            if not n_m or not ks:
+                continue
+            w = datetime.datetime.fromtimestamp(anc[0] + p["t0"] - anc[1]); sec = w.hour * 3600 + w.minute * 60 + w.second
+            j = min(range(len(ks)), key=lambda i: abs(ks[i] - sec))
+            if abs(ks[j] - sec) > 60:
+                continue
+            t_ = fw[ks[j]]; b_ = "< 55 C" if t_ < 55 else "55-65 C" if t_ < 65 else ">= 65 C"
+            bins.setdefault(b_, []).append(svc_m / n_m)
+        if bins:
+            say("per-miss service by SSD temperature (fanwatch, nearest 20 s sample): " + "; ".join(
+                f"{b_} {1e3 * np.mean(v):.3f} ms per miss ({len(v)} checks)" for b_, v in sorted(bins.items())))
     return dict(tot=tot, svc=svc, lat=lat, byt=byt, nst=nst)
 
 

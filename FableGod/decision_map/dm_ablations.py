@@ -115,6 +115,30 @@ ABLATIONS = {
     "gdn_state_bf16": gdn_state_bf16(),
     "gate_bands": gate_k(("bands",)), "hc8w": hc8w(), "hc8w_mix": hc8w(ple=False),
 }
+def pframe_map(q1=False):
+    """The layer-wise reuse map (Fable A's ASSUMPTION_HUNT.md, the orchestrator 22:5x; FAST): the previous position's routed
+    output reused in layers 8-11 on EVERY answer row and in layers 12-35 on rows the drafter certifies sure (cf >= 0.999),
+    both as a bounded chain (S = 1: a reused output is the previous row's freshly computed one; consecutive reusers
+    alternate with a refresh); q1 stacks DAY9's Q1 (gate_top2_cf099: top-2 on cf >= 0.99 rows, mass)."""
+    def setup():
+        PERT.update(reuse=set(range(8, 36)), chain=True, chain_max=1, chain_gate=0.999, chain_all=set(range(8, 12)))
+        if q1: PERT.update(gate=("top", 0.99, 2), renorm=False)
+    return setup
+
+ABLATIONS["pframe_map"] = pframe_map(); ABLATIONS["pframe_map_q1"] = pframe_map(q1=True)
+def q1_union(tag):
+    """Q1-UNION (Fable C's AUDIT_350.md section 4, the orchestrator 23:2x): sure rows keep ranks 0-1 + the rank 2-9 experts
+    already in their check's union (dm_q1u_masks.py -> out/<tag>/<window>.npz), the model's own weights (mass)."""
+    def setup(): PERT.update(rmask=tag, renorm=False)
+    return setup
+ABLATIONS["q1u_cf099"] = q1_union("q1u_cf099"); ABLATIONS["q1u_cf09"] = q1_union("q1u_cf09")
+def t3_all(bits):
+    """t3_all / t4_all (the orchestrator 23:3x; 45 GB's plan 3333333333 = the 1-bit sidecar dropped): EVERY row (prompt and
+    answer) takes all ten routed experts from records3 at `bits` (3: MSB-3; 4: the control, rebuilt 4-bit through the
+    same path), the model's own weights; the stock routed output is zeroed (per-row k 0 everywhere)."""
+    def setup(): PERT.update(gate=("t3all",), renorm=False, t3=bits, t3k=10)
+    return setup
+ABLATIONS["t3_all"] = t3_all(3); ABLATIONS["t4_all"] = t3_all(4)
 for g in range(4):                                   # per-group MoE reuse (12 layers each), then per layer on night 2
     ABLATIONS[f"moe_reuse_prev_g{g}"] = reuse_prev("moe", set(range(12 * g, 12 * g + 12)))
 for L in range(48):

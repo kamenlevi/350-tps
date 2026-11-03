@@ -6,8 +6,8 @@ import json, os, sys
 import numpy as np
 
 R = os.path.expanduser("~/BigMoE/data/r57")
-ARMS = (sys.argv[1] if len(sys.argv) > 1 else "cmb0,cmb1,cmb1c,cmb2,cmb3,cmb4,cmb5,cmb6,cmb3t,cmb32,cmbsc,fastBE,fastCE").split(",")
-PREV = {"cmb3t": "cmb4", "cmb32": "cmb4", "cmbsc": "cmb6", "fastBE": "cmb6", "fastCE": "cmb6"}               # the variants sit on cmb4's stack
+ARMS = (sys.argv[1] if len(sys.argv) > 1 else "cmb0,cmbj0,cmbj2,cmb1,cmb1c,cmb1t,cmb2,cmb3,cmb4,cmb5,cmb6,cmb3t,cmb32,cmbsc,fastBE,fastCE,fastBEn,fastBEh,fastBEhw").split(",")
+PREV = {"cmbj0": "cmb0", "cmbj2": "cmb0", "cmb1": "cmb0", "cmb1t": "cmb1c", "cmb2": "cmb1c", "cmb3t": "cmb4", "cmb32": "cmb4", "cmbsc": "cmb6", "fastBE": "cmb6", "fastCE": "cmb6", "fastBEn": "fastBE", "fastBEh": "fastBEn", "fastBEhw": "fastBEh"}               # the variants sit on cmb4's stack
 REF = json.load(open(os.path.join(R, "chat23_ref_tokens.json")))
 DOM = lambda k: "code" if k.startswith("humaneval") else "math" if k.startswith(("math500", "gsm8k")) else \
     "agent" if k.startswith("agent") else "chat"
@@ -35,6 +35,7 @@ for t in ARMS:
         x = [r for r in rs if DOM(r["key"]) == dom]
         if x:
             d[dom] = dict(tpsw=float(np.mean([r["tpsw"] for r in x])), tps=float(np.mean([r["tps"] for r in x])),
+                          mb=float(np.mean([r["mb"] for r in x])),   # SSD MB per kept token (the process's disk bytes)
                           kept=float(np.mean([r["kept"] for r in x])), drf=float(np.mean([r["drf"] for r in x])),
                           cyc=float(np.mean([r["cyc"] for r in x])))
     tk = toks(t); ref = T0 if t != "cmb0" else {k: REF[k]["gate+t"] for k in tk if k in REF}
@@ -47,9 +48,9 @@ for t in ARMS:
 say("THE COMBINATION at C 256 (shared GPU by day: rough), steady tok/s per domain (checks >= 2), kept per check, draft ms")
 say("| arm | adds | tokens equal | code | math | chat | agent | vs the arm before | vs cmb0 | peak GB |")
 say("|---|---|---|---|---|---|---|---|---|---|")
-ADDS = {"cmb0": "the default", "cmb1": "chat switch", "cmb1c": "chat at 8 rows", "cmb2": "A6 keep", "cmb3": "COPYGATE g2", "cmb4": "D7b code",
+ADDS = {"cmb0": "the default", "cmbj0": "joint sizes, equal RAM (on cmb0)", "cmbj2": "joint sizes +2.07 GB (on cmb0)", "cmb1": "chat switch", "cmb1c": "chat at 8 rows", "cmb1t": "chat t 0.4 (on cmb1c)", "cmb2": "A6 keep", "cmb3": "COPYGATE g2", "cmb4": "D7b code",
         "cmb5": "JOINT", "cmb6": "K-83", "cmb3t": "COPYGATE g2t (on cmb4)", "cmb32": "32 rows (on cmb4)", "cmbsc": "sidecar x1.5 (on cmb6)", "fastBE": "FAST B+E (on cmb6; tokens differ by design)",
-        "fastCE": "FAST C+E (on cmb6; tokens differ by design)"}
+        "fastCE": "FAST C+E (on cmb6; tokens differ by design)", "fastBEn": "FAST B+E + NAX6", "fastBEh": "FAST B+E + NAX6 + H-1c", "fastBEhw": "fastBEh + warm split (not a speed arm)"}
 def mean_tps(a, doms):
     x = [a["d"][d_]["tpsw"] for d_ in doms if d_ in a["d"]]
     return float(np.mean(x)) if x else float("nan")
@@ -74,5 +75,18 @@ for t in order:
         f_ = A[t]["fast"]; rows = sum(x["rows"] for x in f_)
         say(f"{t} FAST: {sum(x['gated'] for x in f_)} of {rows} rows gated ({100 * sum(x['gated'] for x in f_) / max(rows, 1):.0f} %), "
             f"kept {sum(x['k'] for x in f_)} vs exact acceptance {sum(x['kx'] for x in f_)} on the same checks")
+say("SSD MB per kept token per arm (code / math / chat / agent): " + "; ".join(
+    f"{t} " + " / ".join(f"{A[t]['d'][d_]['mb']:.1f}" if d_ in A[t]['d'] else "-" for d_ in ("code", "math", "chat", "agent"))
+    for t in order))
+for t in order:                                          # the warm split's per-row cost (fastBEhw: Fable C's gated expert term)
+    try:
+        W = json.load(open(os.path.join(R, f"{t}_256_warmsplit.json")))
+    except Exception:
+        continue
+    cw = [sm for w in W if w["key"].startswith("humaneval") for sm in w["samples"]]
+    if cw:
+        wm = {n: float(np.median([x[1] for sm in cw for x in sm["warm"] if x[0] == n])) for n in (1, 4, 8, 16)}
+        say(f"{t} warm split on code ({len(cw)} samples): warm ms at 1 / 4 / 8 / 16 rows {wm[1]:.1f} / {wm[4]:.1f} / {wm[8]:.1f} / "
+            f"{wm[16]:.1f}, slope {(wm[16] - wm[1]) / 15:.2f} ms per row; cold 16-row {np.median([sm['cold'][1] for sm in cw]):.1f} ms")
 os.makedirs(os.path.expanduser("~/BigMoE/data/cmb"), exist_ok=True)
 open(os.path.expanduser("~/BigMoE/data/cmb/combo_report.txt"), "w").write("\n".join(L) + "\n")

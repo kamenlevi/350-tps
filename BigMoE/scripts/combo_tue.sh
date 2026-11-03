@@ -4,15 +4,22 @@
 # previous + one switch group (cumulative, so each delta is measured on the stack it joins):
 #   cmb0 the default (REF2-T, R57_PRESET=45)       -> its tokens = the reference of every later arm (+ chat23 where stored)
 #   cmb1 + the chat switch (R57_CHATSW=1)           cmb1c + chat at 8 rows (R57_CHATROWS=8; the orchestrator 21:2x)
+#   cmb1t = cmb1c + chat's confidence cut at t 0.4 (R57_CHATTRUNC; NewIdeas 23:31): a variant on cmb1c's stack. Line: chat
+#        steady tok/s (tpsw) >= +1.5 % vs cmb1c = PASS (it joins the stack), <= 0 = KILL, else BETWEEN
 #   cmb2 + A6 keep (R57_A6=keep)
 #   cmb3 + COPYGATE (R57_COPY=g2)                   cmb4 + D7b on code (R57_D7B=code)
 #   cmb5 + JOINT (BIGMOE_JOINT=1)                   cmb6 + K-83 (K83_EXACT=1; its drafter forms stay on the bf16 drafter)
-#   FAST: fastBE / fastCE = cmb6 + R57_FAST (EvalSuite's RELAX arms B + E / C + E), tokens not checked
+#   FAST: fastBE / fastCE = cmb6 + R57_FAST (EvalSuite's RELAX arms B + E / C + E), tokens not checked; fastBEn = fastBE +
+#   NAX6 (R57_NAX=1), fastBEh = + Leap's nax_hybrid (R57_H1C=1; it fails at start if Leap's ref2 lacks the key); fastBEhw
+#   = fastBEh + the warm split (gated warm passes at 1 / 4 / 8 / 16 rows: Fable C's gated expert term; its tok/s is not a
+#   speed figure); judge cmbsc by SSD MB per kept token on code (MoonShots' M-25: the joint optimum shrinks the sidecar)
 # then variants on cmb4's stack: cmb3t (COPYGATE with the drafter's own t cut) and cmb32 (R57_ROWS=32, MATCH 2.5's rule),
 # and cmbsc on cmb6's: the sidecar x1.5 at equal pool bytes (data/seed45/laysz45_256_sc15.json, md5 5d6d6ec0; replay
 # 11-02: reads per check -7..-25 %, MB code no-gate +4.6 %, chat -0.4..-3.3 %; exact: pool sizes only).
 # A lever whose arm differs in any token, or that does not speed up the stack, stays off (the arm list is edited before
-# arming, from the night's verdicts). Prompts: code x4 (HumanEval 68 / 91 / 16 / 6), math, chat x4, agent x2; CAP 256.
+# arming, from the night's verdicts). MoonShots' M-25b joint-fit pool sizes (the orchestrator 23:4x; copies in data/seed45/,
+# md5 in the commit) on the default's own stack, judged by SSD MB per kept token on code vs cmb0: cmbj0 = joint45_256_0
+# (equal RAM), cmbj2 = joint45_256_2070 (+2.07 GB, lifetime peak ~43.8 GB, under the ~45 GB rule). Prompts: code x4 (HumanEval 68 / 91 / 16 / 6), math, chat x4, agent x2; CAP 256.
 # Shared GPU by day: rough deltas; the quiet measurement of the combined default runs first each night from 00:30
 # (NewIdeas' GPU order 11-02 21:3x), Wed before FLOOR.
 # usage: inside turn45 (HAVE_LOCK=1 KEEP_LOCK=1), with frozen copies (data/r57/snap/*_cmb.*) like the night's
@@ -32,12 +39,12 @@ R57_KEYS=$KEYS MG=6 C45_ALARM=900 C45_REFTOK="$HOME/BigMoE/data/r57/chat23_ref_t
 say "cmb0 (the default) rc=$?"
 REF0="$HOME/BigMoE/data/r57/cmb0_256_tokens.json:gate+t"   # the default's own tokens: every later arm against them
 [ -s "${REF0%%:*}" ] || { say "no cmb0 tokens: stop"; exit 1; }
-R57_KEYS=$KEYS MG=6 C45_ALARM=900 C45_REFTOK=$REF0 C45_ARMS="${CMB_ARMS:-cmb1_256:256:$S1 cmb1c_256:256:$S1C cmb2_256:256:$S2 cmb3_256:256:$S3 cmb4_256:256:$S4 cmb5_256:256:$S5 cmb6_256:256:$S6 cmb3t_256:256:$S4,R57_COPY=g2t cmb32_256:256:$S4,R57_ROWS=32 cmbsc_256:256:$S6,BIGMOE_TIER_SIZES=$HOME/BigMoE/data/seed45/laysz45_256_sc15.json}" $RUN
+R57_KEYS=$KEYS MG=6 C45_ALARM=900 C45_REFTOK=$REF0 C45_ARMS="${CMB_ARMS:-cmbj0_256:256:BIGMOE_TIER_SIZES=$HOME/BigMoE/data/seed45/joint45_256_0.json cmbj2_256:256:BIGMOE_TIER_SIZES=$HOME/BigMoE/data/seed45/joint45_256_2070.json cmb1_256:256:$S1 cmb1c_256:256:$S1C cmb1t_256:256:$S1C,R57_CHATTRUNC=0.4 cmb2_256:256:$S2 cmb3_256:256:$S3 cmb4_256:256:$S4 cmb5_256:256:$S5 cmb6_256:256:$S6 cmb3t_256:256:$S4,R57_COPY=g2t cmb32_256:256:$S4,R57_ROWS=32 cmbsc_256:256:$S6,BIGMOE_TIER_SIZES=$HOME/BigMoE/data/seed45/laysz45_256_sc15.json}" $RUN
 say "arms rc=$?"
 # the FAST preset (Kamen 21:31: two first-class tracks): EvalSuite's RELAX rules on the full exact stack, per prompt set as
 # its arms B + E (code mode: gate 0.99 + copy gate + the comment loophole; chat R1) and C + E (+ R1 on code / math);
 # quality-defined, so no REF2-T token check (EvalSuite's same-scores test judges them): tok/s, kept and the gated share
-R57_KEYS=$KEYS MG=6 C45_ALARM=900 C45_ARMS="${CMB_FAST:-fastBE_256:256:$S6,R57_FAST=BE,R57_REFTOK= fastCE_256:256:$S6,R57_FAST=CE,R57_REFTOK=}" $RUN
+R57_KEYS=$KEYS MG=6 C45_ALARM=900 C45_ARMS="${CMB_FAST:-fastBE_256:256:$S6,R57_FAST=BE,R57_REFTOK= fastCE_256:256:$S6,R57_FAST=CE,R57_REFTOK= fastBEn_256:256:$S6,R57_FAST=BE,R57_NAX=1,R57_REFTOK= fastBEh_256:256:$S6,R57_FAST=BE,R57_NAX=1,R57_H1C=1,R57_REFTOK= fastBEhw_256:256:$S6,R57_FAST=BE,R57_NAX=1,R57_H1C=1,R57_REFTOK=,R57_WARMSPLIT=3}" $RUN
 say "FAST arms rc=$?"
 "$HOME/BigMoE/.venv/bin/python" scripts/combo_report.py >> "$LOG" 2>&1; say "report rc=$? (data/cmb/combo_report.txt)"
 say "combination end"

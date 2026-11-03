@@ -99,7 +99,7 @@ def forward_logits(model, ids):
 def run_window(model, ids):
     """Cold teacher-forced prefill of ids; returns (top-8 ids int64 [N-1, 8], log-probs float32 [N-1, 8])."""
     REC["tk"], REC["lp"] = [], []
-    PREV.clear(); CUR["pos"] = {}; CUR["kpos"] = {}; CAPR["L"] = {}   # carries and row counters start fresh per window
+    PREV.clear(); CUR["pos"] = {}; CUR["kpos"] = {}; CAPR["L"] = {}; CAPR["X"] = {}; CAPR["W"] = {}   # fresh per window
     REC["on"] = True
     try:
         G.restore_or_prefill_prompt_state(RT["rt"], [int(t) for t in ids], base_hidden_variant=None,
@@ -168,8 +168,22 @@ def _row_k(n):
     m = max(0, min(n, len(kr) - p0)); kk[:m] = kr[p0:p0 + m]
     return kk
 
+def _row_rm(n):
+    """Q1-UNION (11-02): this call's n rows' keep-by-rank flags [n, 10] from CUR['rm'] (the window's [rows, 48, 10]
+    mask, rank-sorted), in window order on CUR['kpos'] like _row_k; rows past the mask keep all."""
+    li = CUR["L"]; p0 = CUR["kpos"].get(li, 0); CUR["kpos"][li] = p0 + n
+    kp = np.ones((n, 10), bool); rm = CUR["rm"]
+    m = max(0, min(n, rm.shape[0] - p0)); kp[:m] = rm[p0:p0 + m, li]
+    return kp
+
 def _pert_scores(scores):
     k = PERT.get("topk")
+    if CUR.get("rm") is not None:                         # Q1-UNION: keep the ranks the window's mask keeps (mass)
+        kp = _row_rm(scores.shape[-2])
+        if kp.all(): return scores
+        order = mx.argsort(-scores.astype(mx.float32), axis=-1); rank = mx.argsort(order, axis=-1)
+        kpa = mx.array(kp).reshape(rank.shape)            # [n, 10] -> the scores' own shape ([1, n, 10] on some paths)
+        return scores * mx.take_along_axis(kpa, rank, axis=-1).astype(scores.dtype)
     if CUR.get("k") is not None:                          # per-row k (the drafter gate); no topk on top of it
         assert not k, "topk and a per-row gate together are not wired"
         kk = _row_k(scores.shape[-2])
@@ -212,7 +226,7 @@ def _reuse(li, z):
     n = z.shape[0]
     p0 = CUR["pos"].get(li, 0); CUR["pos"][li] = p0 + n
     if PERT.get("chain"):
-        skip, s = CUR["skip"], np.zeros(n, bool)
+        skip, s = (CUR["skip_all"] if li in PERT.get("chain_all", ()) else CUR["skip"]), np.zeros(n, bool)   # reuse map
         if skip is not None:
             m = max(0, min(n, len(skip) - p0)); s[:m] = skip[p0:p0 + m]
         carry = PREV.get(("chain", li))                     # [1, D]: the last computed row of earlier calls
@@ -274,6 +288,12 @@ def install():
         if CAPR["on"] and li is not None:                 # the block's own router, ranked (argpartition has no order)
             g = self.gate(x); g = g.reshape(-1, g.shape[-1])
             CAPR["L"].setdefault(li, []).append(mx.argsort(-g.astype(mx.float32), axis=-1)[:, :10].astype(mx.int16))
+            if CAPR.get("x"):                             # sketch-on-miss (11-02): the routed experts' input + router weights
+                gg = mx.softmax(g.astype(mx.float32), axis=-1, precise=True); o = mx.argsort(-gg, axis=-1)[:, :10]
+                wv = mx.take_along_axis(gg, o, axis=-1)
+                if self.norm_topk_prob: wv = wv / wv.sum(axis=-1, keepdims=True)
+                CAPR["X"].setdefault(li, []).append(x.reshape(-1, x.shape[-1]).astype(mx.float16))
+                CAPR["W"].setdefault(li, []).append(wv.astype(mx.float16))
         if not _moe_on() or li is None or Q._moe_prefill_combine_applies(self, x):
             return orig(self, x)                          # stock path; >= 32 rows meet _combine_p inside _prefill_call
         # < 32-row chunks: the parent's own ops (mlx_lm Qwen3NextSparseMoeBlock) with the perturbed scores
@@ -304,14 +324,14 @@ def _t3_add(block, li, x):
     kk = np.full(n, 10, np.int32); m = max(0, min(n, len(kr) - p0)); kk[:m] = kr[p0:p0 + m]
     G = np.flatnonzero(kk == 0)
     if not G.size: return None
-    yg = dm_t3.routed_top2(block, li, rows[mx.array(G.astype(np.int32))], bits=PERT["t3"])
+    yg = dm_t3.routed_topk(block, li, rows[mx.array(G.astype(np.int32))], bits=PERT["t3"], K=int(PERT.get("t3k", 2)))
     pos = np.full(n, len(G), np.int32); pos[G] = np.arange(len(G))       # ungated rows take an appended zero row
     return mx.take(mx.concatenate([yg, mx.zeros((1, yg.shape[-1]), yg.dtype)]), mx.array(pos), axis=0)
 
-CAPR = {"on": False, "L": {}}  # DAY9 bytes side ('capture' run): per layer, rank-sorted top-10 expert ids per call
+CAPR = {"on": False, "L": {}, "x": False, "X": {}, "W": {}}  # DAY9 bytes side ('capture' run): per layer, rank-sorted top-10 expert ids per call
 TEARDOWN = []   # undo callables registered by a setup that changes the model itself (hc8w); run by clear()
 def clear():
-    ACTIVE.clear(); PREV.clear(); PERT.clear(); CUR["k"] = None; CUR["skip"] = None; CAPR["on"] = False
+    ACTIVE.clear(); PREV.clear(); PERT.clear(); CUR["k"] = None; CUR["rm"] = None; CUR["skip"] = None; CAPR["on"] = False; CAPR["x"] = False
     while TEARDOWN: TEARDOWN.pop()()
 
 _BASE = {}
@@ -353,6 +373,7 @@ def _gate_k(nm, n):
     g = _gate(nm, n)
     if spec[0] == "top": k[g >= spec[1]] = spec[2]
     elif spec[0] == "t3": k[g >= spec[1]] = 0           # dm_t3 adds their top-2 (records3, PERT['t3'] bits)
+    elif spec[0] == "t3all": k[:] = 0                   # t3_all / t4_all: every row, all ranks from records3
     elif spec[0] == "bands": k[g >= 0.9] = 8; k[g >= 0.99] = 4; k[g >= 0.999] = 2
     else: raise ValueError(spec)
     return k
@@ -384,7 +405,10 @@ def measure(model, windows, name, setup):
     for dom, nm, ids, off, gen in windows:
         a = gen + 1 - off                                   # first answer position inside ids
         CUR["skip"] = _chain_skip(nm, a, len(ids)) if PERT.get("chain") else None
+        if PERT.get("chain_all"):                           # the reuse map (11-02): these layers chain on EVERY answer row
+            sa = np.zeros(len(ids), bool); sa[a:len(ids) - 1] = True; CUR["skip_all"] = bound_runs(sa, int(PERT.get("chain_max") or 0))
         CUR["k"] = _gate_k(nm, len(ids)) if PERT.get("gate") else None
+        CUR["rm"] = np.load(os.path.join(OUT, PERT["rmask"], nm))["keep"] if PERT.get("rmask") else None
         tk, lp = run_window(model, ids)
         res[nm] = dict(dom=dom, a=int(a), off=int(off), tk=tk[a:].tolist(), lp=lp[a:].tolist())
         extra = ""
@@ -399,13 +423,22 @@ def measure(model, windows, name, setup):
             os.makedirs(os.path.join(OUT, "routing"), exist_ok=True)
             np.savez(os.path.join(OUT, "routing", nm), ids=np.stack(R, axis=1)[:len(ids) - 1], tokens=ids, gen=gen)
             extra += f"; routing {R[0].shape[0]} rows"
-        if CUR["k"] is not None:                            # every MoE layer saw each row exactly once, in order
+            if CAPR.get("x"):                               # out/xcap/<window>.npz: answer rows' MoE input x [m, 48, 2560] and
+                X = np.stack([np.array(mx.concatenate(CAPR["X"][L]))[a:len(ids) - 1] for L in range(48)], axis=1)   # weights
+                W = np.stack([np.array(mx.concatenate(CAPR["W"][L]))[a:len(ids) - 1] for L in range(48)], axis=1)
+                os.makedirs(os.path.join(OUT, "xcap"), exist_ok=True)
+                np.savez(os.path.join(OUT, "xcap", nm), x=X, w=W, ids=np.stack(R, axis=1)[a:len(ids) - 1], a=a)
+                extra += f"; x {X.shape}"
+        if CUR["k"] is not None or CUR.get("rm") is not None:   # every MoE layer saw each row exactly once, in order
             seen = {CUR["kpos"].get(L) for L in range(48)}
             if not (len(seen) == 1 and next(iter(seen)) in (len(ids) - 1, len(ids))):
                 extra += f"; WARNING gate row counts {sorted(seen, key=str)} for {len(ids)} ids (rows misaligned)"
                 res[nm]["warn"] = extra
-            kk = CUR["k"][a:len(ids) - 1]
-            extra += "; k " + " ".join(f"{v}:{int((kk == v).sum())}" for v in (2, 4, 8, 10) if (kk == v).any())
+            if CUR["k"] is not None:
+                kk = CUR["k"][a:len(ids) - 1]
+                extra += "; k " + " ".join(f"{v}:{int((kk == v).sum())}" for v in (2, 4, 8, 10) if (kk == v).any())
+            else:
+                rk = CUR["rm"][a:len(ids) - 1]; extra += f"; kept experts per row-layer {rk.sum() / max(rk.shape[0] * 48, 1):.2f}"
         if CUR["skip"] is not None:
             s = CUR["skip"][a:]; runs = np.diff(np.flatnonzero(np.diff(np.r_[0, s.astype(np.int8), 0])))[::2]
             extra += f"; chain skips {int(s.sum())}/{len(ids) - 1 - a} answer rows, longest run {int(runs.max()) if len(runs) else 0}"
@@ -444,6 +477,7 @@ def report(base_name="baseline", names=None):
     rows = ["| perturbation | code sure / tie / mid flip % (n) | ifeval sure / tie / mid | multi sure / tie / mid | mean dmargin |", "|---|---|---|---|---|"]
     for nm in names:
         r = json.load(open(os.path.join(OUT, nm + ".json"))); cells = []; dm = []
+        if not isinstance(r, dict) or not all(isinstance(v, dict) and "tk" in v for v in list(r.values())[:1]): continue   # not a run (gate_dfl2.json)
         for dom in ("code", "ifeval", "multi"):
             flips = np.zeros(3); n = np.zeros(3)
             for w, b in base.items():
