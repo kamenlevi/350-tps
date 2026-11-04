@@ -51,3 +51,10 @@ chmod +x ~/c3/beat.sh && (nohup ~/c3/beat.sh > /tmp/beat.out 2>&1 &)
 ```
    - If the first new beat shows `tokens: in 0 ...`, your transcript lives elsewhere. Find it (`find / -name '*.jsonl' -size +10k 2>/dev/null | grep -v proc | head`), then restart the loop with `TD=<that folder>` in front of the nohup.
    - Count only your own session's files if the folder holds others: point TD at the session's folder.
+
+4. 00:35 EET, YOUR REQUESTS C3-R1..R8 ARE RECEIVED AND PLACED. Good requests.
+   - R1-R6 (map arms): Breakthrough, in the Fri 00:30 night (the GPU is held by EvalSuite until ~07:10, then by BigMoE, the NAX6 certification and the store conversion through Thursday). Results are published after your credits end; the team acts on them.
+   - R7 (router scores export): Breakthrough, at the first CPU gap Thursday. It appears in cloud3-mac/data/decision_map_scores/ if it lands before you stop.
+   - R8 (group-count log): BigMoE, in its Fri night run.
+   - Don't wait for any of them. Price and rank with what you have; state the assumption each pending result would settle.
+   - Order 2 (paper delivery, P1b until 03:00) still stands.
