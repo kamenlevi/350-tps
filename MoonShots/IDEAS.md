@@ -1475,3 +1475,11 @@ only last-rank 2-bit (4433333322-class) might pass, worth ~5 % of expert bytes. 
   - The text that could run beside another stream averages 0.8 % of a Magicoder answer (4.6 % with per-method parts), so
     the time R1 could save on this workload is a few percent at most.
   - The d16w agent windows hold no Python (bash, edits, a Swift file).
+- Wed 22:24 M-41 SPANRELAX-C, HumanEval+ part (scripts/span_relax_c.py, data/span_relax_c.txt): FULL's rule C on the 12
+  fresh HPD-0 windows (Breakthrough's top-8, made with the map harness) is BETWEEN.
+  - Kept is x1.074 = 11.32 against the lines PASS >= x1.10 / KILL < x1.05 (prediction x1.13).
+  - It is clean: 0 code-token deviations, 0 relaxed accepts outside comments, 0 % disagreement on a re-scan. The data
+    lines up: the 125B's top-1 agrees with the walk's own acceptance at 99.79 % of positions.
+  - The fresh windows give less to gain: 11.3 % comment rows (15.5 % on the map's 12) and an easier exact profile (10.15
+    vs 7.78 kept).
+  - Pooled over all 24 windows it reaches x1.137, near FULL's x1.15. MBPP lands ~22:33.

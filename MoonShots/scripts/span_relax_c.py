@@ -92,14 +92,15 @@ for i, nm in enumerate(W["names"]):
             d = dtok[c * per + j]
             dtext, atext = dec(d), dec(tk[0])
             inc, ct = pre[p]
-            q = dict(win=key, p=p, depth=j + 1, right=d == tk[0], lp0=lp[0], lpd=lp[tk.index(d)] if d in tk else None,
+            q = dict(win=key, p=p, depth=j + 1, right=d == tk[0], wright=j < k, lp0=lp[0], lpd=lp[tk.index(d)] if d in tk else None,
                      rank=sum(1 for v in lp if v > lp[tk.index(d)]) if d in tk else 99, inc=bool(inc), dtext=dtext, atext=atext,
                      c13=bool(inc and RCORE.comment_draft_ok(dtext) and RCORE.nontool(ct + dtext) and RCORE.nontool(ct + atext)),
                      guard="\n" in atext, ids=ids, d=d)
             POS.append(q)
 say(f"== SPANRELAX-C rule C ({time.strftime('%a %Y-%m-%d %H:%M')}): walk {walk}, top-8 source {label}: {nwin} windows, {len(POS)} "
     f"positions; in_comment rows {sum(q['inc'] for q in POS)}, conditions 1-3 {sum(q['c13'] for q in POS)}, blocked by the line-end "
-    f"guard {sum(q['c13'] and q['guard'] for q in POS)}")
+    f"guard {sum(q['c13'] and q['guard'] for q in POS)}; alignment: the 125B's top-1 == the draft agrees with the walk's own "
+    f"exact acceptance on {100 * sum(q['right'] == q['wright'] for q in POS) / max(len(POS), 1):.2f} % of positions")
 
 
 def acc(q, rule):

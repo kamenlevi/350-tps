@@ -53,3 +53,14 @@
   - Soft per-token weighting: each far token's experts weighted by the chain's cumulative confidence, with no cutoff
     (possibly new).
   - An acceptance-rate horizon (F ~ 8 checks' worth of kept tokens: code ~90-130, math ~50-70) and per-layer horizons.
+- Result 22:24 (FAR section 8, far_hybrid.txt, CPU 39 s): the near + far hybrid reaches the PASS line that neither part
+  reaches alone.
+  - Tiered eviction: near (2 checks) > far (8 checks) > LRU.
+    - K 266 (45 GB): -20.2 % misses vs LRU. Far alone -14.6 %, near alone -11.1 %.
+    - K 147 (24 GB): -22.3 %. Far alone -11.0 %, near alone -17.8 %.
+    - With M-14's learned key among the rest: -22.0 % / -22.7 %.
+  - A per-layer chooser adds nothing (it swaps tiers on noise). A distance-weighted score reproduces the tier.
+  - The near horizon must be 2 checks (1 check: -17.6 %).
+  - Caveat: the near forecast is a noise model at V1's recall (0.75, independent errors, optimistic). FAR-G1's GPU capture
+    scores it directly: tiered hybrid >= -20 % at K 266 PASS, 10-20 % BETWEEN, < 10 % KILL.
+  - Cost: none extra (same chain, same map, a two-level eviction key). EXACT-safe.

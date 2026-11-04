@@ -216,8 +216,18 @@ The main verdict stays the PASS / KILL above (H 8, F >= 96). The read-out is ext
    (c) Per-layer horizon (possibly new): F_L per band = the largest F at which that band's precision on old residents
    stays >= 0.6 (expected [G]: the full F in layers 0-7, where routes are token-driven, shorter in 8-47, where the memo
    and recency carry more); applied as a per-layer cut of the same forecast, no extra compute.
+> (a quote from the project owner, kept private)
+   chain's cumulative confidence c_s = prod_{u <= s} p_top1(u) (variants: tempered c_s^(1/T), T in {2, 4}; a floor
+   max(c_s, 0.05) so the tail never vanishes; an EMA of p_top1 instead of the product); a resident's score at a decision =
+   sum over the far tokens whose predicted top-k names it of c_s x [token assigned within H checks]; lowest score leaves
+   first, LRU / learned key as tiebreak (the SCORE key of section 8 with c_s in place of gamma^(d - 1)); the near tier of
+   section 8 sits on top (the first two blocks outrank). Re-decided at every origin for free, since the chain is re-drafted
+   there, so the effective horizon follows the text (a confident code block keeps 150+ tokens alive, a wavering chat
+   answer fades out after 20-30). Scored on the same capture at zero GPU (p_top1 is recorded per step), against the best
+   fixed F and the tau rules in (a).
    Line: an adaptive rule replaces the fixed F only if it beats the best fixed F at equal mean horizon by >= 1 point of miss
-   cut at K 266 (and never loses on the other K).
+   cut at K 266 (and never loses on the other K); (d) is judged by the same rule against both the best fixed F and the
+   best tau.
 3. **Capture spec, settled with BigMoE (22:3x-22:4x; BigMoE builds it Thursday, records it in its HANDOVER):** the 6 cap45
    prompts generate 448 tokens (256 + 192) in the exact loop at C 160; origins every 8th check (~38, ~22 with the full 192
    horizon), F = 192 far steps of the MTP head chain per origin (far tokens + head hidden recorded, ~1 MB per origin) and
@@ -305,6 +315,56 @@ each layer's burst) is the latency-bound part GOAL.md saw at 69 misses (12 + 0.1
 with fewer misses, only with fewer stalled layers (the replay: perfect foresight -5 %, Belady -19 %). Section 4's "latency-
 bound" column is therefore the floor, not the expectation: the miss cut maps ~1:1 onto io above the ~12 ms floor. FAST and
 EXACT agree where both exist at C 160 (b 0.15-0.18 both); QOM's optional misses are the exception (no linear law).
+
+## 8. NEAR + FAR hybrid (Kamen's tournament-predictor idea, orchestrator 22:2x): `far_hybrid.py` -> `far_hybrid.txt` (22:22, 39 s)
+Frame: M-38's chained cap45 replay, FH look-ahead H 8, K 266 / 147. **NEAR** = the next 1-2 checks' experts: NEAR-V1 = the
+true next-check needs with per-use recall 0.75 (V1's layer look-ahead level, 0.72-0.79 [K TRIED]) and popularity false
+positives (M-38's noise model: the same per-use-independent optimism as M-38's r 0.7, see 1d), NEAR-P = perfect (the
+bound). **FAR** = the ridge state map top-16 on checks i + 1 .. i + 8 (1e: -14.6 %). Combinations: (a) TIER near-protected >
+far-protected (farthest first) > LRU or the learned key; (b) CHOOSER: per layer an online EMA of each forecaster's precision
+(near resolved one check later, far at the horizon) decides which takes the protected tier; (c) SCORE: s = beta * [near] +
+gamma^(d - 1) * [far], lowest leaves first. [K far_hybrid.txt]
+
+| K 266 (LRU 42.9) | misses | vs LRU | K 147 (LRU 123.1) | misses | vs LRU |
+|---|---|---|---|---|---|
+| learned key alone | 39.5 | -7.8 % | | 116.0 | -5.7 % |
+| FAR ridge alone (+ LRU) | 36.6 | -14.6 % | | 109.5 | -11.0 % |
+| FAR ridge + learned key | 36.4 | -15.0 % | | 109.8 | -10.8 % |
+| NEAR-V1 next 1 check alone | 40.4 | -5.9 % | | 110.3 | -10.4 % |
+| NEAR-V1 next 2 checks alone | 38.1 | -11.1 % | | 101.2 | -17.8 % |
+| NEAR-P1 / P2 (perfect 1 / 2 checks) | 39.4 / 36.7 | -8.3 / -14.4 % | | 105.0 / 94.2 | -14.7 / -23.5 % |
+| **(a) TIER V1(2) > FAR > LRU** | **34.2** | **-20.2 %** | | **95.6** | **-22.3 %** |
+| (a) TIER V1(1) > FAR > LRU | 35.4 | -17.6 % | | 101.2 | -17.8 % |
+| (a) TIER V1(2) > FAR > learned key | 33.5 | -22.0 % | | 95.1 | -22.7 % |
+| (a) TIER P2 > FAR > learned key | 32.5 | -24.3 % | | 89.3 | -27.5 % |
+| (b) CHOOSER (V1(2), FAR) + LRU | 34.4 | -19.7 % | | 101.4 | -17.6 % |
+| (c) SCORE b 1.5 g 0.85 / b 3 g 0.7 + LRU | 34.2 | -20.2 % | | 95.6 | -22.3 % |
+| (c) SCORE b 1.5 g 0.85 + learned key | 33.5 | -22.0 % | | 95.1 | -22.7 % |
+
+Reading:
+1. **Near and far are complementary, nearly additive:** FAR alone -14.6 %, NEAR-V1(2) alone -11.1 %, tiered -20.2 % at
+   K 266 (+5.6 points over far alone); at K 147 -11.0 / -17.8 / -22.3 % (+11.3 over far alone: at 24 GB the near horizon
+   matters more because the pool turns over faster). The tiered hybrid reaches M-38's PASS line (>= 20 %) that neither
+   part reaches alone; with the learned key among the rest -22.0 / -22.7 %.
+2. **Tiering is the right combiner; the chooser and the score add nothing.** (c) with any beta / gamma reproduces the tier
+   exactly (a near forecast at distance 1-2 outranks every far one in both), and (b) is worse (-19.7 / -17.6 %): the
+   online precision EMAs swap tiers on noise, and the near forecast is the better protected tier in every layer here
+   (NEAR-V1's precision is uniform by construction, so the per-layer chooser has nothing real to learn on this stand-in;
+   the capture will show whether deep layers trust near and shallow layers far).
+3. **The near horizon must be 2 checks, not 1:** V1(1) -17.6 % vs V1(2) -20.2 % (K 266); a 1-check near forecast at r 0.75
+   is worth less than the far map alone. Two checks = ~20-30 tokens = the far chain's first two blocks.
+4. **Additivity with the learned key, recovered:** FAR-COMBO (1g) had +6.6 points from the key under a perfect kept-row
+   forecast and ~0 under the ridge; the hybrid gets +1.8 points (20.2 -> 22.0 %) at K 266 and +0.4 at K 147, and with a
+   perfect 2-check near +4.1 (20.2 -> 24.3 %). A realistic near forecast recovers roughly a third of the precise-forecast
+   additivity; the rest needs the far map's precision on old residents (1g).
+5. **What is realistic here:** NEAR-V1 is a noise model at V1's recall level, with independent errors per use (optimistic,
+   like M-38's r 0.7). The engine source for it is the far chain's first 16-32 tokens through the state map (the drafter's
+   own next blocks: token agreement ~65-85 % at the first block [K kept per check]), not V1's within-check look-ahead
+   (which sees one layer ahead, not one check). The FAR-G1 capture measures it directly: the first two blocks of every
+   origin at distance 1-2 checks, scored as the near tier. Lines for the capture: NEAR(2) real >= -10 % alone and the
+   tiered hybrid >= -20 % at K 266 -> PASS (replaces the single-forecast line); hybrid 10-20 % BETWEEN; < 10 % KILL.
+6. Cost: the near tier is the same far chain and the same map (no extra compute); the tiering is a two-level key in the
+   eviction (free). EXACT-safe as before (residency only).
 
 ## 6. TRIED lines (for the orchestrator to record)
 - FAR-CEIL: the true future tokens as a perfect far draft through token -> expert maps (memo / leave-one-prompt-out table /
