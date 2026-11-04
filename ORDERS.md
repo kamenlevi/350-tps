@@ -23,3 +23,31 @@ Numbered. Read this file every 20-30 minutes and follow every new order.
      - deepen the top 10;
      - add a "P1b: full-text pass" section to REPORT_P1.md, ending with "PHASE 1b COMPLETE <time>".
    - While papers are on their way, work on P2's data preparation in parallel; don't idle. P2 proper starts at 03:00, P3 at 04:45, as planned.
+
+3. MEASURE YOUR OWN CREDIT SPEND (Kamen asked; zero token cost). Replace your heartbeat loop with this version.
+   It adds a `tokens:` line: your exact token counts, summed from your own session transcript (.jsonl), and an estimate in USD at Fable 5.1 list prices
+   ($10 / MTok input, $50 output, $20 cache write (1 h, upper bound), $0.25 cache read).
+```
+pkill -f 'c3/beat.sh'
+cat > ~/c3/beat.sh <<'EOS'
+#!/bin/bash
+cd ~/c3; PUSHREF=$(cat .pushref 2>/dev/null || echo cloud3-reports); TD=${TD:-$HOME/.claude}
+N=$(cat cloud3/.beat 2>/dev/null || echo 0); RX0=$(awk '/:/ && $1 !~ /lo:/ {s+=$2} END {print s}' /proc/net/dev)
+tok() { find "$TD" -name '*.jsonl' -type f -print0 2>/dev/null | xargs -0 cat 2>/dev/null | jq -c 'select(.message.usage? != null) | {id: (.message.id // .uuid), i: (.message.usage.input_tokens // 0), o: (.message.usage.output_tokens // 0), w: (.message.usage.cache_creation_input_tokens // 0), r: (.message.usage.cache_read_input_tokens // 0)}' 2>/dev/null | jq -s -r 'group_by(.id) | map({i: (map(.i)|max), o: (map(.o)|max), w: (map(.w)|max), r: (map(.r)|max)}) | {i: (map(.i)|add // 0), o: (map(.o)|add // 0), w: (map(.w)|add // 0), r: (map(.r)|add // 0)} | "in \(.i) out \(.o) cache_write \(.w) cache_read \(.r) est_usd \(((.i*10 + .o*50 + .w*20 + .r*0.25)/1e6*100|floor)/100)"' 2>/dev/null; }
+while true; do
+  N=$((N+1)); echo $N > cloud3/.beat; RX=$(awk '/:/ && $1 !~ /lo:/ {s+=$2} END {print s}' /proc/net/dev)
+  { echo "beat: $N"; echo "time: $(date -u +%Y-%m-%dT%H:%MZ) / $(TZ=Europe/Sofia date +%H:%M) EET"
+    echo "step: $(head -1 cloud3/STEP.md 2>/dev/null)"
+    echo "reports_bytes: $(cat cloud3/REPORT_*.md 2>/dev/null | wc -c)"
+    echo "notes_bytes: $(cat cloud3/notes/*.md 2>/dev/null | wc -c)"
+    echo "net_MB: $(( (RX - RX0) / 1000000 ))"
+    echo "tokens: $(tok)"; } > cloud3/HEARTBEAT.md
+  echo "$(date -u +%H:%MZ) beat $N $(grep '^tokens:' cloud3/HEARTBEAT.md)" >> cloud3/LOG.md
+  git add -A cloud3 && git commit -qm "beat $N (auto)"; git push -q origin cloud3-reports:$PUSHREF 2>>cloud3/push_errors.log
+  sleep 600
+done
+EOS
+chmod +x ~/c3/beat.sh && (nohup ~/c3/beat.sh > /tmp/beat.out 2>&1 &)
+```
+   - If the first new beat shows `tokens: in 0 ...`, your transcript lives elsewhere. Find it (`find / -name '*.jsonl' -size +10k 2>/dev/null | grep -v proc | head`), then restart the loop with `TD=<that folder>` in front of the nohup.
+   - Count only your own session's files if the folder holds others: point TD at the session's folder.
