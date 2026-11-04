@@ -6,7 +6,7 @@ the 00:35 version read 3-bit base records on layers 0-9 only and every level in 
 from the fixed replay: NewIdeas' run of the fixed copy (`~/NewIdeas/data/ledger/bytes10_replay_fix.out`, 03:53, same code,
 one line changed) and my own rerun (`bytes10_replay.out`, 06:54, 306 s: identical to the last digit). The 00:35 outputs are kept as
 `bytes10_replay_bug.*`. CPU only (one core at nice 15), no GPU, no downloads; writes only in ~/FableGod/fablec/. Evidence:
-`bytes10_replay.py` -> `bytes10_replay.out` / `.json` (the map's 36 windows), `bytes10_bonus_masks.py` -> `masks/`. Inputs: the
+`bytes10_replay.py` -> `bytes10_replay.out` / `.json` (the map's 36 windows), `bytes10_bonus_masks.py` -> `masks/`, `bytes10_bonus_cfcheck.py` -> `bytes10_bonus_cfcheck.out` (screen 1(c)'s rows, 20:2x). Inputs: the
 C5 brief, NewIdeas' BYTES10.md, `scripts/ten_x_ledger.py` and its outputs (`data/ledger/ledger_{A,B,C}.txt`,
 `ledger_lastrow.txt`, `research/TEN_X_LEDGER.md`, 03:2x-05:5x), FLOOR night 1's directory, TRIED/NOVELTY.md,
 Breakthrough's `COLD_read.txt` / `COLD_lru.txt` / `dm_t3all_read.log`, NewIdeas' `QOM_read.txt` and
@@ -50,9 +50,12 @@ tables give "mine (ledger's)" and the ledger's is the floor. Code / IFEval / mul
 7. **12 GB:** the same stack lands at 24.3 / 26.1 / 18.6 unhalved, ~65 / 104 / 89 halved. **<= 10 at 12 GB needs the
    resident set to hold the sure rows' working set** (115 / 85 / 80 top-2 experts per layer vs 51 slots): 2-bit resident
    records, or a check whose first pass fits the pool.
-8. **Screens for 13:45** (section 5): screen 1 (a) is done (above); (b) / (c) are rebuilt with the gate file's own cf
-   (`masks/q1u_0.9_live_bonus9g`, `masks/qom_0.5_live_bonus5g`) and are null checks; screen 2 (sure rows at top-1 at live
-   cuts, QOM form) and screen 3 (the W1B 24 GB calibration: 213-245 on code) stand.
+8. **Screens** (section 5): screen 1 (a) is done (above); (b) / (c) ran at 19:38 (Breakthrough, ba53ede): (b) PASS as the
+   null result (7 rows); (c) COST +0.12 / +0.20 / +0.28 points on the 165 rows gated at cf 0.5 (pooled z +1.71). The rows
+   say the cost is my mask's treatment (ranks 0-1 + union only), not the bonus row's cf: the same kind of row under QOM's
+   resident keep costs nothing (section 4, 19:38). The lever's quality numbers were already the resident-keep form's
+   (PASS code / BETWEEN chat): unchanged; the threshold forms are closed. Screen 2 (sure rows at top-1 at live cuts, QOM
+   form) and screen 3 (the W1B 24 GB calibration: 213-245 on code) stand.
 
 ## 1. The ledger audit: what multiplies, what overlaps
 
@@ -134,7 +137,7 @@ Odds [G] are for the lever passing its quality line in its domain. Costs name th
 
 | # | lever | gain (replay) | halved | odds | cost | exact? | novelty |
 |---|---|---|---|---|---|---|---|
-| 1 | **gated bonus row** (section 4): the bonus row keeps ranks 0-1 + the block's union (+ QOM's resident keep) when the drafter has a draft for its token | x0.50 / x0.23 / x0.17 -> 30.8 / 20.0 / 14.2 | x0.75 / x0.62 / x0.59 -> 46 / 53 / 49 | code: map PASS already (QOM form, 05:06 [K]); chat: BETWEEN (+1.5 points), EvalSuite's same-scores test decides: 80 % code, 40 % chat | masks built (two forms ran); engine: the draft after the cut exists already on 68 / 99 / 99 % of segments (ledger section 4); MTP Head for the uncut code segments (a 16th draft) | FAST | **new**; position weighting by reach is published (PSR s7, AcceptMoE) |
+| 1 | **gated bonus row** (section 4): the bonus row keeps ranks 0-1 + the block's union (+ QOM's resident keep) when the drafter has a draft for its token | x0.50 / x0.23 / x0.17 -> 30.8 / 20.0 / 14.2 | x0.75 / x0.62 / x0.59 -> 46 / 53 / 49 | code: map PASS already (QOM form, 05:06 [K]); chat: BETWEEN (+1.5 points), EvalSuite's same-scores test decides: 80 % code, 40 % chat; threshold forms closed 19:38 [K]: union-only at cf 0.5 COST (+0.12 / +0.20 / +0.28), the treatment not the row; a cf 0.3 resident-keep form would be ~x0.74 / x0.61 / x0.76 [G], no better than COLD (7) on chat | masks built (two forms ran); engine: the draft after the cut exists already on 68 / 99 / 99 % of segments (ledger section 4); MTP Head for the uncut code segments (a 16th draft) | FAST | **new**; position weighting by reach is published (PSR s7, AcceptMoE) |
 | 2 | **sure rows at top-1 + union** (the oea_k1 / P1-OEA pass-1 family) | alone x0.82 / x0.94 / x0.95 (50.5 / 80.9 / 79.3); with 1: 16.8 / 11.8 / 7.9 (x0.55 / x0.59 / x0.56) | x0.77 / x0.80 / x0.78 -> 36 / 43 / 38 | 45 % code, 25 % chat: the union-only form at cf 0.9 ran overnight (BETWEEN code, KILL IFEval, BETWEEN multi [K ledger 0.7]); the QOM form is screen 2 | Breakthrough: masks + map arm (5 min GPU) | FAST | adapted (OEA k1, P1-OEA) |
 | 3 | **rank-class pools** (two LRU lists: experts last needed at ranks 0-1 in 70 % of the slots, exact rows' tails in 30 %, promotion on a rank 0-1 need) | x0.52 / x0.74 / x0.87 -> 8.8 / 8.7 / 6.9 (PIN x0.70 / x0.83 / x0.94; OPT room x0.29 / x0.37 / x0.51 [P ledger]) | x0.76 / x0.87 / x0.94 -> 27 / 37 / 36 | exact for any rule (it changes only what stays resident); 60 % that an engine policy keeps half the replay's gain [G] | BigMoE: a loader policy; CPU replay on the traced 24 GB arm first (screen 3) | EXACT | adapted (SLRU / 2Q; SMoE score eviction 2508.18983) |
 | 4 | **11-bit scales + native layout (M-27b)** | x0.824 -> 7.3 / 7.2 / 5.7 | x0.91 -> 25 / 33 / 32 | 85 % (bitwise) | MoonShots / Leap / BigMoE: conversion Thu (a 63 GB copy: the disk call), A/B Fri | EXACT | published practice |
@@ -212,6 +215,31 @@ drafter is rarely sure of the next token, so the gain lives at QOM's cf 0, where
 builds gated by the next segment's first draft (one position too far; 922 / 453 rows): they are kept but superseded by the
 `g` builds.
 
+**Threshold screens (Breakthrough 19:38, commit ba53ede; my CPU join `bytes10_bonus_cfcheck.py` -> `.out`, 20:2x) [K map].**
+(b) `q1u_0.9_live_bonus9g` (7 rows) PASS within +0.1 on all three domains (McNemar 0 / 0, 5 / 6, 6 / 3): the null result.
+(c) `qom_0.5_live_bonus5g` (165 rows) COST: +0.12 / +0.20 / +0.28 points (5 / 1, 48 / 41, 33 / 23; pooled 86 / 65, z +1.71).
+The pre-registered reading of a cost ("the gate file's cf and the walk's disagree") was void: `dm_gate.py` builds the gate
+file from the walk's own cf, one quantity. What the rows say instead. The 1,368 realized bonus rows are of three kinds: (A)
+the live cut fell inside an accepted run, the gate value is the cf of a draft the verifier accepted (37 / 94 / 76 on code /
+IFEval / multi); (B) the cut fell on the check's first miss, the gate value is the drafter's confidence in a token the
+verifier rejects (68 / 386 / 623); (C) the end of a fully kept 15-draft check, no draft, never gated by a threshold (83 / 1 /
+0). At cf 0.5 the gated 34 / 73 / 58 rows are A 21 / 27 / 19 + B 13 / 46 / 39; at 0.9, 7 in all. Joining the arm's argmax
+with the baseline's (the read-out's own flip definition; it reproduces 16 / 98 / 68): the gated bonus rows flip at 9.7 % (16
+/ 165) against 4.0 % (45 / 1,117) for the same kinds left exact in the same arm, +5.7 points per gated row (z 3.3); the
+QOM-gated drafted rows in that arm flip at 0.2 / 0.8 / 0.5 %; and the first-miss rows with cf >= 0.5, which QOM's own
+treatment gates in both arms (the ledger's "disc" rows), flip at 1.7 / 4.6 / 2.5 %, the same as the exact first-miss rows
+below 0.5 (3.9 / 4.6 / 2.8 %). **So the cost is the treatment, not the row:** my mask gives the bonus row ranks 0-1 + the
+block's union only, QOM's resident keep does not, and a drafter-wrong row at cf >= 0.5 costs nothing under the resident
+keep. Consequences: (1) the mechanism's quality numbers are the resident-keep form's (`qom_0_live_bq`: PASS code, +1.56 /
++1.49 chat), as read above; the union-only form is closed at every threshold. (2) On chat the +1.5 at cf 0 comes from the
+88-94 % of bonus rows below cf 0.5 (the live cut lands where the drafter is unsure, by construction), so a threshold on the
+resident-keep form trades bytes for points along the kinds table: cf 0.3 would gate 42 / 51 / 29 % of the bonus rows (75 /
+51 / 29 % of the engine's cf-0 set), worth ~x0.74 / x0.61 / x0.76 of the stack's bytes on a linear share [G] against x0.65 /
+x0.23 / x0.17 at cf 0: no better than COLD on the bonus row (lever 7, x0.62 / x0.52 on chat). (3) Next, if chat needs a
+PASS: not another threshold; EvalSuite's same-scores test of `qom_0_live_bq` as written, with COLD as the fallback. To
+confirm the treatment reading on the map: `qom_0.5_live_bq5` (the same 165 rows with QOM's resident keep) vs
+`qom_0.5_live`, prediction PASS within +0.1, ~5 min GPU; it changes no price.
+
 **Price [P, section 2]:** on the QOM cf 0 + t3 stack, 24 GB 61.7 / 86.1 / 83.1 -> 30.8 / 20.0 / 14.2 with every bonus row
 gated (the engine's convention 35.7 / 19.4 / 13.9 [P ledger]); 12 GB 135 / 251 / 226 -> 69.6 / 75.7 / 55.5; 45 GB 13.5 /
 19.3 / 20.2 -> 5.7 / 4.5 / 4.4 (engine 7.7 / 4.5 / 4.4). The ledger's reconciliation shows the same gate hid inside
@@ -257,7 +285,13 @@ two forms with the result above: PASS code / BETWEEN chat in QOM's form. What is
 arms, rebuilt at 07:0x with the gate file's own cf (`bytes10_bonus_masks.py <arm> <thr> g`): (b) `masks/q1u_0.9_live_bonus9g`
 (7 bonus rows gated, their pairs x0.65) and (c) `masks/qom_0.5_live_bonus5g` (165 gated, x0.59 on those). Both are null checks
 of the claim that the gate above cf 0 touches almost nothing: lines, per domain: all-row flips within +0.1 points of the
-ungated arm = PASS (expected), paired McNemar; a larger cost there would say the gate file's cf and the walk's disagree. The
+ungated arm = PASS (expected), paired McNemar; a larger cost there would say the gate file's cf and the walk's disagree.
+**Result (19:38, Breakthrough, ba53ede; `~/Breakthrough/data/dm_s7/results_wed/SCREEN_read_*.txt`) [K]:** (b) PASS on all
+three domains within +0.1 (1.25 = 1.25, 6.42 vs 6.45, 3.86 vs 3.77 %; McNemar 0 / 0, 5 / 6, 6 / 3): the null result. (c) COST
+on all three: 0.48 vs 0.36, 2.88 vs 2.68, 1.91 vs 1.63 % (+0.12 / +0.20 / +0.28; 5 / 1, 48 / 41, 33 / 23; pooled 86 / 65, z
++1.71, the same sign everywhere). The pre-registered reading of a cost was wrong (the gate file is built from the walk's cf,
+`dm_gate.py`); the verdict comes from the rows (section 4): the union-only treatment costs ~+6 points per gated bonus row at
+any cf, QOM's resident keep does not. Closed; nothing in sections 2-3 changes. The
 00:34 builds (`_bonus9`, `_bonus5`: 453 / 922 rows, the next segment's first draft as the cf) gate one position too far;
 do not run them. The mechanism's real open question is not a map screen: EvalSuite's same-scores test of `qom_0_live_bq` on
 chat.
@@ -332,3 +366,19 @@ SP-MoE https://arxiv.org/abs/2510.10302 ; MoE-SpeQ https://arxiv.org/abs/2511.14
 HOBBIT https://arxiv.org/abs/2411.01433 ; FlashMoE https://arxiv.org/html/2601.17063v1 ; DALI https://arxiv.org/html/2602.03495v1 ;
 SMoE https://arxiv.org/pdf/2508.18983 ; local routing consistency https://arxiv.org/html/2505.16056v3 ; PSR, AcceptMoE, PEARL as
 in TRIED/NOVELTY.md.
+
+## 8. Screen 1(b) / (c) results (Wed 4 Nov 2026, 19:38-20:3x EET)
+
+Breakthrough ran the two threshold arms on the map at 19:28-19:38 (36 windows each, 0 row-count warnings; commit ba53ede;
+`~/Breakthrough/data/dm_s7/results_wed/`). (b) `q1u_0.9_live_bonus9g` vs `q1u_0.9_live`: PASS on all three domains within
++0.1 points, the null result on 7 rows. (c) `qom_0.5_live_bonus5g` vs `qom_0.5_live`: COST on all three, +0.12 / +0.20 /
++0.28 points (pooled McNemar 86 / 65, z +1.71). My CPU join of the arm's argmax with the baseline's
+(`bytes10_bonus_cfcheck.py` -> `.out`; it reproduces the read-out's 16 / 98 / 68 flips) sorts the 1,368 realized bonus rows
+into three kinds and shows the cost is the union-only treatment, not the row: the 165 gated rows flip at 9.7 % against 4.0 %
+for the same kinds left exact (+5.7 points per gated row, z 3.3), while the first-miss rows with cf >= 0.5, which QOM's own
+resident keep gates in both arms, show no excess over the exact ones (1.7 / 4.6 / 2.5 vs 3.9 / 4.6 / 2.8 %). The
+pre-registered alternative (gate file vs walk cf) was void: `dm_gate.py` builds one from the other. Nothing in sections 2-3
+changes: the lever's quality was already read from the resident-keep form (`qom_0_live_bq`: PASS code, +1.56 / +1.49 chat).
+Closed: the union-only form at every threshold, and threshold forms of the resident keep as a route to a chat PASS (cf 0.3
+would be ~x0.74 / x0.61 / x0.76 [G], no better than COLD on chat). Open, as before: EvalSuite's same-scores test of
+`qom_0_live_bq` on chat. Cost of this pass ~0.15 % of the week; CPU only, no messages, nothing committed.

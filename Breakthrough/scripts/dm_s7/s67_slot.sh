@@ -16,6 +16,10 @@
 #   done and only if it can start before 23:10 (predicted FAIL, the lowest value tonight); after 1(c) the GPU goes to
 #   MTP Head's P-CAP (~32 GB) or s7_trl, whichever is ready first (P-CAP waits for 3 clear minutes with no MEM >= 5 GB
 #   lock; this slot waits while another session's shared run declares MEM > 5 GB).
+#   The orchestrator 19:5x: MTP Head's P-OFF goes first (extraction ~20:40-21:15, training to ~22:15 if alive), then s7_trl
+#   once the store is whole (~22:15-22:30), all before BigMoE's 23:00 ticket. DENSE-3 is OFF tonight (a Thu leftover with
+#   BIGMOE_EXT_BUILD=build_nat after the conversion, or dropped if NewIdeas agrees). The interim read-out is not repeated
+#   when the log already has one.
 #   The orchestrator 17:3x: start NOW (the GPU is idle by day; armed with S67_START = the arming time); s7_trl joins when the
 #   store is whole (~21:10). The first time only s7_trl is left, an interim read-out runs (the same read-outs as the end).
 #   Wed 18:1x, by-day heat (fanwatch: a heat pause every ~5 min, 3-6 min each; s7_ref was stopped at 18:05 for "PAUSE over
@@ -31,7 +35,7 @@
 # (+0.1 points vs the ungated twin, BYTES10.md:255-260) for 1(b) vs q1u_0.9_live and 1(c) vs qom_0.5_live.
 # Override the clock at arming: S67_START / S67_LASTGO / S67_DEADLINE = "YYYY-mm-dd HH:MM:SS".
 DM=~/FableGod/decision_map; PY=~/BigMoE/.venv/bin/python; LOG=~/Breakthrough/data/s67_slot.log; Q=$HOME/.local/share/quiet
-ARMS="qom_0_live_ball_c147_t3 s7_ref s7_ref3 s7_cal s7_cal_all q1u_0.9_live_bonus9g qom_0.5_live_bonus5g s7_trl qom_0_live_ball_c147_t3+dense3"
+ARMS="qom_0_live_ball_c147_t3 s7_ref s7_ref3 s7_cal s7_cal_all q1u_0.9_live_bonus9g qom_0.5_live_bonus5g s7_trl"   # DENSE-3 off tonight (the orchestrator 19:5x)
 D3=qom_0_live_ball_c147_t3+dense3; D3SHA=ec71be4478bc606f   # Leap's dense3.py as smoked (17:00)
 est() { case $1 in s7_cal_all) echo 35;; s7_ref3|$D3) echo 10;; s7_trl|s7_cal) echo 7;; q1u_0.9_live_bonus9g|qom_0.5_live_bonus5g) echo 5;; *) echo 6;; esac; }
 ts() { date -j -f "%Y-%m-%d %H:%M:%S" "$1" +%s; }
@@ -82,7 +86,7 @@ readouts() {   # $1 = interim (the first wait for the TRL store; the orchestrato
 }
 while [ $(date +%s) -lt $START ]; do sleep 30; done
 cd $DM || exit 1
-need=3; runs=0; last=; interim=0
+need=3; runs=0; last=; interim=0; grep -q "^\[s67\] read-outs (interim) done" $LOG && interim=1
 while :; do
   [ -z "$(todo)" ] && break
   [ $(date +%s) -ge $LASTGO ] && { say "23:10 (LASTGO): no new arm; left: $(todo)"; break; }

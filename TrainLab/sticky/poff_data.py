@@ -12,7 +12,7 @@ for p in glob.glob(os.path.expanduser("~/Leap/data/l120/*.npz")):
     q = os.path.join(out, os.path.basename(p))
     if not os.path.exists(q):
         os.symlink(p, q)
-n, k = 0, 0
+n, k, on_n, on_d = 0, 0, 0, 0
 for line in open(os.path.expanduser("~/TrainLab/ext/poff/poff_windows.jsonl")):
     r = json.loads(line)
     p = os.path.join(X, r["key"] + ".npz")
@@ -23,6 +23,11 @@ for line in open(os.path.expanduser("~/TrainLab/ext/poff/poff_windows.jsonl")):
         os.symlink(p, q)
     z = np.load(p)
     n += int(z["asst"].sum()); k += 1
+    m_ = len(z["ids"]) - 1                                   # the extractor's own on-path count, over the whole prefix
+    msk = z["asst"][1:m_ + 1].astype(bool)
+    hit = z["tk"][:m_, 0] == z["ids"][1:m_ + 1]
+    on_n += int(hit[msk].sum()); on_d += int(msk.sum())
     if n >= a.tokens:
         break
-print(f"P-OFF data: {out}: L1-20's windows + {k} off-policy windows, {n} assistant tokens")
+print(f"P-OFF data: {out}: L1-20's windows + {k} off-policy windows, {n} assistant tokens; "
+      f"on-path rate (assistant) over these {k} windows {on_n / max(1, on_d):.4f}")

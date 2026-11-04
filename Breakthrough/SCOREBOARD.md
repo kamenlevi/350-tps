@@ -2963,11 +2963,14 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
       ungated last rows in multi).
     - NewIdeas' prediction was code ~1.15-1.3 %, chat as C's. DRAFT17's gated last rows cost nothing measurable on code.
   - SCREEN 7: PENDING. s7_trl waits for Fit12's store; est_KL needs KL_trl.
-    - Ready for it, the scale (KL_cal_all - KL_ref) / (KL_cal - KL_ref) = 11.7 / 12.9 / 17.1 (4 -> 48 layers; linear
+    - Ready for it, the scale (KL_cal_all - KL_ref) / (KL_cal - KL_ref) = 11.1 / 12.8 / 17.1 (CORRECTED 19:5x from the unrounded KL, as NewIdeas: 11.7 / 12.9 came from the rounded table; 4 -> 48 layers; linear
       would be 12).
     - Information [K]: s7_ref3 - s7_ref = +0.30 / +1.14 / +1.01 points (KL +0.0011 / +0.0065 / +0.0088). That is the cost of
       serving the kept ranks 2-9 at MSB-3 instead of 4 bits at 239 slots (BigMoE's all-3-bit FAST pool question; code
       stays under 1.34 % at 239 slots).
+      FRAME (NewIdeas 7fac438, Wed 20:0x): FAST certifies against REF2-T, which already serves ranks 2-9 at 3 bits, so this
+      is REF2-T's own cost against the 4-bit model, not a FAST cost; tail_bits 3 is the like-for-like choice (NewIdeas'
+      call 18:4x, d07577a).
   - 1(b) q1u_0.9_live_bonus9g, null check: PASS on all three domains.
     - code 1.25 % (= q1u_0.9_live; McNemar 0 / 0); IFEval 6.42 % (twin 6.45; 5 / 6); multi 3.86 % (twin 3.77, +0.09 <=
       +0.1; 6 / 3, z +1.00).
@@ -2978,3 +2981,11 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
     - Per the pre-registration, a cost above +0.1 means the gate file's cf and the walk's disagree on the 165 bonus rows
       gated at 0.5 (BYTES10.md:255-260).
   - Left: s7_trl (when the store is whole; P-CAP may take the GPU first), then DENSE-3 (before 23:10 only).
+- ADDENDUM Wed 19:5x (the orchestrator 19:5x; nothing in the pre-registration changes): MTP Head's P-OFF goes first
+  (extraction ~20:40-21:15, training to ~22:15 if alive), then s7_trl once Fit12's store is whole (~22:15-22:30), all
+  before BigMoE's 23:00 ticket. DENSE-3 is off tonight: a Thu leftover (BIGMOE_EXT_BUILD=build_nat after the conversion)
+  or dropped if NewIdeas agrees (predicted FAIL). The slot was re-armed at 19:55 with ARMS ending at s7_trl, while it
+  waited for the store with no arm running; the interim read-out was not repeated.
+- ADDENDUM Wed 20:0x (NewIdeas): DENSE-3 is kept as a Thursday leftover (the ~13:10 spare after the records3 conversion,
+  BIGMOE_EXT_BUILD=build_nat): "a measurement beats two predictions". The reading is unchanged (QUEUE 16:5x). NewIdeas runs
+  s7_read.py (it writes into NewIdeas' repo) when s7_trl lands.

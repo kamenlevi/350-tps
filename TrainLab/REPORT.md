@@ -3140,3 +3140,45 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   - Else BETWEEN.
   - Retrain noise is unmeasured; D-09's whole 2-doubling effect was +0.20.
 - The full 160K version keeps the original lines if it runs on Thursday.
+
+### P-OFF amendment 2 (Wed 11-04 19:4x, before any extraction or training): tonight right after P-CAP; extraction sized from Leap's measured speed
+- The orchestrator 19:4x: P-OFF is back on tonight, right after P-CAP. The extraction gives up if it can't start by 21:40
+  (then Thursday). Training runs only if the rate is alive and it starts by 21:55, done by ~22:55. Breakthrough's s7_trl
+  runs after it.
+- **Correction to my 18:1x estimate.** I assumed ~370 tok/s for the extraction (~40 min for all 892K tokens). Leap's own
+  log (~/Leap/logs/job.out, the L1-20 extraction) measured 109 windows / 42,355 tokens in 763 s: 56 tok/s, ~7 s per
+  short window. The cost is SSD-bound: each window streams nearly every non-resident expert (C 51). That run's MLX peak
+  was 22.4 GB on windows of <= 609 tokens, not ~16 GB. All 1,698 windows would take ~3.3 h.
+- **Tonight's extraction is therefore the training prefix only:** the first 260 windows of poff_windows.jsonl, which
+  hold 60,162 assistant tokens and 136,845 tokens to prefill. The longest is 1,271 tokens. Estimate ~32 min.
+  - Smoke: the 3 longest windows of that prefix (ext/poff/smoke3.jsonl), so the smoke footprint bounds the run's. It
+    stops above 27 GB. The share lock declares MEM 28 GB.
+  - The rest (windows 261-1,698) waits for Thursday's 160K version. The extraction is resumable; ~680 windows ≈ 80 min.
+- **The decision rate** is the extractor's own "on-path rate (assistant)" line over windows 1-260. It excludes the 3 smoke
+  windows, which were extracted first. The alive line stays >= 0.75.
+  - Also reported: the same count over all 260 windows (sticky/poff_data.py). It reproduces the extractor's L1-20 number
+    (0.9978 vs 0.998 printed).
+- Training, walk and lines are unchanged from amendment 1 (60K version: PASS >= +0.18 code, KILL <= +0.05). The training
+  lock is 90 min, not 70, for heat pauses; the cap is still --minutes 55 of trained time.
+
+### P-OFF amendment 3 (Wed 11-04 20:0x, before any extraction or training): after BigMoE's 45 GB run; training gate 22:15 with >= 36 GB
+- The orchestrator 20:0x: Kamen is closing Chrome so BigMoE's 45 GB quiet run (WAITMEM 44) goes right after P-CAP,
+  ~20:40-21:30. P-OFF's extraction must not start before it.
+- The wrapper (turns/poff_night.sh) now waits for:
+  - P-CAP's runner to end;
+  - then BigMoE's lock to come and go (or 21:00 if it hasn't started);
+  - then 3 clear minutes with >= 30 GB available.
+  The extraction still gives up at 21:40.
+- Training may now start up to 22:15 (was 21:55), so it still ends before ~23:10. It needs 3 clear minutes with >= 36 GB
+  available (free + inactive + speculative + purgeable), since Chrome may be reopened after ~21:30. Otherwise Thursday.
+  Breakthrough's s7_trl may run first if its store is whole first.
+- Data, rate line (>= 0.75), recipe and PASS / KILL lines are unchanged.
+
+### P-OFF amendment 4 (Wed 11-04 20:1x, before any extraction): extraction only tonight; training on Thursday
+- P-CAP is heat-stretched to ~20:57: its steps take 20.3 s on the wall clock vs 13.7 s trained. BigMoE's early 45 GB run
+  then takes ~21:00-21:50, so the 21:40 extraction give-up would fire.
+- The orchestrator 20:0x said yes to my option: the extraction alone may start as late as 22:00 (~35 min, MEM 28 GB,
+  done by ~22:35). It gives tonight's on-path rate:
+  - >= 0.75: alive. The 60K training runs on Thursday, with amendment 1's lines.
+  - < 0.75: KILL by the pre-registered diagnostic. No training.
+- Breakthrough's s7_trl goes after the extraction, or before it if its store is whole first.

@@ -57,6 +57,12 @@ All [P] cells: research/TEN_X_LEDGER.md (Wed 03:4x). They replace Fable C's BYTE
 | JOINT, keepalive, zero-copy, pickup, lever 2 forecasts | BigMoE / Fable A | yes | 0 bytes: they move exposure (BROKEN line 1), not this line | Wed lever-1 arms | - |
 
 ## Log (newest first)
+- Wed 19:5x: FRAME FIX (SWEEP v1.2): judged against REF2-T, the FAST stack's own reference (ranks 2-9 at 3 bits),
+  the code routes under 10 MB pass with room [G]: TRL-2 4.0 MB at 1.19 %, the mix 7.2 MB at 1.13-1.21 % (19:5x's
+  1.30 / 1.24-1.31 are the conservative frame against the 4-bit model).
+- Wed 19:5x: SWEEP v1.1 in the engine frame (unchecked): both code routes under 10 MB at 24 GB stay est. PASS at
+  the edge [G]: TRL-2 4.0 MB at 1.30 %, the mix 7.2 MB at 1.24-1.31 % (line 1.34). Today's stack (19.5 MB) 1.18 %.
+  s7_trl measures the mix on 4 layers when Fit12's store is whole (scripts/s7_read.py, gate OK on all domains).
 - Wed 18:4x: S7_REF3 (unchecked until ~21:00): the 3-bit tail passes on code. Code is 1.04 % flips at 239 slots, and
   [G] 1.23 % on today's 24 GB stack. So BigMoE's flag stays 3 and today's prices hold (19.5 / 14.3 / 10.6 at 24 GB);
   flag 4's x2.06 is not needed. E29 = +0.0011 / +0.0065 / +0.0088 KL.

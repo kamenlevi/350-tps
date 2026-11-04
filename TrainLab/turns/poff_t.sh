@@ -11,7 +11,7 @@ OUT=$HOME/TrainLab/ext/poff/poff60.safetensors
 $PY sticky/poff_data.py --tokens 60000 --out $HOME/TrainLab/ext/poff/train60 || { log "data folder failed"; exit 2; }
 ok=0
 for t in 1 2 3; do
-  out=$(peer lock share 70m --cpu 300 --gpu 90 "MEM 34 GB: MTP Head P-OFF training (L1-20 + 60K off-policy code tokens, ~55 min) + walk" 2>&1)
+  out=$(peer lock share 90m --cpu 300 --gpu 90 "MEM 34 GB: MTP Head P-OFF training (L1-20 + 60K off-policy code tokens, ~55 min) + code walk; then Breakthrough s7_trl" 2>&1)
   log "lock try $t: $(printf '%s' "$out" | head -1)"
   printf '%s' "$out" | grep -q "reserved" && { ok=1; break; }
   sleep 60

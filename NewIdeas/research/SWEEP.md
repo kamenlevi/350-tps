@@ -1,12 +1,18 @@
-# THE SWEEP: old "lossy" and error-bar kills, re-priced under today's FAST stack (v1, Wed 4 Nov 2026 14:4x)
+# THE SWEEP: old "lossy" and error-bar kills, re-priced under today's FAST stack (v1.2, Wed 4 Nov 2026 19:5x; v1 14:4x)
 
 > (a quote from the project owner, kept private)
 are the kinds of things which we should be searching for." Every KILL / PARKED from before the 11-02 two-track rule
 that was judged on an exact or error bar, and every published method set aside as "lossy", priced under today's FAST
 stack. The candidates with sources are in research/SWEEP_CANDIDATES.md (33 rows).
 
-Status: v1. Every number below is [P] (a replay or arithmetic on measured numbers) or [G] (a model). Nothing goes to
-Kamen before MoonShots' independent re-derivation (the orchestrator's rule). DRAFT17 already has it (x0.723 vs x0.706).
+Status: v1.2 (Wed 19:5x). The quality column uses screen 7's measured terms (scripts/sweep_engine.py,
+data/ledger/sweep_engine.txt). FRAME FIX: v1.1 (19:5x) added the 3-bit tail's cost (E29) to every row, judged against
+the 4-bit model. But the FAST stack certifies against REF2-T (EvalSuite PREREG_f1), and REF2-T itself serves ranks 2-9
+at 3 bits (4433333333). So the verdict frame is amendment 2's in-frame one: MSB-3 rows pay no E29, and a store pays
+(r - 1) x E29. v1.1's numbers stay in that file as the conservative column. MoonShots re-derived v1.1 (413d214, within
++-0.2 points). Every number below is [P] (a replay or arithmetic on measured numbers) or [G] (a model). Nothing
+goes to Kamen before MoonShots' independent re-derivation (the orchestrator's rule). DRAFT17 already has it (x0.723 vs
+x0.706). v1.2's frame argument is with MoonShots (19:5x).
 
 **Re-derivation (MoonShots 14:4x, its own replay scripts/sweep_stores_check.py on Breakthrough's capture checks, QUEUE
 M-35, d05b2ac):**
@@ -38,10 +44,19 @@ M-35, d05b2ac):**
     here, but t4_all is the t-path's numerics floor, not this term. The map runs D-02a's 4-bit model, so in C's form the
     kept ranks 2-9 sit at 4 bits as a stand-in for the engine's MSB-3. The guess is 0.8 x (t3_all - t4_all - the ranks
     0-1 term), and screen 7's s7_ref3 - s7_ref measures it tonight.
-    MEASURED Wed 18:4x (s7_ref3 - s7_ref, 239 slots): +0.0011 / +0.0065 / +0.0088. The rows below still carry
-    the guess, in the map's frame; they move to the engine's frame (each row + r x E29) with screen 7's final read.
+    MEASURED Wed 18:4x (s7_ref3 - s7_ref, 239 slots): E29 = +0.0011 / +0.0065 / +0.0089 (paired z 3.4 / 9.6 / 13.6
+    per row, 1.8 / 7.9 / 9.6 per window; data/ledger/s7_read.txt). It replaces the guess: a store pays
+    (r - 1) x E29(c), E29(c) = E29 x keep(c) / keep(239). It pays this against REF2-T, whose ranks 2-9 are at 3 bits.
+    Against the 4-bit model it would be r x E29(c) (the conservative column).
   - the pool: (1 - g) x 0.0024 / 0.0180 / 0.0084, where g = the replay's keep gap closed toward the 45 GB pool. The
-    147-slot cost is measured (C at 147 minus bq_t3).
+    147-slot cost is measured (C at 147 minus bq_t3). v1.1: a third anchor is measured, s7_ref (C + DRAFT17 at 239
+    slots): 0.0040 / 0.0232 / 0.0236. It closes 0.89 / 0.86 / 0.92 of the KL gap where the keep proxy says 0.67 /
+    0.75 / 0.81, so v1's linear-in-g pool term was pessimistic for big pools. v1.1 interpolates the map-frame C form
+    piecewise in g between the three measured anchors (147: screen 6; 239: s7_ref; 45 GB: bq_t3 + DRAFT17).
+  - **Check of the r scale (v1.1):** r is an MSE ratio vs the 4-bit weights (Fit12's E4 units; MSB-3 = 3 E4, MSB-2 =
+    15 E4, so MSB-2 is r 5). s7_cal_all (all 48 layers at MSB-2) measures 0.0180 / 0.1094 / 0.1465; the model says
+    0.0177 / 0.1004 / 0.1192 (implied r 5.10 / 5.51 / 6.26). Linear in MSE holds on code; chat runs 8-19 % above it
+    at this large an error, so chat cells for stores with r > 1 are optimistic.
   - DRAFT17 on code: +0.0004 MEASURED (screen 6, Wed 18:0x: C 0.0057 -> 0.0061; v1's [G] was +0.0006). Code flips
     unchanged (1.07 %, paired 12 / 12).
   - Check: the model gives C at 147 = 0.0057 / 0.0386 / 0.0313, as measured (by construction).
@@ -51,13 +66,13 @@ M-35, d05b2ac):**
 The 12 GB column's IFEval / multi cells are stand-in-dependent (-34..+17 %, see the re-derivation above); its code
 cells and the whole 24 GB column are re-derived.
 
-| # | candidate (old verdict, bar) | FAST form | 24 GB MB per kept [P, re-derived] | 12 GB [P] | est. flips % [G] (lines 1.34 / 5.42 / 3.69) | what it needs |
+| # | candidate (old verdict, bar) | FAST form | 24 GB MB per kept [P, re-derived] | 12 GB [P] | est. flips % [G], verdict frame v1.2 (lines 1.34 / 5.42 / 3.69; conservative: sweep_engine.txt) | what it needs |
 |---|---|---|---|---|---|---|
-| 0 | today's FAST stack (reference): MSB-3 11-bit + POOLSPLIT + DRAFT17 | - | 19.5 / 14.3 / 10.6 | 52.0 / 54.4 / 39.4 | 1.12 / 7.67 / 6.01 (PASS / BETWEEN / KILL) | screen 6 tonight (DRAFT17's code cost) |
-| 1 | B10 TRL-2 (KILL 10-25, 1.5x MSB-3 error bar) | a FAST-only store, 276 slots | **4.0 / 3.0 / 2.7** | 21.7 / 18.0 / 13.0 | 1.27 / 7.96 / 7.09 (PASS / BETWEEN / KILL) | screen 7 (the mix) tonight; full encode ~31 GB disk |
-| 2 | the 2.40 b mix (gate / up TRL-2, down TRL-3; same B10 bar) | a FAST-only store, 239 slots | **7.2 / 5.0 / 4.1** | 28.5 / 25.3 / 18.4 | 1.23-1.32 / 7.88-8.34 / 6.81-7.27 (PASS edge / BETWEEN-KILL edge / KILL; r 1.62-1.87) | screen 7 (4 layers, KL read-out) tonight |
-| 3 | TRL-3 / T3R (PARKED / KILL on a 12 GB bytes line; quality passed: ranks 2-9 at 0.5x MSB-3) | a FAST-only store, 185 slots | 15.8 / 11.4 / 8.5 | 44.9 / 45.2 / 32.8 | 0.87 / 6.33 / 4.66 (PASS / BETWEEN / BETWEEN) | the best chat quality of any store; ~47 GB disk; 3INST decode at ~3c speed |
-| 4 | GPTQ-3 g64 (HOBBIT-style copy; "lossy", T:368 0.61x MSB-3 at 3.5 b) | a FAST-only store, 171 slots (MSB-3's size) | 19.5 / 14.3 / 10.6 | 52.0 / 54.4 / 39.4 | 0.96 / 6.87 / 5.09 (PASS / BETWEEN / BETWEEN) | the cheapest encoder (GPTQ, not trellis); quality at no byte cost |
+| 0 | today's FAST stack (reference): MSB-3 11-bit + POOLSPLIT + DRAFT17 | - | 19.5 / 14.3 / 10.6 | 52.0 / 54.4 / 39.4 | 1.08 / 7.61 / 5.98 (PASS / BETWEEN / KILL; +-0.1, an uninterpolated stretch) | screen 6 PASS (18:0x) |
+| 1 | B10 TRL-2 (KILL 10-25, 1.5x MSB-3 error bar) | a FAST-only store, 276 slots | **4.0 / 3.0 / 2.7** | 21.7 / 18.0 / 13.0 | 1.19 / 7.87 / 7.20 (PASS / BETWEEN / KILL; chat +0.1..+0.5 possible) | screen 7's s7_trl (the mix) first; full encode ~31 GB disk |
+| 2 | the 2.40 b mix (gate / up TRL-2, down TRL-3; same B10 bar) | a FAST-only store, 239 slots | **7.2 / 5.0 / 4.1** | 28.5 / 25.3 / 18.4 | 1.13-1.21 / 7.63-8.09 / 6.79-7.28 (PASS / BETWEEN / KILL; r 1.62-1.87; chat +0.1..+0.5 possible) | s7_trl (4 layers, KL read-out) when Fit12's store is whole; the reader is ready (scripts/s7_read.py) |
+| 3 | TRL-3 / T3R (PARKED / KILL on a 12 GB bytes line; quality passed: ranks 2-9 at 0.5x MSB-3) | a FAST-only store, 185 slots | 15.8 / 11.4 / 8.5 | 44.9 / 45.2 / 32.8 | 0.86 / 6.32 / 4.61 (PASS / BETWEEN / BETWEEN) | the best chat quality of any store; ~47 GB disk; 3INST decode at ~3c speed |
+| 4 | GPTQ-3 g64 (HOBBIT-style copy; "lossy", T:368 0.61x MSB-3 at 3.5 b) | a FAST-only store, 171 slots (MSB-3's size) | 19.5 / 14.3 / 10.6 | 52.0 / 54.4 / 39.4 | 0.94 / 6.85 / 5.03 (PASS / BETWEEN / BETWEEN; +-0.1) | the cheapest encoder (GPTQ, not trellis); quality at no byte cost |
 | 5 | FAST 3-bit prefill (KILL on paper 10-20, exactness) | prompt rows read MSB-3 only | prefill x0.74: code 117.9 -> 87.4 | - | unknown (the prompt's KV at 3 bits; not on the map) | a map arm with 3-bit prompt rows (harness) |
 | 6 | dense / trunk diet, e.g. 8-bit HC + PLE (KILL on hard KLD) | -627 MB of trunk to expert slots (+3.7 %) | ~x0.96 [P, elasticity ~1] | ~x0.96 | small, unknown | a map arm (HC8 was FAST-judged already) |
 | 7 | Rnd19#5 plane-aware prefetch (PARKED, never run) | prefetch only the MSB-2 plane of predicted experts | engine reads -5-9 % (prefetch waste 18-26 % at 24 GB [K]) | - | none (prefetch only) | an engine arm (BigMoE) |
@@ -77,15 +92,17 @@ Subsumed or dead under today's stack (no re-test):
 ## What the sweep says
 
 1. **Code at 24 GB has a route under 10 MB per kept token with an estimated PASS:** a FAST-only trellis store (TRL-2
-   4.0, the mix 7.2), est. code flips 1.23-1.32 % (mix) / 1.27 % (TRL-2) [G]. It was killed on 10-25 on an EXACT error bar and never priced as
-   a FAST copy. Screen 7 tonight measures the mix on 4 layers with the KL read-out (corrected model 14:5x: code
-   1.23-1.32 % for the mix, close to the line at its pessimistic error ratio).
+   4.0, the mix 7.2), est. code flips 1.13-1.21 % (mix) / 1.19 % (TRL-2) [G, verdict frame v1.2; 1.24-1.31 / 1.30 conservative]. The TRL
+   rows wait for s7_trl: MSE cannot see a trellis code's error structure (MoonShots). It was killed on 10-25 on an EXACT error bar and never priced as
+   a FAST copy. Screen 7 measures the mix on 4 layers with the KL read-out: its calibration arms landed 19:38
+   (gate OK on all three domains, scale 11.1 / 12.8 / 17.1); s7_trl waits for Fit12's store.
 2. **Chat is quality-bound at 24 GB, and no single store reaches PASS in the model [G].** The KL budget at the IFEval
    line is 0.0164, and the base alone (QOM + the gated row) uses 0.0093. The two other terms:
    - the sure rows' ranks 0-1 precision (0.0113 at MSB-3);
    - the pool (0.0139 at 171 slots).
    Better codes (TRL-3, GPTQ-3) cut the first; more slots (TRL-2, the mix) cut the second, but at worse precision. The
-   best chat stores (TRL-3, GPTQ-3) land BETWEEN on both chat domains at 8.5-14.3 MB.
+   best chat stores (TRL-3, GPTQ-3) land BETWEEN on both chat domains at 8.5-14.3 MB (multi KILL in the
+   conservative frame).
 3. **The FAST stack's 3-bit records are a truncation of the EXACT 4-bit codes,** kept nested so EXACT = MSB-3 + LSB. A
    re-quantized 3-bit code has ~half the error at the same or smaller size (GPTQ-3 0.61x, TRL-3 0.50x). FAST does not
    need the nesting, so this is quality at no byte cost.
@@ -97,6 +114,14 @@ Subsumed or dead under today's stack (no re-test):
    it earlier" is that filter.
 
 ## Why chat stays BETWEEN at 24 GB (the KL model's budget, [G])
+
+v1.2 (verdict frame, measured terms): even at the 45 GB pool, C's form costs 0.0206 of IFEval's 0.0164 budget. A
+store there would need r <= ~0.77 (MSE vs MSB-3) to pass. At 24 GB (171 slots, 0.0339) only r ~0 reaches the line,
+and that is a 4-bit store, which holds just 126 slots there. So chat PASS at 24 GB needs a different rule, not a
+better store. Fable C's gate screens landed 19:38
+(Breakthrough ba53ede): 1(b) costs nothing (PASS, null); 1(c), the bonus row gated at cf 0.5 on QOM cf 0.5, costs
++0.12 / +0.20 / +0.28 points but sits at 0.48 / 2.88 / 1.91 % absolute (map frame, 45 GB pool), well under every
+line. That rule's bytes at 24 GB are not priced yet. The v1 reasoning below is in the map frame.
 
 The KL budget at each line, minus the fixed base (QOM cf 0 + the gated last row, 4-bit sure rows, measured at the 45 GB
 pool): IFEval 0.0164 - 0.0093 = 0.0071; multi 0.0114 - 0.0101 = 0.0013.
@@ -115,10 +140,12 @@ pool): IFEval 0.0164 - 0.0093 = 0.0071; multi 0.0114 - 0.0101 = 0.0013.
 
 ## Next (cheapest first)
 
-- The 3-bit tail is worth ~2x bytes (W4PRICE 16:3x, data/ledger/w4_price.txt, unchecked). If s7_ref3 fails, row 0
-  goes 19.5 / 14.3 / 10.6 -> 40.2 / 33.0 / 24.9 at 24 GB (Cl 160 / Cm 115, code [G] 1.25 % PASS), and rows 1-4 need
-  a re-price with a 4-bit tail.
-- Tonight: screens 6 + 7 (DRAFT17's quality; the mix on 4 layers, KL read-out).
+- The 3-bit tail stays: s7_ref3 PASSED on code (18:4x, 1.04 % at 239 slots). Flag 4 would have cost ~2x bytes
+  (W4PRICE 16:3x), so it is not needed.
+- Screen 6 PASS (18:0x). Screen 7's ref / ref3 / cal / cal_all landed 19:38; s7_trl waits for Fit12's store, and
+  scripts/s7_read.py prints its verdict in one command.
+- Chat at 24 GB: price the gate-threshold rule (QOM cf 0.5 + the bonus row gated at 0.5: 0.48 / 2.88 / 1.91 % on the
+  map) in bytes at 24 GB, then its engine-frame quality.
 - MoonShots: re-derive rows 1-4's bytes (the trellis / GPTQ-3 / TRL-3 store prices) before any of them goes to Kamen.
 - If screen 7's code estimate PASSes: Kamen's call on the full mix store (encoder + ~36 GB disk). TRL-3 / GPTQ-3 are
   the chat-side follow-ups (a GPTQ-3 store needs Hessians for all experts: the capture question).

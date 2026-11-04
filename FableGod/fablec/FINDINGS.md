@@ -83,3 +83,23 @@ Files: `AUDIT.md` (task 1), `INVENT.md` (task 2), `replay_c1.py` → `replay_c1.
 - **Lesson for my replays:** assert the mask's rank axis against one block's true union before the first table (a one-line
   check would have caught it at 00:27). Cost of the pass: ~0.3 % of the week (over the 0.1 % planned: the correction
   rewrote the deliverable).
+
+## Screen 1(b) / (c) results (Wed 4 Nov 2026, 19:38-20:3x EET; Breakthrough's map run, my CPU read)
+- **Results [K map, ba53ede]:** (b) `q1u_0.9_live_bonus9g` PASS within +0.1 on all three domains (7 rows: the null result).
+  (c) `qom_0.5_live_bonus5g` COST +0.12 / +0.20 / +0.28 points (McNemar 5 / 1, 48 / 41, 33 / 23; pooled z +1.71).
+- **What the rows say (`bytes10_bonus_cfcheck.py` -> `.out`):** the 1,368 realized bonus rows are (A) cut inside an accepted
+  run 37 / 94 / 76, (B) cut on the check's first miss (the gate value is the drafter's confidence in a rejected token) 68 /
+  386 / 623, (C) end of a fully kept check, no draft 83 / 1 / 0. Joining the arm's argmax with the baseline's (reproduces
+  the read-out's 16 / 98 / 68): gated bonus rows flip at 9.7 % vs 4.0 % for the same kinds left exact (+5.7 points per
+  gated row, z 3.3); QOM-gated drafted rows 0.2 / 0.8 / 0.5 %; first-miss rows with cf >= 0.5 under QOM's own resident keep
+  1.7 / 4.6 / 2.5 % = the exact first-miss rows' 3.9 / 4.6 / 2.8 %. The cost is my mask's union-only treatment, not the
+  bonus row's cf.
+- **Verdicts:** the lever (gated bonus row) is unchanged: its quality numbers were already the resident-keep form's (PASS
+  code / BETWEEN chat at cf 0). Closed: the union-only form at any threshold; a cf 0.3 resident-keep form on chat
+  (~x0.74 / x0.61 / x0.76 [G], no better than COLD). Open as before: EvalSuite's same-scores test of `qom_0_live_bq` on chat.
+- **Two lessons:** (1) my pre-registered alternative ("the gate file's cf and the walk's disagree") could never be true:
+  `dm_gate.py` builds one from the other; check that two quantities are independent before pre-registering them as a
+  contrast. (2) A per-row join of the arm's argmax with the baseline's, by row kind, is a 10-second CPU read that turns a
+  COST verdict into a mechanism; do it before passing any screen result on. Cost of the pass ~0.15 % of the week; CPU only.
+- **For the orchestrator:** a findings note in the README's shape is drafted at `fablec/FINDING_gated_bonus_row.md` (with
+  the TRIED line at its end); my brief limits writes to fablec, so it is not in `~/FableGod/findings/` or `~/TRIED/`.
