@@ -25,7 +25,7 @@ os.environ.pop("MTPLX_FUSED_GATE_UP", None)            # the streamed engine has
 os.environ.pop("BIGMOE_TIER", None)
 os.environ.pop("BIGMOE_VERIFY_MIDLOOP", None)          # SB comes from the lambda below, as in S45
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
-> (a quote from the project owner, kept private)
+CHATSW = os.environ.get("R57_CHATSW") == "1"            # Kamen 11-02 ~10:1x "Yes, 1-3": MTP Head's chat switch (D-23d PASS, exact;
 if CHATSW:                                               # ~/TrainLab/INTEGRATION_CHATSWITCH.md): prompts the type rule calls chat
     os.environ["TL_INFER"] = "1"                         # draft on the 125B's MTP head (d22 b5, K15, cut t, early exit); code /
     os.environ.pop("BIGMOE_MTP_STREAM", None)            # math / agent stay on DFlash2. Head resident (D-20 / D-23d); TL_INFER:
@@ -175,7 +175,7 @@ PRS = {}                                                 # this run's samples: v
 #          each id to the LRU front in order), up to the pool size C_m; the 4-bit ranks' ones into the LSB sidecar up to C_l
 A6 = set(filter(None, os.environ.get("R57_A6", "").replace("+", ",").split(",")))   # '+' too: c45_runner's arm lists split on ','
 A6_POOLS = int(os.environ.get("R57_A6_POOLS", "24"))
-# WARMSPLIT (NewIdeas 11-02 07:3x, Monday night; lead ~/.local/share/pacer/leads/2026-11-01_per_row_cost_opus.md step 1):
+# WARMSPLIT (NewIdeas 11-02 07:3x, Monday night; lead ~/.local/share/usage-pace/leads/2026-11-01_per_row_cost_opus.md step 1):
 # R57_WARMSPLIT=N: every Nth check from the 3rd drafts all 15 (a 16-row check) and, before the real one, runs the identical
 # input cold at 16 rows (rolled back), then warm (all its experts now resident) at 1 / 4 / 8 / 16 rows, each rolled back.
 # Warm slope = the GPU-only cost per row; cold 16 - warm 16 = the SSD's exposed share. The real check then commits as

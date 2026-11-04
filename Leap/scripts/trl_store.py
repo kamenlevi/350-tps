@@ -160,7 +160,14 @@ def test():
             worst = max(worst, float(np.abs(yk[m, r] - yd).max() / np.abs(yd).max()))
     yr = TR.ref_forward(x, P, ids, sco, pairs=True).reshape(M, 10, -1)
     worst_d = float(np.abs(yk - yr).max() / np.abs(yr).max())
-    ok = worst <= 1e-4 and worst_d <= 1e-4
+    ynax = TR.tier_glu_trl_nax(x, P, mx.array(ids), out=mx.float32)      # the serving kernel (half operands)
+    mx.eval(ynax)
+    yn = np.array(ynax).reshape(M, 10, -1)
+    worst_n = max(float(np.abs(yn[m, r] - (dense[int(ids[m, r])]["down"] @ (lambda g, u: g / (1 + np.exp(-g)) * u)(
+        dense[int(ids[m, r])]["gate"] @ xs[m], dense[int(ids[m, r])]["up"] @ xs[m]))).max() / np.abs(yr[m, r]).max())
+        for m in range(M) for r in range(10))
+    print(f"TRL-NAX on the same real codes vs the dense path (per pair, relative to the pair's max |y|): {worst_n:.2e}", flush=True)
+    ok = worst <= 1e-4 and worst_d <= 1e-4 and worst_n <= 5e-3
     print(f"TRL store test: real L18 codes through the store -> TRL-G (fp32) vs the dense W = Q R^T path: max |dy| / max |y| "
           f"{worst:.2e}; vs the float64 forward of the loaded pools {worst_d:.2e} -> {'PASS' if ok else 'FAIL'}", flush=True)
     return ok

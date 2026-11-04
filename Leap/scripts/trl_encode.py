@@ -167,6 +167,10 @@ def main():
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--cap", default=os.path.expanduser("~/Fit12/data/b10rcap"))
     ap.add_argument("--hx", default=None, help="cached _hx.npz (Hx, Ux) to use, e.g. Fit12's L18 cache")
+    ap.add_argument("--fit12-out", default=None, help="also write Fit12's store format (fit_trl_store.py: the 8-bit view of "
+                    "W = Q R^T, keys w / s / b, same metadata) as DIR/e{EEE}_{proj}_k{k}.safetensors (temp + os.replace)")
+    ap.add_argument("--store", default=None, help="write trl-v1 (trl_store.py) layer files here: DIR/L{L}.trl.part while "
+                    "running, os.replace to L{L}.trl + index.json once experts 0-511 are all in (E0-E1 must be 0-511)")
     a = ap.parse_args()
     L, ks = a.layer, FORMS[a.form]
     e0, e1 = (int(x) for x in a.experts.split("-"))
@@ -185,6 +189,14 @@ def main():
           f"{'cached' if a.hx else 'computed'} {time.time() - t00:.1f} s", flush=True)
     if a.out:
         os.makedirs(os.path.join(a.out, f"L{L}"), exist_ok=True)
+    stf = None
+    if a.store:                                         # trl-v1: records written in place as experts finish
+        import trl_store as TS
+        os.makedirs(a.store, exist_ok=True)
+        sen = TS.entry(L, {p: ks[p] for p in ("gate", "up", "down")})
+        part = os.path.join(a.store, sen["file"] + ".part")
+        stf = open(part, "r+b" if os.path.exists(part) else "w+b")
+        stf.truncate(sen["recsz"] * sen["E"])
     nchk = nok = 0
     tl = time.time()
     for b0 in range(e0, e1 + 1, a.batch):
@@ -219,9 +231,31 @@ def main():
             for p, j in js.items():
                 o, K = F.SH[p]
                 w = TM.pack_bits(j.st.reshape(-1, TT * TT), j.k).reshape(o // TT, K // TT, NW[j.k])
-                arrs[f"{p}_w"], arrs[f"{p}_k"] = w, np.array(j.k)
+                arrs[f"{p}_w"], arrs[f"{p}_k"] = w, np.array(j.k)            # (keys gate_w / up_w / down_w = trl-v1's)
                 arrs[f"{p}_s"] = (j.sc.astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
             TIM["pack"] += time.perf_counter() - tq
+            if a.fit12_out:                             # Fit12's file, byte for byte as fit_trl_store.py writes it
+                os.makedirs(a.fit12_out, exist_ok=True)
+                for p, j in js.items():
+                    R = Rs[e] if p == "down" else Rx
+                    a8 = mx.array((j.Q @ R.T).astype(np.float32)).astype(mx.bfloat16)
+                    wq, s8, b8 = mx.quantize(a8, group_size=64, bits=8)
+                    mx.eval(wq, s8, b8)
+                    f = os.path.join(a.fit12_out, f"e{e:03d}_{p}_k{j.k}.safetensors")
+                    tmp = f[:-len(".safetensors")] + ".tmp.safetensors"
+                    mx.save_safetensors(tmp, {"w": wq, "s": s8, "b": b8},
+                                        metadata={"layer": str(L), "expert": str(e), "proj": p, "k": str(j.k),
+                                                  "damp": str(DAMP[p]), "code": "TRL 3INST L12 BlockLDLQ RHT"})
+                    os.replace(tmp, f)
+            if stf is not None:
+                buf = bytearray(sen["recsz"])
+                for nm, pc in sen["pieces"].items():
+                    v = TS.down_signs(L, e) if nm == "down_sg" else arrs[nm]
+                    v = np.ascontiguousarray(np.asarray(v).astype(pc["dtype"]))
+                    assert list(v.shape) == pc["shape"], (nm, v.shape)
+                    buf[pc["off"]:pc["off"] + pc["size"]] = v.tobytes()
+                stf.seek(e * sen["recsz"])
+                stf.write(buf)
             if a.out:
                 f = os.path.join(a.out, f"L{L}", f"e{e:03d}.npz")
                 np.savez(f[:-4] + ".tmp.npz", **arrs)
@@ -252,6 +286,17 @@ def main():
               f"cum prep {TIM['prep']:.1f} s, feedback {TIM['feedback']:.1f} s, Viterbi wait {TIM['vit_wait']:.1f} s, "
               f"pack {TIM['pack']:.1f} s" + (f"; check {nok} / {nchk} views bitwise == Fit12's store" if a.check else ""),
               flush=True)
+    if stf is not None:
+        stf.flush(); os.fsync(stf.fileno()); stf.close()
+        if (e0, e1) == (0, 511):                        # a whole layer: publish it (atomic rename + index merge)
+            import json
+            os.replace(part, os.path.join(a.store, sen["file"]))
+            ip = os.path.join(a.store, "index.json")
+            ix = json.load(open(ip)) if os.path.exists(ip) else {"format": "trl-v1", "layers": {}}
+            ix["layers"][str(L)] = sen
+            json.dump(ix, open(ip + ".tmp", "w"), indent=1)
+            os.replace(ip + ".tmp", ip)
+            print(f"[trl_encode] L{L} published: {os.path.join(a.store, sen['file'])}", flush=True)
     ne = e1 - e0 + 1
     print(f"[trl_encode] done L{L} {ne} experts in {time.time() - tl:.1f} s = {(time.time() - tl) / ne:.3f} s per expert "
           f"(full store at this rate: {(time.time() - tl) / ne * 24576 / 3600:.2f} h)" +

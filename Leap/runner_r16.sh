@@ -1,6 +1,6 @@
 #!/bin/sh
 # Leap's sixteenth detached screen runner (Thu 2026-10-29 02:12; RULES.md 'Rapid screening'): waits for the pid given
-> (a quote from the project owner, kept private)
+# as $1 (0: none) to finish, then runs its screen as runner_r.sh does. No time-of-day gate: Kamen Thu 00:27 "You can do tests
 # for now" (STATE.md); his stop comes as PAUSE, which every gate here honours.
 # Pass / kill lines are pre-registered in TABLE_350.md. Log: data/runner_r.log (shared with runner_r.sh)
 cd "$HOME/Leap" || exit 1

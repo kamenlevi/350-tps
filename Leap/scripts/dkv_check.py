@@ -58,6 +58,7 @@ SUB = d7b_nax.DraftSubset(tgt.lm_head)
 MASK, SW = int(d8.config.mask_token_id), d8.config.sliding_window
 say(f"\nDKV check {time.strftime('%a %H:%M:%S')}: D8-NAX ({N8} NaxQL8), MLX {mx.__version__}; loaded in {time.time() - t00:.0f} s")
 
+ONLY_C = os.environ.get("DKV_ONLY_C") == "1"           # (21:1x) re-time only: (a) / (b) passed at 19:0x (2f726fb)
 # ---- (a) stress on one real attention layer ----
 DKV.install()
 layer, rope = d8.layers[0].self_attn, d8.rope
@@ -65,7 +66,7 @@ rng = np.random.default_rng(0)
 rnd = lambda shape: mx.array((rng.standard_normal(shape)).astype(np.float16)).astype(mx.bfloat16)
 c0 = dict(DKV.COUNTS)
 steps = bad = trims = 0
-for pr, S0 in enumerate((2100, 2047, 1000, 300, 40, 2)):
+for pr, S0 in enumerate(() if ONLY_C else (2100, 2047, 1000, 300, 40, 2)):
     ref = RotatingKVCache(SW - 1, 0)
     new = DKV.LinRotCache(SW - 1, 0, cap=(SW - 1 + 200) if pr % 2 else None)
     P0 = S0 + (int(rng.integers(0, 3000)) if S0 >= SW - 1 else 0)    # r57's start: max(0, P - 2047) (deviation 19:0x:
@@ -84,9 +85,10 @@ for pr, S0 in enumerate((2100, 2047, 1000, 300, 40, 2)):
             DF._trim_recent_cache([ref], n); DF._trim_recent_cache([new], n)
             trims += 1
 dc_ = {k: DKV.COUNTS[k] - c0[k] for k in DKV.COUNTS}
-ok_a = bad == 0 and all(dc_[k] > 0 for k in ("fast", "slow", "adopt", "compact", "trim_fast"))
-say(f"(a) stress: {steps} steps (6 prompts, {trims} trims): outputs != reference in {bad}; paths taken {dc_} -> "
-    f"{'PASS' if ok_a else 'FAIL'}")
+ok_a = None if ONLY_C else (bad == 0 and all(dc_[k] > 0 for k in ("fast", "slow", "adopt", "compact", "trim_fast")))
+if not ONLY_C:
+    say(f"(a) stress: {steps} steps (6 prompts, {trims} trims): outputs != reference in {bad}; paths taken {dc_} -> "
+        f"{'PASS' if ok_a else 'FAIL'}")
 DKV.uninstall()
 
 
@@ -135,8 +137,8 @@ def arm(name):
         DKV.install(addmask=ARMS[name])
 
 
-ok_b, lines = True, []
-for folder in ("dfl2d_code", "dfl2d_math"):
+ok_b, lines = (None if ONLY_C else True), []
+for folder in (() if ONLY_C else ("dfl2d_code", "dfl2d_math")):
     o = {}
     for name in ARMS:
         arm(name)
@@ -180,5 +182,5 @@ for rows in (1000, 2047):
         f"{k} {v:.2f} ({v - med['ref']:+.2f})" for k, v in med.items()) + f"; rounds {[[round(1e3 * x, 2) for x in v] for v in res.values()]}")
 arm("ref")
 DKV.uninstall()
-say(f"DKV check: (a) {'PASS' if ok_a else 'FAIL'}, (b) {'PASS' if ok_b else 'FAIL'}; COUNTS {DKV.COUNTS}; mlx peak "
+say(f"DKV check: (a) {'skipped' if ok_a is None else 'PASS' if ok_a else 'FAIL'}, (b) {'skipped' if ok_b is None else 'PASS' if ok_b else 'FAIL'}; COUNTS {DKV.COUNTS}; mlx peak "
     f"{mx.get_peak_memory() / 2**30:.2f} GB; {time.time() - t00:.0f} s")

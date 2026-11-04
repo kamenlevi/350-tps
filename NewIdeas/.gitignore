@@ -1,5 +1,0 @@
-data/cap35/
-data/**/*.npz
-papers/*.pdf
-*.pyc
-__pycache__/

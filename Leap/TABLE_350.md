@@ -232,7 +232,7 @@ Tags: **published** = shown elsewhere, untested here; **here** = measured on thi
   - Pruning barely shrinks a check's bytes (distinct experts per layer, 16 rows: 72 -> 63-68; 54-57 with top-8). Its
     value is residency.
   - At 45 GB the whole 256-pool at 3.5 b (~30 GB) is resident: zero misses.
-> (a quote from the project owner, kept private)
+  - **CLOSED (22:39): Kamen (relayed by the orchestrator at ~22:38) rejected pruning ("No I don't want to use half of the experts").** All 512
     experts per layer stay; no pruning or merging. The residency lesson carries over to all-expert methods below.
 - **All 512 experts at 24 GB (22:41; scripts/resid27.py; same traces and replay):**
   - Misses per token, code, 16-row checks:
@@ -498,7 +498,7 @@ Tags: **published** = shown elsewhere, untested here; **here** = measured on thi
     small model nor an affordable tree extracts it.
 
 ## L1-23 (Leap, pre-registered 20:26; MoonShots' L1-01b): bit-exact 16-row kernels for the 125B's dense layers
-> (a quote from the project owner, kept private)
+- **Why:** Kamen (~20:00): "make the kernel allow for 95+ percent of the hardware". MoonShots measured the 125B's dense
   shapes (data/b8mr/denseinv.txt). A bit-exact 16-row check today chunks its rows (12 + 4 for the 4-bit shapes, 5s for
   the bf16 hyper-connection mixers), because MLX's kernels change numerics with the row count. Its dense layers take
   ~57 ms (4-bit ~37.5, bf16 ~17.5, 8-bit ~1.7), against a ~12 ms floor and ~16 ms for 1-row decode. Exactness costs
@@ -637,7 +637,7 @@ Tags: **published** = shown elsewhere, untested here; **here** = measured on thi
     parts (attention, GDN core, routing, glue) are not measured here.
   - Rounding changes once, for decode and verify together.
 
-> (a quote from the project owner, kept private)
+## L1-26 (Leap, pre-registered 23:26; Kamen's "mend to fit the GPU" item a): a fragment-native 4-bit weight layout
 - **Why:** L1-24 / L1-25. The 16-row paths are ALU-bound on unpacking.
   - qmm16c's lane reads 8-byte pieces of 4 weight rows per 64-value group.
   - It spends 3 ops (shift, mask, or 0x4300) per 4-bit value to make a bf16 operand.
@@ -700,7 +700,7 @@ Tags: **published** = shown elsewhere, untested here; **here** = measured on thi
 - Item (b), the drafter on the Neural Engine, is KILLED on arithmetic. Drafting is 3-8 % of a check and has to wait for
   the check's result (prior art: Mirror-SD 2510.13161).
 
-> (a quote from the project owner, kept private)
+## L1-27 (Leap, pre-registered 23:36; Kamen's "mend" item a): 4-bit weights fed to the tensor units AS 4-bit
 - **Why:** L1-24 / L1-26. The few-row paths are ALU-bound on unpacking: experts reach 82 % of the floor with the
   native layout, the dense shapes 77-86 %.
   - The installed SDK (26.5; MPPTensorOpsMatMul2d.h) lists **bfloat x uint4b_format -> float** for matmul2d.
@@ -3156,7 +3156,7 @@ Data: data/b5_slice.txt (timings, 20 checks per variant), data/b5_gpu.txt (trace
     - BigMoE (engine owner) gets the finding: its shipped plain-path gather costs ~8 ms per layer-call in
       allocations. For its own stock paths a reused scratch buffer (no clear_cache) may be a cheap exact win too;
       that is BigMoE's to screen.
-> (a quote from the project owner, kept private)
+- **R-50b (Kamen via the orchestrator, Thu 20:5x: "did you test it", i.e. does R-50 carry over to the 45 GB setup;
   pre-registered Thu 21:02; scripts/r50b_screen.py, runner_r27.sh after runner 26, ~2 min):** warm 16-row checks,
   gather vs slot, at the 45 GB line's REF2 configuration (C 192), with the needed experts resident.
   - Setup: no drafter; REF2 + SB on; PF1 for prefills only.
@@ -3399,7 +3399,7 @@ R-59 at C 224, warm 16-row REF2b check, ms per check (x its bytes floor at 280 G
     cycle at C 224.
   - Exact-safe if qmmg's per-output accumulation order is kept: only memory access changes, e.g. more loads in flight.
     A candidate kernel row, after R-62 / R-61.
-> (a quote from the project owner, kept private)
+- **HOLD (Kamen 11:5x, "Hold it for now"):** no runs and no locks until he lifts it (PAUSE / HOLD kept by
   hold_guard.sh). Reading, planning and writing only.
 - **R-62 RESULT (Sat 19:58, runner 52, Kamen's 19:55-20:45 hour; shared GPU, rough; data/r62_att16.txt): BETWEEN.** One
   SDPA call per layer is 2.1-2.8x faster than MTPLX's 12 head chunks, but bit-identical only below 512 keys.
@@ -4404,7 +4404,7 @@ R-59 at C 224, warm 16-row REF2b check, ms per check (x its bytes floor at 280 G
   cycle's excess, the miss burst 58-73 % of the cold ones', the drafter's window 18-23 % of all three. A6 goes to
   BigMoE by cause.
 
-> (a quote from the project owner, kept private)
+## DAY9 (Kamen Mon 10:3x: "run all 9 tests"; ~/FableGod/DAY9_2026-11-02.md): Leap's items, pre-registered Mon 10:59 EET
 - **C0 / NEW-2 timeline (condition 5; scripts/c0_timeline.py):** BigMoE's r57_screen.py (e3210bf, the 45 GB default:
   R57_PRESET=45 = REF2-T + gate + t 0.3 + OOO + TIER_COMBINE + K-73) with probes. At checks 1, 2, 5, 10, 15, 30 the cache
   is rolled back (mtplx rollback_after_verify) and the check re-run:
@@ -6036,7 +6036,7 @@ shapes, since latency does not depend on the values.
     420 s, each killed at its cap, lock 11 min.
   - **Deviation from the S pre-registration (forced by the cap):** 12 s phases instead of 20, and a 45 s warm-up
     instead of 60; still 3 rounds of {a4x4, q4, a4x4 + q4}, each between alone phases.
-> (a quote from the project owner, kept private)
+  - **Second deviation (the orchestrator 18:5x, Kamen's plan change: "small breakthrough tests run NOW, not
     overnight"):** the night runner was stopped (19:00). The run goes now (`WC2_NOW=1`), by day, under a quiet lock
     with Kamen on the Mac (PowerPoint, Chrome, Spotify). The order became M-28 -> Fit12 -> WC2: Fit12 was granted at
     19:00:53 while no ticket of mine was in yet.
@@ -7827,3 +7827,82 @@ screen); GPU tests small, on share locks.
 - **What this means for the store:** quality (screen 7) and bytes are unchanged. The serving kernel as built would
   cost ~0.3-0.5 ms per layer call more than NAX6-N at S 16, which at 24 GB eats more than the ~12 MB per kept token of
   SSD it saves. The store is not blocked: the encoder is ready, and the kernel needs the TA-style rewrite.
+
+### (2d) TRL-TA, pre-registered 20:5x (correctness before any timing: PASS)
+- **Kernel (tierglu_trl.tier_glu_trl_ta):** B10(b)'s TA / TB mapping, grouped per expert. Layout v2 per projection:
+  [rb][word][tile column], so the lanes' word loads are contiguous (the encoder's tiles transpose to it; to_v2).
+  - A: lane = tile columns l, l + 32, ...; each group row's 16 x' values live in registers and serve RA = 4 output
+    rows.
+  - B: TB's (row, tile column) items over the lanes; RP rows per pass.
+- **Correctness:** fp32 == float64 reference within 2-4e-7, all forms, 1-16 rows, RP 2 / 4.
+- **Arms:** RP 2 / 3 / 4 at B10's geometry (RA 4, 8 simdgroups; RB 4, 8 simdgroups). Verdict = the best per trace.
+- **Line:** unchanged (S 16 vs NAX6-N, PASS <= 1.00x, BETWEEN <= 1.25x, KILL above).
+- **Prediction:** 0.75-0.9x (B10's TA decoded 713 G weights / s at one row; RP x the FMAs and RA-fold x reuse).
+
+### (2e) TRL-TA RESULT (21:00; quiet lock, 20 s of GPU): **KILL (1.61x)**
+- Per S 16 call: code NAX6-N 0.728 ms vs TA RP 2 1.300 (1.78x), RP 3 1.656, RP 4 1.785. Chat 0.991 vs 1.429 (1.44x).
+  S 8: 1.37-1.53x. TRL-3 TA RP 3: 1.83-2.38x. Prediction 0.75-0.9x: wrong.
+- More rows per pass are slower (RP 2 < 3 < 4). The x' rows in registers (RP x 16) cost occupancy more than they save.
+  The mapping was not TRL-G's problem: both ALU kernels spend ~8-10 ops per weight on the 3INST decode plus every FMA.
+  NAX6-N's dequant is ~1 op per weight (spread3 into 4-bit nibbles), and its FMAs run on the matrix units.
+
+### (2f) TRL-NAX, pre-registered 21:0x (correctness first: PASS)
+- **Kernel (tierglu_trl.tier_glu_trl_nax):** NAX6's MPP structure with the trellis decode.
+  - Each lane decodes its output row's next 32 weights (two tiles) as half into a 32 x 32 threadgroup tile.
+  - matmul2d (16 x 32 x 32, half x half -> fp32) multiplies all <= 16 rows of a group at once, so each weight is
+    decoded once per group with no re-decodes, and the FMAs run on the matrix units.
+  - The row scale applies once at the end; K is split over KS simdgroups (A) / KSB (B), with partial sums in
+    threadgroup memory. Layout v1 (the encoder's).
+- **Correctness:** fp32 out vs the float64 reference: max 3.7-6.8e-4, rms ~5.3e-4, all forms, 1-16 rows. That is half
+  rounding of the A (x', h') and B (weights) operands, ~4.9e-4 each; the line was <= 5e-3.
+- **Arms:** KS 4 (8 simdgroups per A threadgroup) and KS 2. Verdict = the better per trace. Line unchanged.
+- **Prediction:** 0.8-1.0x. The decode stays ~8 ALU ops per weight, but there are no re-decodes and no ALU FMAs:
+  ~400 M decodes x 8 ops at ~6 T ops / s ~0.55 ms, plus tile traffic.
+
+### (2f) TRL-NAX RESULT (21:13-21:14; quiet lock, 12 s of GPU; data/trl_bench.txt): **PASS (0.87x NAX6-N)**
+| per call, layer 18 | NAX6-N | TRL-G (A) | TRL-NAX KS 4 | TRL-NAX KS 2 | TRL-3 NAX KS 4 |
+|---|---|---|---|---|---|
+| code S 16 | 0.722 ms | 1.222 (1.69x) | 0.645 (0.89x) | **0.640 (0.89x)** | 0.756 (1.05x) |
+| chat S 16 | 0.946 ms | 1.171 (1.24x) | 0.818 (0.86x) | **0.810 (0.86x)** | 0.966 (1.02x) |
+| code S 8 | 0.460 ms | 0.632 (1.38x) | 0.422 (0.92x) | 0.424 (0.92x) | 0.493 (1.07x) |
+| chat S 8 | 0.547 ms | 0.683 (1.25x) | 0.498 (0.91x) | 0.499 (0.91x) | 0.585 (1.07x) |
+- **Verdict (S 16, the better KS per trace, mean of code / chat): 0.87x, PASS** (line <= 1.00x). Prediction 0.8-1.0x:
+  right. TRL-G in the same run: 1.24-1.69x, so the lock was not unusually kind.
+- **What it means:** the 2.40 b mix (1.518 MB per expert vs records3's 2.150 MB MSB-3 + 0.768 MB LSB) serves its
+  expert GLU ~13 % faster than today's NAX6-N per layer call, at 30-48 % fewer bytes per expert. TRL-3 (3.07 b,
+  1.928 MB, held-out quality near MSB-3's) runs at ~parity (1.02-1.07x). The decode path is no longer the reason to
+  hold the store; quality (screen 7) and disk are.
+- **Why it works:** each weight is decoded once per group (groups <= 16 rows, one MPP pass); the matrix units do the
+  FMAs; the row scale applies once. The ALU kernels lost because they paid ~8-10 ops per weight-row product.
+- **Caveats:**
+  - Kernel-level, resident pools (random streams; decode cost does not depend on the values), one layer's routing.
+  - FAST numerics: x', h' and the weights enter the MPP as half (~5e-4 relative, small next to TRL's own error).
+  - Not in the engine yet. Wiring (CFG switch, pools, reader from the trl-v1 store) is the next build; a held ref2
+    diff after screen 7.
+- **TRL-NAX on real codes (21:17, trl_store.py test):** 16 real L18 experts through the trl-v1 store. Per pair against
+  the dense float64 path W = Q R^T: max |dy| = 7.7e-4 of the pair's max |y| (half operands). PASS (<= 5e-3).
+- **Runbook:** data/TRL_FULLSTORE_RUNBOOK.md covers disk, capture, the 4-process encode with --store (trl-v1 layers
+  written in place, published by rename), checks, serving, rollback.
+
+### DKV re-time (Wed 21:18; queued quiet lock, 6 s of GPU; data/dkv_check.txt, DKV_ONLY_C=1): **PASS**
+- ms per propose (BP-0's cycle, median of 3 interleaved rounds; the rounds agree within ~0.2 ms):
+  - 2,047 context rows: ref 7.41, **dkv 6.93 (-0.48)**, dkv+add 6.41 (-1.00);
+  - 1,000 rows: ref 7.17, dkv 6.38 (-0.79), dkv+add 6.15 (-1.02).
+- **Line (pre-registered 18:0x): dkv <= ref - 0.25 ms at 2,047 rows -> PASS.** Exactness: (a) / (b) bitwise PASS at
+  19:0x (2f726fb), unchanged code.
+- **Next:** hand data/r57_dkv.diff (R57_DKV / R57_DKV_ADD, both default OFF) to BigMoE as an exact drafter lever.
+  The additive-mask variant adds another -0.5 ms at the same bits.
+
+### L41 for screen 7 (the orchestrator 21:18 / 21:20): finish Fit12's layer 41 with the batched encoder
+- **Pre-check (21:19):** experts 10 / 50 / 90 re-encoded from Fit12's inputs (b10rcap, its L41 _hx.npz). All 9 files
+  are byte-identical (cmp) to Fit12's store, and the views match (--check 9 / 9).
+- **Plan:** scripts/trl41_finish.sh N writes experts N..511 in Fit12's format into ~/Leap/data/trl41_for_fit12;
+  Fit12 copies them in with cp -n. It runs after P-CAP's resume ends (the orchestrator: NO-SWAP margin >= 8 GB; P-CAP
+  takes 36 GB) at ~1 s per expert. s7_trl's last start is 22:53.
+- Note: my short quiet locks at 21:13 / 21:18 reset P-CAP's 3-minute clear-poll start rule (no other quiet lock).
+- **L41 RESULT (21:34:38-21:40:20, share lock beside P-CAP's walk):** experts 146..511 (366) in 341 s, 0.93 s each
+  including Fit12's 8-bit views. With Fit12's 0..147, all 1,536 / 1,536 files exist (layer 41 WHOLE).
+  - In-run overlap e146 / e147: 6 / 6 byte-identical to Fit12's.
+  - The memory / swap guard never fired; free memory stayed 34-44 GB with the walk up.
+  - Handed to Fit12 21:40. Fit12 checks, then copies via temp names and renames, then announces the whole store
+    (Breakthrough's dm_t3.trl_gate reads Fit12's store). Log: data/trl41_finish.log.

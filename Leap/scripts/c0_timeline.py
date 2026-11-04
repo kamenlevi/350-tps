@@ -41,7 +41,7 @@ os.environ.pop("MTPLX_FUSED_GATE_UP", None)            # the streamed engine has
 os.environ.pop("BIGMOE_TIER", None)
 os.environ.pop("BIGMOE_VERIFY_MIDLOOP", None)          # SB comes from the lambda below, as in S45
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
-> (a quote from the project owner, kept private)
+CHATSW = os.environ.get("R57_CHATSW") == "1"            # Kamen 11-02 ~10:1x "Yes, 1-3": MTP Head's chat switch (D-23d PASS, exact;
 if CHATSW:                                               # ~/TrainLab/INTEGRATION_CHATSWITCH.md): prompts the type rule calls chat
     os.environ["TL_INFER"] = "1"                         # draft on the 125B's MTP head (d22 b5, K15, cut t, early exit); code /
     os.environ.pop("BIGMOE_MTP_STREAM", None)            # math / agent stay on DFlash2. Head resident (D-20 / D-23d); TL_INFER:
