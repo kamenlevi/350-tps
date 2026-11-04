@@ -84,7 +84,7 @@ cells and the whole 24 GB column are re-derived.
 | 7 | Rnd19#5 plane-aware prefetch (PARKED, never run) | prefetch only the MSB-2 plane of predicted experts | engine reads -5-9 % (prefetch waste 18-26 % at 24 GB [K]) | - | none (prefetch only) | an engine arm (BigMoE) |
 | 8 | B9 / B7 2-bit warm tier for ranks 4-9 (killed by a bytes line; quality never measured) | under QOM: low-bit residents raise the rank 2-9 keep | not priced (needs a two-tier replay) | - | the chat lever in principle (the pool term is 0.0180 of IFEval's 0.0386) | a two-tier replay design |
 | 9 | Rnd19#2 gate-mass-adaptive tiers / HOBBIT on-miss low precision (PASS on 35B, never built) | rank 1 at 2 bits when its gate mass is small | ~x0.9 [G] | ~x0.9 | between C and lever 6 for those rows | gate masses (not in the routing files) |
-| 10a | chat's gate threshold: QOM cf 0.5 + the bonus row gated at 0.5 (Fable C's 1(c), measured Wed 19:38) | sure rows read their top-2's LSB parts (4-bit, = REF2-T's ranks 0-1); unsure rows = REF2-T's reads; split Cl 69 / Cm 147 | 61.8 / 87.9 / 87.2 (EXACT at its best split 190.6 / 176.8 / 155.1) [P, re-derived: MoonShots c388167 within 0-3 %, far-row stand-ins +2..+6 % on chat] | - | 0.65 / 4.34 / 2.85 (PASS / PASS / PASS; additive from measured arms, pool term from the 164-slot arm) | a per-request rule (code cf 0, chat cf 0.5); its map arm (qom_0.5_live_c147_bonus5g, masks bit-checked 4324e09) runs after s7_trl tonight |
+| 10a | chat's gate threshold: QOM cf 0.5 + the bonus row gated at 0.5 (Fable C's 1(c), measured Wed 19:38) | sure rows read their top-2's LSB parts (4-bit, = REF2-T's ranks 0-1); unsure rows = REF2-T's reads; split Cl 69 / Cm 147 | 61.8 / 87.9 / 87.2 (EXACT at its best split 190.6 / 176.8 / 155.1) [P, re-derived: MoonShots c388167 within 0-3 %, far-row stand-ins +2..+6 % on chat] | - | **measured 0.71 / 4.30 / 2.73 (PASS / PASS / PASS)** on the map at 147 slots (qom_0.5_live_c147_bonus5g, Wed 22:14; read scripts/chat_arm_read.py, data/ledger/chat_arm_read.txt; first read, independent re-derivation pending); [G] was 0.65 / 4.34 / 2.85. Against 1(c) at the 45 GB pool, the small pool costs +1.42 IFEval / +0.82 multi points (McNemar p 5e-6 / 0.003) | a per-request rule (code cf 0, chat cf 0.5). The cf 0.3 arm (bonus row gated at 0.3; 49.2 / 51.7 MB on chat, x0.56-0.59) is pre-registered and runs last tonight or first Thursday (QUEUE 22:0x) |
 | 10b | the same with 3-bit sure rows (t3) | no LSB reads on sure rows; Cl 23 / Cm 163 | 44.5 / 73.0 / 75.9 [P, re-derived c388167] | - | 0.92 / 5.56 / 4.35 (PASS / BETWEEN / BETWEEN; two perturbations on the same rows, so chat may be super-additive (MoonShots)) | - |
 
 Subsumed or dead under today's stack (no re-test):
@@ -112,8 +112,9 @@ Subsumed or dead under today's stack (no re-test):
    Better codes (TRL-3, GPTQ-3) cut the first; more slots (TRL-2, the mix) cut the second, but at worse precision. The
    best chat stores (TRL-3, GPTQ-3) land BETWEEN on both chat domains at 8.5-14.3 MB (multi KILL in the
    conservative frame).
-   **A chat PASS route exists at 24 GB [G]: the gate threshold (row 10a, QOM cf 0.5 with 4-bit sure rows) at ~88 MB
-   per kept token on chat.** That is about half of EXACT's 155-177 MB and ~6-8x today's FAST stack. Code keeps
+   **A chat PASS route exists at 24 GB, measured on the map (Wed 22:14): the gate threshold (row 10a, QOM cf 0.5 with
+   4-bit sure rows, 147 slots) at 0.71 / 4.30 / 2.73 % flips (lines 1.34 / 5.42 / 3.69) and ~88 MB per kept token on
+   chat [P].** That is about half of EXACT's 155-177 MB and ~6-8x today's FAST stack. Code keeps
    cf 0 (19.5 MB, PASS), so the engine would pick the rule per request.
 3. **The FAST stack's 3-bit records are a truncation of the EXACT 4-bit codes,** kept nested so EXACT = MSB-3 + LSB. A
    re-quantized 3-bit code has ~half the error at the same or smaller size (GPTQ-3 0.61x, TRL-3 0.50x). FAST does not

@@ -301,3 +301,5 @@ FAR-CEIL	new	a new measurement (no method claim): the drafter's rejected rows ho
 FAR-STATE	new	a new measurement: token-vs-state ceilings for far-ahead expert forecasts (token maps 0.53 / 0.66 -6 %, true-token ceiling 0.68 / 1.00 -20 %, ridge state map 0.70 / 0.64 -14.6 %); the state -> route map itself is adapted from SP-MoE / DraftExpert
 FAR-COMBO	adapted	learned eviction (Hawkeye / Mockingjay family, M-14) stacked with lookahead protection (MoE-SpeQ's lookahead-aware eviction)
 FAR-G1	adapted	MoE-SpeQ / Specter's draft-fed expert lookahead at a longer horizon (proposed, not run)
+FAR-WAIT	new	a new measurement on this engine (no method claim; the form, a fixed latency plus bytes at the drive's streaming rate, is the textbook I/O model): the per-check demand SSD wait = ~10-16 ms + 0.15-0.17 ms per 2.16 MB miss (~14 GB/s), R2 0.86-1.00 over 106 runs, EXACT and FAST alike; it prices every miss-cutting lever at ~0.16 ms per miss above the floor
+FAR-ORIGIN	engineering	capture sizing for FAR-G1 (every 4th check, >= 96 far tokens)

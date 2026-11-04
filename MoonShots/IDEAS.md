@@ -1445,8 +1445,11 @@ only last-rank 2-bit (4433333322-class) might pass, worth ~5 % of expert bytes. 
       at per-use recall ~ precision ~ 0.7 cut misses only 7 % (nearest earlier row) or 14.6 % (a ridge state -> route
       map), not 26.5 %. Their errors repeat across a resident's uses; this model's are independent, so a resident used 3
       times is named with 0.97. The true future tokens reach recall 0.68 at best: the rejected rows hold 32 % of the reuse.
-      Perfect 8-check foresight cuts misses 34 % but stalled layers only 5 %, so at 45 GB it buys bytes more than tok/s
-      unless the SSD wait is bandwidth-bound. The PASS stands only for a forecaster at the per-resident 0.92 / 0.72.
+      Perfect 8-check foresight cuts misses 34 % but stalled layers only 5 %. FAR then fit the SSD wait on BigMoE's 106
+      logged runs (FAR-WAIT): ~10-16 ms per check + 0.15-0.17 ms per miss (~14 GB/s, the drive's streaming rate), R2
+      0.86-1.00. So above the floor the wait is bandwidth-bound and a miss cut maps ~1:1 onto SSD time: -26.5 % misses
+      = -20 ms (-14.5 %) of a cap45 check, -6..-9 % at the live 100-200 misses. The floor matches M-28: ~43 stalled
+      layers x ~0.28 ms per call ~ 12 ms. The PASS stands only for a forecaster at the per-resident 0.92 / 0.72.
   - M-39 SPANRELAX KILL by the letter (scripts/span_relax_check.py, data/span_relax_check.txt): Fable FULL's bet, relaxed
     acceptance only inside '#' comments, as pre-registered in ~/FableGod/full/FULL.md section 5. The replay reproduces
     RELAX_350's code table (7.78 / 8.61) and Mission 25's table (x1.157, 1.68 %, 55 / 0).

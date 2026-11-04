@@ -37,3 +37,9 @@
     - at today's live 100-200 misses per check, -4 to -8 ms (+6-9 %).
   - EXACT's demand reads sit on the critical path in full (service time = io + 0.3-2 ms).
   - FAR-G1 origins: every 4th check with >= 96 far tokens reproduces the every-check ceiling.
+- Idea added 22:16: the best look-ahead distance may not be ~100 tokens.
+  - FAR-G1 captures up to 192 far tokens per origin. The read-out scores horizons 16-192 against eviction look-ahead
+    H 4 / 8 / 16, per layer band and domain, at K 266 and K 147.
+  - It also tests a confidence-adaptive horizon (SPICE-style, published) and a per-layer horizon (possibly new).
+  - With perfect knowledge the gain saturates by ~96 far tokens at K 266 (F 64: -18.9 %; F 96 = F 128: -20.3 %).
+    A real draft decays with distance, so the real optimum is likely shorter. Untested.
