@@ -1066,7 +1066,9 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
     px1 = st.stats()
     pfx = {k_: px1.get(k_, 0) - px0.get(k_, 0) for k_ in ("pf_issued", "pf_used", "pf_victims", "joint_reads", "joint_paired",
                                                        "ka_reads", "bursts", "burst_gap025", "burst_gap1",
-                                                       "vt_hits", "vt_ins", "vt_purged", "vt_drops")}   # (ext/build_la / _vt)
+                                                       "vt_hits", "vt_ins", "vt_purged", "vt_drops",
+                                                       "fc_issued", "fc_landed", "fc_hits", "fc_late", "fc_drops", "fc_skip",
+                                                       "fc_busy_bursts", "fc_busy_n", "fc_wait_s")}   # fc_*: lever 2 (build_l2)
     pfx["vt_used_gb"] = px1.get("vt_used_bytes", 0) / 1e9   # the tier's filled part at the run's end
     if VTIER and "vt_hits_layer" in px1:                 # per ext layer (NewIdeas 15:46: its replay of the victim policy),
         pfx["vt_hits_layer"] = [a_ - b_ for a_, b_ in zip(px1["vt_hits_layer"], px0["vt_hits_layer"])]   # this run's
@@ -1218,7 +1220,11 @@ for n_p, (s, key) in enumerate(PICK):
                f"{r['pf']['burst_gap1']}; keepalive reads {r['pf']['ka_reads']}" if r["pf"]["bursts"] else "")
             + (f"; tier: {r['pf']['vt_hits']} hits (copied back, no SSD read), {r['pf']['vt_ins']} copied in, "
                f"{r['pf']['vt_drops']} dropped, {r['pf']['vt_purged']} slabs found purged; filled {r['pf']['vt_used_gb']:.2f} of "
-               f"{VT_BYTES / 1e9:.2f} GB (volatile, beside the footprint)" if VTIER else ""))
+               f"{VT_BYTES / 1e9:.2f} GB (volatile, beside the footprint)" if VTIER else "")
+            + (f"; forecast reads (lever 2): {r['pf']['fc_issued']} into the tier, {r['pf']['fc_hits']} used "
+               f"({r['pf']['fc_late']} still landing, {r['pf']['fc_wait_s'] * 1e3:.1f} ms waited), {r['pf']['fc_drops']} "
+               f"dropped unused, {r['pf']['fc_skip']} skipped (resident / tiered); {r['pf']['fc_busy_bursts']} demand bursts "
+               f"met forecasts in flight ({r['pf']['fc_busy_n']} reads)" if r["pf"]["fc_issued"] else ""))
         mm = r["mem"]
         say(f"    mem: MLX peak prefill {mm[0]:.1f} / decode {mm[2]:.1f} GB; at the end active {mm[3]:.1f}, cache {mm[4]:.1f}, "
             f"footprint {mm[5]:.1f} GB; lifetime peak after prefill {mm[1]:.1f} -> after decode {mm[6]:.1f} GB")

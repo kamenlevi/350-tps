@@ -54,21 +54,29 @@ def stages(NP, upto):
     def f(i, h, bo, inj):
         P = P8[i]
         KP, NT = HCD // NP, (LR + HC + 31) // 32
-        part, ssq, hw = hc8r._kern(1, None)(
+        V2 = VAR in ("v2", "v4")
+        V4 = VAR == "v4"
+        part, ssq, hw = hc8r._kern(6 if V4 else 4 if V2 else 1, None)(
             inputs=[h, bo, inj, P["wn"], P["wq"], P["ws"], P["wb"], P["wi"]],
             template=[("T", BF), ("HCD", HCD), ("D", W), ("LR", LR), ("HC", HC), ("NP", NP), ("KP", KP), ("NT", NT),
                       ("PEND", 1)],
-            grid=(32 * NT * NP, 1, 1), threadgroup=(32, 1, 1),
+            grid=(32 * NT * NP, 1, 1), threadgroup=(32 * NT if V2 else 32, 1, 1),
             output_shapes=[(NP, 16, NT * 32), (NP, 16), (16, HCD)], output_dtypes=[mx.float32, mx.float32, BF])
         if upto == 1:
             return [part, ssq], hw, bo, inj
-        mix1, inject, rinv = hc8r._kern(2, P["eps"])(
-            inputs=[part, ssq], template=[("T", BF), ("LR", LR), ("HC", HC), ("NP", NP), ("NC", NT * 32), ("D", W)],
-            grid=(16 * (LR + HC), 1, 1), threadgroup=(256, 1, 1),
-            output_shapes=[(16, LR), (16, HC), (16, HC)], output_dtypes=[BF, BF, mx.float32])
+        if V4:
+            mix1, inject, rinv, _xs = hc8r._kern(7, P["eps"])(
+                inputs=[part, ssq], template=[("T", BF), ("LR", LR), ("HC", HC), ("NP", NP), ("NC", NT * 32), ("D", W)],
+                grid=(16 * NT * 32, 1, 1), threadgroup=(NT * 32, 1, 1),
+                output_shapes=[(16, LR), (16, HC), (16, HC), (16, LR // 64)], output_dtypes=[BF, BF, mx.float32, mx.float32])
+        else:
+            mix1, inject, rinv = hc8r._kern(2, P["eps"])(
+                inputs=[part, ssq], template=[("T", BF), ("LR", LR), ("HC", HC), ("NP", NP), ("NC", NT * 32), ("D", W)],
+                grid=(16 * (LR + HC), 1, 1), threadgroup=(256, 1, 1),
+                output_shapes=[(16, LR), (16, HC), (16, HC)], output_dtypes=[BF, BF, mx.float32])
         if upto == 2:
             return [mix1, inject, rinv], hw, bo, inject
-        m, w_, j = hc8r.read(P, h, bo, inj, NP=NP)
+        m, w_, j = hc8r.read(P, h, bo, inj, NP=NP, v=4 if V4 else 2 if V2 else 1)
         return [m, j], w_, m, j
     return f
 

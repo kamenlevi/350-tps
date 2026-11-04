@@ -2821,3 +2821,81 @@ information). Then "map batch done" to BigMoE; flips to NewIdeas. Read-out decis
     z +3.55; IFEval z +6.83; multi z +6.31. Vs qom_0_k1_live_t3: z +5.08 / +12.48 / +11.39. The cheap top-1 form (24.0 MB
     per kept token on code [P]) costs measurably on code and fails chat.
   - NewIdeas' predictions held for both arms.
+
+## MAP SCREENS 6 + 7 (NewIdeas; the orchestrator 14:3x ROUTE: "build the per-layer weight-source hook ... Screens 6 + 7 run
+tonight as one share-lock batch ... ~22:00"): HARNESS BUILT + BIT-CHECKED, PRE-REGISTRATION (copied Wed 14:5x; NewIdeas'
+lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + amendment 3de406e), before any run)
+- Screen 6 = DRAFT17's quality at the 24 GB pool: qom_0_live_ball_c147_t3 = C (screen 4) with every last row gated, bonus
+  rows included; tbits_mask(masks, 3, 2). Lines: PASS <= 1.34 / 5.42 / 3.69 %, BETWEEN <= 1.5x, KILL above (code's verdict
+  is the one that matters). Prediction [G, NewIdeas]: code ~1.15-1.3 % PASS; IFEval ~8.1 %, multi ~6.0 % (C's).
+- Screen 7 = the trellis FAST store's quality on layers S = {7, 18, 30, 41}. Masks qom_0_live_ball_c239_t3 (C + DRAFT17 at
+  the mix's 239-slot pool; READY). Four arms, 36 windows each:
+  - s7_ref (7-ref): tbits_mask(masks, 3, 2), C's form: the gated rows' ranks 0-1 from records3 MSB-3, the mask's kept
+    ranks 2-9 at 4 bits on the stock path.
+  - s7_trl (7-trl): s7_ref, except that at S the gated rows take EVERY kept expert (ranks 0-1 + the mask's 2-9) from Fit12's
+    TRL view (the 2.40 b mix: gate / up k 2, down k 3; W = Q R^T decoded to an MLX 8-bit affine view, gather_qmm bits 8),
+    with nothing on the stock path.
+  - s7_cal (7-cal): the same rows and experts at S from records3 at MSB-2 (to2bit).
+  - s7_cal_all (7-cal-all): s7_cal at all 48 layers.
+- Read-out (NewIdeas' map_kl.py): est_KL = KL_ref + (KL_trl - KL_ref) x (KL_cal_all - KL_ref) / (KL_cal - KL_ref), then
+  est_flips by the fit (NewIdeas data/ledger/map_kl_fit.txt). The lines are on est_flips: PASS <= 1.34 / 5.42 / 3.69 %,
+  BETWEEN <= 1.5x, KILL above. A domain is "no estimate" if KL_cal - KL_ref < 2x its paired SE.
+  Prediction [G, NewIdeas]: code ~1.0 % PASS, IFEval ~7.3 % BETWEEN, multi ~6.0 % KILL.
+- Read as specified, flagged for NewIdeas: at S, 7-trl and 7-cal also move the kept ranks 2-9 (4 bits -> TRL / MSB-2;
+  "every kept expert (any rank)"), while 7-ref keeps C's 4-bit ranks 2-9. So est_KL estimates "every kept expert of the
+  gated rows TRL at all 48 layers" against C's form.
+- HARNESS (Breakthrough, installed Wed 14:47 with no map process; scripts/dm_s7/: patch_s7.py, install_s7.sh, test_dm_s7.py,
+  smoke_s7.py; pre-patch files in data/abl_scratch/s7/orig):
+  - dm_t3.routed_kept(block, L, xg, src, keep): only the kept (row, rank) pairs, src = bits (records3 via read / _proj)
+    or "trl:mix" (Fit12's trl_view.read / proj, read-only import). Reads go in groups of 128 experts (bounded memory); the
+    combine is routed_topk's (K 10).
+  - trl_gate refuses s7_trl unless all 512 experts of each S layer have whole files (safetensors size, shapes, and the
+    metadata's layer / expert / proj / k). DM_TRL_FALLBACK=1 (smoke only) serves missing experts from MSB-3 and counts them.
+  - dm_common: PERT['t3L'] = {layer: src}. At those layers the gated rows post nothing on the stock path (_row_rm) and
+    _t3_add sends them to routed_kept, ranks < t3k forced in (the _t3 masks drop them). measure() stores per-window counts
+    (res 'lsrc').
+  - dm_ablations: qom_0_live_ball_c147_t3, s7_ref, s7_trl, s7_cal, s7_cal_all.
+- BIT-CHECKS [K] (Wed 14:3x-14:49; data/dm_s7/):
+  - CPU (36 checks):
+    - at S the gated rows go to routed_kept, keep = ranks 0-1 + the mask's 2-9 (8.2-8.3 kept experts per row), and the
+      stock path posts nothing for them;
+    - other layers keep tbits_mask's form (routed_topk K 2; ranks 2-9 on the stock path);
+    - the arms' PERT is as specified, and the TRL gate refuses today's partial store.
+  - GPU unit (seconds):
+    - routed_kept(src 3 / 2) == routed_topk(bits 3 / 2, K 10, keep), bit for bit;
+    - the TRL path vs a dense fp32 reference (dequantize bits 8, at the kernels' bf16 rounding points): rms rel 4.3e-3.
+      For scale: the live 3-bit path vs its own reference 1.8e-2; experts swapped (negative control) 1.36;
+    - the MSB-3 fallback mix 9.9e-3; read-group size 3 vs 128 bit-equal.
+  - Map smoke (one code window, HumanEval_135, 144 rows; 85 s, share lock, swap +0 MB):
+    - C (qom_0_live_bq_c147_t3) re-run == the stored out/ JSON, bit for bit (tk and lp): existing arms are untouched;
+    - s7_trl ran: 4 calls, 4,957 pairs, 970 expert reads (49 TRL + 921 counted fallbacks, since the store is partial by day);
+    - s7_ref 9.2 s; s7_cal_all 55.4 s = 5.9x C (MSB-2's unpacking of every kept expert at 48 layers), MLX peak 15.4 GB vs
+      12.5.
+- COST, scaled from the smoke [K x 36]: s7_ref / s7_trl / s7_cal / screen 6 ~5-6 min each, s7_cal_all ~31 min; the batch
+  ~55 min in one map process, MEM ~17 GB. (NewIdeas' ~28 min for screen 7 was low.) s7_trl waits for Fit12's full encode
+  (ETA ~20:40).
+- ADDENDUM Wed 15:5x, before any run (the orchestrator 15:3x / 15:0x; NewIdeas 14:5x):
+  - s7_ref3 (NewIdeas' amendment 2): every kept expert of the gated rows at MSB-3 at all 48 layers. It uses lsrc_mask bits
+    3 through routed_kept, the path that equals routed_topk bit for bit; same masks. The engine's FAST pool serves ranks
+    2-9 at 3 bits, the map's C form at 4.
+    Reading (NewIdeas, amended in QUEUE):
+    - est_abs_TRL = KL_ref + (KL_trl - KL_ref) x (KL_cal_all - KL_ref) / (KL_cal - KL_ref);
+    - in-frame = KL_ref + (est_abs_TRL - KL_ref3); the conservative est_abs_TRL is reported beside it;
+    - without s7_ref3 the verdict uses the conservative one. s7_ref3 - s7_ref = the ranks 2-9 MSB-3 term at 239 slots.
+  - Fable C's screens 1(b) / 1(c) (~/FableGod/fablec/BYTES10.md:255-260). The orchestrator 15:3x: the gate threshold is
+    chat's last lever, per NewIdeas' sweep 385fa70.
+    - Arms, q1_union form, the gate-file-cf rebuilds (never the 00:34 _bonus9 / _bonus5): q1u_0.9_live_bonus9g (7 bonus
+      rows gated, their pairs x0.65) and qom_0.5_live_bonus5g (165 gated, x0.59).
+    - Null checks. Per domain, all-row flips within +0.1 points of the ungated twin (q1u_0.9_live / qom_0.5_live) =
+      PASS (expected), with paired McNemar. A larger cost = the gate file's cf and the walk's disagree. Read-out:
+      dm_screen_read.py --null (new 15:4x: PASS / COST on the +0.1 line alone, the level printed for information).
+    - Masks bit-checked 15:4x vs their twins: only the 7 / 165 bonus rows differ, by drops only; kept pairs x0.65 /
+      x0.59, matching Fable C's build log.
+  - Slot (scripts/dm_s7/s67_slot.sh, re-armed 15:5x for 20:00; the orchestrator 15:0x):
+    - Order: 6, s7_ref, s7_ref3, s7_cal, s7_cal_all, 1(b), 1(c), then s7_trl once the TRL store is whole. One map process
+      per arm.
+    - An arm starts only before 23:10, and only if its estimate ends by 23:30 (the hard stop for RELAX's quiet arms).
+      Leftovers go to Thu morning beside T0.
+    - Estimates (min, with margin): 6 / 6 / 10 / 7 / 35 / 5 / 5 / 7. s7_ref3 ~8 from B''s 471 s on the same 3-bit
+      all-ranks path (no MSB-2 unpacking), not ~31.
+    - Expected end ~21:25 if the start is clear at 20:00 and the store is whole by ~21:15.

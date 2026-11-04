@@ -59,7 +59,7 @@ def passes(run, laymap):
                 continue
             li = base[L_ext] if kind == "b" else side[L_ext]
             w0 = t0 if kind == "b" else min(t0, b_t0.get(li, t0))
-            r = rd[(rd[:, 0] == L_ext) & (rd[:, 3] >= w0 - 1e-6) & (rd[:, 3] <= t1 + 1e-6) & (rd[:, 2] != 1)] if len(rd) else rd
+            r = rd[(rd[:, 0] == L_ext) & (rd[:, 3] >= w0 - 1e-6) & (rd[:, 3] <= t1 + 1e-6) & (rd[:, 2] != 1) & (rd[:, 2] != 3)] if len(rd) else rd   # 3: lever 2's forecast reads
             d = lay.setdefault(li, dict(seen=np.inf, svc_b=0.0, svc_s=0.0, mb=0, ms=0, delay=[], rd=[]))
             if kind == "b":
                 d["seen"] = min(d["seen"], t0); d["svc_b"] += t1 - t0; d["mb"] += len(r)

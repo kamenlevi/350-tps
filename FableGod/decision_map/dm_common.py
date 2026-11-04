@@ -175,7 +175,7 @@ def _row_rm(n):
     li = CUR["L"]; p0 = CUR["kpos"].get(li, 0); CUR["kpos"][li] = p0 + n
     kp = np.ones((n, 10), bool); rm = CUR["rm"]
     m = max(0, min(n, rm.shape[0] - p0)); kp[:m] = rm[p0:p0 + m, li]
-    if PERT.get("t3keep") and CUR.get("k") is not None:   # rows served from records3 (dm_t3) post nothing on the stock path
+    if (PERT.get("t3keep") or li in PERT.get("t3L", ())) and CUR.get("k") is not None:   # rows served from records3 (dm_t3) post nothing on the stock path; screen 7: the gated rows at PERT["t3L"]'s layers too
         kr = CUR["k"]; mm = max(0, min(n, len(kr) - p0)); kp[:mm][kr[p0:p0 + mm] == 0] = False
     return kp
 
@@ -327,11 +327,15 @@ def _t3_add(block, li, x):
     kk = np.full(n, 10, np.int32); m = max(0, min(n, len(kr) - p0)); kk[:m] = kr[p0:p0 + m]
     G = np.flatnonzero(kk == 0)
     if not G.size: return None
-    keep = None
-    if PERT.get("t3keep"):                                # the gated rows' own rank mask at this layer (rank-sorted)
+    keep = None; src = PERT.get("t3L", {}).get(li)        # screen 7 (Wed 14:4x): this layer's own source for the gated rows
+    if PERT.get("t3keep") or src is not None:             # the gated rows' own rank mask at this layer (rank-sorted)
         rm = CUR["rm"]; keep = np.ones((len(G), 10), bool); gi = p0 + G; ok_ = gi < rm.shape[0]
         keep[ok_] = rm[gi[ok_], li]
-    yg = dm_t3.routed_topk(block, li, rows[mx.array(G.astype(np.int32))], bits=PERT["t3"], K=int(PERT.get("t3k", 2)), keep=keep)
+    if src is not None:                                   # every kept expert from src; ranks < t3k forced in (the _t3 masks drop them)
+        keep[:, :int(PERT.get("t3k", 2))] = True
+        yg = dm_t3.routed_kept(block, li, rows[mx.array(G.astype(np.int32))], src, keep)
+    else:
+        yg = dm_t3.routed_topk(block, li, rows[mx.array(G.astype(np.int32))], bits=PERT["t3"], K=int(PERT.get("t3k", 2)), keep=keep)
     pos = np.full(n, len(G), np.int32); pos[G] = np.arange(len(G))       # ungated rows take an appended zero row
     return mx.take(mx.concatenate([yg, mx.zeros((1, yg.shape[-1]), yg.dtype)]), mx.array(pos), axis=0)
 
@@ -405,6 +409,10 @@ def bound_runs(skip, S):
     for j in range(len(skip)): r[j] = (r[j - 1] + 1 if j else 1) if skip[j] else 0
     return skip & (r % (S + 1) != 0)
 
+def _lsrc():
+    import dm_t3
+    return dict(dm_t3.LSRC)
+
 def measure(model, windows, name, setup):
     """setup(): registers ACTIVE / PERT perturbations (or nothing for the baseline). Writes out/<name>.json with per-
     position top-8 ids and log-probs for the answer positions."""
@@ -424,9 +432,14 @@ def measure(model, windows, name, setup):
         if PERT.get("gate") == ("t3mask",):                 # the t3 rows = the rows whose mask drops rank 0 (Tue 11:0x): a
             kk = np.full(len(ids), 10, np.int32); r = CUR["rm"]; m = min(len(kk), r.shape[0])   # live cut's exact bonus
             kk[:m][~r[:m, :, 0].any(axis=1)] = 0; CUR["k"] = kk                                 # rows are not served twice
+        l0 = _lsrc() if PERT.get("t3L") else None         # screen 7: this window's per-layer source counts
         tk, lp = run_window(model, ids)
         res[nm] = dict(dom=dom, a=int(a), off=int(off), tk=tk[a:].tolist(), lp=lp[a:].tolist())
         extra = ""
+        if l0 is not None:
+            d = {k_: v - l0[k_] for k_, v in _lsrc().items()}; res[nm]["lsrc"] = d
+            extra += (f"; per-layer src: {d['calls']} calls, {d['pairs']} pairs, {d['experts']} experts read"
+                      f" (TRL {d['trl']}, fallback {d['fallback']})")
         if PERT.get("reuse") is not None:                   # every reused layer saw each row exactly once, in order
             seen = {CUR["pos"].get(L) for L in (range(48) if PERT["reuse"] == "all" else PERT["reuse"])}
             if not (len(seen) == 1 and next(iter(seen)) in (len(ids) - 1, len(ids))):

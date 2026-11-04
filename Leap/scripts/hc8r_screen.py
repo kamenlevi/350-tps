@@ -107,6 +107,7 @@ VARS = [(int(a.split("v")[0]), int(a.split("v")[1])) for a in os.environ.get("HC
 st = {k: [] for k in ["emu mixed", "emu inject"] + [f"dev {o} {n}" for n in [f"NP{a}v{b}" for a, b in VARS] + ["eager8"]
                                                      for o in ("mixed", "inject")]}
 wb_emu = wb_ex = 0
+xv = {}                                                     # each variant vs the first one, bitwise (mixed, written, inject)
 for i in range(len(G)):
     hyper, bo, inj = ins[i]
     outs = {f"NP{a}v{b}": fast(a, b)(i, hyper, bo, inj) for a, b in VARS}
@@ -115,6 +116,9 @@ for i in range(len(G)):
     mx.eval(list(outs.values()), em, ew, ej, gm, gw, gj)
     st["emu mixed"].append(max(rel(o[0], em.reshape(1, 16, W)) for o in outs.values()))
     st["emu inject"].append(max(rel(o[2], ej.reshape(1, 16, HC)) for o in outs.values()))
+    first = next(iter(outs.values()))
+    for nm_, o in list(outs.items())[1:]:
+        xv[nm_] = xv.get(nm_, 0) + all(eqb(u, v) for u, v in zip(o, first))
     wb_emu += all(eqb(o[1], ew) for o in outs.values())
     wb_ex += all(eqb(o[1], ref[i][1]) for o in outs.values()) and eqb(gw, ref[i][1])
     for nm, (mm, _, jj) in list(outs.items()) + [("eager8", (gm, gw, gj))]:
@@ -124,6 +128,9 @@ ok1 = max(st["emu mixed"]) <= 4e-3 and max(st["emu inject"]) <= 4e-3 and wb_emu 
 say(f"(1) read() vs emulate(): mixed rel rms max {max(st['emu mixed']):.2e} (median {np.median(st['emu mixed']):.2e}), "
     f"inject max {max(st['emu inject']):.2e}; written == emulate {wb_emu}/{len(G)}, == exact (and eager8) {wb_ex}/{len(G)} "
     f"-> {'OK' if ok1 else 'FAIL'}")
+if xv:
+    say("    bitwise vs " + next(iter(f"NP{a}v{b}" for a, b in VARS)) + " (mixed, written, inject), of 96: "
+        + ", ".join(f"{k} {v}" for k, v in xv.items()))
 say("(2) deviation vs the exact read (rel rms, median [max] over 96 teacher-forced reads): " + "; ".join(
     f"{k[4:]} {np.median(v):.2e} [{max(v):.2e}]" for k, v in st.items() if k.startswith("dev")))
 

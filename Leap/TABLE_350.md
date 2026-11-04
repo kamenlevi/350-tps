@@ -6758,3 +6758,58 @@ shapes, since latency does not depend on the values.
   - **Use:** after load, ref2.apply(); ref2.dense_native_convert(model) (head=False). That gives DENSE-N at no RAM cost
     (BigMoE's default with R-83: ~-2.0 ms per check). BigMoE's prefill evaluates per layer, so the unpacked transients
     stay at ~one layer.
+
+## NATIVE-FRI: native expert records in the engine, the Friday arms (Leap, pre-registered Wed 2026-11-04 14:5x; BUILD_DAY #3; the orchestrator's option A: no loader patch, Friday's in-place conversion instead)
+- **What changes Friday:** the 00:30 in-place conversion (native+p11+pad; reversible, ~2 min each way, no second copy).
+  BigMoE's layout patch then reads converted records. ref2 routes 3c calls to 3c-N (bitwise == 3c, 4-7 % slower on the
+  expert call, NATIVE-3C) and NAX calls to NAX6-N (bitwise == NAX6, +21 % at S 16) with no new engine code.
+- **Track:** NAX's bits differ from 3c's, so NAX6-N is a FAST lever until Kamen certifies a NAX reference (the
+  orchestrator asked him 14:5x: EvalSuite same scores on math / code / instructions, ~1 night, ~+12-14 % EXACT).
+- **Arms** (BigMoE's harness, the 45 GB default plus the arm's switch; C 224 everywhere = equal RAM, since the padded
+  records keep recsz; 14 prompts; A-B-B-A within each store phase):
+  - Phase R (row-major store, before the conversion): D = today's default (3c, REF2-T); N = R57_NAX=1 (NAX6, C1).
+  - Phase C (converted store): Dc = default (3c-N); Nc = R57_NAX=1 (NAX6-N, nax_native from the pools' dtype).
+- **Exactness, token for token on every prompt:** Dc == D (== REF2-T's rows; by construction 3c-N == 3c);
+  Nc == N (by construction NAX6-N == NAX6). A mismatch is a bug, not a verdict.
+- **Lines (geo steady tok/s):**
+  - #3's FAST value = Nc vs D: PASS >= +6 %, KILL < +2 %, BETWEEN in between.
+  - Diagnostics, no lines: Nc vs N (the native gain on the NAX path; [P] ~+5-8 % from the expert term's share); Dc vs D
+    (the conversion's net for EXACT: 3c-N's -1..-7 % on the expert call against p11's -10.9 % bytes and pad's zero-copy
+    reads); N vs D (C1, if it never ran).
+- **Adoption:** Nc via EvalSuite same-scores (FAST, the 11-04 rule), or EXACT if the NAX reference is certified. The
+  conversion stays either way (Kamen-approved); Dc is the EXACT default after it.
+- **Prediction:** Nc vs D +8-14 %; Nc vs N +5-8 %; Dc vs D -2..+3 % (kernel cost against byte gains). PASS 55 %.
+- **Step 1 result (Wed 14:49, share lock beside Breakthrough's GPU run; correctness only; data/nat_engine_check.txt):
+  PASS.**
+  - BigMoE's live package (load_index / make_pools / make_sidecar / ext.ensure; the lever-1 ext with
+    set_direct_split; layouts native / native+p11 / native+p11+pad) loaded the same 64 experts of layers 20 and 47
+    from my scratch store (APFS clones converted by convert_records_p11.py --pad) and from today's records3. The slot
+    assignment was identical.
+  - On 9 routings per layer (S 16 / 8 / 1 x 3):
+    - 3c-N(converted) == 3c(row-major), BigMoE's tier_glu, REF2-T's kernel: 9 / 9 for tier_glu, with scores, and
+      phases + combine;
+    - NAX6-N(converted) == NAX6(row-major): 9 / 9.
+  - BigMoE's own scripts/test_layout_engine.py covers the bytes (every slot == its record's part; the prefill rebuild
+    == records3's). So Friday's converted store runs today's exact default as 3c-N, bitwise, and the NAX arm as NAX6-N,
+    bitwise.
+  - BigMoE 14:5x: **C1 never ran** (the DAY9 night ticket was dropped at its 05:30 NOTAFTER; only smokes ran). So
+    Friday's phase-R NAX arm (N) is the first real C1, and the NATIVE-FRI predictions rest on kernel numbers only.
+- **v4 (post-hoc, Wed 14:5x; bitwise == v2 by construction and on 96 / 96 reads: mixed, written, inject):**
+  - v2 breakdown at NP 20 (share lock): K1 29.4 us per read, K2 2.6, K3 22.7.
+  - Changes: K1's A builders load the next group's h / w_norm / bo one group ahead. K2 runs one threadgroup per row and
+    also emits mix1's per-(row, 64-group) sums in v2's order (k = 0..63). K3 drops its serial sums and one barrier.
+  - Quiet: 4.97 ms per 96-read chain vs v2 5.27 (same run), S4g 9.77, B 8.64. That's -4.80 vs S4g, -3.67 vs B, x0.51.
+  - The screen script printed "PASS" against the <= 5.0 line, but v4 is post-hoc; the pre-registered verdict stays
+    BETWEEN.
+  - ref2 CFG hc8_v / REF2_HC8_V now defaults to 4. It is bitwise == v2, so EvalSuite's c805fd0 (v2) certification
+    carries over. hc8_wire_check / dn_ram_check / dn_wire_check PASS after the change.
+- **Prep found and fixed (Wed 14:5x): NAX6-NH had no p11 path.** Friday's FAST arm (R57_NAX=1 + R57_H1C=1 ->
+  ref2 nax_native + nax_hybrid -> tier_glu_nax6nh) would have read the converted store's 11-bit scale pieces as bf16
+  (N taken from s3's shape = 9216 words): silently wrong outputs.
+  - Fix (tierglu_nax6h.py): _native_hybrid(p11=True) splices the hybrid's ALU path into NAX6-N's p11 core (P11R views
+    return the same floats), and tier_glu_nax6nh takes the p11 kernels and strides for uint32 pools, as tier_glu_nax6n
+    does.
+  - The bf16 sources are byte-identical to before (checked), so live users are unchanged. Backup
+    data/tierglu_nax6h_before_p11.py.
+  - P11PAD check with NAX6-NH added (layers 20 / 44, 128 experts): NAX6-NH on padded p11 == unpadded p11 == bf16
+    native pools, 4 / 4 / 4 per layer. All other kernels still PASS; ref2.self_test PASS.

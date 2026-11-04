@@ -117,22 +117,42 @@ def tier_glu_nax6h(x, msb, lsb, msb_slot, lsb_slot, plan="4433333333", b2=None, 
 
 # ---------------------------------------------------------------- NAX6-NH: the hybrid on the native record layout (N7-13)
 # The same ALU path with tierglu_nax6n's addresses (codes at 192 words per quant group, LSB at 64, scales / biases at 32).
-def _native_hybrid():
+def _native_hybrid(p11=False):
+    """NAX6-NH's sources: the hybrid's ALU path spliced into NAX6-N's core; p11=True: into its p11 core (Wed 2026-11-04,
+    for Friday's native+p11+pad store: the scale / bias reads become P11R views, which return the same floats)"""
     import tierglu_nax6n as NN
+    core_n = NN._CORE_NP if p11 else NN._CORE_N
+    a_n, b_n = (NN._A_NP, NN._B_NP) if p11 else (NN._A_N, NN._B_N)
     loop_n = "    for (int gp = kc * GPC; gp < (kc + 1) * GPC; ++gp) {"
     d0 = "            const device uint32_t* c = wrow + 192 * g;"
-    assert NN._CORE_N.count(loop_n) == 1 and NN._CORE_N.count(d0) == 1 and NN._CORE_N.count(_DEC1) == 1
-    dec = NN._CORE_N[NN._CORE_N.index(d0):NN._CORE_N.index(_DEC1)]
+    assert core_n.count(loop_n) == 1 and core_n.count(d0) == 1 and core_n.count(_DEC1) == 1
+    dec = core_n[core_n.index(d0):core_n.index(_DEC1)]
     alu = _ALU.replace(_DECODE, dec).replace("accv += (float)srow[g] * smul * dot + (float)brow[g] * as0[g];",
                                              "accv += (float)srow[32 * g] * smul * dot + (float)brow[32 * g] * as0[g];")
     assert alu != _ALU
-    core = NN._CORE_N.replace(loop_n, alu + loop_n)
-    a = NN._A_N.replace(NN._CORE_N, core).replace(
+    core = core_n.replace(loop_n, alu + loop_n)
+    a = a_n.replace(core_n, core).replace(
         _PART_A, "    if (alu) { part[(pj * KS_C + kc) * 512 + lane] = accv; } else {\n" + _PART_A + "\n    }")
-    b = NN._B_N.replace(NN._CORE_N, core).replace(
+    b = b_n.replace(core_n, core).replace(
         _PART_B, "    if (alu) { part[(ti * KS_C + kc) * 512 + lane] = accv; } else {\n" + _PART_B + "\n    }")
     assert core in a and core in b
     return a, b
+
+
+@lru_cache(None)
+def _knh_p11():
+    import p11 as P11
+    a, b = _native_hybrid(p11=True)
+    ka = mx.fast.metal_kernel(
+        name="tierglu_nax6nhp_a",
+        input_names=["x", "xs", "w3g", "w3u", "s3g", "s3u", "b3g", "b3u", "b2g", "b2u", "l1g", "l1u", "bg", "bu",
+                     "msb_slot", "lsb_slot", "pidx", "seg", "nseg"],
+        output_names=["h"], source=a, header=N6._HDR4 + P11.P11_METAL)
+    kb = mx.fast.metal_kernel(
+        name="tierglu_nax6nhp_b",
+        input_names=["h", "hs", "w3d", "s3d", "b3d", "b2d", "l1d", "bd", "msb_slot", "lsb_slot", "pidx", "seg", "nseg"],
+        output_names=["y"], source=b, header=N6._HDR4 + P11.P11_METAL)
+    return ka, kb
 
 
 @lru_cache(None)
@@ -152,13 +172,22 @@ def _knh():
 
 def tier_glu_nax6nh(x, msb_n, lsb_n, msb_slot, lsb_slot, plan="4433333333", grp=None, nsg_b=2, ks=4, ks_b=2, xs=None,
                     hybrid=True, b2=None):
-    """NAX6-H on tierglu_nax6n.repack()'s native pools (FAST); hybrid=False == NAX6-N == NAX6 bitwise"""
+    """NAX6-H on tierglu_nax6n.repack()'s native pools (FAST); hybrid=False == NAX6-N == NAX6 bitwise. p11 pools (uint32
+    s3 / b3 / b, native+p11 or native+p11+pad) take the p11 sources, as tier_glu_nax6n does"""
     M, K = x.shape
     R = len(plan)
     m4, m2, r4 = plan_masks(plan)
     assert m2 == 0
-    N = msb_n["gate_proj"]["s3"].shape[1]
-    D = msb_n["down_proj"]["s3"].shape[1]
+    p11 = msb_n["gate_proj"]["s3"].dtype == mx.uint32
+    if p11:
+        import p11 as P11
+        N, D = msb_n["gate_proj"]["w3"].shape[1], msb_n["down_proj"]["w3"].shape[1]
+        pwm, pwl = msb_n["gate_proj"]["s3"].shape[-1], lsb_n["gate_proj"]["b"].shape[-1]
+        assert pwm >= P11.piece_words(N * 40) and pwm % 4 == 0 and pwl >= P11.piece_words(N * 40) and pwl % 4 == 0 and b2 is None
+        assert all(msb_n[p][k].shape[-1] == pwm for p in PROJ for k in ("s3", "b3")) and all(lsb_n[p]["b"].shape[-1] == pwl for p in PROJ)
+    else:
+        N = msb_n["gate_proj"]["s3"].shape[1]
+        D = msb_n["down_proj"]["s3"].shape[1]
     if grp is None:
         grp = N6.gpu_grp(msb_slot, lsb_slot, plan)
     pidx, seg, nsg_, nseg = grp
@@ -169,7 +198,9 @@ def tier_glu_nax6nh(x, msb_n, lsb_n, msb_slot, lsb_slot, plan="4433333333", grp=
     g, u, d = (msb_n[p] for p in PROJ)
     tmpl = [("T", x.dtype), ("NR_C", R), ("MASK4_C", m4), ("MASK2_C", m2), ("R4_C", max(r4, 1)), ("DIAG_C", 0), ("GS_C", 1),
             ("HYB_C", int(bool(hybrid)))]
-    ka, kb = _knh()
+    if p11:
+        tmpl = tmpl + [("PWM_C", pwm), ("PWL_C", pwl)]
+    ka, kb = _knh_p11() if p11 else _knh()
     xs = rowsum64(x) if xs is None else xs
     (h,) = ka(inputs=[x, xs, g["w3"], u["w3"], g["s3"], u["s3"], g["b3"], u["b3"], bb["gate_proj"], bb["up_proj"],
                       L["gate_proj"]["l1"], L["up_proj"]["l1"], L["gate_proj"]["b"], L["up_proj"]["b"], ms, ls, pidx, seg, nsg_],

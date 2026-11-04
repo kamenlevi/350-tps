@@ -245,3 +245,26 @@ ABLATIONS["qom_0_k1_live_t3"] = tbits_mask(os.path.expanduser("~/NewIdeas/data/d
 ABLATIONS["qom_0_live_bq_t2"] = tbits_mask(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0_live_bq_t3"), 2, 2)   # NewIdeas (QUEUE.md:1305-1320): bq_t3's masks, sure rows' ranks 0-1 at 2 bits (to2bit)
 ABLATIONS["qom_0_live_bq_c147_t3"] = tbits_mask(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0_live_bq_c147_t3"), 3, 2)   # NewIdeas screen 4 (C) (QUEUE.md:1343-1390; the orchestrator Wed 07:5x): qom_0_live_bq_t3 at the 24 GB pool (147 base slots)
 ABLATIONS["qom_0_k1_live_bq_c147_t3keep"] = p1_t3(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0_k1_live_bq_c147"))   # screen 4 (B'), the cheap top-1 form: cut rows wholly from records3 at 3 bits, the 24 GB pool
+ABLATIONS["qom_0_live_ball_c147_t3"] = tbits_mask(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0_live_ball_c147_t3"), 3, 2)   # NewIdeas screen 6 (QUEUE.md 14:0x; the orchestrator 14:3x): DRAFT17's quality at the 24 GB pool, C with every last row gated
+def lsrc_mask(path, srcs, bits=3, k=2):
+    """Map screen 7 (NewIdeas QUEUE.md 14:1x + amendment 3de406e; the orchestrator 14:3x): tbits_mask(path, bits, k) on every
+    layer, except that at the layers of srcs {layer: src} the gated rows take EVERY kept expert (ranks < k + the mask's kept
+    ranks k-9) from src and post nothing on the stock path (dm_t3.routed_kept): src = "trl:<form>" (Fit12's TRL view; refused
+    unless all 512 experts of each such layer are in the store, or DM_TRL_FALLBACK=1, counted) or an int (records3 at those
+    bits through dm_t3)."""
+    def setup():
+        PERT.update(rmask=path, gate=("t3mask",), t3=bits, t3k=k, renorm=False, t3L=dict(srcs))
+        for s in sorted({v for v in srcs.values() if isinstance(v, str)}):
+            import dm_t3
+            miss = dm_t3.trl_gate(sorted(L for L, v in srcs.items() if v == s), s.split(":", 1)[1])
+            print(f"[dm] {s}: " + (f"FALLBACK to records3 MSB-3 for missing experts {miss}" if miss else
+                                   f"all 512 experts present at layers {sorted(L for L, v in srcs.items() if v == s)}"), flush=True)
+    return setup
+_S7M = os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0_live_ball_c239_t3"); _S7 = (7, 18, 30, 41)   # screen 7's masks and S
+ABLATIONS["s7_ref"] = tbits_mask(_S7M, 3, 2)                          # 7-ref: C + DRAFT17 at the mix's 239-slot pool (C's form)
+ABLATIONS["s7_trl"] = lsrc_mask(_S7M, {L: "trl:mix" for L in _S7})    # 7-trl: at S every kept expert from the TRL mix (2.40 b)
+ABLATIONS["s7_cal"] = lsrc_mask(_S7M, {L: 2 for L in _S7})            # 7-cal: at S every kept expert at MSB-2 (to2bit)
+ABLATIONS["s7_cal_all"] = lsrc_mask(_S7M, {L: 2 for L in range(48)})  # 7-cal-all: the same at all 48 layers
+for _arm in ("q1u_0.9_live_bonus9g", "qom_0.5_live_bonus5g"):   # Fable C screens 1(b) / 1(c) (BYTES10.md:255-260; the orchestrator Wed 15:3x): the gate-file-cf rebuilds, NEVER the 00:34 _bonus9 / _bonus5
+    ABLATIONS[_arm] = q1_union(os.path.expanduser(f"~/FableGod/fablec/masks/{_arm}"))   # union form, as qom_0_live_bonus (1(a)); twins q1u_0.9_live / qom_0.5_live
+ABLATIONS["s7_ref3"] = lsrc_mask(_S7M, {L: 3 for L in range(48)})    # NewIdeas 14:5x: 7-ref3, every kept expert of the gated rows at MSB-3 at all 48 layers (the engine's FAST-pool frame)

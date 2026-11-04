@@ -92,6 +92,10 @@ struct Layer {
   std::vector<int32_t> vt_table, vt_owner, vt_free; std::list<int32_t> vt_lru;
   std::vector<std::list<int32_t>::iterator> vt_where; bool vt_pinned = false;
   int64_t vt_h = 0, vt_i = 0;                       // this layer's tier hits / copies in (NewIdeas' per-layer replay)
+  // lever 2 (BIGMOE_FC_F / FS): per tier slot 1 = bytes in place (0 while a forecast read writes it), 1 = a forecast's
+  // entry not yet used; forecast reads in flight (the slab stays pinned meanwhile); each piece's offset in a tier slot
+  std::vector<std::atomic<int>>* vt_rdy = nullptr; std::vector<uint8_t> vt_fc; std::atomic<int>* vt_fly = nullptr;
+  std::vector<int64_t> vt_off;
 };
 static int32_t g_cur_seq = -1;                      // pass being served (for the miss split)
 
@@ -107,6 +111,9 @@ static Stats g_st;
 static std::atomic<double> g_last_rd_end{0.0};
 static std::atomic<int64_t> g_bursts{0}, g_burst_g025{0}, g_burst_g1{0};
 static std::atomic<int64_t> g_vt_hits{0}, g_vt_ins{0}, g_vt_purged{0}, g_vt_drops{0};   // BIGMOE_VTIER
+static std::atomic<int64_t> g_fc_issued{0}, g_fc_landed{0}, g_fc_hits{0}, g_fc_late{0}, g_fc_wait_ns{0}, g_fc_drops{0},
+                            g_fc_skip{0}, g_fc_busy_bursts{0}, g_fc_busy_n{0};   // lever 2 (BIGMOE_FC_F / FS)
+static std::atomic<int> g_fc_fly_all{0};
 // S10 read / coverage trace (BIGMOE_TRACE): every expert read (demand or prefetch, issue -> bytes in place) and, per gated
 // call, how its experts were found (resident, prefetched on time / late, queued read cancelled into demand, demand miss
 // predicted-but-unissued / unpredicted). Read with ext.trace_reads() / ext.trace_cov().
@@ -449,17 +456,27 @@ static void read_expert(const Layer* lp, int e, uint8_t* const* dst, bool par = 
 static void vt_copy(const Layer& ly, int s, int t, bool to_tier);   // BIGMOE_VTIER (below, with the tier's helpers)
 // modes (R-44 b POM, base pools only): per job 0 = the record part as before, 1 = 2-plane read, 2 = upgrade in place
 static void load_jobs(Layer& ly, const std::vector<std::pair<int, int>>& jobs, const std::vector<uint8_t>* modes = nullptr,
-                      const std::vector<std::pair<int, int>>* vtj = nullptr) {
+                      const std::vector<std::pair<int, int>>* vtj = nullptr, const std::vector<int>* tdst = nullptr) {
   if (ly.rec_fd >= 0) {                             // record path: one read per expert
     Layer* lp = &ly; const auto* jp = &jobs; const std::vector<uint8_t>* mp = modes; const auto* vp = vtj;
+    const std::vector<int>* tp = tdst;               // lever 2: job j's bytes go to tier slot (*tp)[j] (pieces as vt_copy)
     static bool direct = getenv("BIGMOE_RECORDS_DIRECT") != nullptr;   // preadv straight into the 9 pool slots
     const int tag = t_rd_tag, Li = (int)(lp - g_layers.data());
     dispatch_apply(jobs.size(), dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^(size_t j) {
       auto [e, s] = (*jp)[j];
+      const int ss = s, tt = tp ? (*tp)[j] : -1;
+      auto D = [lp, ss, tt](int i) -> uint8_t* {     // piece i's destination: pool slot ss, or tier slot tt
+        return tt >= 0 ? lp->vt_mem + (int64_t)tt * lp->vt_slot + lp->vt_off[i] : lp->pieces[i].pool + (int64_t)ss * lp->pieces[i].per; };
       if (vp) {                                     // BIGMOE_VTIER: the slot's ghost into the tier first; a hit copies back
         auto [ts, tv] = (*vp)[j];
         if (tv >= 0) vt_copy(*lp, s, tv, true);
-        if (ts >= 0) { vt_copy(*lp, s, ts, false); return; }
+        if (ts >= 0) {                              // lever 2: a forecast read still writing ts -> wait for its bytes
+          if (lp->vt_rdy && !(*lp->vt_rdy)[ts].load(std::memory_order_acquire)) {
+            const double tw = now_s(); while (!(*lp->vt_rdy)[ts].load(std::memory_order_acquire)) {}
+            g_fc_wait_ns += (int64_t)((now_s() - tw) * 1e9);
+          }
+          vt_copy(*lp, s, ts, false); return;
+        }
       }
       const double t_r0 = g_rtrace ? now_s() : 0;
       int n = (int)lp->pieces.size();
@@ -471,17 +488,17 @@ static void load_jobs(Layer& ly, const std::vector<std::pair<int, int>>& jobs, c
         for (int i = dn; i < n; i++) tail += lp->pieces[i].per;
         Bounce tb(tail);
         struct iovec iov[16];
-        for (int i = 0; i < dn; i++) { iov[i].iov_base = lp->pieces[i].pool + (int64_t)s * lp->pieces[i].per; iov[i].iov_len = lp->pieces[i].per; }
+        for (int i = 0; i < dn; i++) { iov[i].iov_base = D(i); iov[i].iov_len = lp->pieces[i].per; }
         iov[dn].iov_base = tb.p; iov[dn].iov_len = (size_t)tail;
         read_record(lp->rec_fd, (int64_t)e * lp->recsz + lp->part_off, iov, dn + 1);
         int64_t o = 0;
-        for (int i = dn; i < n; i++) { memcpy(lp->pieces[i].pool + (int64_t)s * lp->pieces[i].per, tb.p + o, lp->pieces[i].per); o += lp->pieces[i].per; }
+        for (int i = dn; i < n; i++) { memcpy(D(i), tb.p + o, lp->pieces[i].per); o += lp->pieces[i].per; }
         if (g_rtrace) { double t_r1 = now_s(); std::lock_guard<std::mutex> lk(g_rmu); g_rd.push_back({Li, e, tag, t_r0, t_r1, t_p0, t_p1}); }
         return;
       }
       if (direct && lp->rec_fmt == 1 && !(g_m01 && lp->part_len)) {   // (M-01 parts unpack from the bounce)
         struct iovec iov[16];
-        for (int i = 0; i < n; i++) { iov[i].iov_base = lp->pieces[i].pool + (int64_t)s * lp->pieces[i].per; iov[i].iov_len = lp->pieces[i].per; }
+        for (int i = 0; i < n; i++) { iov[i].iov_base = D(i); iov[i].iov_len = lp->pieces[i].per; }
         read_record(lp->rec_fd, (int64_t)e * lp->recsz + lp->part_off, iov, n);
         if (g_rtrace) { double t_r1 = now_s(); std::lock_guard<std::mutex> lk(g_rmu); g_rd.push_back({Li, e, tag, t_r0, t_r1, t_p0, t_p1}); }
         return;
@@ -489,7 +506,7 @@ static void load_jobs(Layer& ly, const std::vector<std::pair<int, int>>& jobs, c
       // default: ONE page-aligned read into a per-thread bounce buffer (Scout: aligned single reads are the fastest
       // pattern; unaligned F_NOCACHE destinations are slow), then the pieces go into their pool slots (records3: rebuilt)
       uint8_t* d[16];
-      for (int i = 0; i < n; i++) d[i] = lp->pieces[i].pool + (int64_t)s * lp->pieces[i].per;
+      for (int i = 0; i < n; i++) d[i] = D(i);
       const int md = mp ? (*mp)[j] : 0;
       if (md) pom_read(lp, e, d, md, jp->size() < 4);
       else read_expert(lp, e, d, jp->size() < 4);
@@ -710,6 +727,7 @@ static void vt_pin(Layer& ly) {                     // BIGMOE_VTIER: non-volatil
 }
 static void vt_unpin(Layer& ly) {
   if (!ly.vt_pinned) return;
+  if (ly.vt_fly && ly.vt_fly->load(std::memory_order_acquire) > 0) return;   // lever 2: a forecast read still writes
   ly.vt_buf->setPurgeableState(MTL::PurgeableStateVolatile); ly.vt_pinned = false;
 }
 static int vt_take(Layer& ly, const std::vector<int32_t>& busy) {   // a tier slot: a free one, else drop the tier's
@@ -717,6 +735,8 @@ static int vt_take(Layer& ly, const std::vector<int32_t>& busy) {   // a tier sl
   for (auto it = ly.vt_lru.end(); it != ly.vt_lru.begin();) {
     --it; int e = *it, t = ly.vt_table[e];
     if (std::find(busy.begin(), busy.end(), t) != busy.end()) continue;
+    if (ly.vt_rdy && !(*ly.vt_rdy)[t].load(std::memory_order_acquire)) continue;   // lever 2: still being written
+    if (!ly.vt_fc.empty() && ly.vt_fc[t]) { ly.vt_fc[t] = 0; g_fc_drops++; }   // a forecast never used
     ly.vt_lru.erase(it); ly.vt_table[e] = -1; ly.vt_owner[t] = -1; g_vt_drops++; return t;
   }
   return -1;
@@ -829,6 +849,10 @@ static void ensure(int L, const int32_t* ids, int n, int32_t* out) {
       if (ly.vt_table[e] >= 0) {
         ts = ly.vt_table[e]; ly.vt_table[e] = -1; ly.vt_owner[ts] = -1; ly.vt_lru.erase(ly.vt_where[e]);
         vt_busy.push_back(ts); vt_out.push_back(ts); g_vt_hits++; ly.vt_h++;
+        if (!ly.vt_fc.empty() && ly.vt_fc[ts]) {      // lever 2: a forecast read's entry used (landed or still landing)
+          ly.vt_fc[ts] = 0; g_fc_hits++;
+          if (ly.vt_rdy && !(*ly.vt_rdy)[ts].load(std::memory_order_acquire)) g_fc_late++;
+        }
       }
       const int v = ly.ghost[s];                     // (never one needed now: this call loads those itself)
       if (v >= 0 && ly.table[v] < 0 && ly.vt_table[v] < 0 && !in(need, v) && (tv = vt_take(ly, vt_busy)) >= 0) {
@@ -849,6 +873,7 @@ static void ensure(int L, const int32_t* ids, int n, int32_t* out) {
   if (!jobs.empty()) {
     double t = now_s(), gap = t - g_last_rd_end.load(std::memory_order_relaxed);   // the SSD's idle time before this burst
     g_bursts++; if (gap >= 250e-6) g_burst_g025++; if (gap >= 1e-3) g_burst_g1++;
+    { const int fl = g_fc_fly_all.load(std::memory_order_relaxed); if (fl > 0) { g_fc_busy_bursts++; g_fc_busy_n += fl; } }
     load_jobs(ly, jobs, ly.pom_r2 ? &modes : nullptr, ly.vt_n ? &vtj : nullptr);
     double t1 = now_s(); g_st.io_ns += (int64_t)((t1 - t) * 1e9); g_last_rd_end.store(t1, std::memory_order_relaxed);
   }
@@ -903,6 +928,45 @@ static void prefetch(int L, const int32_t* ids, int n, int seq, bool victim_ok =
       // additive update of this pass's published table: before the GPU reads it -> fast path
       // with the spare slot; after -> slow path as before. Never removes or moves an entry.
       if (g_pf_publish) table_add(L, seq, e, s);
+    });
+  }
+}
+
+// Lever 2 (BIGMOE_FC_F / BIGMOE_FC_FS; BigMoE Wed 11-04, FableGod push/WALL1_D1_SPEC.md section 8): right after layer L's
+// release, read the first F ids of L+1's posted forecast (the ranked look-ahead list) that are neither resident nor in the
+// tier as whole records INTO THE VOLATILE TIER (BIGMOE_VTIER), one GCD block each (trace tag 3); FS = the same for L+1's
+// sidecar. The GPU never reads the tier, so a wrong guess evicts nothing a check needs (R-57's KILL: wrong guesses evicted
+// LRU experts); a demand miss that finds its expert there copies it back, waiting for a read still in flight. A slot being
+// written is never taken (vt_take) and the slab stays pinned meanwhile (vt_unpin), so a purge cannot drop it mid-write.
+// Exact: a cache only. Off unless F or FS > 0.
+static int g_fc_f = getenv("BIGMOE_FC_F") ? atoi(getenv("BIGMOE_FC_F")) : 0;
+static int g_fc_fs = getenv("BIGMOE_FC_FS") ? atoi(getenv("BIGMOE_FC_FS")) : 0;
+static void fc_issue(int L, const int32_t* ids, int n, int F) {   // under g_mu
+  if (F <= 0 || L < 0 || L >= (int)g_layers.size()) return;
+  Layer& ly = g_layers.at(L);
+  if (!ly.vt_n || !ly.vt_rdy || ly.rec_fd < 0) return;
+  const std::vector<int32_t> none;
+  for (int i = 0, k = 0; i < n && k < F; i++) {
+    int e = ids[i];
+    if (e < 0) continue;
+    e &= 0xFFFFF;
+    if (e >= ly.E) continue;
+    if (ly.table[e] >= 0 || ly.vt_table[e] >= 0 || ly.pf.count(e)) { g_fc_skip++; continue; }
+    vt_pin(ly);
+    const int t = vt_take(ly, none);
+    if (t < 0) break;
+    ly.vt_table[e] = t; ly.vt_owner[t] = e; ly.vt_lru.push_front(e); ly.vt_where[e] = ly.vt_lru.begin();
+    ly.vt_fc[t] = 1; (*ly.vt_rdy)[t].store(0, std::memory_order_release);
+    ly.vt_fly->fetch_add(1); g_fc_fly_all++; g_fc_issued++; k++;
+    Layer* lp = &ly;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+      t_rd_tag = 3;                                  // trace: 3 = forecast (lever 2)
+      const std::vector<std::pair<int, int>> jobs{{e, 0}}; const std::vector<int> td{t};
+      load_jobs(*lp, jobs, nullptr, nullptr, &td);
+      t_rd_tag = 0;
+      g_last_rd_end.store(now_s(), std::memory_order_relaxed);
+      (*lp->vt_rdy)[t].store(1, std::memory_order_release);
+      lp->vt_fly->fetch_sub(1, std::memory_order_acq_rel); g_fc_fly_all--; g_fc_landed++;
     });
   }
 }
@@ -1702,6 +1766,13 @@ static void loader_main() {
         int32_t pr[160];
         for (int i = 0; i < n1 + n2; i++) pr[i] = stamp_dec(row[pidx(i)]);
         std::lock_guard<std::mutex> lk(g_mu);
+        if ((g_fc_f > 0 || g_fc_fs > 0) && n1) {     // lever 2: L+1's forecast into the volatile tier (base row L only)
+          const int nb = g_fam0 > 0 ? g_fam0 : g_nl;
+          if (L + 1 < nb) {
+            fc_issue(L + 1, pr, n1, g_fc_f);
+            if (g_fam0 > 0 && g_fam0 + L + 1 < g_nl) fc_issue(g_fam0 + L + 1, pr, n1, g_fc_fs);
+          }
+        }
         if (n1 && L + 1 < g_nl) prefetch(L + 1, pr, n1, seq);
         if (n2 && L + 2 < g_nl) prefetch(L + 2, pr + n1, n2, seq);
         if (g_pf_side > 0 && n1 && g_fam0 > 0 && L + 1 < g_fam0 && g_fam0 + L + 1 < g_nl)   // BIGMOE_PF_SIDE
@@ -1932,9 +2003,17 @@ NB_MODULE(bigmoe_ext, m) {
     ly.vt_table.assign(ly.E, -1); ly.vt_owner.assign(slots, -1); ly.vt_where.resize(ly.E);
     ly.vt_free.clear(); for (int t = slots - 1; t >= 0; t--) ly.vt_free.push_back(t);
     ly.ghost.assign(ly.C, -1);
+    ly.vt_rdy = new std::vector<std::atomic<int>>(slots);   // lever 2: every slot's bytes in place (no read in flight)
+    for (auto& r : *ly.vt_rdy) r.store(1);
+    ly.vt_fc.assign(slots, 0); ly.vt_fly = new std::atomic<int>(0);
+    ly.vt_off.clear(); { int64_t o = 0; for (auto& pc : ly.pieces) { ly.vt_off.push_back(o); o += pc.per; } }
     ly.vt_n = slots;                                    // last: ensure() / make_room() key on it
     return (long long)(sb * slots);
   });
+  m.def("fc_test", [](int L, std::vector<int32_t> ids, int F) -> int {   // lever 2, test only: L's forecast reads now
+    std::lock_guard<std::mutex> lk(g_mu); const int64_t i0 = g_fc_issued.load();
+    fc_issue(L, ids.data(), (int)ids.size(), F); return (int)(g_fc_issued.load() - i0); });
+  m.def("fc_wait", []() { while (g_fc_fly_all.load(std::memory_order_acquire) > 0) usleep(100); });   // test only
   m.def("vtier_purge", [](int L) {                   // test only: discard layer L's tier the way a macOS purge does
     std::lock_guard<std::mutex> lk(g_mu);
     Layer& ly = g_layers.at(L);
@@ -2141,6 +2220,10 @@ NB_MODULE(bigmoe_ext, m) {
     d["burst_gap1"] = g_burst_g1.load();
     d["vt_hits"] = g_vt_hits.load(); d["vt_ins"] = g_vt_ins.load(); d["vt_purged"] = g_vt_purged.load();   // BIGMOE_VTIER
     d["vt_drops"] = g_vt_drops.load();
+    d["fc_issued"] = g_fc_issued.load(); d["fc_landed"] = g_fc_landed.load(); d["fc_hits"] = g_fc_hits.load();   // lever 2
+    d["fc_late"] = g_fc_late.load(); d["fc_wait_s"] = g_fc_wait_ns.load() * 1e-9; d["fc_drops"] = g_fc_drops.load();
+    d["fc_skip"] = g_fc_skip.load(); d["fc_busy_bursts"] = g_fc_busy_bursts.load(); d["fc_busy_n"] = g_fc_busy_n.load();
+    d["fc_f"] = g_fc_f; d["fc_fs"] = g_fc_fs;
     { int64_t vb = 0, vr = 0; std::lock_guard<std::mutex> lk(g_mu);
       for (auto& ly : g_layers) if (ly.vt_n) { vb += (int64_t)ly.vt_n * ly.vt_slot; vr += (int64_t)(ly.vt_n - (int)ly.vt_free.size()) * ly.vt_slot; }
       d["vt_bytes"] = vb; d["vt_used_bytes"] = vr;        // the tier's size / its filled part (volatile: not in phys_footprint)

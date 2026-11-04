@@ -15,6 +15,8 @@ import json, os, sys
 import numpy as np
 D = os.path.dirname(os.path.abspath(__file__)); OUT = os.path.join(D, "out")
 argv = sys.argv[1:]; ALSO = []
+NULL = "--null" in argv   # Wed 15:4x: a null check (Fable C's screens 1(b) / 1(c), BYTES10.md:255-260): PASS = within +<points> of the paired arm, whatever the level; else COST
+if NULL: argv.remove("--null")
 while "--also" in argv: i = argv.index("--also"); ALSO.append(argv[i + 1]); del argv[i:i + 2]
 ARM, REF = argv[0], argv[1]; PLUS = float(argv[2]) if len(argv) > 2 else None
 DOMS = ("code", "ifeval", "multi"); LVL = {"code": 1.34, "ifeval": 5.42, "multi": 3.69}   # Q1 at 0.99, as pre-registered
@@ -49,8 +51,10 @@ else:
     v, mc = [], []
     for d in DOMS:
         g, own = pct(A, d), pct(B, d)
-        ok = g <= LVL[d] and (PLUS is None or g <= own + PLUS)
-        r = "PASS" if ok else "BETWEEN" if g <= 1.5 * LVL[d] else "KILL"
+        if NULL: r = "PASS" if g <= own + PLUS else "COST"
+        else:
+            ok = g <= LVL[d] and (PLUS is None or g <= own + PLUS)
+            r = "PASS" if ok else "BETWEEN" if g <= 1.5 * LVL[d] else "KILL"
         v.append(f"{d} {r} {g:.2f} % (" + (f"{REF} {own:.2f} + {PLUS} = {own + PLUS:.2f}; " if PLUS is not None else "")
                  + f"level {LVL[d]:.2f}, x1.5 {1.5 * LVL[d]:.2f})")
         a, b = int((A[d] & ~B[d]).sum()), int((B[d] & ~A[d]).sum())

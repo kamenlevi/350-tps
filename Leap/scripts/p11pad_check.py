@@ -32,6 +32,7 @@ import p11 as P11
 import tierglu_3cn as C3
 import tierglu_nax6 as N6
 import tierglu_nax6n as NN
+import tierglu_nax6h as NH                                  # NAX6-NH (Wed 11-04: its p11 path), the live module
 for m in (P11, C3, NN):
     assert os.path.dirname(os.path.abspath(m.__file__)) == os.path.abspath(CAND), m.__file__
 
@@ -134,7 +135,8 @@ for L in (20, 44):
                                                            C3.tier_glu_phase_n(x, d["msb"], d["lsb"], ms_, ls_, ph, 2, plan=PLAN), ph, sc)),
                       ("pairs", lambda d: C3.tier_glu_pairs_n(x, d["msb"], d["lsb"], ms_, ls_, pidx, plan=PLAN)),
                       ("split", lambda d: C3.tier_glu_split_n(x, d["msb"], d["lsb"], ms_, ls_, hit, sc, plan=PLAN)),
-                      ("NAX6-N", lambda d: NN.tier_glu_nax6n(x, d["msb"], d["lsb"], ms_, ls_, plan=PLAN, grp=N6.gpu_grp(ms_, ls_, PLAN)))):
+                      ("NAX6-N", lambda d: NN.tier_glu_nax6n(x, d["msb"], d["lsb"], ms_, ls_, plan=PLAN, grp=N6.gpu_grp(ms_, ls_, PLAN))),
+                      ("NAX6-NH", lambda d: NH.tier_glu_nax6nh(x, d["msb"], d["lsb"], ms_, ls_, plan=PLAN, grp=N6.gpu_grp(ms_, ls_, PLAN)))):
             a, b, c = f(p1), f(p0), f(nat)
             mx.eval(a, b, c)
             k = cnt.setdefault(nm, [0, 0, 0])

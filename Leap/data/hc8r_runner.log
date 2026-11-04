@@ -28,3 +28,14 @@ HC8-1P screen Wed 14:27:28 (quiet lock, 16v1,20v2,40v2) + timing
 HC8-1P verdict: BETWEEN (best HC8 NP20v2 5.40 ms per chain; vs S4g +4.19, vs B +3.23; (1) OK)
 lock released
 Wed 14:27:31 exit 0 after 4 s, unlocked
+Wed 14:52:26 run (cap 300 s)
+
+HC8-1P screen Wed 14:52:27 (quiet lock, 20v2,20v4) + timing
+96 mixers loaded and quantized (8-bit g64); hc_norm eps 1e-06
+(1) read() vs emulate(): mixed rel rms max 1.48e-03 (median 1.07e-03), inject max 2.25e-04; written == emulate 96/96, == exact (and eager8) 96/96 -> OK
+    bitwise vs NP20v2 (mixed, written, inject), of 96: NP20v4 96
+(2) deviation vs the exact read (rel rms, median [max] over 96 teacher-forced reads): mixed NP20v2 6.69e-03 [1.47e-02]; inject NP20v2 3.48e-03 [4.54e-03]; mixed NP20v4 6.69e-03 [1.47e-02]; inject NP20v4 3.48e-03 [4.54e-03]; mixed eager8 6.70e-03 [1.44e-02]; inject eager8 0.00e+00 [0.00e+00]
+(3) ms per 96-read chain (median of 40): S4g 9.77 [9.68-10.03], B 8.64 [8.52-8.91], HC8 NP20v2 5.27 [5.20-5.47], HC8 NP20v4 4.97 [4.88-5.23]
+HC8-1P verdict: PASS (best HC8 NP20v4 4.97 ms per chain; vs S4g +4.80, vs B +3.67; (1) OK)
+lock released
+Wed 14:52:30 exit 0 after 3 s, unlocked

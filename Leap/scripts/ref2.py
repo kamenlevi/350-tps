@@ -59,6 +59,8 @@ What changes (monkeypatches on MTPLX, read-only):
     pass over the streams, the norm after the GEMM, fp32 gates (6.69e-3 rel rms vs the exact read = HC8-eager's
     6.70e-3; 5.22 vs 9.67 ms per 96-read chain, quiet). Row-invariant (16 padded rows), so SD == AR. Without the
     switch, 8-bit mixers take MTPLX's eager chain at 16 padded rows. COUNTS hc8_fast. hc8r is imported on first use.
+    CFG hc8_v / REF2_HC8_V (default 4, Wed 14:5x): hc8r's kernel version; v4 is bitwise == v2 (96 / 96 reads) and
+    4.97 vs 5.27 ms per 96-read chain (quiet); v2 is what EvalSuite's snap/leap-c805fd0 runs.
   - DENSE-N-RAM (Wed 2026-11-04, exact, inert until called): dense_native_convert(model, head=False) replaces every
     eligible 4-bit dense weight (QuantizedLinear, bits 4, group 64, N >= dense_min_n; R-83's qkv | z concat too) IN PLACE
     by its native copy, 4-D on purpose so that a direct reader fails loudly; one copy, no RAM cost. _qmm: a converted
@@ -152,7 +154,8 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "fatt_verify": os.environ.get("REF2_FATT_VERIFY") == "1", "fatt_r8": os.environ.get("REF2_FATT_R8") == "1",
        "dense_native": os.environ.get("REF2_DENSE_NATIVE") == "1",
        "dense_native_nt": int(os.environ.get("REF2_DENSE_NATIVE_NT", "1")),
-       "hc8_fast": os.environ.get("REF2_HC8_FAST") == "1", "hc8_np": int(os.environ.get("REF2_HC8_NP", "20"))}
+       "hc8_fast": os.environ.get("REF2_HC8_FAST") == "1", "hc8_np": int(os.environ.get("REF2_HC8_NP", "20")),
+       "hc8_v": int(os.environ.get("REF2_HC8_V", "4"))}
 _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
               kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
@@ -421,7 +424,7 @@ def _gr(self, hyper_input, pending=None):
         bf = mx.bfloat16
         if CFG["hc8_fast"] and h16.dtype == bf and (p16 is None or all(t.dtype == bf for t in p16)):
             bo, inj = (None, None) if p16 is None else (p16[0].reshape(R, -1), p16[1].reshape(R, -1))
-            mixed, written, inject = _hc8r().read(q8, h16.reshape(R, -1), bo, inj, NP=CFG["hc8_np"], v=2)
+            mixed, written, inject = _hc8r().read(q8, h16.reshape(R, -1), bo, inj, NP=CFG["hc8_np"], v=CFG["hc8_v"])
             COUNTS["hc8_fast"] += 1
             return (mixed[:rows].reshape(*lead, -1), written[:rows].reshape(hyper_input.shape),
                     inject[:rows].reshape(*lead, -1))
