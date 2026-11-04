@@ -7661,3 +7661,169 @@ kernels), timing = the whole call + combine in dependent chains of 16, interleav
     | 2,047 | 8.94 | 8.70 (-0.24) | 11.95 | 8.32 / 7.59 / 7.17 |
 
     The line is -0.25 ms at 2,047 rows. Re-time on a free GPU before handing it to BigMoE.
+
+## TRELLIS FULL-STORE PREP (Leap, Wed 2026-11-04 20:0x-; the orchestrator 20:0x, Kamen wants today's usage used)
+Goal: be ready if tonight's screen 7 passes (NewIdeas' corrected estimate: code 1.13-1.21 % for the mix, line 1.34 %).
+(1) a Metal TRL encoder for all 24,576 experts (the 2.40 b mix first, then TRL-3), bit for bit == Fit12's C encoder on
+layer 18 (Fit12's store = the reference); size the 48-layer Hessian capture. (2) the decode path for serving: k 3 and
+the engine wiring are new; pre-register the speed line. No full-store disk writes (31-36 GB is Kamen's call after the
+screen); GPU tests small, on share locks.
+- **Prior art:** QTIP (Tseng et al., NeurIPS 2024) encodes with a Viterbi per tile on CUDA GPUs and decodes with
+  computed codes (1MAD / 3INST) in fused matvec kernels. ik_llama.cpp's IQ*_KT have a Metal decode port. Not found: a
+  Metal Viterbi encoder, or a trellis decode grouped per expert inside a routed MoE GLU. Tag: published method; the
+  Metal encoder and the grouped decode are new builds.
+
+### (1) Encoder, pre-registered 20:1x
+- **Bit-for-bit target:** fit_trellis.dylib's Viterbi. Its arithmetic as compiled (otool: no fadd at all, 4 fmadd +
+  5 fmla): t = 0 cost = d * d; t > 0 cost = fma(d, d, best[j]); min over the 2^k predecessors with strict < (lowest h
+  wins ties); final state = the lowest among the minima. LUT3 has 3,726 distinct values in 4,096 states, so ties are
+  real; the kernel copies the tie rules.
+- **Line:** every tile == the C output bitwise (random, Laplace, tiny-scale, all-zero, constant and exact-LUT tiles,
+  k 2 and 3), and Fit12's pipeline with only the Viterbi swapped reproduces layer 18's store bit for bit (all 1,536
+  8-bit views). Anything else is a bug.
+
+### (1) Encoder result (20:16-20:4x; share locks, GPU shared with MTP Head's P-CAP at 90 %)
+- **Viterbi kernel (scripts/trl_metal.py):** PASS. 0 of ~2,000 tiles differ from Fit12's C at k 2 and at k 3,
+  including the tie-heavy cases (data/trl_metal_test.txt). Valid trellis paths; the bitstream packs and unpacks
+  exactly. NMSE on N(0, 1): 0.0710 at k 2 (Fit12's B3 C test: 0.0711), 0.0193 at k 3.
+- **Speed (data/trl_metal_bench.txt; GPU shared):** 194 k tiles / s at k 2 and 246 k tiles / s at k 3 in calls of
+  2,560 tiles. Fit12's C on 4 cores: ~1.5 k tiles / s (4.2 s per 6,400-tile matrix). So ~130x.
+- **Layer 18 end to end (scripts/trl_l18_check.py):** Fit12's own code (modules imported read-only, CPU default
+  device, 4 BLAS threads as its runner), with fit_b3.vit swapped for the Metal Viterbi.
+  - H_x recomputed == Fit12's cached H_x, bitwise.
+  - Expert 0's down view differed at first. Cause: e0 / e1 came from the 14:22 smoke, before fit_trl_store.py's
+    14:3x change of H_h from fp64 to fp32. With H_h in fp64, e0 matches 3 / 3 (e1 matches either way). The
+    reference store is mixed on that point; harmless.
+
+### (2) Decode path, pre-registered 20:3x (before any kernel exists)
+- **Kernel (scripts/tierglu_trl.py, TRL-G):** a trellis-decode GLU grouped per distinct expert, like NAX's grouping
+  (gpu_grp; no tiers in the mix).
+  - Lane = output row. Each lane walks its row's 16 x 16 tiles, extracts each 12-bit state from a 64-bit window
+    (k 2: words r, r + 1; k 3: words 3r / 2 .. + 2), computes 3INST, and serves up to 4 rows of the group per pass.
+  - Rotations: x' = H512(s_L x) once per token; h' = H128(s_e h) per pair (mx.hadamard_transform).
+  - Store as trl_encode.py writes it: k 2 tiles in 17 words, k 3 in 25, bf16 row scale; the decode multiplies by
+    inst3(s) / RMS3.
+  - The format and the kernel need no LUT.
+- **Correctness:** real layer-18 codes (trl_encode.py, experts encoded in-process) vs a float64 numpy forward of the
+  same codes (dense Q = LUT3[s] x sc, the same rotations). Line: max |dy| <= 1e-2 of max |y| per call (fp32 accumulation;
+  bf16 x).
+- **Speed line:** TRL-G (mix, rotations and combine included) vs NAX6-N (layer 18 records3, native, plan 4433333333),
+  per S 16 call on layer 18's code / chat routing (traces125). Resident pools (random streams for TRL; the decode cost
+  does not depend on the values). Dependent chains of 16, interleaved medians (k90's method), S 8 reported too.
+  - PASS <= 1.00x NAX6-N: TRL serves at no kernel cost. Its byte saving is free at 24 / 12 GB, and 45 GB is not slowed.
+  - BETWEEN 1.00-1.25x: a gain only where SSD bytes dominate (24 / 12 GB). NewIdeas prices it.
+  - KILL > 1.25x: at 24 GB the decode would eat what the store saves. Assumes ~12 MB of SSD saved per kept token
+    (NewIdeas' replays: mix 7.2 vs MSB-3 FAST 19.5 MB), ~1.1 ms at ~11 GB/s, against ~4.5 ms of expert GLU per kept
+    token at NAX6-N speed (0.65 ms per call x 48 layers / ~7 kept per check), so break-even is ~1.24x.
+- **Prediction:** 0.8-1.0x. B10(b)'s per-pair 3INST kernel decoded ~713 G weights / s with one FMA per weight. Grouped,
+  each weight is decoded once per distinct expert (~62 per S 16 call, ~2.6 rows each): 305 M decodes ~0.43 ms + the
+  extra FMAs ~0.1 ms, vs NAX6-N 0.65 ms (quiet).
+
+### (2) Decode correctness (20:28-20:31; data/tierglu_trl_test.txt)
+- TRL-G's fp32 output per pair == the float64 numpy forward of the same streams within 4-7e-7 of max |y| (rms 4e-7).
+  The reference uses TM.unpack_states, a bit-level unpack independent of the kernel's 64-bit windows. Covered: k 2 / 3
+  (the mix), k 3 / 3 (TRL-3) and k 2 / 2, with 1, 3 and 16 tokens. In the 16-token case experts are shared, giving groups
+  of up to 16 rows (4 passes). PASS.
+- Deviation from the pre-registered tolerance: I set "<= 1e-2 of max |y|" on the engine path (bf16 per-pair y + bf16
+  combine_phase, as NAX6-N's harness). That path reads 0.6-1.24e-2 against float64, i.e. bf16 rounding (2^-9 per
+  rounding, summed over 10 ranks), and it fails the 1e-2 line in 4 of 9 cases. The line was mis-set for a bf16 output.
+  The decode is judged on the fp32 path (5e-7), which separates a decode bug (O(1)) from output rounding.
+
+### (1b) The 48-layer capture, sized (20:3x; from Fit12's B10-r capture: scripts/b10r.sh + fit_b12.py b10_cap, read only)
+- **What:** the MoE input x at every layer for the fit rows R0..R7 (8 parts x 4,096 tokens: math / code / instr /
+  multi / wiki / know / agent, round-robin; fit_b10r_text.py). R8 / R9 (validation, for the damping search) and U
+  are not needed with fixed damping.
+- **Disk:** 4,096 x 2,560 x 2 B = 21 MB per part per layer, so 168 MB per layer and **8.05 GB for 48 layers** (+31 MB
+  of ids). Temporary: delete after the encode.
+- **GPU:** one prefill of 32,768 tokens; the capture adds only copies. B10-r captured 11 parts (45,056 tokens) at 9
+  layers in 140 s (Oct 25), so ~100-150 s at 48 layers (Fit12: ~5 min with margin). It needs a quiet lock (the
+  engine's prefill), with b10r.sh's SSD (<= 66 C to start, stop at 73 C) and swap guards. Command: F12_CAP_LAYERS =
+  0..47, F12_CAP_TEXTS = R0..R7.
+- **RAM:** the capture engine (fit_b12.py: F12_V3F store, BIGMOE_JOINT) + ~1 GB of x per part before writing.
+- **H_x per layer:** X^T X in fp64 (429 GFLOP) + inverse + Cholesky (2,560), ~3-5 s per layer on 4 cores, so
+  ~3-4 min for 48 layers.
+- **Privacy note:** the "agent" domain (1 of 7) is Kamen's own Claude Code sessions. The codes carry only a
+  Hessian-weighted imprint of them, but if a TRL store is ever published, that calibration choice is Kamen's call.
+
+### (2b) Engine wiring (plan; nothing in BigMoE's repo is touched)
+- **Store (per layer):** one file of 512 fixed-size records. Mix record:
+  - gate words 435,200 B + up 435,200 B (40 x 160 tiles x 17 words);
+  - down 640,000 B (160 x 40 x 25 words);
+  - bf16 scales 7,680 B; down signs 640 B (int8; or regenerate from seed 1000 L + e);
+  - total 1,518,720 B, padded to 16 KB pages: 1,523,712 B. **37.5 GB for 48 layers.** TRL-3: 1,928,320 B ->
+    47.5 GB. (Fit12's tight-bit sizes 36.2 / 46.7 GB do not pad tiles to words; the kernel's aligned 64-bit windows
+    need the padding, +2.9 %.)
+- **index.json:** per layer E, recsz, piece offsets, k per projection, layout "trl-mix-v1"; the reader refuses any other
+  layout.
+- **Pools (per slot):** wg / wu [C, 40, 160, 17], wd [C, 160, 40, 25] u32; scales; down signs. One pread per expert,
+  as records3.
+- **Call:** tier_glu_trl(x, P, slot) in place of tier_glu_nax6n for TRL layers. The x' rotation (per layer) and the h'
+  rotation (per pair) live inside it; the combine is unchanged. A new CFG switch defaults OFF. A held ref2 diff (like
+  r57_dkv.diff) comes after screen 7 and the speed verdict.
+- **Amendment 20:4x (before any timing):** a second kernel-A variant, A2. One lane computes the gate row and the same
+  up row, sharing the x' loads; SwiGLU stays in registers; bitwise == A in every test case. The S 16 verdict uses the
+  better of A and A2 per trace (both defined before measuring). TRL-3 is reported, not judged.
+- **Converted-store reader (20:4x):** trl_encode.read_record reads a native+p11+pad layer through BigMoE's
+  ext.record_rowmajor and parses it as fit_q.read does. 8 / 8 experts of BigMoE's padded scratch copy (layer 20) ==
+  fit_q.read on today's records3. So the encoder runs on the store before or after Thursday's conversion.
+
+### (1) Encoder result, final (20:4x)
+- **Layer 18, all 1,536 matrices, bit for bit == Fit12's store:** PASS. Experts 2-511: 1,530 / 1,530
+  (data/trl_l18_check_2_511.log, 0 DIFF; two heat pauses on the way). Experts 0-1: 6 / 6 with H_h in fp64
+  (the smoke's code).
+- **TRL-3 (k 3 everywhere; Fit12 has no TRL-3 files):** the Metal path == Fit12's own C path in-process, 6 / 6 matrices
+  (experts 5-6; TRL_FORM=trl3 TRL_VS_C=1; the log line's "== Fit12's store" means the C path in this mode). In-sample
+  error vs MSB-3: gate 0.33-0.36x, up 0.34-0.37x, down 0.50-0.54x.
+- **Batched encoder (scripts/trl_encode.py):** --check decodes the PACKED CODES (unpack -> LUT3 x bf16 scale ->
+  Q R^T -> the 8-bit view), and 48 / 48 views == Fit12's store. So the store format round-trips exactly.
+  - Speed without the check: 0.642 s per expert (32 experts, batch 16, one process, 4 BLAS threads). Per expert:
+    prep (read + H_h + W R) 0.26 s, BlockLDLQ feedback 0.35 s. Viterbi wait 0.0 s: the GPU part is hidden; the CPU
+    fp64 code that keeps the codes bitwise sets the pace.
+  - **Full store (24,576 experts):** 4.4 h on one 4-thread process; ~1.1-1.5 h with 3-4 processes (12-16 cores, a
+    night slot). Plus the capture (~2-5 min GPU, quiet) and H_x (~4 min CPU).
+  - A FAST variant (feedback and H_h in fp32 on the GPU) would take ~0.1 s per expert (~40 min), but it is not
+    bitwise == the screened encoder. Not built: the bitwise one fits a night.
+- **Disk (df 20:4x):** 126 GB free; the floor is 110-112 GB (Thursday's conversion needs 112). The mix store (37.5 GB)
+  needs ~25 GB freed first; TRL-3 (47.5 GB) ~35 GB.
+- **Layer 30, H_x computed by the encoder (no cache; 1.2 s):** 48 / 48 views of experts 100-115 == Fit12's L30 store,
+  bit for bit. So the per-layer path the full run uses is covered as well as the cached one.
+
+### (2c) Store format + the serving chain on real codes (20:4x; scripts/trl_store.py)
+- **Format trl-v1:** one file per layer of fixed records (16 KB-aligned) + index.json. Pieces: gate / up / down words,
+  bf16 row scales, the expert's int8 h-signs. Layer constants: k per projection, x-sign seed L, Hadamard 512 / 128.
+  Mix record: 1,518,720 B payload, 1,523,712 B on disk.
+- **Test (PASS):** 16 real L18 experts, through encode (the bitwise pipeline) -> write_layer -> load_pools -> TRL-G
+  (fp32). Against the dense float64 path W = Q R^T (y = W_d (silu(W_g x) * W_u x), fit_b3.rot's R) on real calibration
+  inputs: max |dy| / max |y| = 6.1e-7. Against the float64 forward of the loaded pools: 4.8e-7. So the signs, the
+  Hadamard order, the code format, the scale semantics and the kernel agree end to end. (The 24 MB test layer is in
+  data/trl_store_test/, not committed.)
+- **Amendment 20:5x (before any timing):** rows per pass became a template parameter. Layer 18's traces at S 16 have
+  76-82 distinct experts per call, with 25-30 % of pairs in groups larger than 4, so 4 rows per pass re-decodes +9-11 %
+  and 8 rows +1 %. Third variant: A2 at 8 rows (bitwise == A). The verdict takes the best of A / A2 / A2-rp8 per trace.
+
+### (2) Decode speed RESULT (20:53-20:55; queued quiet lock, 18 s of GPU; data/trl_bench.txt): **KILL (1.41x)**
+| per call, layer 18 | NAX6-N | TRL mix A | A2 | A2 rp8 | TRL-3 (A) |
+|---|---|---|---|---|---|
+| code S 16 | 0.809 ms | 1.314 (1.62x) | 1.460 (1.80x) | 1.833 (2.27x) | 1.484 (1.83x) |
+| chat S 16 | 1.068 ms | 1.278 (1.20x) | 1.476 (1.38x) | 1.948 (1.82x) | 1.439 (1.35x) |
+| code S 8 | 0.524 ms | 0.691 (1.32x) | 0.744 (1.42x) | 0.983 (1.88x) | 0.775 (1.48x) |
+| chat S 8 | 0.620 ms | 0.731 (1.18x) | 0.821 (1.32x) | 1.064 (1.72x) | 0.854 (1.38x) |
+- **Verdict (S 16, best variant per trace = A, mean of code / chat): 1.41x, KILL** (line: PASS <= 1.00x, KILL > 1.25x).
+  Prediction 0.8-1.0x: wrong.
+- **Geometry sweep (informational, same quiet lock; data/trl_sweep.txt):** 8 settings of threadgroup size and rows
+  per pass, all 1.44-1.59x on code and 1.13-1.23x on chat. The best (2 / 4 simdgroups, 4 rows) is ~1.29x. Geometry is
+  not the problem.
+- **Read:** TRL-G is near-flat across traces (1.28-1.31 ms) and decodes only ~330 G weights / s (~400 M decodes per
+  S 16 call incl. re-decodes). B10(b)'s per-pair TA reached 713 G / s. The difference is the mapping:
+  - TA: lane = tile column, word-interleaved layout (coalesced word loads), each lane's 16 x values loaded once and
+    reused across RA output rows.
+  - TRL-G: lane = output row, a broadcast float4 x load per (row, tile column), two 68 B word segments per simdgroup.
+  - A2 and 8 rows per pass are slower: more registers per lane, lower occupancy.
+- **Next (a new bet, not run):** TRL-TA, a grouped kernel on TA's mapping. Lane = tile column, words interleaved
+  per row block (a store-layout change: trl-v2, the encoder repacks), each group row's x segment kept in registers
+  (rp x 16), one decode per (output row, tile column) served to rp rows.
+  - Prediction: ~600-700 G decodes / s, i.e. ~0.6-0.7 ms per S 16 call, ~0.7-0.85x NAX6-N.
+  - Same line as here.
+- **What this means for the store:** quality (screen 7) and bytes are unchanged. The serving kernel as built would
+  cost ~0.3-0.5 ms per layer call more than NAX6-N at S 16, which at 24 GB eats more than the ~12 MB per kept token of
+  SSD it saves. The store is not blocked: the encoder is ready, and the kernel needs the TA-style rewrite.

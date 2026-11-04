@@ -1964,3 +1964,4 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 17:12:01 SCR trl relay armed: waits for runner 84909; re-starts it with stop 2241 only if it ends on its stop time with the store not whole (the orchestrator 17:1x) (pid 11163)
 18:32:34 SCR trl encode: layer 30 complete (1536 files)
 19:39:03 SCR trl thu armed: at 2026-11-05 06:00:00, only if the store is not whole, the same runner with last chunk start 0830 (the orchestrator 19:3x, branch b) (pid 5718)
+20:50:41 SCR trl encode: layer 7 complete (1536 files)

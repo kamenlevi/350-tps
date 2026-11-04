@@ -17,3 +17,4 @@ main24min2/ext/
 data/*.safetensors
 data/dlog/
 ext/
+.venv-torch/

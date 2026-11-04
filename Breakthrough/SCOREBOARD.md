@@ -2989,3 +2989,30 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
 - ADDENDUM Wed 20:0x (NewIdeas): DENSE-3 is kept as a Thursday leftover (the ~13:10 spare after the records3 conversion,
   BIGMOE_EXT_BUILD=build_nat): "a measurement beats two predictions". The reading is unchanged (QUEUE 16:5x). NewIdeas runs
   s7_read.py (it writes into NewIdeas' repo) when s7_trl lands.
+- ADDENDUM Wed 20:1x, before its run: NewIdeas' CHAT ROUTE arm (the orchestrator 20:1x; pre-registration copied from
+  NewIdeas' QUEUE 20:1x, 4fb08ca; masks 4324e09).
+  - Arm qom_0.5_live_c147_bonus5g = Fable C's 1(c) rule (QOM cf 0.5, the bonus row gated at 0.5, proxy g) on a 147-slot
+    pool (the 24 GB split, SWEEP row 10a). Harness as 1(c): q1_union(masks dir), i.e. PERT {rmask, renorm False}; no t3,
+    4-bit everywhere on the stock path; 36 windows.
+  - Read: dm_screen_read.py on the lines, PASS <= 1.34 / 5.42 / 3.69 % on EVERY domain, BETWEEN <= 1.5x; paired McNemar
+    vs qom_0.5_live_bonus5g (1(c)) and vs qom_0.5_live_c164 (information); map_kl.py beside. Prediction [G, NewIdeas]:
+    ~0.7 / ~4.6 / ~3.0 %.
+  - Install (20:13, install_chat.sh, test_chat_arm.py, 7/7 ok):
+    - the PERT is exactly {rmask: NewIdeas' masks dir, renorm: False};
+    - 36 windows, with names and shapes equal to 1(c)'s and to the routing's;
+    - versus 1(c): drops only, ranks 0-1 identical, and 7,774 rows differ (NewIdeas' check: 7,774);
+    - kept share 92.3 % over all rows, prompt rows included (NewIdeas' 82.5 % uses another denominator).
+  - Slot: re-armed 20:13 with LASTGO 22:53 and DEADLINE 23:00 (BigMoE's ticket at 23:00, RELAX ~23:05).
+    - The arm is listed in data/s67_extra.txt (est 5 min, start by 22:50, twins 1(c) then c164).
+    - It runs right after s7_trl, only if it can start by 22:50; otherwise it is a Thursday leftover.
+    - Dry test: ten cases right.
+- ADDENDUM Wed 20:2x (NewIdeas: the chat arm needs no TRL store): from 22:40 the chat arm no longer waits for s7_trl, so it
+  runs even if Fit12's store is late or not whole tonight; s7_trl still goes first while its store is whole, and after the
+  chat arm if it still fits (LASTGO 22:53). Fit12 at 20:15: L18 + L30 whole, L7 388/512, L41 0/512; ETA 22:15-22:30, last
+  chunk by 22:45. Re-armed 20:1x (dry test: five more cases right).
+- ADDENDUM Wed 20:55 (the orchestrator 20:55): not now (Leap's quiet lock to ~21:01, then BigMoE's 44 GB early run). The
+  chat arm's "alone" time moves from 22:40 to 22:15, after MTP Head's P-CAP resume (~21:50-22:15); the runner's yield checks
+  keep it behind P-CAP if P-CAP runs late. s7_trl: Thursday is fine. The orchestrator places it at its 21:45 night-order
+  pass: right after RELAX (~23:50) if Fit12's L41 is whole by then (before the conversion, no reader fix needed),
+  otherwise after BigMoE's Thursday ticket. Tonight's runner still takes s7_trl if the store is whole by its last start.
+  Re-armed 20:55 (S67_XALONE 22:15, LASTGO 22:53, DEADLINE 23:00; checked on the process).

@@ -293,3 +293,4 @@ def dense3(which=None):
         print(f"[dm] dense3: {n} modules at MSB-3 ({mb:.0f} MB of 4-bit weights rewritten)", flush=True)
     return setup
 ABLATIONS["dense3"] = dense3()
+ABLATIONS["qom_0.5_live_c147_bonus5g"] = q1_union(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0.5_live_c147_bonus5g"))   # NewIdeas 20:1x chat route (QUEUE 20:1x 4fb08ca, masks 4324e09): 1(c)'s rule on a 147-slot pool, 4-bit stock path

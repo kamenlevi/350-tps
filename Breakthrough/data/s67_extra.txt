@@ -1,0 +1,2 @@
+# the orchestrator 20:1x / NewIdeas 20:1x: <arm> <est min> <start by HH:MM> <primary twin> <info twins...>
+qom_0.5_live_c147_bonus5g 5 22:50 qom_0.5_live_bonus5g qom_0.5_live_c164

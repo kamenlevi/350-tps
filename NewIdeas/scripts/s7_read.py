@@ -8,6 +8,8 @@ Per domain, per row KL(REF2-T || arm) from map_kl.rows_kl; paired differences us
   in-frame est = KL_ref + (est_abs_TRL - KL_ref3), the verdict;
   flips = the pre-registered fit a + b sqrt(KL); lines PASS <= 1.34 / 5.42 / 3.69 %, BETWEEN <= 1.5x, KILL above.
 Also prints E29 = KL_ref3 - KL_ref (the ranks 2-9 MSB-3 term at 239 slots) with its paired SEs.
+Added 20:0x (MoonShots cd7e1f0; information, not pre-registered): the strict view, TRL as an independent quantizer
+disagreeing with REF2-T's 3-bit ranks 2-9: strict = in-frame + 2 x E29 = est_abs + E29.
 Usage: python s7_read.py   (writes ~/NewIdeas/data/ledger/s7_read.txt)"""
 import json, os, sys
 import numpy as np
@@ -79,15 +81,17 @@ def main():
             f"{d} {'OK' if gate[d] else 'NO ESTIMATE'} (window SE: {'OK' if gate_w[d] else 'fails'})" for d in DOMS))
         L.append("scale (cal_all - ref) / (cal - ref): " + " / ".join(f"{scale[d]:.1f}" for d in DOMS) + " (linear 48 / 4 = 12)")
         if "s7_trl" in P:
-            L += ["| domain | trl - ref | est_abs_TRL KL | flips | in-frame est KL | flips | verdict (in-frame) | raw s7_trl flips |",
-                  "|---|---|---|---|---|---|---|---|"]
+            L += ["| domain | trl - ref | est_abs_TRL KL | flips | in-frame est KL | flips | verdict (in-frame) | strict KL (= est_abs + E29) | flips | strict verdict | raw s7_trl flips |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|"]
             for d in DOMS:
                 if not gate[d]: L.append(f"| {d} | {P['s7_trl'][d][0]:+.5f} | no estimate | | | | | |"); continue
                 ea = K["s7_ref"][d] + P["s7_trl"][d][0] * scale[d]
                 ef = K["s7_ref"][d] + (ea - K["s7_ref3"][d]) if "s7_ref3" in K else ea
                 raw = 100 * np.nanmean(np.concatenate([v[1][:, 2] for v in A["s7_trl"].values() if v[0] == d]))
+                es = ea + (K["s7_ref3"][d] - K["s7_ref"][d]) if "s7_ref3" in K else ea
                 L.append(f"| {d} | {P['s7_trl'][d][0]:+.5f} | {ea:.4f} | {flips(d, ea):.2f} ({verdict(d, flips(d, ea))}) | "
-                         f"{ef:.4f} | {flips(d, ef):.2f} | {verdict(d, flips(d, ef))} | {raw:.2f} |")
+                         f"{ef:.4f} | {flips(d, ef):.2f} | {verdict(d, flips(d, ef))} | {es:.4f} | {flips(d, es):.2f} | "
+                         f"{verdict(d, flips(d, es))} | {raw:.2f} |")
         else:
             L.append("s7_trl: not landed yet; the estimate table prints when it does")
     os.makedirs(os.path.dirname(DST), exist_ok=True)

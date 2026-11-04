@@ -63,7 +63,11 @@ Plan: ~/BigMoE/docs/PLAN_records3_convert.md. Leap prepares and verifies.
 - Engine smoke: the residency check + a short REF2-T decode, token for token vs the pre-conversion reference.
 - Tell every session (peer say + the orchestrator).
 
-## STATUS 19:2x
+## STATUS 20:0x
+- DECIDED (the orchestrator, 20:0x): option (a). "D4X: DIFFERS (HIGHER)" counts as GO, like PASS; Kamen keeps the veto
+  tonight. BigMoE aligned its guard (8618a37): convert_records3.sh converts on PASS or DIFFERS (HIGHER); FAIL / VOID /
+  none still refuse. That matches EvalSuite's runners 43 / 44. No open blockers on Leap's side.
+## STATUS 19:2x (superseded)
 - B1: FIXED by BigMoE 8e8bdc4, verified against EvalSuite's day_runner42.sh.
   - T0_DONE is gone. The script needs NAX6_DONE == "D4X: PASS" (d4x.py prints exactly that; runner 42 writes it),
     CHECK1_DONE starting "check 1 rc 0 " (runner 42 writes "check 1 rc $c1 (HH:MM)"), and RELAX_DONE.

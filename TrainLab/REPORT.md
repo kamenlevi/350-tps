@@ -3182,3 +3182,67 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   - >= 0.75: alive. The 60K training runs on Thursday, with amendment 1's lines.
   - < 0.75: KILL by the pre-registered diagnostic. No training.
 - Breakthrough's s7_trl goes after the extraction, or before it if its store is whole first.
+
+### P-CAP: run STOPPED at step 148/188 by its swap guard (Wed 11-04 20:37); my CPU port tests caused it. No walk yet.
+- Cause: from 20:19, my PORT tests ran on the CPU beside it. An MLX CPU reference process (~4-5 GB) and a 5.6 GB PyTorch
+  step-1 check overlapped from 20:37. Swap went 8378 -> 10433 MB (+2 GB) and the runner's guard sent SIGTERM.
+  - The trainer finished the step and saved its checkpoint: ext/pcap/pcap10.safetensors (bf16) and .state.json, step
+    148, data order kept.
+  - "CPU only" was not "memory free". Rule from now on: port tests total <= 4 GB, one process at a time, footprint
+    measured first, none during a quiet run.
+- Memory: MLX peak 35.4 GB, so the lock was re-declared MEM 36 at step 20 (declared 32). The start guard was 34 GB
+  available (pre-registered: 36 GB free).
+- Early read, NOT the pre-registered measure (that is the walk). Validation at step 100, where both runs have seen 25.6K
+  anchors:
+
+  | | argmax, mean gain d1-15 | selector, mean gain d1-15 | depth 10 argmax | depth 15 argmax |
+  |---|---|---|---|---|
+  | L1-20 (5 layers, A 64 S 4) | +0.095 | +0.092 | 0.472 -> 0.619 | 0.087 -> 0.303 |
+  | P-CAP (10 layers, A 32 S 8) | +0.134 | +0.126 | 0.528 -> 0.712 | 0.101 -> 0.378 |
+
+  - P-CAP learns ~40 % more per depth at equal data. Caveats: the 24 validation groups differ (A 32 vs A 64 grouping),
+    the batch shapes differ, and the new layers run at 10x the learning rate.
+  - It says nothing yet about kept per check.
+- To finish: resume the last 40 steps (the MLX trainer restarts AdamW with a 10-step ramp; a deviation to record),
+  then the walk. ~25 min at MEM 36 GB, in a slot from the orchestrator (asked 20:4x).
+- 20:4x, the orchestrator: the resume goes FIRST after BigMoE's early 45 GB run releases its lock (~21:35-21:50). If that
+  run hasn't started by 21:15, it moves to 23:00, and the resume takes the GPU as soon as it is free. turns/pcap_resume.sh:
+  - start rule: >= 36 GB available (the pre-registered guard), 3 clear minutes; gives up at 22:25;
+  - share lock MEM 36 GB; swap guard +2 GB;
+  - the same pass / kill lines.
+  **Deviation:** the MLX trainer's resume restarts AdamW's moments, with a 10-step learning-rate ramp, for steps 149-188.
+  P-OFF's extraction moves to Thursday. It runs tonight only if BigMoE's run moved to 23:00 and the extraction can start
+  by 21:45.
+
+### PORT step-1 parity: which embedding rounding the GPU used (pre-registered 20:5x, before the A/B)
+- MLX 0.32.2's CPU dequantize rounds twice: bf16(bf16(s * q) + b), bitwise vs MLX-CPU. Its GPU kernel very likely rounds
+  once (an fma in float). L1-20 trained on the GPU.
+- Two full-size step-1 runs so far:
+  - 5.3434 with one rounding (attn chunk 16, rows 256, 6 threads, fp32 storage);
+  - 5.3474 with two (chunk 8, rows 128, 4 threads, bf16 storage; a 6.8 GB footprint, over my own 4 GB rule; the
+    bf16-storage build kept a second full copy, since fixed).
+- A/B rule, written now: rerun both roundings with identical settings. The rounding whose loss is closer to L1-20's
+  logged step-1 loss is taken as the GPU's and becomes the port's default. The other stays an option ("twice" =
+  MLX-CPU tests).
+- **RESULT 20:56** (both runs: --bf16-store, chunk 8, rows 128, 4 threads; only the embedding rounding differs):
+  - once: 5.343469, -0.000507 vs L1-20's logged 5.343977 (-9.5e-5 relative);
+  - twice: 5.347406, +0.003429 (+6.4e-4).
+  By the rule above, **one rounding is the GPU's arithmetic** and stays the default. The port reproduces L1-20's GPU
+  step-1 loss to 1e-4 relative. MLX-CPU's two-rounding dequantize differs from its GPU kernel.
+- Footprint 4.87 GB per run, again over my own 4 GB rule (by 0.9 GB, ~17 s each; only Fit12's 2 GB run beside it).
+  The full-size step-1 check runs again only when nothing else runs, or after cutting it below 4 GB.
+
+### PORT walk validated (Wed 11-04 21:0x): port/walk_port.py vs the MLX walk, L1-20 weights
+| | checks | kept per check | per-token rate | P(first 15) |
+|---|---|---|---|---|
+| code, MLX walk (bf16 drafter) | 666 | 9.57 | 0.9239 | 0.276 |
+| code, PORT walk (fp32 drafter) | 660 | 9.66 | 0.9258 | 0.288 |
+| math, MLX walk | 2046 | 7.00 | 0.8707 | 0.086 |
+| math, PORT walk | 2043 | 7.01 | 0.8710 | 0.087 |
+
+- The port runs the drafter in fp32, the trainer's regime; MLX's walk runs it in bf16. A few near-tie picks differ: +0.09
+  kept on code, +0.01 on math. Per-depth rates agree within ~0.01.
+- Good enough for Kaggle to score checkpoints against each other. The Mac's bf16 walk stays the reference for absolute
+  numbers.
+- Footprint: the math run peaked at 5.97 GB, over my own 4 GB rule (nothing big beside it; Fit12 2 GB). Cause: the
+  head's 512-row transients (~1.8 GB). Fixed: one bf16 output buffer, 256 rows.

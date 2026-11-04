@@ -15,6 +15,9 @@ FRAME FIX (19:5x): the FAST stack certifies against REF2-T (EvalSuite PREREG_f1)
 (4433333333). So MSB-3 kept ranks 2-9 match the reference: the verdict frame is amendment 2's in-frame one,
   KL_in = map(c) + (r - 1) x (T01 + E29(c))   (= KL_ref + (est_abs - KL_ref3) for a store over all 48 layers),
 and the formula above (KL_abs, vs the 4-bit model) is the conservative column, as amendment 2 reports est_abs beside it.
+MoonShots (cd7e1f0): the credit view is the expected-score view; disagreement with REF2-T for an INDEPENDENT quantizer
+(TRL / GPTQ / the mix, errors not nested in MSB-3) is (r + 1) x E29 at ranks 2-9: KL_strict = map(c) + (r - 1) x T01 +
+(r + 1) x E29(c). MSB-3 (row 0) is the reference's own bits: 0 under every view. Both views print for rows 1-4.
 Writes ~/NewIdeas/data/ledger/sweep_engine.txt."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -76,14 +79,17 @@ def main():
              " / ".join(f"{kl['s7_cal_all'][d]:.4f}" for d in DOMS) + " (implied r: " + " / ".join(
                  f"{(kl['s7_cal_all'][d] - A1[d] + T01[d]) / (T01[d] + E29[d]):.2f}" for d in DOMS) + ")")
     L += ["", "| row | r (MSE vs MSB-3) | slots | in-frame KL code / IFEval / multi | in-frame flips % (VERDICT) | "
-          "verdicts | absolute flips % (vs the 4-bit model, conservative) | v1 (map frame, guessed terms) |",
-          "|---|---|---|---|---|---|---|---|"]
+          "verdicts | strict flips % (independent quantizer vs REF2-T) | strict verdicts | absolute flips % (vs the 4-bit model) | v1 (map frame, guessed terms) |",
+          "|---|---|---|---|---|---|---|---|---|---|"]
     for name, r, c, v1 in ROWS:
         k = {d: mapkl(d, c) + (r - 1) * (T01[d] + e29(d, c)) for d in DOMS}
         ka = {d: mapkl(d, c) + (r - 1) * T01[d] + r * e29(d, c) for d in DOMS}
+        ks = {d: mapkl(d, c) + (r - 1) * T01[d] + ((r + 1) * e29(d, c) if r != 1.0 else 0.0) for d in DOMS}
+        fs = {d: fl(d, ks[d]) for d in DOMS}
         f = {d: fl(d, k[d]) for d in DOMS}
         L.append(f"| {name} | {r} | {c} | " + " / ".join(f"{k[d]:.4f}" for d in DOMS) + " | " +
                  " / ".join(f"{f[d]:.2f}" for d in DOMS) + " | " + " / ".join(vd(d, f[d]) for d in DOMS) +
+                 " | " + " / ".join(f"{fs[d]:.2f}" for d in DOMS) + " | " + " / ".join(vd(d, fs[d]) for d in DOMS) +
                  " | " + " / ".join(f"{fl(d, ka[d]):.2f}" for d in DOMS) + f" | {v1} |")
     L.append("(E29's window-cluster SE on code is 0.00065 (z 1.8; s7_read.txt): code rows carry about +-0.1 flip points "
              "from it; chat terms are z 8-10)")

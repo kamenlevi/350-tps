@@ -16,10 +16,10 @@ log() { echo "[$(date +%H:%M:%S)] $*"; }
 hm() { date +%H%M; }
 avail_gb() { vm_stat | awk '/page size of/ {ps=$8} /Pages free/ {f=$3} /Pages inactive/ {i=$3} /Pages speculative/ {s=$3} /Pages purgeable/ {p=$3} END {printf "%d", (f+i+s+p)*ps/2^30}'; }
 others() { peer ls 2>/dev/null | grep "^- "; }   # other sessions only (mine is the "You:" line; a status that mentions MTP Head still counts)
-locks() { grep -oE "· (shared run|quiet lock until)[^·]*"; }   # the lock segment only, never the status text
-nquiet() { others | locks | grep -c "quiet lock until"; }
+locks() { grep -oE "· (shared run \(others may work\)|benchmarking|waiting for a quiet window)[^·]*"; }   # peer ls segments: share lock / held quiet lock or bench / queued quiet ticket   # the lock segment only, never the status text
+nquiet() { others | locks | grep -cE "^· (benchmarking|waiting for a quiet window)"; }
 nbig() { others | locks | grep -oE "MEM [0-9]+ GB" | awk '$2 >= 5' | wc -l | tr -d " "; }
-nbigmoe() { others | grep "~/BigMoE" | locks | grep -cE "quiet lock until|MEM ([5-9]|[1-9][0-9]+) GB"; }   # its quiet lock, or a share lock declaring MEM >= 5 GB
+nbigmoe() { others | grep "~/BigMoE" | locks | grep -cE "^· benchmarking|MEM ([5-9]|[1-9][0-9]+) GB"; }   # its quiet lock, or a share lock declaring MEM >= 5 GB
 wait_clear() {   # $1 = minimum GB available, $2 = give-up HHMM; 0 when clear for 6 polls (3 min)
   local clear=0 q b a
   while :; do
