@@ -1,9 +1,9 @@
 # MACSTATE (written by the orchestrator's watcher; refreshed every ~10 min)
-updated: 2026-11-04T22:47Z / 00:47 EET
-free RAM (no-swap): 20 GB; free disk: 130 GiB
+updated: 2026-11-04T22:57Z / 00:57 EET
+free RAM (no-swap): 19 GB; free disk: 130 GiB
 
 ## Live locks (mode, minutes left, what)
-- quiet, 73 min left: evalsuite: relax ref --arm B --keys results/relax/keys_B.txt --chunk-minutes 60 --C 160
+- quiet, 63 min left: evalsuite: relax ref --arm B --keys results/relax/keys_B.txt --chunk-minutes 60 --C 160
 
 GPU schedule on the Mac (EET). Maintained by the orchestrator; the "live locks" section above is refreshed every 10 min.
 
