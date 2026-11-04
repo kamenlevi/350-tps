@@ -57,6 +57,11 @@ All [P] cells: research/TEN_X_LEDGER.md (Wed 03:4x). They replace Fable C's BYTE
 | JOINT, keepalive, zero-copy, pickup, lever 2 forecasts | BigMoE / Fable A | yes | 0 bytes: they move exposure (BROKEN line 1), not this line | Wed lever-1 arms | - |
 
 ## Log (newest first)
+- Wed 22:2x: SCREEN 7 KILLS the trellis route to code under 10 MB at 24 GB. The 2.40 b mix (7.2 MB on code)
+  measures 1.45 / 9.54 / 10.44 % in-frame (BETWEEN / KILL / KILL; QUEUE 22:2x), with damage 1.6-2.5x its MSE model.
+  TRL-2 (4.0 MB) is expected no better. Code's cheapest measured PASS stays ~19.5 MB [P] (today's FAST stack).
+  Chat at 24 GB has a measured PASS rule (cf 0.5 + bonus gate, 0.71 / 4.30 / 2.73 %, 22:14) at ~88 MB; the cf 0.3
+  version (49-52 MB) is pre-registered.
 - Wed 19:5x: FRAME FIX (SWEEP v1.2): judged against REF2-T, the FAST stack's own reference (ranks 2-9 at 3 bits),
   the code routes under 10 MB pass with room [G]: TRL-2 4.0 MB at 1.19 %, the mix 7.2 MB at 1.13-1.21 % (19:5x's
   1.30 / 1.24-1.31 are the conservative frame against the 4-bit model).

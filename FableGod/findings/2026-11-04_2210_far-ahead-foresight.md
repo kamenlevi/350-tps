@@ -64,3 +64,19 @@
   - Caveat: the near forecast is a noise model at V1's recall (0.75, independent errors, optimistic). FAR-G1's GPU capture
     scores it directly: tiered hybrid >= -20 % at K 266 PASS, 10-20 % BETWEEN, < 10 % KILL.
   - Cost: none extra (same chain, same map, a two-level eviction key). EXACT-safe.
+- Prior art, refreshed 22:26 (standard web search; abstracts and summaries only):
+  - Published:
+    - draft-based expert forecasting one draft ahead: MoE-SpeQ 2511.14102, SP-MoE 2510.10302, MoE-SpAc (a short-horizon
+      demand sensor for prefetch and eviction);
+    - a confidence-adaptive horizon with a hard stop: SPICE 2608.21240, which argues fixed horizons pollute the cache;
+    - multi-signal / multi-level schemes: FineMoE / fMoE 2502.05370 (prompt semantic hints + layer-trajectory matching),
+      HOBBIT 2411.01433 (token / layer / sequence levels);
+    - Least-Stale eviction: SpecMD 2602.03921.
+  - Not found: a near-draft tier + a far-draft tier (~100+ tokens) in one tiered eviction; soft per-token confidence
+    weighting without a cutoff; FAR's measurements. Tag: adapted. The new parts are the far horizon, the near/far tiering,
+    the soft weighting and the measurements.
+- Correction 22:30 (MoonShots' novelty check, research/FAR_NOVELTY_CHECK.md, 27ff044):
+  - Soft per-token confidence weighting is published in its near form: PSR section 7 (2610.34721), AcceptMoE (2608.02989)
+    and MoE-SpeQ's confidence buffer. Only the far-chain extension is ours.
+  - The near / far tiering and the ~100-token draft horizon are "adapted" (not found in this form).
+  - The new parts are the four measurements. Clean claim note: 2026-11-04_2240_near-far-expert-forecasting.md.
