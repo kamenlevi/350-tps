@@ -25,6 +25,11 @@ os.environ.pop("MTPLX_FUSED_GATE_UP", None)            # the streamed engine has
 os.environ.pop("BIGMOE_TIER", None)
 os.environ.pop("BIGMOE_VERIFY_MIDLOOP", None)          # SB comes from the lambda below, as in S45
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
+# THE COMBINED EXACT DEFAULT (WED_TESTS item 5, Wed 4 Nov 08:3x; R57_D45=0 = the 11-02 default): the chat switch is part of
+# R57_PRESET=45 now, so it is set before CHATSW is read; the rest of the stack is set in the preset block below
+_D45 = os.environ.get("R57_PRESET") == "45" and os.environ.get("R57_D45", "1") == "1"
+if _D45:
+    os.environ.setdefault("R57_CHATSW", "1")
 > (a quote from the project owner, kept private)
 if CHATSW:                                               # ~/TrainLab/INTEGRATION_CHATSWITCH.md): prompts the type rule calls chat
     os.environ["TL_INFER"] = "1"                         # draft on the 125B's MTP head (d22 b5, K15, cut t, early exit); code /
@@ -50,6 +55,21 @@ if os.environ.get("R57_PRESET") == "45":                 # THE 45 GB DEFAULT (Ne
         os.environ["BIGMOE_TIER_SIZES"] = _p
     if os.environ.get("R57_COMBINE") == "1":
         os.environ.setdefault("K73_EXACT", "1")
+    # Wed 4 Nov 08:3x, WED_TESTS item 5 (data/d45/d45_report.txt; A-B-C-C-B-A at C 160, all 6 arms 14 / 14 == REF2-T): ADOPT
+    # the night's exact levers, steady +12.1 % geo over 14 prompts (chat +17.3, code +12.4, math +12.8, agent +0.5; SSD MB per
+    # kept token -30 %; lifetime footprint +1.8 GB): the chat switch (above), the SSD keepalive (50 us), the volatile tier
+    # 64/32 (7.8 GB purgeable, outside phys_footprint; needs an ext with set_vtier: ext/build since item 0) and K-83; and ADD
+    # lever 1's full stack on top, +6.4 % (code +11.7): JOINT, the copy split, the coherent spin, the system-scope post (these
+    # need OOO: R57_COMBINE=1). ~+19 % together. Each stays off with its own =0 (R57_CHATSW, BIGMOE_SSD_KEEPALIVE_US,
+    # K83_EXACT, BIGMOE_JOINT, BIGMOE_COPY_PAR, BIGMOE_SPIN_COHERENT, BIGMOE_POST_SYS) or R57_VTIER= (empty); R57_D45=0 = all.
+    if _D45:
+        os.environ.setdefault("BIGMOE_SSD_KEEPALIVE_US", "50")
+        os.environ.setdefault("R57_VTIER", "64/32")
+        if os.environ.get("R57_COMBINE") == "1":
+            for _k in ("K83_EXACT", "BIGMOE_JOINT", "BIGMOE_COPY_PAR", "BIGMOE_SPIN_COHERENT", "BIGMOE_POST_SYS"):
+                os.environ.setdefault(_k, "1")
+if os.environ.get("BIGMOE_COPY_PAR") == "0":             # the ext turns the copy split on for ANY value: =0 means off here
+    os.environ.pop("BIGMOE_COPY_PAR")
 TIER = os.environ.get("R57_TIER") == "1"                 # S45-T (NewIdeas 18:2x): REF2-T on the gate at C's RAM (M-08 sizing)
 if TIER:
     os.environ["BIGMOE_TIER"] = "4433333333"; os.environ["BIGMOE_TIER_GLU"] = "3c"

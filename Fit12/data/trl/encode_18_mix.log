@@ -1,0 +1,2 @@
+[trl] start 14:29:26: layers [18], experts 0-3, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 157.1 GB free, swap 9773 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L18: fit rows 32760, H_x + prep 9.1 s

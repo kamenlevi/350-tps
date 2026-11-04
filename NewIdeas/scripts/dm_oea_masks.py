@@ -107,6 +107,8 @@ def masks(out_dir, arm):
     mc = re.search(r"_c(\d+)$", arm_)                      # <arm>_c<N> (Tue 23:2x): qom's base pool = N slots per layer
     cpool = int(mc.group(1)) if mc else None                  # (e.g. _c164 = the uniform C 160 line), not laysz45_256's C_m
     if mc: arm_ = arm_[:mc.start()]
+    ball = arm_.endswith("_ball"); arm_ = arm_[:-5] + "_bq" if ball else arm_   # <arm>_live_ball (Wed 13:5x, DRAFT17): like
+    # _bq, but a last row with no next draft is gated too (a drafted 17th position; at cf 0 any drafted row is sure)
     bq = arm_.endswith("_bq"); arm_ = arm_[:-3] if bq else arm_   # <arm>_live_bq (Wed 04:4x, BYTES10 screen 1 in QOM's form): each
     # live segment's last row (the bonus row, or the discarded last row after a miss) is gated by the draft it verifies,
     # like a drafted row (QOM: ranks 0-1 + union members + resident ranks 2-9); exact when no draft is left
@@ -144,8 +146,9 @@ def masks(out_dir, arm):
                         if p <= fm: rows.append(p); c_ = -1.0 if live and k == m and p == A + m else g[p]  # live
                                                      # cut: the kept drafts' bonus row verifies no draft (exact)
                         else: rows.append((p + 97) % N); c_ = dc[p - A] if p - A < m else -1.0
-                        if bq and p - A == m and nxt >= 0:       # _bq: the last row verifies the next draft (engine)
-                            c_ = nxt; bqn[dom] = bqn.get(dom, 0) + int(p <= fm)
+                        if bq and p - A == m and (nxt >= 0 or ball):   # _bq: the last row verifies the next draft (engine);
+                            c_ = nxt if nxt >= 0 else 1.0                # _ball: a drafted 17th position when none is left
+                            bqn[dom] = bqn.get(dom, 0) + int(p <= fm)
                         cfs.append(c_)
                     if not rows: continue                        # a live segment past the window's end
                     cfs = np.array(cfs)

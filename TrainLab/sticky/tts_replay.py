@@ -226,8 +226,9 @@ def run_window(smp, lr, seed, tag, val):
     return out, tms
 
 
+AGR = []
 def load_set(pattern):
-    smp, names = [], []
+    smp, names = [], []; AGR.clear()
     for p in sorted(glob.glob(os.path.expanduser(pattern))):
         z = np.load(p)
         f = z["f"].reshape(z["f"].shape[0], -1)
@@ -235,8 +236,13 @@ def load_set(pattern):
         tk = lp = None
         if "tk" in z.files:                                # the 125B's top-32 per answer position: tk[i] at gen + i
             tk, lp = z["tk"], z["lp"]
-            ok = float(np.mean(tk[:, 0] == ids[gen - off + 1:gen - off + 1 + tk.shape[0]]))
-            assert ok > 0.98, f"{p}: top-32 not aligned at gen ({ok:.3f})"
+            if tk.shape[0] == len(ids):                    # d02a's tf_* windows hold one row per position from off
+                tk, lp = tk[gen - off:], lp[gen - off:]
+            m = min(tk.shape[0], len(ids) - (gen - off) - 1)
+            ok = float(np.mean(tk[:m, 0] == ids[gen - off + 1:gen - off + 1 + m]))
+            AGR.append(ok)                                 # aligned: the target's top-1 vs the stored answer, multi /
+            assert ok > 0.8, f"{p}: top-32 not aligned at gen ({ok:.3f})"    # ifeval 0.97-0.99, agent 0.899-1.0;
+                                                           # misaligned <= 0.09 (smoke 11-04 09:0x)
         smp.append((f, ids, off, gen, tk, lp)); names.append(os.path.basename(p))
         if NMAX and len(smp) >= NMAX:
             break
@@ -258,7 +264,8 @@ def summary(recs, label, base=None):
 for item in SETS.split(","):
     tag, pat = item.split("=", 1)
     smp, names = load_set(pat)
-    say(f"  {tag}: {len(smp)} windows ({'top-32 soft CE' if smp[0][4] is not None else 'hard CE'})")
+    say(f"  {tag}: {len(smp)} windows ({'top-32 soft CE' if smp[0][4] is not None else 'hard CE'}"
+        + (f"; target top-1 vs answer, min / mean {min(AGR):.3f} / {np.mean(AGR):.3f}" if AGR else "") + ")")
     base, saved = None, {}
     for lr in LRS:
         t0 = time.time(); val = [NCHECK, 0.0]; recs, tms = [], []

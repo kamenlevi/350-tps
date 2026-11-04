@@ -55,6 +55,10 @@ untrained form; if it misses, MTP Head proposes a trained map (it needs a new Bi
 Kamen 23:1x: a FAST mode may depend on the cache state (QOM goes ahead; EvalSuite certifies under >= 2 prompt orders;
 EXACT stays the default), so the logical-cache lead matters for certification, not for permission.
 
+Outcomes (Wed): TTS step 1 KILL (MTP Head, -0.1..-3 % kept); SAMELAYER-T BETWEEN (recall 0.823 code / 0.851 chat;
+priced by MoonShots at -40 % forecast-missed code demand, ~-2.4 ms exposed per check as a bound); SELGAP open, not
+queued; ToolSpec (a) KILL; M-32 KILL; M-34's 2-bit quality screen BETWEEN / KILL / KILL.
+
 Novelty watch for the papers (NewIdeas):
 - PSR section 7 weights verifier expert demand by the drafter's confidence, which touches Q1's NOVELTY wording.
 - Memory-Sovereign Inference (arXiv 2608.23805) streams Qwen3-Next-80B from NVMe with byte-identical logits. PRIOR_ART's

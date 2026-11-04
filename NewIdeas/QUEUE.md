@@ -184,11 +184,11 @@ Why it matters at 24 GB too (R-43, BigMoE b43): there each extra checked row cos
 | M-27 | MoonShots (CPU measurement + pricing; no slot) | LOSSLESS45 [BREAKTHROUGH PUSH bet (Kamen-approved push, the orchestrator Tue 17:0x): lossless compression of expert bytes, EXACT. TRIED (mostly mine, 10-18..10-27): W24-floor (3-bit copy floor 2.98 of 3.5 b / weight, -15 % MSB), W24-sp (11-bit lossless scales, -10.9 % at 24 GB), R-16 W24-ec (GPU rANS 46 GB/s of codes, 2.72 b; KILL at 24 GB for GPU contention), C1 (net <= +6 % after decode), R-23 (cross-expert context 0.0035 b), LSB planes uniform. New here: the 45 GB line's price (C 256 + M-17 sizes, the sidecar ~23 % of bytes), a per-layer sample over all 48 layers, an explicit shared-base / delta test, and the decode-time balance. Pre-registered Tue 17:0x, before the run]: sample 4 experts x 48 layers of records3 (both parts): per layer the order-0 entropy and Huffman length of the 3-bit codes, the LSB planes' entropy, the scales / biases' 16-bit entropy; shared base + delta = H(codes of expert e | codes of expert e' at the same position) and H(e - e' mod 8) for every pair in a layer vs H0. Formats priced on band45's capture reads at C 256 (M-18: code 142.2 base + 118.2 sidecar reads per check): today; fixed-width (11-bit scales, cheap decode); entropy floor (rANS codes at H0 + 0.016 b, entropy-coded scales); 16 KB-aligned parts. Lines: bytes - PASS if the entropy-coded store saves >= 12 % SSD MB per kept token on code at C 256, KILL < 8 % (the orchestrator's suggestion), BETWEEN otherwise; time (decides whether bytes convert) - the GPU rANS decode of a check's missed codes at the measured 46 GB/s must take less than the SSD time it saves at 12 GB/s, else flagged 'no net gain' (CPU decode reported as a judgment). **RESULT Tue 17:1x (scripts/lossless45.py, data/lossless45.txt; 192 records over all 48 layers, 25 s): bytes PASS (13.1 % code, 12.8 / 13.1 % chat, entropy store), time NO NET GAIN** - per code check 52.0 MB fewer SSD bytes = 4.33 ms at 12 GB/s, but the GPU rANS decode of the missed codes takes 5.20 ms at the measured 46 GB/s (net -0.87 ms). Measured: 3-bit codes H0 2.724 b (per layer 2.700-2.731), Huffman 2.765, rANS ~2.740 of 3; the LSB plane 1.00000 b (incompressible); scales / biases ~8 of 16 b (11-bit fixed width lossless); shared base + delta: none (H0 - H(e | e') -0.0003 b over 288 pairs; deltas cost +0.229 b). Fixed-width 11-bit scales alone: -5.0 %. **EXPLORATORY LEAD (not pre-registered)**: the fixed-width form held packed in RAM as well (bit unpacking inside the dequant kernels, no separate decode) fits ~4.6 % more parts in the same pools: held-out code -17.6 % vs M-17 at C 256 (-24.5 % at C 320), chat -14 to -16 %; exact; implied 63.6 -> ~66.9 tok/s. R-16 folded this pack into rANS (killed for decode contention), so it was never built alone. Needs Leap's kernels (11-bit scale reads) and a converted store (BigMoE; ~63 GB vs the disk floor). **Tue 17:1x, NewIdeas' pipelining question** (decode each landed record in the gate-spin shadow, only the last-landing one exposed, ~2.3 ms per check): on the entropy store alone vs today that would net ~+2 ms per check, but (1) stacked on the 11-bit pack the rANS layer adds only 38.16 -> 34.93 MB per kept token (-24.6 % vs M-17 in total), ~2.2 ms of SSD per check, against ~2.3 ms of exposed decode -> ~0; (2) R-16's live b42 measured a concurrent GPU decode costing the check +9-12 ms per pass at 6 GB/s (24 GB) - the shadow is not free (it contends with the OOO compute of resident experts); at ~2 GB/s here that is a few ms. So the entropy store stays BETWEEN; worth a live gate-pipeline micro-test only after M-27b. |
 | M-27b | Leap (kernels) + BigMoE (store, live A/B); MoonShots (sizes, line) | PACKED11 [EXACT. From M-27's exploratory lead; the orchestrator Tue 17:0x: pre-register before any build. Pre-registered Tue 17:0x, before any build or run]: records3's s3 / b3 (MSB parts) and b (LSB parts) stored as 11-bit fixed-width fields (W24-sp: all 221,184 pieces round-trip bitwise) in the SSD store AND held packed in the RAM pools; Leap's dequant kernels (3c-N / NAX6-N) unpack them in place; ONE in-place conversion with the native layout (BigMoE plans; disk floor 100 GB). Parts 2,064,384 / 720,896 B (16 KB-aligned); pool sizes re-fitted at equal RAM (M-25b's joint fit with the packed part sizes; MoonShots supplies the files). Replay prediction (M-27, held-out): code SSD MB per kept token -17.6 % at C 256 (-24.5 % at C 320), chat -14..-16 %; implied C50 steady +5 %. Gate before the A/B: a kernel unit test - packed-scale dequant gives the bf16-scale path's weights bitwise on every piece of a full layer. Live A/B (BigMoE, C50-style: cap45's six prompts at C 256, today's default = records3 + M-17 sizes vs packed store + packed pools + re-fitted sizes, same RAM, separate passes per arm, quiet lock): PASS = every token bitwise identical AND code SSD MB per kept token <= -10 % AND the six-prompt median steady tok/s >= +3 %; KILL = any token differs, or MB per kept token > -5 %, or median steady < +1 %; BETWEEN otherwise; C 320 reported if run. Size files ready (Tue 17:1x): ~/MoonShots/data/packed45_{256,320}.json (C 256: C_m sum 14,752, C_l 4,824 at 33.93 GB; C 320: 17,984 / 7,376 at 42.44 GB; key part_bytes). **Tue 17:1x: Kamen approved the combined conversion (native layout + 11-bit packed scales, one in-place change); M-27b's live A/B = BigMoE's pre-registered before / after A/B, reported against both lines; packed45 files feed the after-arm.** C 224 file for BigMoE's A/B (Tue 17:3x, BigMoE's ask: the night's memory likely limits the A/B to C 224): data/packed45_224.json at laysz45_224.json's pool RAM (29.677 GB; C_m sum 12,976 vs 12,466, C_l 4,008 vs 3,528), md5 11309e04c5f9e901916542aa81047ae0; held-out prediction vs M-17 at C 224: code -15.0 %, chat -14.2 / -14.6 %. |
 | M-28 | MoonShots (SSD + CPU timing, ~1 min, quiet lock; by day Wed 15:00-15:30 if BigMoE doesn't need it, else the orchestrator's slot; numbers to BigMoE, the lead) | SSDMICRO [WALL 1 sprint lever 1 (kill the per-call overhead), EXACT: reads only. The orchestrator Tue 18:3x, charter ~/FableGod/push/WALL1_SPRINT.md: find what makes the ~0.28 ms fixed cost per loader call (SSD_WALL2's fit at C 256: SSD busy = 0.283 ms per call + MB / 12.7 GB/s; ~70-77 calls per check = ~20 ms). TRIED: M-20 SSDWAKE (+50-65 us after 0.25-1 ms gaps; a 4 KB / 50 us keepalive removes it), TABLE_350 B1 (QD 64 rates by size; QD 1 16 KB 82 us, 1 MB 217, 2.9 MB 331), REC1 / REC2 (one aligned read per record; unaligned F_NOCACHE destinations slow), 9 pieces vs one whole read (~0.28 vs ~0.40 ms at QD 1, 24 GB era). New here: the per-call cost taken apart at the loader's real call shape (1-3 records per call at C 256) with per-read timestamps (GCD start, read, return), every factor in one interleaved run. Pre-registered Tue 18:5x, before any timing]: harness ~/MoonShots/scripts/ssdmicro.c (C; BigMoE's load_jobs pattern: one page-aligned F_NOCACHE pread per record part, one dispatch_apply on the user-interactive queue; records3 read-only and never parsed, every read on bytes no other read of the run touches and that are not resident in the page cache (mincore)) + ssdmicro_sum.py, runner run_ssdmicro.sh. R0 = the median C 256 call: 2 base records (2 x 2,162,688 B) as 2 whole reads after a 0.8 ms idle gap. Fixed cost = call time - bytes at 12.7 GB/s. Sets (100 rounds; all 81 points interleaved per round in blocks by keepalive setting; medians): S1 lone reads 4 KB-4 MB at QD 1 (first-byte intercept; gaps 0 / 0.8 ms); S2 queue depth: k parallel 256 KB reads, k 1-64; S3 one record in k = 1-32 pieces (2.16 MB-68 KB), 2 records at k 1 / 4 / 8; S4 idle gaps 0-10 ms (R0, R0 in 8 pieces); S5 keepalive spacing (BigMoE's 4 KB pread + usleep(n) loop, n 25-500 us); S6 F_NOCACHE vs the page cache; S7 GCD vs 8 pre-spun threads vs serial; S8 JOINT (base call then sidecar call vs one call; whole and 8 + 3 pieces). Lines: L1 = Fable A's D1 screen (SSD_WALL2 section 5): pieces (1 record whole - in 8 pieces) PASS >= 0.10 ms, KILL < 0.04; joint (two whole calls - one 8 + 3 call) PASS >= 0.20, KILL < 0.10; PASS = both pass, KILL = both kill, else BETWEEN. L2 = the orchestrator's question: R0's fixed cost >= 0.20 ms -> the drive + dispatch path makes most of the 0.28 (keepalive / pieces / pre-spun threads act there); <= 0.10 -> most of it sits outside the I/O path (release pickup, rebuild, call overhead) and BigMoE's per-burst trace must find it; between: split. L3 = lever 1's target (<= 5 ms per check at ~45 calls after JOINT): the best measured 2-record call at gap 0.8 (any dispatch / pieces / keepalive / cache) has fixed cost PASS <= 0.11 ms, KILL > 0.20. Descriptive: first byte, QD curve, best piece size, the cheapest keepalive spacing whose 0.8 ms penalty is <= 10 us, F_NOCACHE delta, GCD wake. My prediction: R0 ~0.50 ms, fixed ~0.15-0.20 (the I/O path makes 55-70 % of the 0.28); pieces -0.05..-0.10; joint -0.15..-0.25. Runtime ~1 min (no new round after 12 min), ~30 GB read; up to 8 spinning cores only around S7's calls. **RESULT Tue 18:59 (run moved up by Kamen's 'small tests now'; quiet lock 18:58:49-18:59:07, Kamen on the Mac, CPU 83-86 % idle; 100 rounds in 13.7 s; data/ssdmicro.txt): L1 KILL: pieces make a lone record SLOWER (+39 us in 8 pieces, +17..+93 at 2-32; 2 records +39 / +49 at 4 / 8); joint in 8 + 3 pieces -76 us (< 100), but joint with whole reads -120 us (1+1), -155 (2+2). L2 split: R0 527.5 us, fixed 187 us = 66 % of the engine's 283 (first byte ~119, idle wake +44, GCD start + return 8, QD-2 sharing ~16); ~96 us per call sits outside the I/O path (last record's rebuild, release pickup). L3 BETWEEN: best call = whole reads + keepalive, fixed 130 us (line 110 / 200); its floor is the first byte. Keepalive: usleep(25-100) = real spacing 145-270 us removes the whole wake; 400+ us leaves half. Page cache +49 us per call; pre-spun threads no gain. Per check at C 256: keepalive -3.4 ms busy, JOINT -4..5 ms; don't build pieces or pre-spun threads.** |
-| M-29 | MoonShots (SSD + CPU timing, ~20 s, quiet lock; tonight if the SSD is quiet before the 00:30 runs, else Wed by day; numbers to BigMoE, the lead) | SSDMICRO2 [WALL 1 sprint lever 1, EXACT: reads and copies only. The orchestrator's brief Tue 22:3x: 'reading straight into aligned slot memory (the zero-copy candidate), the copy-tail cost, keepalive spacing variants'. From M-28: of the median call's ~0.28 ms fixed cost, ~0.19 is the I/O path and ~0.10 sits outside it. The tier loader (bigmoe_ext.cpp read_expert, rec_fmt 1 on a record part) reads each missed part into a pooled aligned bounce, then memcpys its 9 (base) / 6 (sidecar) pieces into the pool slots on the job's thread. TRIED: REC1 (preadv straight into the slots) KILL for unaligned F_NOCACHE destinations (records3's s / b pieces are 51,200 B = 12.5 x 4 KB; engine pool strides leave slots 2 KB-aligned). New here: aligned zero-copy (pieces padded to 4 KB inside the same 2,162,688 B part, or one contiguous slot), Metal pool memory as the destination, and a wake-ahead ping instead of a keepalive trickle. Pre-registered Tue 22:3x, before any timing]: harness ~/MoonShots/scripts/ssdmicro2.m (C + Metal; M-28's method: one GCD dispatch_apply per call, F_NOCACHE, fresh records, none resident in the page cache, 0.8 ms busy-waited idle gap, all 50 points interleaved per round in blocks by keepalive setting, 150 rounds, medians) + ssdmicro2_sum.py, runner run_ssdmicro2.sh. Sets: Z zero-copy with 1 and 2 base records per call (Z0 today = bounce + memcpy into engine-stride slots; Z0n no copy; Z0p copy split over 3 projections; Z1 one read into a contiguous 16 KB-aligned slot; Z2 REC1; Z3 4 KB-padded pieces into 16 KB-aligned slots; Z3b the same into 4 KB- but never 16 KB-aligned slots; Z4 16 KB-padded pieces (2,260,992 B); Z0 / Z1 / Z3 / Z3b also into Metal shared buffers); S the sidecar part (today, no copy, contiguous, 4 KB-padded into 16 / 4 KB-aligned slots); K keepalive spacing usleep(n) n = 50 / 100 / 125 / 150 / 175 / 200 with 4 KB reads, n = 200 with 16 / 64 KB reads; P wake-ahead ping: one 4 KB read T = 25 / 50 / 100 / 200 / 400 us before the call, no trickle; C keepalive 50 with today's copy and with Z3b. Lines: Z = the best Metal zero-copy arm (Z1m / Z3m / Z3bm) vs today's Z0m on 2-record calls: PASS = saves >= 50 us per call AND within 15 us of Z0n (no DMA penalty for reading into slot memory); KILL = saves < 20 us; else BETWEEN; with it whether 4 KB-aligned slots match 16 KB-aligned ones (within 15 us: then the pool padding costs ~0.15 GB at 45 GB instead of ~1 GB). P = some T <= 200 us removes >= 70 % of the 0.8 ms wake penalty: PASS (the engine can ping at the router's launch instead of a trickle); no T removes >= 30 %: KILL; else BETWEEN. Descriptive: the copy tail per base / sidecar record against M-28's ~96 us outside the I/O path; the widest keepalive spacing with penalty <= 10 us; the read-size effect. My prediction: copy tail 50-100 us per base record, ~25 per sidecar; Z PASS (60 %), 4 KB alignment enough (50 %), REC1 slow; P PASS at T 100-200 (50 %). Runtime ~20 s, ~1.1 GB of pre-faulted slot memory, < 2 cores. **RESULT Tue 22:33 (quiet lock, 150 rounds in 12.3 s, data/ssdmicro2.txt): Z PASS: zero-copy into 4 KB-aligned Metal slots (s / b pieces padded to 53,248 B inside the same part) saves 173 us per 2-record call (716 -> 543 us), +5 us vs no copy at all; 4 KB = 16 KB alignment (-5 us), so the padding costs ~0.18 GB at C 256, not ~1 GB; Metal = malloc. Copy tail 119-122 us per base record alone, 170-176 with two side by side, 81 split over 3 projections; sidecar 44.5. REC1 +843 us. K: widest keepalive spacing with penalty <= 10 us ~340 us real (usleep 150), half usleep 50's reads. P PASS: one 4 KB ping 200 us before the burst removes 97.5 % of the +48 us wake (T 100: 22 %, T 400: 78 %). C: keepalive + zero-copy 487 vs 703 us (-31 %). Per check after JOINT: zero-copy -5.5..-8 ms SSD busy bound (Fable A budgeted -2.5).** **ADOPTED into the conversion (BigMoE 22:4x): records3's conversion format is now 'native+p11+pad' (MSB s3 / b3 padded to 36,864 B, LSB stored l1-first at 0 / 204,800 / 409,600 then the three b pieces packed, lsb_sz unchanged, the b copy ~10 us); Leap moves the p11 kernels' stride to the pool shape; BigMoE builds the direct path (aligned pieces straight into record-order pools); the A/B night gains a B2 + zero-copy arm.** |
-| M-29b | MoonShots (SSD + CPU timing, ~10 s, quiet lock; tonight after M-31) | ZEROCOPY-24 [WALL 1, the 24 GB line; EXACT. From M-29's zero-copy PASS at 1-2 records per call (the 45 GB line's bursts): at the 24 GB line a loader call carries ~4-15 misses, so many copies run side by side (memory-bandwidth contention could grow the tail) and the reads run at queue depth up to 15 (does reading into slot memory stay penalty-free?). Pre-registered Tue 22:4x, before any timing]: ssdmicro2.m in its 'big' mode (M-29's method; 150 rounds): Z0m (bounce + copy into Metal pool slots, today), Z0pm (the copy split over 3 projections), Z0n (no copy), Z3bm (zero-copy: 4 KB-padded pieces into 4 KB-aligned Metal slots) at 4, 8 and 15 base records per call; summary ssdmicro2b_sum.py appended to data/ssdmicro2.txt. Line: Z3bm saves >= 50 us per call vs Z0m at both 8 and 15 records: PASS; < 20 us at both: KILL; else BETWEEN. My prediction: PASS (the tail stays one or two records' copies, ~120-200 us). **RESULT Tue 22:46 (quiet lock, 150 rounds, data/ssdmicro2.txt): BETWEEN. Zero-copy saves 21.5 / 8.1 / 60.2 us per call at 4 / 8 / 15 records: the exposed copy tail shrinks to 45-78 us (earlier copies overlap later reads) and 9-piece reads into the slots cost 34-59 us of bandwidth at QD 4-15. A 45 GB-line lever (-173 us at 1-2 records), about neutral at 24 GB; an exploratory contiguous arm is queued.** **Repeat 22:47 (with an exploratory contiguous arm; the verdict stays the registered 22:46 run's): zero-copy saves 45.4 / 61.4 / 157.5 us at 4 / 8 / 15 records (would PASS): the copy tail swings 45-78 us (22:46) vs 61-208 us (22:47) at the same queue depths, so at 24 GB zero-copy never loses but its size is unsettled (-8..-158 us per call). The contiguous one-read-per-record slot is worse at high QD (-23 us at 15 records vs -158 for 9 aligned pieces): prefer aligned pieces.** |
+| M-29 | MoonShots (SSD + CPU timing, ~20 s, quiet lock; tonight if the SSD is quiet before the 00:30 runs, else Wed by day; numbers to BigMoE, the lead) | SSDMICRO2 [WALL 1 sprint lever 1, EXACT: reads and copies only. The orchestrator's brief Tue 22:3x: 'reading straight into aligned slot memory (the zero-copy candidate), the copy-tail cost, keepalive spacing variants'. From M-28: of the median call's ~0.28 ms fixed cost, ~0.19 is the I/O path and ~0.10 sits outside it. The tier loader (bigmoe_ext.cpp read_expert, rec_fmt 1 on a record part) reads each missed part into a pooled aligned bounce, then memcpys its 9 (base) / 6 (sidecar) pieces into the pool slots on the job's thread. TRIED: REC1 (preadv straight into the slots) KILL for unaligned F_NOCACHE destinations (records3's s / b pieces are 51,200 B = 12.5 x 4 KB; engine pool strides leave slots 2 KB-aligned). New here: aligned zero-copy (pieces padded to 4 KB inside the same 2,162,688 B part, or one contiguous slot), Metal pool memory as the destination, and a wake-ahead ping instead of a keepalive trickle. Pre-registered Tue 22:3x, before any timing]: harness ~/MoonShots/scripts/ssdmicro2.m (C + Metal; M-28's method: one GCD dispatch_apply per call, F_NOCACHE, fresh records, none resident in the page cache, 0.8 ms busy-waited idle gap, all 50 points interleaved per round in blocks by keepalive setting, 150 rounds, medians) + ssdmicro2_sum.py, runner run_ssdmicro2.sh. Sets: Z zero-copy with 1 and 2 base records per call (Z0 today = bounce + memcpy into engine-stride slots; Z0n no copy; Z0p copy split over 3 projections; Z1 one read into a contiguous 16 KB-aligned slot; Z2 REC1; Z3 4 KB-padded pieces into 16 KB-aligned slots; Z3b the same into 4 KB- but never 16 KB-aligned slots; Z4 16 KB-padded pieces (2,260,992 B); Z0 / Z1 / Z3 / Z3b also into Metal shared buffers); S the sidecar part (today, no copy, contiguous, 4 KB-padded into 16 / 4 KB-aligned slots); K keepalive spacing usleep(n) n = 50 / 100 / 125 / 150 / 175 / 200 with 4 KB reads, n = 200 with 16 / 64 KB reads; P wake-ahead ping: one 4 KB read T = 25 / 50 / 100 / 200 / 400 us before the call, no trickle; C keepalive 50 with today's copy and with Z3b. Lines: Z = the best Metal zero-copy arm (Z1m / Z3m / Z3bm) vs today's Z0m on 2-record calls: PASS = saves >= 50 us per call AND within 15 us of Z0n (no DMA penalty for reading into slot memory); KILL = saves < 20 us; else BETWEEN; with it whether 4 KB-aligned slots match 16 KB-aligned ones (within 15 us: then the pool padding costs ~0.15 GB at 45 GB instead of ~1 GB). P = some T <= 200 us removes >= 70 % of the 0.8 ms wake penalty: PASS (the engine can ping at the router's launch instead of a trickle); no T removes >= 30 %: KILL; else BETWEEN. Descriptive: the copy tail per base / sidecar record against M-28's ~96 us outside the I/O path; the widest keepalive spacing with penalty <= 10 us; the read-size effect. My prediction: copy tail 50-100 us per base record, ~25 per sidecar; Z PASS (60 %), 4 KB alignment enough (50 %), REC1 slow; P PASS at T 100-200 (50 %). Runtime ~20 s, ~1.1 GB of pre-faulted slot memory, < 2 cores. **RESULT Tue 22:33 (quiet lock, 150 rounds in 12.3 s, data/ssdmicro2.txt): Z PASS: zero-copy into 4 KB-aligned Metal slots (s / b pieces padded to 53,248 B inside the same part) saves 173 us per 2-record call (716 -> 543 us), +5 us vs no copy at all; 4 KB = 16 KB alignment (-5 us), so the padding costs ~0.18 GB at C 256, not ~1 GB; Metal = malloc. Copy tail 119-122 us per base record alone, 170-176 with two side by side, 81 split over 3 projections; sidecar 44.5. REC1 +843 us. K: widest keepalive spacing with penalty <= 10 us ~340 us real (usleep 150), half usleep 50's reads. P PASS: one 4 KB ping 200 us before the burst removes 97.5 % of the +48 us wake (T 100: 22 %, T 400: 78 %). C: keepalive + zero-copy 487 vs 703 us (-31 %). Per check after JOINT: zero-copy -5.5..-8 ms SSD busy bound (Fable A budgeted -2.5).** **ADOPTED into the conversion (BigMoE 22:4x): records3's conversion format is now 'native+p11+pad' (MSB s3 / b3 padded to 36,864 B, LSB stored l1-first at 0 / 204,800 / 409,600 then the three b pieces packed, lsb_sz unchanged, the b copy ~10 us); Leap moves the p11 kernels' stride to the pool shape; BigMoE builds the direct path (aligned pieces straight into record-order pools); the A/B night gains a B2 + zero-copy arm.** **Wed 09:01 (batched ticket): the wake-ahead ping at the engine's gaps: after 1.2 / 2.0 ms idle (+50 / +49 us), a 4 KB ping 150 us ahead removes 87 / 94 %, 250 us ahead 91 / 87 %.** |
+| M-29b | MoonShots (SSD + CPU timing, ~10 s, quiet lock; tonight after M-31) | ZEROCOPY-24 [WALL 1, the 24 GB line; EXACT. From M-29's zero-copy PASS at 1-2 records per call (the 45 GB line's bursts): at the 24 GB line a loader call carries ~4-15 misses, so many copies run side by side (memory-bandwidth contention could grow the tail) and the reads run at queue depth up to 15 (does reading into slot memory stay penalty-free?). Pre-registered Tue 22:4x, before any timing]: ssdmicro2.m in its 'big' mode (M-29's method; 150 rounds): Z0m (bounce + copy into Metal pool slots, today), Z0pm (the copy split over 3 projections), Z0n (no copy), Z3bm (zero-copy: 4 KB-padded pieces into 4 KB-aligned Metal slots) at 4, 8 and 15 base records per call; summary ssdmicro2b_sum.py appended to data/ssdmicro2.txt. Line: Z3bm saves >= 50 us per call vs Z0m at both 8 and 15 records: PASS; < 20 us at both: KILL; else BETWEEN. My prediction: PASS (the tail stays one or two records' copies, ~120-200 us). **RESULT Tue 22:46 (quiet lock, 150 rounds, data/ssdmicro2.txt): BETWEEN. Zero-copy saves 21.5 / 8.1 / 60.2 us per call at 4 / 8 / 15 records: the exposed copy tail shrinks to 45-78 us (earlier copies overlap later reads) and 9-piece reads into the slots cost 34-59 us of bandwidth at QD 4-15. A 45 GB-line lever (-173 us at 1-2 records), about neutral at 24 GB; an exploratory contiguous arm is queued.** **Repeat 22:47 (with an exploratory contiguous arm; the verdict stays the registered 22:46 run's): zero-copy saves 45.4 / 61.4 / 157.5 us at 4 / 8 / 15 records (would PASS): the copy tail swings 45-78 us (22:46) vs 61-208 us (22:47) at the same queue depths, so at 24 GB zero-copy never loses but its size is unsettled (-8..-158 us per call). The contiguous one-read-per-record slot is worse at high QD (-23 us at 15 records vs -158 for 9 aligned pieces): prefer aligned pieces.** **Wed 09:01 third run (250 rounds, the batched ticket): zero-copy saves 45.6 / 29.2 / 43.0 us at 4 / 8 / 15 records; across the three runs ~30-60 us per call typical (158 once): the 24 GB value is ~-30..-60 us per call.** |
 | M-30 | MoonShots (SSD + CPU timing, ~10 s, quiet lock; tonight if the SSD is quiet before the 00:30 runs; numbers to BigMoE and Fable A for lever 2's design) | QUEUEMIX [WALL 1 sprint lever 2 (never let the queue empty), EXACT: reads only. Lever 2 (SSD_WALL2 design 2) issues layer L+1's forecast reads with layer L's burst so the drive never idles and the next demand reads skip the first byte (~119 us) and the idle wake (~48 us); the same forecast reads share the drive's bandwidth with the demand reads beside them. TRIED / specs: no measurement of demand reads issued into a busy drive; no I/O-priority work (setiopolicy_np absent from TRIED, PRIOR_ART, SSD_WALL2, WALL1_D1_SPEC). Pre-registered Tue 22:4x, before any timing]: harness ~/MoonShots/scripts/ssdmicro3.c (+ ssdmicro3_sum.py, run_ssdmicro3.sh; M-28's method: fresh records, none resident in the page cache, F_NOCACHE, 0.8 ms busy-waited idle gap, points interleaved, 150 rounds, medians). Demand = 2 base records by one GCD dispatch_apply (the loader's call). Forecast = F = 1 / 2 / 4 records from F pre-spun threads: M mixed (issued with the demand call; default, IOPOL_UTILITY and IOPOL_THROTTLE), B busy (issued Delta = 100 / 200 / 400 / 800 us before it; default; throttle at 200 / 400), C chained (issued when the demand call returns); A = the demand call alone after the idle gap, A0 back to back. Lines: L-busy = some busy or mixed arm's demand call >= 100 us faster than A: PASS (a busy drive saves the first byte + wake net of the shared bandwidth); every busy and mixed arm slower than A: KILL (forecast reads in flight only cost the demand; lever 2's timing gain then comes only from forecasts that finish before the demand arrives); else BETWEEN. L-priority = a throttle / utility arm's demand call >= 50 us faster than the same arm at default AND its forecasts end <= 1 ms after the demand call: PASS; forecasts > 2 ms late or demand < 20 us faster: KILL; else BETWEEN. Descriptive: the demand cost per forecast record in flight, the chained forecasts' read time (does a read issued into a just-busy drive skip the first byte?). My prediction: L-busy BETWEEN / KILL (60 %: forecasts still transferring cost more than the first byte saves, except at Delta 400-800 where they are nearly done); L-priority KILL (75 %: the kernel's throttle delays reads by milliseconds). Runtime ~10 s, < 6 cores (4 spinning forecast threads only during their points). **RESULT Tue 22:39 (quiet lock, 150 rounds in 6.8 s, data/ssdmicro3.txt): L-busy BETWEEN (best -60 us vs 531 alone after idle, line 100): a busy drive never saves the demand's first byte, only the ~50 us wake; forecasts mixed in cost the demand +165 / +320 / +632 us at F 1 / 2 / 4 (their byte share), issued 100-200 us earlier still +121..+219 (F 2); chained (issued when the demand returns) cost nothing and finish 474 / 796 us later. L-priority BETWEEN: IOPOL_THROTTLE / UTILITY forecast threads shield the demand completely (mixed F 2: 535 vs 851 us) but the kernel holds them 1.6-2.5 ms. For design 2: chain forecasts after the demand burst, never mix them in; throttled threads only for forecasts >= 2 layers ahead.** |
 | M-31 | MoonShots (SSD + CPU timing, ~10 s, quiet lock; tonight; numbers to BigMoE) | HEADPING [WALL 1, the floor under lever 1, EXACT: reads only. After JOINT, keepalive / ping and zero-copy, a burst still pays the drive's first byte (~119 us, M-28), and a busy drive does not hide it (M-30). Unusual place: is part of the first byte a cold lookup inside the drive (the FTL's logical-to-physical map, a NAND page not yet sensed) that a tiny read can warm? If so, the loader pings the heads of every forecast expert (4 KB each, no bandwidth wasted on wrong forecasts) and the right ones start faster. TRIED / PRIOR_ART / DEAD: no head ping, FTL or page-register entry. Pre-registered Tue 22:4x, before any timing]: harness ~/MoonShots/scripts/ssdmicro4.c (+ ssdmicro4_sum.py, run_ssdmicro4.sh; fresh records, none resident in the page cache, F_NOCACHE, 0.8 ms busy-waited gap, 150 rounds, medians). Probe: one full base part (2,162,688 B) read in-thread at QD 1 with BigMoE's keepalive running (usleep 50) so the idle wake stays out. H0 no ping; H1 4 KB of the record's head pinged Delta = 100 / 300 / 1,000 / 5,000 us before the read (from the ping's end); H2 the part's last 4 KB; H3 the next record's head; H4 a far record's head; H5 64 KB of the head; G0 / G1 the loader's 2-record GCD call without / with both heads pinged (300 us); H0 / H1 (100, 300) also with the keepalive off. Line: H1 at Delta 100 / 300 / 1,000 cuts the full read by >= 30 us vs H0: PASS; < 10 us at all three: KILL; else BETWEEN. H2-H5 tell the mechanism (map cache if H2 / H3 help like H1; NAND page if only H1 / H5). My prediction: KILL (55 %); the first byte is sensing + controller time with no cache to warm. **RESULT Tue 22:45 (quiet lock, 150 rounds in 4.5 s, data/ssdmicro4.txt): KILL. Keepalive on, a 4 KB head ping moves the later full read (296 us, QD 1) by +0.6..+3.2 us at Delta 100 us - 5 ms; the part's tail, the next record's head, a far head and 64 KB do no better (-2.1..+2.7); the 2-record call +3.2. The first byte has no warmable map or page cache; keepalive off, a ping 100 us ahead saves 42 us = the wake (M-29's ping).** |
-| M-32 | MoonShots (CPU replay; Wed, once BigMoE's pre-route capture (pr_224 / pr_160) gives per-layer forecast recall, and only if lever 2 goes ahead; no slot) | FCASTSIZE [WALL 1 lever 2 x lever 3, EXACT: residency only. From my papers sweep (research/sweep_1103/WALL1_SSD.md item 4; Fate arXiv 2502.12224's shallow-favoring cache): with a layer-ahead forecast, a miss the forecast catches is read early and hidden, so pool slots are worth more in the layers the forecast misses. TRIED: 'Concave stall-time objective for slot allocation' (KILL) priced misses, not forecast coverage; M-17 / M-25b fit misses only. Pre-registered Tue 23:0x, before any run]: re-fit M-25b's joint per-layer (C_m, C_l) sizes with each layer's misses weighted by (1 - that layer's forecast recall), at equal RAM to the current joint sizes (C 224 and C 256), held out by window as M-25b; score on held-out windows by the forecast-missed demand MB per kept token, priced in exposed ms per check with M-28 / M-29's burst costs (first byte 119 us + bytes at 12.2 GB/s per burst, the 0.5 ms cover). Line (the sweep's): >= 1.0 ms less exposed per check at equal RAM vs the current joint sizes: PASS; < 0.3 ms: KILL; else BETWEEN. My prediction: BETWEEN (0.3-1.0 ms). |
+| M-32 | MoonShots (CPU replay; Wed, once BigMoE's pre-route capture (pr_224 / pr_160) gives per-layer forecast recall, and only if lever 2 goes ahead; no slot) | FCASTSIZE [WALL 1 lever 2 x lever 3, EXACT: residency only. From my papers sweep (research/sweep_1103/WALL1_SSD.md item 4; Fate arXiv 2502.12224's shallow-favoring cache): with a layer-ahead forecast, a miss the forecast catches is read early and hidden, so pool slots are worth more in the layers the forecast misses. TRIED: 'Concave stall-time objective for slot allocation' (KILL) priced misses, not forecast coverage; M-17 / M-25b fit misses only. Pre-registered Tue 23:0x, before any run]: re-fit M-25b's joint per-layer (C_m, C_l) sizes with each layer's misses weighted by (1 - that layer's forecast recall), at equal RAM to the current joint sizes (C 224 and C 256), held out by window as M-25b; score on held-out windows by the forecast-missed demand MB per kept token, priced in exposed ms per check with M-28 / M-29's burst costs (first byte 119 us + bytes at 12.2 GB/s per burst, the 0.5 ms cover). Line (the sweep's): >= 1.0 ms less exposed per check at equal RAM vs the current joint sizes: PASS; < 0.3 ms: KILL; else BETWEEN. My prediction: BETWEEN (0.3-1.0 ms). **RESULT Wed 09:02 (pulled forward by the orchestrator; 0 s replay, data/fcastsize.txt): KILL. Re-fit to the corrected pre-route's per-layer recall (0.68-0.86, nearly flat), the sizes cut forecast-missed demand by only -0.01..-0.08 ms exposed per check at C 224 / 256 and add 1.9 % to all demand on code. Keep M-25b's joint sizes. Lever 2 by-product: the forecast leaves 13.3 of code's 45.7 MB per kept token unnamed at C 256.** |
 | M-33 | MoonShots (CPU replay, minutes; no slot) | COPYROUTE [WALL 1 lever 2 (forecast), EXACT: timing only. From my papers sweep (research/sweep_1103/WALL1_SSD.md, 'a gap'): no prior art for position-level routing replay (ExpertFlow / DoMoE / MoE-Infinity match tokens, semantics or traces); our files have the prompt footprint as a set (COLD-CUT) and copy-span drafting (L1-10, MATCH), not routing replay. Pre-registered Tue 23:0x, before any run]: for an answer row t whose last 8 tokens match an earlier span of the window (prompt or earlier answer) ending at s, forecast row t's experts at every layer with the routing recorded at row s; it exists before the check starts and covers all 48 layers at once. Data: Breakthrough's 36 map windows (~/FableGod/decision_map/out/moonshots, ids [T-1, 48, 10] for prompt and answer rows). Per domain: coverage (matched answer rows / answer rows), recall@10 per layer averaged over layers 4-47, split by match into the prompt vs the earlier answer; baselines on the same rows: the previous row's routing and a random row of the window. Line (adapted from the sweep's, which needs agent captures we lack): code recall >= 0.80 over layers 4-47 AND >= 15 % of code answer rows matched: PASS (then an agent capture with prefill routing decides its size); recall < 0.65 or < 5 % matched: KILL; else BETWEEN. My prediction: coverage 15-30 % on code, < 10 % on chat; recall 0.6-0.8 (routing follows the local context but also the position and the whole prefix). **RESULT Tue 23:02 (1 s, data/copyroute.txt): KILL. Code: 62 % of answer rows matched (nearly all into the prompt) but recall@10 over layers 4-47 is 0.339 (previous row 0.216, random 0.118); by depth 0.88 (L0), 0.59 (L6), ~0.4 (L12-24), ~0.2 (L36-42): early layers route by the token, deep ones by the prefix. Chat 0.6 % matched. Leftover: layers 0-6 as a layer-0 forecast.** |
 | M-34 | MoonShots (CPU replay, light, beside FLOOR; no slot); quality screen = Breakthrough's map if NewIdeas routes it | SURE2B [BYTES10, bytes per expert (the orchestrator Tue 23:5x: MoonShots owns bytes / expert); TEN_X_LEDGER lever 6 '2-bit sure-row records x0.67 per sure-row miss [P], unmeasured'. FAST (lossy on sure rows only; Kamen's decision 2 allows cache-state FAST modes). TRIED: records4 2+1+1 (P2 + B3 + B4 planes) KILL / PARKED for 2-bit-heavy rank plans on ALL rows (per-part prefill KL 2.4-3.9x the target; +46-49 % more separate reads); MSB-plane 2-bit on all rows ppl +11.3 % (35B). New here: 2 bits only on drafter-sure rows, laid out so a 2-bit read is a PREFIX of the 3-bit record [P2 codes | scales | B3 plane] (one read either way; no extra calls). Pre-registered Wed 05:5x, before any run]: replay = NewIdeas' ten_x_ledger.py part C, reused read-only (36 map windows, HPD-0 live checks at t 0.3, plain LRU per layer, prompt warm-up). Base = QOM + 3-bit sure rows (sure rows load ranks 0-1, no LSB) at cf 0 and cf 0.5. Variant: a sure row's base miss reads the 2-bit prefix (codes 1,228,800 + bf16 scales 307,200 = 1,540,096 B padded, x0.712 of the 2,162,688 B part); an unsure row needing an expert held at 2 bits reads the B3 plane (622,592 B padded); slots fixed-size (no capacity gain; a byte-budget LRU variant reported as the upper bound). Pools 24 GB (147 + 46) and 12 GB (51 + 32). Line (bytes side): code SSD MB per kept token at 24 GB, cf 0, fixed slots, vs the base: <= x0.80 PASS, > x0.92 KILL, else BETWEEN; IFEval / multi and 12 GB reported. Quality side (not mine; proposed to NewIdeas for Breakthrough's map): the 2-bit form w = s3 * (2 * (q3 >> 1) + 0.5) + b3 on sure rows' ranks 0-1, the map's flip lines as for '3-bit sure rows'. My prediction: x0.80-0.85 on code (upgrade reads eat part of the x0.712), BETWEEN. **RESULT Wed 05:49 (16 s, data/sure2b.txt): KILL by the line (code 24 GB cf 0 x0.921; IFEval x0.98, multi x0.985): at cf 0 the bonus row's 10 ranks + LSB dominate, and 28 % of the 2-bit loads are later upgraded. Exploratory on top of ledger lever 1 (gated bonus row): every read becomes a 2-bit prefix, x0.712 with fixed slots (24 GB: code 18.0, IFEval 13.7, multi 9.9 MB per kept token), x0.63-0.65 with variable-size slots (16.3 / 12.3 / 8.7). Conditional on lever 1's screen and a 2-bit quality screen.** **Engine convention (NewIdeas 05:51: lever 1 as the map tested it, qom_0_live_bq; 05:52): 24 GB code 35.7 -> 29.7 (x0.833 fixed slots; x0.777 variable), IFEval 19.4 -> 13.9 (x0.715), multi 13.9 -> 9.9 (x0.712); 12 GB code x0.813, chat x0.712-0.714. Screen helper scripts/to2bit.py (self-test OK on 2 experts: 3-bit unpack bit-exact to mx.dequantize; 2-bit triple within 0.4 % of the rule; gather_qmm bits=2 within 0.7 % of dense; the 2-bit weights are 31 % relative RMS from the 3-bit ones).** |
 Parked seed, OPENED as R-54 (NewIdeas 20:48) (NewIdeas 19:3x, published, untested here): EXPERT-AWARE DRAFT SELECTION for the 24 GB line, where an extra checked row costs ~12 ms of SSD waiting (~108 reads, R-43). Pick draft rows / tree nodes by acceptance per marginal expert READ (non-resident experts not already loaded for this pass), not per row: EcoSpec (arXiv 2607.12696, marginal expert cost in draft selection, up to 1.62x on Qwen3-235B / DeepSeek-V3.1 / GPT-OSS-120B), S2-MoE (2608.15018, routing-aware tree expansion on edge devices), EVICT (2605.00342, cost-justified tree truncation). Cheapest screen: from real 24 GB verify passes' per-row expert ids, how unevenly marginal reads fall across rows (a heavy tail = room). Owner when opened: BigMoE after R-44, or Fit12 on account-2.
@@ -1318,3 +1318,448 @@ block 32 (net ~+2 % under this cost model unless the drafter nears the oracle); 
     screen helper ~/MoonShots/scripts/to2bit.py is with Breakthrough (one-line install: dm_t3._proj bits == 2 ->
     to2bit.proj2; self-test: 3-bit unpack bit-exact to mx.dequantize, gather_qmm within 0.7 % of dense; 2-bit weights
     ~31 % relative RMS from 3-bit). qom_0_live_bq_t2 is one install away for the 13:45 list.
+- Wed 07:27: RESULT, SCREEN 2b (qom_0_k1_live_t3 vs qom_0_live_t3; pre-registered 04:0x) AND 2-BIT SURE ROWS
+  (qom_0_live_bq_t2 vs qom_0_live_bq_t3; pre-registered 05:5x). Breakthrough's morning batch 07:06-07:26, one process,
+  36 windows each, 0 row-count warnings. My read-out (scripts/qom_read.py, 07:3x) matches Breakthrough's
+  (~/FableGod/decision_map/out/SCREEN_read_*.txt) flip for flip.
+  | arm | code | IFEval | multi | verdict |
+  |---|---|---|---|---|
+  | qom_0_live_t3 (2b's twin, top-2 at 3 bits) | 0.71 % (24) | 4.45 % (151) | 4.14 % (147) | PASS / PASS / BETWEEN |
+  | qom_0_k1_live_t3 (top-1, QOM form) | 0.59 % (20) | 4.65 % (158) | 3.24 % (115) | PASS / PASS (information) / PASS |
+  | qom_0_live_bq_t3 (bq_t2's twin) | 0.77 % (26) | 6.09 % (207) | 5.29 % (188) | PASS / BETWEEN / BETWEEN |
+  | qom_0_live_bq_t2 (2-bit sure rows) | 1.49 % (50) | 10.13 % (344) | 9.77 % (347) | BETWEEN / KILL / KILL |
+  * 2b vs top-2 at 3 bits (McNemar): code 9 / 13 (z -0.85), IFEval 56 / 49 (z +0.68), multi 39 / 71 (z -3.05); vs
+    gate_top2_cf099 z -3.81 / -1.83 / -1.26. IFEval was outside 2b's registered domains (screen 2 KILLed it), so its
+    PASS is information only.
+  * My prediction (BETWEEN code, KILL chat): wrong. The reading (Breakthrough's, and mine): in QOM's form a RESIDENT
+    rank 1 stays at 4 bits, where top-2 at 3 bits serves it at 3. At C 256 pools most of them are resident (the masks
+    keep ~93 % of sure-row rank 2-9 pairs as union members or residents), so top-1 drops little and gains precision on
+    what it keeps. The same reason ties 2b to the pool: a smaller pool keeps fewer rank 1 experts (07:4x entry).
+  * bq_t2 vs bq_t3: code 34 / 10 (z +3.62), IFEval 208 / 71 (z +8.20), multi 228 / 69 (z +9.23); vs bq z +5.40 /
+    +11.23 / +12.77. My prediction (code BETWEEN, chat KILL): hit. Lever 6 (MoonShots M-34, 2-bit sure rows) is KILL on
+    chat and BETWEEN on code (1.49 % > bq_t3 + 0.3 = 1.07 and > the level 1.34): it leaves the ranked path.
+  * Harness (Breakthrough): MoonShots' to2bit.py c5af2d3 pinned in decision_map, dm_t3._proj bits == 2; self-test OK on
+    L12 e7 and L40 e300.
+- Wed 07:4x: CAVEAT ON THE 24 GB QUALITY CLAIMS, AND PRE-REGISTRATION, SCREEN 4: THE 24 GB POOL (FAST; before any
+  build or run).
+  * The caveat. Every QOM mask but qom_0.5_live_c164 kept the residents of laysz45_256's base pools (C_m mean 295 of
+    512 per layer: the 45 GB default; the build logs say "pool m"). The ledger's and BYTES10's 24 GB MB per kept token
+    come from a replay at 147 base slots per layer. So "code FAST stack map-PASS at 35.7 MB per kept token at 24 GB"
+    pairs a 45 GB-pool quality with a 24 GB-pool price. At C 164 (cf 0.5, 4 bits) the smaller pool cost +0.23 / +0.79 /
+    +1.02 points (03:58); at 147, at cf 0 (every drafted row sure) and with top-1 (rank 1 kept only when resident or a
+    union member) it will cost more. Until screen 4 runs, the QOM stacks' 24 GB status is "map-tested at the 45 GB
+    pool"; the 45 GB statements stand.
+  * Arms (scripts/dm_oea_masks.py, suffix _c147 = a 147-slot base pool per layer, the replay's 24 GB line; built CPU
+    only at the next gap between quiet windows; bit-checked against their 4-bit twins with qom_t3_check.py; READY
+    marker as before):
+    (B) qom_0_k1_live_bq_c147_t3: the <= 10 candidate. QOM cf 0, sure rows at top-1 (rank 0 at 3 bits; union members
+        and resident ranks 1-9 at 4 bits), the last row gated in QOM's form, the 24 GB pool. Setup
+        PERT.update(rmask=<abs>/qom_0_k1_live_bq_c147_t3, gate=("t3mask",), t3=3, t3k=1, renorm=False).
+    (C) qom_0_live_bq_c147_t3: today's code PASS stack (top-2 at 3 bits + the gated last row) at the 24 GB pool. Setup
+        as qom_0_live_bq_t3 (t3=3, t3k=2) on its own dir.
+    (A, optional, after B and C) qom_0_k1_live_bq_t3: (B) at the 45 GB pool, to separate the pool's cost from the
+        gate's.
+  * Lines, per domain, all-row flips: PASS <= Q1 at 0.99's level (1.34 / 5.42 / 3.69 %), BETWEEN <= 1.5x (2.01 / 8.13
+    / 5.54 %), KILL above. These are the 24 GB verdicts. Paired McNemar: C vs qom_0_live_bq_t3 (the pool's cost at
+    top-2), B vs C (top-1's cost at the 24 GB pool), B vs qom_0_k1_live_t3.
+  * Predictions [G]: C code PASS (~1.0 %), IFEval BETWEEN (~7 %), multi BETWEEN or KILL (~6 %, at the 5.54 edge).
+    B code PASS or BETWEEN (~1.2 %), IFEval BETWEEN (~7.5 %), multi KILL (~6.5 %): top-1 leans on residency more.
+  * Bytes at 24 GB [P], my replay (before-block misses; the last row on the engine convention): C 35.7 / 19.4 / 13.9;
+    B from scripts/ledger_top1.py (filled in before any GPU run).
+  * Slot: the orchestrator's call (two arms, ~20 min of the map on a shared GPU, MEM ~17 GB).
+- Wed 07:5x: TOP-1 PRICES AND AN AMENDMENT TO SCREEN 4 (before any GPU run). Masks built 07:50-07:52 under a share lock
+  (CPU only), bit-checked ALL OK (data/dm_masks/check_c147.log), READY. Prices: scripts/ledger_top1.py
+  (data/ledger/ledger_top1.txt); it reproduces the top-2 rows exactly (24 GB: 54.5 / 84.4 / 81.7 map, 35.7 / 19.4 / 13.9
+  engine convention).
+  * 2b served a kept rank 1 at 4 bits (t3k=1: ranks >= 1 come from the stock path at the model's precision). An engine
+    matching that needs rank 1's LSB part, which misses often in the 46-slot LSB pool at 24 GB. The cheap form serves a
+    kept rank 1 from its 3-bit base record, with no LSB read on sure rows, which is what the ledger's top-1 lever
+    (x0.55-0.59) assumed. So 2b's PASS does not validate that lever: the form it tested is the dear one.
+  | rule (last row gated: engine convention) | 45 GB | 24 GB | 12 GB |
+  |---|---|---|---|
+  | QOM cf 0 + 3-bit, top-2 (qom_0_live_bq_t3's form) | 7.7 / 4.5 / 4.4 | 35.7 / 19.4 / 13.9 | 83.1 / 72.6 / 52.9 |
+  | top-1, kept rank 1 at 4 bits (2b's form: LSB read on a miss) | 12.9 / 9.3 / 7.4 | 32.4 / 21.9 / 15.3 | 58.0 / 39.5 / 28.1 |
+  | top-1, kept rank 1 at 3 bits (no LSB on sure rows) | 5.7 / 2.9 / 2.9 | 24.0 / 11.5 / 7.7 | 52.1 / 32.3 / 22.9 |
+  * Amendment: (B) is replaced by (B') qom_0_k1_live_bq_c147_t3keep, the cheap form. The harness's existing t3keep gate
+    (P1-K1 at 3 bits) does it: rows the mask cuts are served wholly from records3 at 3 bits with their own rank mask.
+    Mask: qom_0_k1_live_bq_c147 (the 4-bit twin, rank 0 kept; READY). Setup PERT.update(rmask=<abs>
+    /Users/kamen/NewIdeas/data/dm_masks/qom_0_k1_live_bq_c147, gate=("t3keep",), t3=3, t3k=10, t3keep=True,
+    renorm=False). On sure rows every kept expert runs at 3 bits, ranks 2-9 too. That is the engine's own precision for
+    ranks 2-9, but stricter than the map's other arms, which serve them at 4 bits: a conservative test. Sure rows with
+    nothing dropped (20 / 12 / 12 of 3295 / 3408 / 3565) stay at 4 bits, because the gate keys on a drop.
+  * B' lines: the level lines above (PASS <= 1.34 / 5.42 / 3.69 %, BETWEEN <= 1.5x). Paired: B' vs C and B' vs
+    qom_0_k1_live_t3 (both mix top-1's cost with the 3-bit ranks 2-9; the verdict is the line).
+  * Prediction [G] B': code BETWEEN (~1.5 %), IFEval KILL (~9 %), multi BETWEEN or KILL (~5.5-6.5 %).
+  * If B' passes on a domain, that domain has a 24 GB FAST stack, map-tested at the 24 GB pool, at 24.0 / 11.5 / 7.7 MB
+    per kept token (multi under 10) before the pool policy and 11-bit.
+  * Order: C first (it checks a claim already reported), then B'. B (2b's form at the 24 GB pool) is dropped: on chat it
+    reads more than C.
+- Wed 08:3x: RESULT, SCREEN 3: THE ENGINE VS THE REPLAY AT 24 GB (pre-registered 04:0x; scripts/screen3_read.py,
+  data/ledger/screen3_read.txt). BigMoE's W1B 24 GB traced arm (data/w1b24/w24t, 07:54-07:56): tier 4433333333 with
+  C_m 147 / C_l 46 per layer, the replay's 24 GB line exactly; 6 prompts x 256 tokens (HumanEval/68, /91, 4 math);
+  33.2 tok/s untraced, 30.1 traced; lifetime footprint 23.87 GB. Decode = the misses (miss.bin) in each prompt's own
+  verify / MTP passes, in the ledger's record sizes.
+  | prompt | kept per pass | decode misses, MB per kept (trunk + MTP head + LSB) | engine reads (trace) | process disk_read |
+  |---|---|---|---|---|
+  | HumanEval/68 | 7.76 | 200.8 + 1.4 + 23.7 = 226.0 | 266.3 | 427.1 |
+  | HumanEval/91 | 3.88 | 217.4 + 6.8 + 23.1 = 247.4 | 291.4 | 409.2 |
+  | math x 4 | 1.30-3.32 | 195.4-228.4 | 263.5-342.9 | 333.6-438.4 |
+  * Against the replay (code, EXACT, 24 GB, LRU): 212.8 (my count) / 245.2 (Fable C's). Unscaled: 1.06 / 1.16 on the
+    two code prompts (0.92-1.16 on all six). The registered line scaled the reference by 7.91 / kept per pass; the data
+    refutes that scaling: per-kept bytes stay flat from 1.30 to 7.76 kept per pass (195-247 MB), as ledger part A said
+    (x0.91 from k 1 to 16). On the one prompt where the scaling is neutral (HumanEval/68, 7.76 kept): 1.04.
+  * VERDICT: CALIBRATED (0.8-1.25x). The replay's 24 GB prices stand; plain LRU and the engine's LFU 0.99 + prefetch
+    miss about the same (the policy lever is not cashed yet). Fable C's prediction (0.9-1.1x): hit (1.11 on code by my
+    count, 0.97 by its own). The scaled "below 0.8" cells (0.17-0.57) are the line's scaling artifact, not a finding.
+  * Beside the line: the engine READS 18-26 % more than it misses (55 % on the 5 tok/s math prompt). On HumanEval/68 49 %
+    of issued prefetches were used (pf_issued 10,693, used 5,196). That is ~40 MB per kept token on code, a byte lever
+    of ~x0.85 at 24 GB, traded against latency hiding (BigMoE's call). The process bytes add ~130-160 MB per token on
+    top (prefill and the untraced rest: 35-40 % of the process bytes on 256-token answers).
+- Wed 08:48: RESULT, SCREEN 4: THE 24 GB POOL (pre-registered 07:4x, amended 07:5x; Breakthrough ran C then B'
+  08:33-08:47 in one process, 36 windows each, 0 row-count warnings; my read-out 08:57 matches flip for flip).
+  | arm | code | IFEval | multi | verdict |
+  |---|---|---|---|---|
+  | qom_0_live_bq_t3 (45 GB pool, 05:13) | 0.77 % (26) | 6.09 % (207) | 5.29 % (188) | PASS / BETWEEN / BETWEEN |
+  | C qom_0_live_bq_c147_t3 (24 GB pool) | 1.07 % (36) | 8.07 % (274) | 5.99 % (213) | PASS / BETWEEN / KILL |
+  | B' qom_0_k1_live_bq_c147_t3keep | 1.69 % (57) | 11.25 % (382) | 8.61 % (306) | BETWEEN / KILL / KILL |
+  * The pool's cost at top-2 (C vs bq_t3): code 20 / 10 (z +1.83, +0.30 points), IFEval 126 / 59 (z +4.93, +1.98),
+    multi 75 / 50 (z +2.24, +0.70). B' vs C: z +3.55 / +6.83 / +6.31; B' vs 2b: z +5.08 / +12.48 / +11.39.
+  * Predictions: C code PASS / IFEval BETWEEN / multi BETWEEN-or-KILL: hit. B' code BETWEEN / IFEval KILL / multi
+    BETWEEN-or-KILL: hit (multi 8.61 % was worse than my ~6.5).
+  * Meaning:
+    - Code: the FAST stack (QOM cf 0 + 3-bit sure rows + the gated last row) is map-PASS at the 24 GB pool, at 35.7 MB per
+      kept token [P, replay calibrated by screen 3]. The 07:4x caveat is answered for code.
+    - Chat at 24 GB: that stack is BETWEEN on IFEval (8.07 %, at the 8.13 edge) and KILL on multi. The chat stacks
+      tested only at the 45 GB pool stay unverified at 24 GB, and they will lose ~1-2 points the same way.
+    - Top-1 in its cheap form is off the 24 GB path (KILL on chat; BETWEEN on code at 24.0 vs C's PASS at 35.7).
+    - Under QOM the pool decides quality, not only bytes: that is the next idea (08:5x).
+- Wed 08:5x: NEW IDEA, PRE-REGISTRATION: QUALITY POOL (tag: new as far as I know; skip-on-miss with a cache exists in
+  HOBBIT / AdapMoE-style offloading, but not a pool chosen for the router mass that skipping rows keep). FAST.
+  * Observation (screen 4 + the mask logs): under QOM a sure row keeps a rank 2-9 expert only if it is a union member
+    or resident. From the 45 GB pool to 147 slots the kept share of sure-row rank 2-9 pairs falls 92.9 / 90.4 / 89.1 % ->
+    75.8 / 79.0 / 80.4 %, and flips rise +0.30 / +1.98 / +0.70 points (C vs qom_0_live_bq_t3). The pool's policy (plain
+    LRU in the masks; LFU 0.99 in the engine, which misses about as LRU does: screen 3) serves the loads' hit rate, not
+    what sure rows keep. Ranks 2-9 carry ~68 % of the mean top-10 router mass (ten_x_ledger MASS).
+  * Idea: at the same 147 slots, pick the eviction / admission policy that maximizes the router mass sure rows keep.
+    Candidates: LFU with decay 0.99 / 0.999 (count of loads + resident uses); mass-LFU (score += MASS[rank] for every
+    routed (row, rank) pair, loaded or not: a ghost history; admission by score) at decay 0.99 / 0.999; SLRU (80 %
+    protected).
+  * Cheapest kill test (CPU, ~5-10 min, no GPU): scripts/pool_quality.py, a stats-only twin of dm_oea_masks' QOM pool
+    under qom_0_live_bq's rule (cf 0, top-2, the gated last row), per domain: the kept share of sure-row rank 2-9 pairs
+    (count and MASS-weighted) and the load misses. Self-check: LRU must reproduce 75.8 / 79.0 / 80.4 % at 147 slots and
+    92.9 / 90.4 / 89.1 % at the 45 GB pool.
+  * Line: a policy is ALIVE if on IFEval AND multi it closes >= 1/3 of the MASS-weighted gap between LRU at 147 slots
+    and LRU at the 45 GB pool, with load misses <= 1.10x LRU's at 147; otherwise KILL. ALIVE -> C's masks with that
+    policy (qom_0_live_bq_c147<policy>_t3) and a map slot, paired vs C.
+  * Prediction [G]: decayed LFU and mass-LFU +2-4 points on chat (short of 1/3 on IFEval: KILL there), SLRU +1-2.
+- Wed 08:58: RESULT, QUALITY POOL (pre-registered 08:5x): KILL. scripts/pool_quality.py ran 57 s under a share lock
+  (data/ledger/pool_quality.txt). Self-check exact: LRU's kept shares equal the builder's logs (75.8 / 79.0 / 80.4 % at
+  147 slots, 92.9 / 90.4 / 89.1 % at the 45 GB pool).
+  | policy at 147 slots | gap closed, MASS-weighted (code / IFEval / multi) | load misses x LRU 147 |
+  |---|---|---|
+  | slru (80 % protected) | +3 / +8 / +3 % | x0.94 / x0.91 / x0.96 |
+  | mlfu_d99 (mass-weighted ghost LFU) | -1 / +9 / -7 % | x0.92 / x1.06 / x1.13 |
+  | lfu_d99 / lfu_d999 | -21..-116 % | x1.15-2.93 |
+  * No policy closes 1/3 of the gap on IFEval and multi: the lost keep is capacity, not policy. Frequency LFU is worse
+    than LRU here: the per-request working set moves, and recency follows it.
+  * My prediction (LFU +2-4 points; SLRU +1-2; KILL on IFEval): the verdict hit, the direction for LFU missed.
+  * By-product: SLRU reads x0.91-0.96 of LRU's load misses with no keep cost: a small exact lever, priced on QOM's
+    gated stack only.
+  * What does move the keep is capacity (the 45 GB pool doubles the slots). So the capacity levers (11-bit: ~178 slots in
+    the same GB; LOSSLESS45; the volatile tier) count twice under QOM: fewer misses AND more kept experts. Next: price
+    11-bit's capacity effect on both (CPU, pre-registered below).
+- Wed 08:59: PRE-REGISTRATION, 11-BIT'S CAPACITY UNDER QOM (CPU pricing; no quality claim). 11-bit scales shrink every
+  record to x0.824 [K MoonShots]; the ledger prices only that (x0.824 per byte read). In the same 24 GB the pools also
+  hold 1 / 0.824 more records: 147 -> 178 base slots, 46 -> 56 LSB slots (12 GB: 51 -> 62, 32 -> 39). Under QOM that
+  counts twice: fewer misses, and more rank 2-9 experts kept on sure rows (screen 4: the pool costs +0.30 / +1.98 / +0.70
+  points between 147 slots and the 45 GB pool).
+  * Run (scripts/capacity_11bit.py): bytes = ledger_top1's replay of C's rule (QOM cf 0 + 3-bit + the gated last row,
+    engine convention) at 147 / 46 and 178 / 56, the latter x0.824; keep = pool_quality's LRU kept share at 178 slots.
+  * Prediction [G]: bytes x0.824 x ~0.85 = ~x0.70 on code (35.7 -> ~25); kept share +3-4 points on chat (~1/4 of the gap
+    to the 45 GB pool).
+  * Use: C's price with 11-bit at 24 GB, and whether a map arm at 178 slots (qom_0_live_bq_c178_t3, quality of C after
+    11-bit) is worth a slot: ask for it if the kept share closes >= 1/3 of the MASS gap on IFEval.
+- Wed 08:59: RESULT, 11-BIT'S CAPACITY UNDER QOM [WRONG, CORRECTED 13:4x: see ERRATUM; 11-bit is x0.89-0.90 at 24 GB] (pre-registered 08:59, before the run; scripts/capacity_11bit.py, data/ledger/capacity_11bit.txt; 15 s; self-check: 24 GB without 11-bit = 35.7 /
+  19.4 / 13.9, ledger_top1's engine row).
+  | domain | 24 GB C stack | + 11-bit with its capacity (x) | 12 GB | + 11-bit (x) | kept 147 -> 178 slots (gap closed) |
+  |---|---|---|---|---|---|
+  | code | 35.7 | 22.6 (x0.633) | 83.1 | 61.1 (x0.735) | 76.7 -> 81.2 % (+27 %) |
+  | IFEval | 19.4 | 11.6 (x0.595) | 72.6 | 49.6 (x0.683) | 80.0 -> 83.2 % (+29 %) |
+  | multi | 13.9 | 8.5 (x0.615) | 52.9 | 35.9 (x0.679) | 81.5 -> 84.1 % (+32 %) |
+  * 11-bit is worth x0.60-0.63 at 24 GB under QOM (x0.68-0.74 at 12 GB), not the ledger's x0.824: the same GB holds 21 %
+    more records, and at 24 GB the misses are capacity misses. My prediction (~x0.70 on code; +3-4 keep points on chat):
+    bytes better than predicted, keep hit.
+  * Keep: +27-32 % of the gap to the 45 GB pool, under my 1/3 line on IFEval (29 %), so no map arm asked for. By the
+    screen 4 pool cost, linear: code ~0.98 % (PASS), IFEval ~7.5 % (BETWEEN), multi ~5.8 % (KILL edge) [G].
+  * Needs: BigMoE sizing the pools by bytes after the 11-bit conversion (the 24 GB tier already sizes by GB: 17.07 GB
+    pools). EXACT gets the capacity effect too (not priced here).
+- Wed 13:2x: RESULT, T3R2 (pre-registered Tue 19:15, 4dbe21a; amendment 19:27, 1ba42c3; Fit12 13:05-13:12, quiet, 12 GB).
+  Re-computed by NewIdeas with Fit12's t3r2_verdict.py on ~/Fit12/data/scr/t3r2/r47.txt: PASS.
+  * t80ck1u / t80ck2 x1.148 pooled on the shared text over 16 of 16 prompts (line >= 1.10), coverage 80 / 77 %:
+    57.3 vs 49.9 tok/s (2638 tok / 46.01 s vs 2639 / 52.86 s). T3R's original 8 beside it: x1.138 (coverage 88 / 84 %).
+  * Full outputs (texts differ after the cut, not the metric): 44.17 vs 40.77 tok/s (x1.083).
+  * Per prompt x0.78-1.46; only /91 below 1 (x0.78). The pooled ratio cleared the line on both halves of the prompts.
+  * Clean: 16 PAIR lines ok, no PAUSE, no re-runs, SSD 25 -> 62 C; t80ck2 = T3t (4 / 4); K1U engaged on all 16; peak
+    lifetime 11.354 GB (limit 11.95).
+  * INFO: 3-bit t80ck1um3 x1.268 (x1.254 on the original 8; coverage 76 / 74 %).
+  * Next (orchestrator 13:1x): EvalSuite same-scores at 12 GB (FAST adopts on same-scores, the 11-02 two-track rule),
+    behind RELAX + T0.
+- Wed 13:2x: RESULT, T3R-PF (P2-PREFETCH, exact; my line Tue 14:56, fd081ae; Fit12 p47 after r47). KILL:
+  t80ck1upf / t80ck1u x0.901 (line <= 1.01 KILL); second verdict t80ck2pf / t80ck2 x0.927. Gate PF2 8 / 8 PASS (tokens +
+  logits equal), forced waits 0, no PAUSE. Re-computed with the same script.
+  * My CPU model (-12.6 ms per check) failed in both halves:
+    - The late reads were not hidden. Pass 1 +26.2 ms per check at K1U (108.2 -> 134.4; misses 283 -> 409, about the
+      late reads) and +22.9 ms at K2 (687 -> 839): each read cost about its full read time.
+    - Pass 2 hardly used them: misses per check 338 -> 333 (K1U), 138 -> 134 (K2); ms 87.5 -> 85.3, 41.2 -> 37.3. The
+      replay had 156 -> 81.
+    - Most prefetches went to checks that never ran pass 2. HumanEval/68 had no pass 2 at all (pass2 0, exact 0) and
+      still lost 17 % (t80ck1u 81.50 -> 67.72 tok/s) and 9 % (t80ck2 61.54 -> 55.81). Over the 4 prompts, K1U had pass 2
+      on 19 of 89 checks.
+  * Lesson: price a gap-read lever by the checks that use it, and measure exposure first. At 12 GB a read in pass 1's
+    gap delayed pass 1 by its full read time.
+- Wed 13:2x: Fit12's K12 (Leap's stale-slot probe on T3, a sync at every MoE layer) PASS 12 / 12 (prompt, arm) pairs
+  bitwise equal (tokens + logits + per-check log), 15,964 synced calls (k12_verdict.py re-run): no stale reads in T3.
+- Wed 13:25: PRE-REGISTRATION, POOLSPLIT (BYTES10, FAST stack only; CPU replay; untested re-tune, not new). Under C's
+  stack (QOM cf 0 + 3-bit sure rows + the gated last row), only unsure rows read LSB parts. Those are last rows with no
+  next draft (DFlash2 drafts the needed token on 68 / 99 / 99 % of segments). Yet the 24 GB split keeps 46 LSB slots
+  per layer (1.70 GB). Moving LSB RAM to base slots at equal GB per layer (24 GB: Cl 0 -> Cm 163, +11 %; 12 GB: Cl 0 ->
+  Cm 62, +22 %) counts twice under QOM: fewer base misses and more resident rank 2-9 experts kept on sure rows.
+  * Run (scripts/pool_split.py): C's replay (ledger_top1's loop, engine convention) at equal bytes per layer for Cl in
+    {0, 4, 8, 12, 16, 24, 32, default}, at 24 GB and 12 GB, with and without 11-bit (records x0.824). Keep =
+    pool_quality's LRU kept share at each split's Cm (24 GB). Self-check: the default splits must give 35.7 / 19.4 /
+    13.9 and 83.1 / 72.6 / 52.9.
+  * Prediction [G]: chat's best split is Cl 0-8, code's Cl 8-24 (code has ~32 % unsure last rows). Best-split bytes at
+    24 GB x0.90-0.95 (chat) and x0.93-0.97 (code); keep +1 point (~10 % of the gap to the 45 GB pool). 12 GB gains more:
+    x0.85-0.90.
+  * Line: ALIVE (a FAST-mode pool-split flag for BigMoE; EXACT keeps its split) if the best split cuts bytes >= 5 % on
+    all three domains at 24 GB, or holds bytes <= x1.00 while closing >= 10 % of the keep gap. KILL if < 3 % on all three
+    and < 5 % of the gap. BETWEEN otherwise.
+- Wed 13:28: RESULT, POOLSPLIT [11-bit rows WRONG, CORRECTED 13:4x: see ERRATUM; the non-11-bit rows stand] (pre-registered 13:25; scripts/pool_split.py, data/ledger/pool_split.txt; 106 s, 3
+  procs; self-checks: all 12 default cells equal the ledger's, keep at 147 / 178 = capacity_11bit's). ALIVE: the best
+  split cuts bytes >= 5 % on all three domains at 24 GB.
+  | line | code | IFEval | multi | keep gap closed (24 GB) |
+  |---|---|---|---|---|
+  | 24 GB default 147 / 46 | 35.7 | 19.4 | 13.9 | 0 % |
+  | 24 GB 163 / 0 | 32.8 (x0.917) | 16.5 (x0.849) | 12.0 (x0.861) | +15 / +16 / +17 % |
+  | 24 GB 11-bit default 178 / 56 | 22.6 | 11.6 | 8.5 | +27 / +29 / +32 % |
+  | 24 GB 11-bit 198 / 0 | 20.5 (x0.904) | 9.4 (x0.808) | 7.1 (x0.833) | +41 / +46 / +50 % |
+  | 12 GB 62 / 0 (default 51 / 32) | 75.6 (x0.909) | 60.2 (x0.829) | 43.6 (x0.825) | - |
+  | 12 GB 11-bit 75 / 0 (default 62 / 39) | 55.3 (x0.906) | 39.8 (x0.803) | 28.7 (x0.799) | - |
+  * Why: chat has no unsure rows left (LSB reads 0.0 MB per kept even with no LSB pool); code reads 2.3-2.7 MB of LSB
+    parts at Cl 0 vs 0.8-1.2 at the default, far less than the base slots save. Practical setting: Cl 4-8 (a staging
+    margin), within 1 % of Cl 0 (24 GB 11-bit 195 / 8: 20.5 / 9.7 / 7.3).
+  * Prediction check: chat's best Cl 0-8 hit; code's Cl 8-24 missed (code's best is also Cl 0). Bytes better than
+    predicted (chat x0.85-0.86 vs x0.90-0.95; code x0.917 vs x0.93-0.97); keep +1.4-2.4 points (15-17 % of the gap) vs
+    +1 point.
+  * 24 GB chat bytes now under 10 MB per kept token [P]: IFEval 9.4, multi 7.1 (11-bit + POOLSPLIT; SLRU would add
+    x0.91-0.96). Quality is the open part: the 24 GB pool put C at 8.07 / 5.99 % on chat (IFEval BETWEEN, multi KILL).
+    Linear in the keep gap, 198 slots gives ~7.2 % / ~5.6 % [G]: IFEval BETWEEN, multi at the BETWEEN / KILL edge
+    (5.54). Code 20.5 (PASS stack at 147 slots; more slots only help).
+  * FAST mode only: EXACT serves ranks 0-1 at 4 bits on every row and keeps its own split. Needs BigMoE's FAST-mode
+    pool sizing (C_l 4-8, the rest to C_m) with the 11-bit conversion.
+  * Next: map screen 5 = C at 198 slots (qom_0_live_bq_c198_t3; masks are CPU, mine), the quality of the 24 GB chat
+    stack after 11-bit + POOLSPLIT. Pre-registered below; GPU slot is the orchestrator's call (not by day).
+- Wed 13:3x: [WITHDRAWN 13:4x before any run: its 198-slot premise was the 11-bit error; see ERRATUM] PRE-REGISTRATION, MAP SCREEN 5 = C at the 198-slot pool (before any run; masks are CPU, built now).
+  * Arm: qom_0_live_bq_c198_t3. C's stack (QOM cf 0 + 3-bit sure rows, t3mask t3k=2, + the gated last row) at a flat
+    198-slot LRU base pool per layer. That is the 24 GB FAST pool after the 11-bit conversion and POOLSPLIT (Cl 0); 11-bit
+    is lossless, so the pool is the only change vs screen 4's C (147 slots: 1.07 / 8.07 / 5.99 %). Twin for the +0.3
+    reading: qom_0_live_bq_t3 (the 45 GB pool, 0.77 / 6.09 / 5.29 %).
+  * Lines (screen 4's): PASS <= level 1.34 / 5.42 / 3.69 %, BETWEEN <= 1.5x (2.01 / 8.13 / 5.54), KILL above; per
+    domain.
+  * Prediction [G], linear in the keep gap closed (+41 / +46 / +50 %): code ~0.9 % PASS, IFEval ~7.2 % BETWEEN, multi
+    ~5.6 % at the BETWEEN / KILL edge. Chat PASS on both: <= 15 %.
+  * Use: chat PASS on both -> the 24 GB chat stack is <= 10 MB per kept token in bytes (9.4 / 7.1 [P]) AND map-PASS
+    -> EvalSuite candidate. BETWEEN -> chat at 24 GB needs one more quality lever. KILL on multi -> more capacity first.
+  * Cost: one map arm (~7 min GPU, shared lock), any slot the orchestrator picks (not by day).
+- Wed 13:4x: ERRATUM (my error; found while pricing a smaller FAST store): 11-BIT IS NOT x0.824 PER BYTE.
+  * What was wrong. The ledger (TEN_X_LEDGER 03:4x) priced 11-bit as "x0.824 on every byte [K MoonShots]". MoonShots'
+    -17.6 % is a NET replay result at the 45 GB C 256 pools that already includes ~4.6 % more parts in the same RAM
+    (data/lossless45.txt, EXPLORATORY: joint fit with part sizes 2,064,384 / 720,896 B). The packed store's parts are
+    2,064,384 / 720,896 B vs records3's 2,162,688 / 770,048: x0.955 / x0.936 per part. At 08:59 I then added 1 / 0.824 more
+    slots on top (147 -> 178): double counting. At 13:28 POOLSPLIT reused x0.824.
+  * Corrected (scripts/capacity_11bit.py re-run; 24 GB 147 / 46 -> 154 / 49 and 12 GB 51 / 32 -> 53 / 34 at equal RAM,
+    each line's own part sizes; old output kept as data/ledger/capacity_11bit_0859_wrong.txt):
+    | domain | 24 GB C stack | + 11-bit (x) | was (08:59) | 12 GB | + 11-bit (x) | keep gap closed at 154 |
+    |---|---|---|---|---|---|---|
+    | code | 35.7 | 32.1 (x0.898) | 22.6 (x0.633) | 83.1 | 77.7 (x0.934) | +6 % |
+    | IFEval | 19.4 | 17.3 (x0.888) | 11.6 (x0.595) | 72.6 | 67.0 (x0.923) | +7 % |
+    | multi | 13.9 | 12.4 (x0.894) | 8.5 (x0.615) | 52.9 | 48.7 (x0.922) | +8 % |
+  * POOLSPLIT corrected (scripts/pool_split.py re-run; 13:28 output kept as pool_split_1328_wrong11bit.txt):
+    | 24 GB line | code | IFEval | multi | keep gap closed |
+    |---|---|---|---|---|
+    | 11-bit 154 / 49 (default at equal RAM) | 32.1 | 17.3 | 12.4 | +6 / +7 / +8 % |
+    | 11-bit 171 / 0 (POOLSPLIT) | 29.3 (x0.914) | 14.5 (x0.839) | 10.6 (x0.852) | +21 / +23 / +25 % |
+    | 11-bit 169 / 4 (practical) | 29.5 | 14.8 | 10.8 | +20 / +21 / +23 % |
+    | was (13:28): 11-bit 198 / 0 | 20.5 | 9.4 | 7.1 | +41 / +46 / +50 % |
+    12 GB 11-bit 65 / 0: 70.1 / 54.6 / 39.4 (default 53 / 34: 77.7 / 67.0 / 48.7). Without 11-bit nothing changes (24 GB 163 / 0
+    x0.917 / x0.849 / x0.861; 12 GB 62 / 0 x0.909 / x0.829 / x0.825). Self-checks: the 11-bit defaults equal the corrected
+    capacity_11bit columns.
+  * What changes:
+    - WITHDRAWN: "11-bit x0.60-0.63 at 24 GB" (08:59, sent to the orchestrator and MoonShots 09:01); "code 22.6 / ~21 at
+      24 GB"; "chat under 10 MB per kept at 24 GB" (13:28 / 13:32); BUILD_DAY_1104.md build #6's "~22 after the 11-bit
+      store".
+    - Still true: POOLSPLIT without 11-bit (x0.917 / x0.849 / x0.861 at 24 GB, 163 / 0); 11-bit is still worth more under
+      QOM than per byte (x0.89-0.90 at 24 GB vs x0.955), because the extra parts are kept too, just ~5 % of them, not 21 %.
+    - The 45 GB EXACT 11-bit cell (60.4 -> 49.8) is MoonShots' own net figure at C 256 (code -17.6 %, IFEval -16.1 %,
+      multi -15.8 %): right as a net, wrong as "per byte"; relabelled.
+    - Map screen 5 WITHDRAWN before any run: its premise (a 198-slot pool = 24 GB after 11-bit + POOLSPLIT) was the
+      error. The real pool is 171 slots, and chat stays above 10 MB there anyway, so the arm cannot change a
+      decision. The c198 masks stay on disk as an upper bracket; no GPU asked.
+  * Where 24 GB stands now [P]: code 29.3 (map-PASS stack at 147 slots; more slots only help), ~27.5 with SLRU; chat 14.5 /
+    10.6 (quality BETWEEN / KILL at 147 slots; ~7.6 / ~5.8 % at 171 by the linear keep model, the same classes). Under 10
+    at 24 GB needs ~x0.34 more on code and ~x0.7 / ~x0.95 on chat, plus chat's quality.
+  * Lesson: take a lever's factor from its parts (record sizes), never from another line's net replay; a net figure
+    already holds that line's capacity effect.
+- Wed 13:4x: PRE-REGISTRATION, TRELLIS FAST STORE (BYTES10, code at 24 GB; CPU byte replay only). A new angle on B10
+  (trellis-coded residency, killed Sun on an EXACT-quality line: TRL-2 out of sample 1.85x MSB-3's output error vs 1.5x).
+  Two things changed since: (1) under QOM capacity counts twice (bytes and keep), and code's C-stack bytes fall steeply
+  between ~200 and ~300 slots (24.9 at 198 -> 7.7 at the 45 GB pool's ~295, records3 units); (2) the FAST bar is the
+  map's flips, not 1.5x MSB-3. MSB-2 sure rows (lever 6) gave code 1.49 % (BETWEEN, line 1.34). TRL-2 has ~0.4x MSB-2's
+  error [G: one bit ~4x]. So code may PASS where MSB-2 did not.
+  * Record sizes (derived 13:4x, all four observed part sizes reproduced exactly): W = 3 x 2560 x 640 = 4,915,200
+    weights per expert; 16 KB-aligned parts. MSB-3 11-bit 2,064,384 B; TRL-3 (3.07 b) 1,900,544; gate/up TRL-2 + down
+    TRL-3 (2.40 b) 1,474,560; TRL-2 (2.06 b) 1,277,952. 24 GB slots at Cl 0 (equal RAM): 171 / 185 / 239 / 276.
+  * Run (scripts/trellis_store.py): C's rule (QOM cf 0 + gated last row, engine convention) at those slots; sure rows'
+    misses at the record size. Unsure rows (code ~32 % of segments' last rows; chat ~0):
+    - U1: served from the trellis pool too (no exact rows: optimistic);
+    - U2: read from v3 every use (MSB 2,064,384 + LSB 720,896 for ranks 0-1, no pool: conservative).
+    Keep: pool_quality's LRU kept share at each slot count.
+  * Line (bytes only; quality untested here): ALIVE if code <= 10 MB per kept token under U2 at TRL-2 (or the 2.40 b mix);
+    KILL if code > 12 even under U1 at TRL-2; BETWEEN otherwise.
+  * Prediction [G]: TRL-2 code U1 ~9-11, U2 ~11-13; IFEval / multi ~4-6.
+  * If ALIVE, it becomes a proposal for Kamen, not a build: Metal TRL-2 encoder (CPU ~45 h), ~30 GB of disk for a second
+    store, Leap's decode kernel, then a map screen with encoded experts. Code-quality proxy [G]: ~1.0 %, by interpolating
+    t3 / t2 flips at TRL-2's measured error.
+- Wed 13:44: RESULT, TRELLIS FAST STORE byte test (pre-registered 13:4x; scripts/trellis_store.py, data/ledger/
+  trellis_store.txt; 29 s). BETWEEN by the line: code U1 5.8 <= 12, but U2 43.2 > 10. Cross-checks hold: the MSB-3 11-bit
+  rows bracket POOLSPLIT's 171 / 0 cell (code U1 26.8 <= 29.3 <= U2 58.4; chat U1 = POOLSPLIT's 14.4-14.5 / 10.6).
+  | store (24 GB, Cl 0) | slots | code U1 / U2 | IFEval U1 / U2 | multi | keep gap closed (code / IFEval / multi) |
+  |---|---|---|---|---|---|
+  | MSB-3 11-bit (today's FAST + POOLSPLIT) | 171 | 26.8 / 58.4 | 14.4 / 15.0 | 10.6 | +21 / +23 / +25 % |
+  | TRL-3 3.07 b (0.50x MSB-3's error [K B10-r]) | 185 | 21.8 / 54.8 | 11.4 / 12.0 | 8.5 | +32 / +36 / +38 % |
+  | gate/up TRL-2 + down TRL-3, 2.40 b (1.62x [K B10-a]) | 239 | 10.1 / 46.3 | 5.0 / 5.6 | 4.1 | +67 / +75 / +81 % |
+  | TRL-2 2.06 b (1.85x [K B10-r]) | 276 | 5.8 / 43.2 | 3.0 / 3.6 | 2.7 | +87 / +94 / +100 % |
+  * Code's U2 is all unsure rows: 39.2 MB per kept token of v3 reads in every store (the last rows with no next draft,
+    ~32 % of code segments, each reading 10 MSB + 2 LSB parts per layer uncached). Two ways out, both untested:
+    (a) a 17th draft, so every last row is gated (code unsure rows -> ~chat's ~0; then code ~= U1); (b) serve those rows
+    from the trellis pool too (no exact rows in FAST).
+  * Chat has almost no unsure rows: the 2.40 b mix puts IFEval / multi at 5.0-5.6 / 4.1 and TRL-2 at 3.0-3.6 / 2.7 MB per
+    kept token, with the keep gap to the 45 GB pool closed 75-100 % (more experts resident than today's 24 GB).
+  * Quality is the open part. Sure rows served at TRL-k instead of MSB-3, interpolating the map's t3 / t2 points by
+    weight error [G]: TRL-3 better than today's t3 (chat maybe ~5 / ~4.5 %); 2.40 b / TRL-2 between t3 and t2 (code ~1.0
+    % PASS-ish; chat ~7-8 % BETWEEN / KILL). The real test needs encoded experts in the map.
+  * Not a build ask: cost if pursued = a TRL encoder for 24,576 experts (CPU ~45 h at 4 threads, or a Metal encoder),
+    ~31-36 GB of disk for a second store (TRL-2 31.4 GB, the 2.40 b mix 36.2 GB; disk 147 GB free, floor 100), Leap's decode kernel,
+    then a map screen. The orchestrator / Kamen decide. Cheapest next step (CPU, mine): pin the quality proxy by
+    measuring MSB-2's weight error in MSB-3 units on real records, so the t3 / t2 interpolation has a measured axis.
+  * INFO add-on 13:4x (after the result; does not change the registered BETWEEN): U3 = unsure rows read through a small
+    v3 pool (MSB + LSB as one 2,785,280 B unit, LRU, V slots per layer), the rest of the 24 GB RAM to trellis slots; code
+    only (chat has ~no unsure rows); V in {8, 16, 32}; scripts/trellis_u3.py.
+  * INFO result 13:4x (scripts/trellis_u3.py, data/ledger/trellis_u3.txt): a small v3 pool does not rescue code's unsure
+    rows. v3 part 49.5 -> 44.6 / 40.8 / 35.6 MB per kept at V 8 / 16 / 32 (conservative units). Their experts barely
+    repeat, so code needs (a) a 17th draft (asked MTP Head 13:46) or (b) the unsure rows served from the trellis pool (U1).
+  * Reference points for (b) and the quality proxy, from map arms already run (qom_read's flip metric vs REF2-T, code /
+    IFEval / multi):
+    - t4_all (every expert of every row at 4 bits): 0.33 / 2.15 / 1.58 % (the metric's floor for any change);
+    - t3_all (every expert of every row at 3 bits, no drops): 0.92 / 7.24 / 5.83 %;
+    - qom_0_live_bq_t3 (C at the 45 GB pool): 0.77 / 6.09 / 5.29 %;
+    - qom_0_live_bq_t2 (2-bit sure rows): 1.49 / 10.13 / 9.77 %.
+    Serving the unsure rows at the sure rows' precision too costs little on top (t3_all vs C). Code stays under its 1.34
+    line at 3 bits everywhere. A TRL-2 store (error 1.85x MSB-3, ~0.4x MSB-2 [G]) puts code at ~1.1-1.3 % [G]: PASS-edge.
+- Wed 13:5x: PRE-REGISTRATION, DRAFT17 (bytes, CPU replay). MTP Head 13:5x: DFlash2 can draft the bonus row: one more
+  masked block position, drafts 1-15 unchanged, likely < 1 ms; a ~3 min GPU timing is offered for 14:25. At cf 0 any
+  drafted row is sure, so every last row gets gated: blocks_conv's 'all' convention vs 'engine' (today: code 32 % of
+  segments have no next draft).
+  * Run (scripts/draft17.py): C's rule (QOM cf 0 + 3-bit + gated last row) with conv 'engine' vs 'all' at:
+    - 24 GB 147 / 46, 163 / 0, and 11-bit 171 / 0;
+    - 12 GB 62 / 0;
+    - the trellis TRL-2 / 2.40 b pools (U = none).
+    Code only: chat has ~1 % ungated last rows.
+  * Line (bytes): DRAFT17 is a lever on its own if 'all' cuts code's bytes >= 5 % at 24 GB 171 / 0. KILL as a byte lever
+    if < 2 %.
+  * Prediction [G]: code x0.90-0.93 at 171 / 0, since code reads 2.6 MB of LSB parts there plus the unsure rows' top-10.
+  * Quality: untested. The bq arms gated 68 % of code's last rows at ~0 cost (0.42 -> 0.39 %); the other 32 % are the
+    question. If ALIVE, a map arm qom_0_live_ball_c147_t3 (masks are mine) is the test.
+  * Quality evidence already on the map (found 13:5x, before the run): Fable C's screen 1 (a), qom_0_live_bonus, gated
+    EVERY realized bonus row (the union-only form, no resident keep): code 0.65 % (PASS), vs 0.42 % ungated and 0.39 %
+    for bq (QOM form, 68 % of code's bonus rows). So gating all of code's bonus rows costs <= ~+0.25 points at the 45 GB
+    pool, less with the resident keep [G]. At the 24 GB pool, C's 1.07 % -> ~1.15-1.3 % [G]: still under 1.34. The
+    builder now takes _ball (dm_oea_masks.py: _bq + a gated last row when no next draft is left).
+- Wed 14:04: RESULT, DRAFT17 (pre-registered 13:5x; scripts/draft17.py, data/ledger/draft17.txt; 4 s; self-check: the
+  engine column equals ledger_top1 / pool_split / trellis_store). ALIVE, far past the line: x0.665 at 24 GB 11-bit 171 / 0
+  (line >= 5 %). My prediction x0.90-0.93 MISSED: code's ungated bonus rows were a third of code's bytes. Each one is an
+  exact row reading its full top-10 (+ LSB parts), and ranks 2-9 are rarely resident.
+  | code, C's rule | engine (today) | all (a drafted bonus row) | x |
+  |---|---|---|---|
+  | 24 GB 147 / 46 | 35.7 | 25.2 | x0.706 |
+  | 24 GB 163 / 0 (POOLSPLIT) | 32.8 | 21.9 | x0.669 |
+  | 24 GB 11-bit 171 / 0 | 29.3 | 19.5 | x0.665 |
+  | 12 GB 62 / 0 | 75.6 | 56.1 | x0.742 |
+  | 24 GB trellis 2.40 b, 239 slots | 46.3 (U2) | 7.2 | - |
+  | 24 GB trellis TRL-2, 276 slots | 43.2 (U2) | 4.0 | - |
+  * Cost (MTP Head 14:03, ~/TrainLab/REPORT.md:2870, data/draft17_time.txt; K83 drafter path, L1-20):
+    - 16 -> 17 positions: -0.16 / +0.14 ms per pass at context 600 / 1,900, with drafted tokens identical. This needs a
+      one-line change to the _rows16 test in Leap's draft_fused.py.
+    - As the code stands, +8.6 ms per check (R-78's forms fall back at any row count other than 16).
+    - Masking the extra position from rows 0-15 costs the same.
+  * Quality: Fable C's qom_0_live_bonus (every bonus row gated, union-only) put code at 0.65 % (PASS) vs 0.42 %
+    ungated. The QOM form keeps residents, so it should cost less. Chat already gates ~99 % of last rows, so DRAFT17
+    is ~free there. The map arm below measures it at the 24 GB pool.
+  * Chat is unchanged by DRAFT17 (its bytes were already gated).
+- Wed 14:0x: PRE-REGISTRATION, MAP SCREEN 6 = DRAFT17's quality at the 24 GB pool (before any run).
+  * Arm: qom_0_live_ball_c147_t3. It is C (screen 4's qom_0_live_bq_c147_t3: 1.07 / 8.07 / 5.99 %) with every last row
+    gated, including the bonus rows that have no next draft today (dm_oea_masks.py _ball). Same 147-slot pool, same
+    t3mask t3k=2 serving (tbits_mask, 3 bits, k 2).
+  * Lines (screen 4's): PASS <= 1.34 / 5.42 / 3.69 %, BETWEEN <= 1.5x, KILL above. The verdict that matters is code's;
+    chat should equal C's within noise (it already gates ~99 % of last rows).
+  * Prediction [G]: code ~1.15-1.3 % (PASS); IFEval ~8.1 %, multi ~6.0 % (C's, unchanged).
+  * Use: code PASS -> DRAFT17 joins code's 24 GB FAST stack: 35.7 -> 25.2 today, 19.5 with 11-bit + POOLSPLIT [P].
+    That needs Leap's one-line _rows16 fix, or it costs 8.6 ms per check.
+  * Cost: one map arm (~7 min GPU, shared lock), in a slot the orchestrator picks. Masks are built now (CPU, 1 core, ~2 min).
+  * Masks built + bit-checked 14:0x (build_ball_c147.log, check_ball_c147.log: ALL OK) -> READY.
+    - Realized bonus rows gated: code 188 vs C's 105, IFEval 481 vs 480, multi 699 vs 699, so only code changes.
+    - Code's sure-row rank 2-9 kept share at 147 slots 73.7 % vs C's 75.8 %: the exact bonus rows had been warming the pool
+      with their full top-10. A small extra quality cost; screen 6 measures it with everything else.
+    - Harness line Breakthrough needs: ABLATIONS["qom_0_live_ball_c147_t3"] = tbits_mask(<masks>, 3, 2), as for
+      qom_0_live_bq_c147_t3.
+- Wed 14:1x: DRAFT17 ROUTED (orchestrator):
+  - Leap lands the _rows16 fix first, before its FAST HC read.
+  - Screen 6 takes screen 5's freed slot (Thu ~07:4x beside T0, or at RELAX_DONE).
+  - MoonShots re-derives 35.7 -> 25.2 independently on CPU; until it agrees, the claim reaches Kamen marked unchecked.
+- Wed 14:1x: TRELLIS STORE, quality-test sizing (CPU count, 30 s). The map's windows touch most experts: code 15,417
+  distinct (layer, expert) pairs in top-2 (63 % of 24,576) and 22,645 in top-10 (92 %); IFEval 59 / 92 %, multi 52 / 90 %.
+  So any map screen of a trellis store needs nearly the whole encode: B10a's ~6-7 s per expert on 6 threads makes that
+  ~44 h, so it needs a Metal encoder, plus calibration Hessians or a data-free form. The cheapest real quality test is a
+  layer-subset screen: TRL-2 on 8 of 48 layers (~4,096 experts, ~7-11 h CPU encode), with a harness override per layer
+  range (Breakthrough). Its extrapolation to 48 layers is a risk. A proposal for after Kamen's yes, not an ask now.
+- Wed 14:1x: PRICES, TRELLIS x DRAFT17 (scripts/trellis_draft17.py, data/ledger/trellis_draft17.txt; 45 s; cross-checks
+  equal draft17.txt). Every last row gated (no exact rows), MB per kept token, code / IFEval / multi:
+  | line | MSB-3 11-bit | TRL-3 3.07 b | TRL-2 + 3 mix 2.40 b | TRL-2 2.06 b |
+  |---|---|---|---|---|
+  | 24 GB (slots) | 19.5 / 14.3 / 10.6 (171) | 15.8 / 11.4 / 8.5 (185) | 7.2 / 5.0 / 4.1 (239) | 4.0 / 3.0 / 2.7 (276) |
+  | 12 GB (slots) | 52.0 / 54.4 / 39.4 (65) | 44.9 / 45.2 / 32.8 (71) | 28.5 / 25.3 / 18.4 (91) | 21.7 / 18.0 / 13.0 (105) |
+  Keep gap closed at 24 GB: TRL-3 +32-38 %, mix +67-81 %, TRL-2 +87-100 %.
+- Wed 14:1x: PRE-REGISTRATION (draft; the encoder details are amended in with Fit12 before any run), MAP SCREEN 7 =
+  the trellis FAST store's quality (the orchestrator 14:3x, Kamen's direction). A layer subset, because a full-model
+  arm needs ~the whole encode (QUEUE 14:1x: 63-92 % of experts touched), ~55 h of CPU.
+  * Masks: qom_0_live_ball_c239_t3 (C + DRAFT17 at the 2.40 b mix's 239-slot pool), built + bit-checked, READY 14:1x.
+    Code's kept share 86.0 % vs 73.7 % at 147 slots.
+  * Proposed form and layers (Fit12 to confirm): the 2.40 b mix (gate / up TRL-2, down TRL-3), S = 8 layers (3, 9, 15,
+    21, 27, 33, 39, 45), all 512 experts each.
+  * Four arms, the same masks, all rows in checks (prefill rows untouched):
+    - 7-ref: every kept expert at MSB-3 (as C).
+    - 7-trl: layers S from the TRL mix for every kept expert (any rank); other layers as 7-ref.
+    - 7-cal: layers S at MSB-2 (to2bit) instead.
+    - 7-cal-all: all 48 layers at MSB-2.
+  * Harness need (Breakthrough): a per-layer expert-weight source for kept experts of in-check rows (TRL files /
+    records3 at 2 bits), beside tbits_mask.
+  * Estimate per domain: est = ref + (trl - ref) x (cal_all - ref) / (cal - ref). If (cal - ref) < 0.3 points on a
+    domain, the factor is unreliable there, and I use the linear 48 / 8 = 6 instead (conservative), flagged.
+  * Lines on est (screen 4's): PASS <= 1.34 / 5.42 / 3.69 %, BETWEEN <= 1.5x, KILL above. The raw arms are reported
+    beside it. Layer sensitivity is very uneven (reuse arms: L36-39 3.51 % code vs L08-11 1.19 %), so the calibration
+    arms carry the extrapolation; the verdict is an estimate, not a full-model measurement.
+  * Prediction [G]: 7-ref ~0.95 / ~6.8 / ~5.5 %. Mix all-layer est: code ~1.2 % PASS, IFEval ~8 % BETWEEN, multi ~7 %
+    KILL.
+  * Use: code PASS -> the mix store is a code-FAST candidate at 24 GB (7.2 MB per kept [P]), and the full ~36 GB store +
+    encoder go to Kamen. Chat BETWEEN / KILL -> chat stays on the MSB-3 FAST stack (14.3 / 10.6).
+  * Cost: four map arms (~28 min GPU, share lock) after Fit12's encode (~9 h at 4 threads for 4,096 experts [G]).

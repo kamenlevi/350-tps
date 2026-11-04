@@ -238,3 +238,10 @@ ABLATIONS["hyb_0.9_k1_u10_live_t3"] = t3k_mask(os.path.expanduser("~/NewIdeas/da
 ABLATIONS["q1u_0.9_live_t3"] = t3k_mask(os.path.expanduser("~/NewIdeas/data/dm_masks/q1u_0.9_live_t3"), 2)   # its top-2 twin
 ABLATIONS["qom_0_live_bq"] = q1_union(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0_live_bq"))   # NewIdeas: screen 1 in QOM's form (QUEUE.md:1214-1222; the orchestrator Wed 04:47): the gated last row also keeps resident ranks 2-9
 ABLATIONS["qom_0_live_bq_t3"] = hyb_t3(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0_live_bq"), 0.9)   # its 3-bit form (masks qom_0_live_bq_t3, t3k 2); pre-approved only if bq is not KILL (NewIdeas' read-out)
+def tbits_mask(path, bits, k):   # Wed 06:3x (the orchestrator 06:2x): ranks < k of the gated rows from records3 at `bits` (dm_t3), the rest from <path>'s masks
+    def setup(): PERT.update(rmask=path, gate=("t3mask",), t3=bits, t3k=k, renorm=False)
+    return setup
+ABLATIONS["qom_0_k1_live_t3"] = tbits_mask(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0_k1_live_t3"), 3, 1)   # NewIdeas screen 2b (QUEUE.md:1189 / 1250): QOM cf 0, sure rows top-1 at 3 bits
+ABLATIONS["qom_0_live_bq_t2"] = tbits_mask(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0_live_bq_t3"), 2, 2)   # NewIdeas (QUEUE.md:1305-1320): bq_t3's masks, sure rows' ranks 0-1 at 2 bits (to2bit)
+ABLATIONS["qom_0_live_bq_c147_t3"] = tbits_mask(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0_live_bq_c147_t3"), 3, 2)   # NewIdeas screen 4 (C) (QUEUE.md:1343-1390; the orchestrator Wed 07:5x): qom_0_live_bq_t3 at the 24 GB pool (147 base slots)
+ABLATIONS["qom_0_k1_live_bq_c147_t3keep"] = p1_t3(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0_k1_live_bq_c147"))   # screen 4 (B'), the cheap top-1 form: cut rows wholly from records3 at 3 bits, the 24 GB pool

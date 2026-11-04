@@ -2401,6 +2401,29 @@ sure / tie / mid (dmargin), code | IFEval | multi:
   1.63 %, pass 2 in 52 vs 55 % of code blocks: worth taking over plain 0.8 by b43930c's rule). The night's step C takes
   q1u_cf09 + q1u_cf09_t3 + oea_k8 at scale (hyb_0.9_u8 is BETWEEN on chat, so not its +3-bit). P1-OEA's three JSONs are
   NewIdeas' to read.
+- RESULTS FLOOR NIGHT 1 [K] (Wed 03:10-07:06; 78 windows = code 6,327 / IFEval 6,923 / multi 6,731 rows; data/floor1
+  FLOOR_read.txt, DAY9_read.txt, Q1U_read.txt; extras on the 36 in data/floor1_36):
+  - Bands (gate_bands, 78): >= 0.999 band 0.000 % (0/3163) / 0.000 % (0/710) / 0.202 % (1/494); 0.99-0.999 band 0.255 %
+    (3/1176) / 0.842 % (6/713) / 0.330 % (2/606); 125B-sure rows 0.02 / 0.00 / 0.04 %; non-tie 0.67 / 1.76 / 1.43 %.
+    NEW WORLD-with-margin NOT met (the 0.99-0.999 band is over 0.1 % on code and 0.3 % on chat). EDGE by one flip (multi's
+    >= 0.999 band, 1/494). KILL not triggered (top-5 on the 0.99-0.999 band <= 0.56 %, code non-tie 0.67 % < 2 %).
+    Verdict BETWEEN (dm_floor_read). The bytes part (C 256 replay) did not run: floor_rows.py needs the 36-window
+    perturbation arms (topk2 ...), which the 78 never had; R's design gap, not a data fault.
+  - Q1 at 0.999 (gate_top2_cf0999, 78): code drafter-sure rows 0.00 % [0.00-0.12] (0/3163) = PASS; IFEval 0/710, multi
+    1/494. Q2 (DAY9's band structure): KILL (mid band 1.29 % vs >= 0.99 rows 0.07 % = 18.7x, kill > 2x).
+  - Extras on the 36: chain reuse stacked on the bands (run 5) NOT adopted (code sure rows 0.17 % vs ~0.02 %, >= 0.999
+    band 2/1607); skip k 0 on cf >= 0.999 in L8-35 (run 6) NOT adopted (>= 0.999 band 2/1607 = 0.124 % > the 0.1 % EDGE);
+    top-4 on cf >= 0.99 (run 7): 0.99-0.999 band 0.17 / 0.54 / 0.36 %, under KILL, over the margin.
+  - Step C at scale (78, all-row flips vs 1.34 / 5.42 / 3.69 %): q1u_cf09 (live) 1.04 / 6.37 / 4.12 % = PASS / BETWEEN /
+    BETWEEN; q1u_cf09_t3 1.09 / 6.56 / 4.37 % = PASS / BETWEEN / BETWEEN; oea_k8 (16-row) 0.44 / 3.78 / 2.99 % = PASS x3
+    (the 36's 0.62 / 3.83 / 3.07 % held); hyb_cold4_t3 1.14 / 11.18 / 10.73 %; u8+t3 live control 1.25 / 7.92 / 5.60 %;
+    pmtc 0.98 / 8.44 / 6.21 %; len 1.04 / 8.44 / 6.21 %.
+  - COLD on the 42 held-out windows (verdict lines 12b3d63; data/floor1/COLD_read_heldout.txt): hyb_cold4_t3 code PASS
+    1.01 % (z -0.60 vs the control: no cost). PROMPT pmtc vs the control: code 0.81 vs 1.11 % (z -1.88), IFEval 8.45 vs
+    8.08 % (z +0.92), multi 6.70 vs 5.66 % (z +2.78) -> CODE+, so be67ff0's GENERAL is WITHDRAWN (multi costs on
+    held-out windows). len: the same chat rows (short prompts take pmtc); code 0.81 % (z -1.88) at cached bytes x0.196 vs
+    the control's x0.272 (-28 %) and pmtc's x0.253 -> CODE+. So the prompt table is a code lever (len's form), not a
+    general FAST step.
 
 ## 3-BIT PASS 1 (M-18 for the 12 GB two-pass; Fit12's item 4): PRE-REGISTRATION (Tue 10:4x, before the runs)
 - Runs (36 windows, built and unit-tested; t3 path = test_t3 ALL OK): t3_top2_all = every row's top-2 from records3 at 3
@@ -2676,6 +2699,23 @@ sure / tie / mid (dmargin), code | IFEval | multi:
   engine's) bitwise equal at C_m 51 / 59 / 65; G1 at C_m 47 / C_l 32 = the exact loop alone. Pool size changes which slots
   are rewritten when, so staleness would make outputs depend on C. The live spin path at C_m ~51 is therefore covered.
   Fit12's ~5-min sync-every-MoE-layer A/B is the confirmation if the orchestrator schedules it.
+- K12 RESULT (Fit12, Wed 13:15) [K]: PASS 12/12. bt_b12 8db7 on v3p, C_m 47 / C_l 32, MAXK 40 gate, T3's calls, 4 HumanEval
+  prompts x 3 arms in a fresh process. mx.eval at every MoE block's entry and exit (15,964 synced calls) = bitwise equal
+  to T3R2's unsynced run (tokens, logits hash, per-check log).
+- The modes K12 left open (MAXK 80 spec / MTP; Fit12: "yours to judge"), code read Wed 13:2x: CLEAR BY CONSTRUCTION, no run.
+  - Every post_ids ends a command buffer. ext start() gives post_ids a 64 MB dummy input unless BIGMOE_NOPOSTCOMMIT is set
+    (nothing sets it), so MLX commits right after each post (v3p ext/bigmoe_ext.cpp, g_post_bump). A call's spins and
+    expert reads open a fresh buffer, and nothing earlier in that buffer read the pool.
+  - Within a call the GPU reads only protected slots. The loader protects the waited and late ids, then resident ids in
+    list order, and releases any id it evicts as -1 (flag-mode path). The late re-read after layer L+1's attention reads
+    fresh victims outside that set.
+  - MAXK 80 only widens the row (S <= 4 verify rows x 20 ids, one extra id line). The MTP head's chained drafts
+    (spec125 draft_start: no CPU wait between steps) each post, so each commits. A CPU sync also ends every verify
+    (spec125: mx.eval(g, hid); g.tolist()).
+  - [K] backing: K12 on the same mechanism at MAXK 40; Fit12's cross-C bitwise runs on the MTP decode path (above).
+  - Leap's hazard needs a slot read earlier in the SAME buffer: NOPOSTCOMMIT, or two reads of one pool between posts.
+    Neither exists in the live bt_b12. Keep the post-commit on the live path. A gate that drops it (e.g. a zero-commit
+    pickup) must read weights with coherent(system) loads (Leap B4: 0 stale at 1.09x plain bandwidth) or re-run K12.
 
 ## RECORDS3 LAYOUT CHECK (BigMoE's converted store + build_nat; prefix item, the orchestrator Tue): RESULT Wed 03:28 = PASS [K]
 - ctrl = baseline + t3_top2_all on 3 windows with today's store and ext (out_layout/ctrl); test = the same with
@@ -2733,3 +2773,51 @@ per domain; Q1 at 0.99's level (gate_top2_cf099) = 1.34 / 5.42 / 3.69 % (code / 
   McNemar vs qom_0_live_t3: code 9 / 7, z +0.50; IFEval 102 / 46, z +4.60; multi 92 / 51, z +3.43. Vs qom_0_live_bq (the
   3-bit cost): code 17 / 4, z +2.84; IFEval 130 / 62, z +4.91; multi 118 / 46, z +5.62. On code the gated row is free in
   both forms; 3 bits adds measurable flips, though code stays under the level.
+
+## MORNING MAP BATCH AFTER FLOOR NIGHT 1 (the orchestrator Wed 06:2x): PRE-REGISTRATION (copied Wed 06:3x; NewIdeas' lines, before any run)
+One process, right after FLOOR night 1's runner exits (scripts/map_slot.sh WAIT_PID): qom_0_k1_live_t3, then qom_0_live_bq_t2,
+36 windows each (one process; screen 2b's verdict is read on code + multi only as pre-registered, its IFEval column is
+information). Then "map batch done" to BigMoE; flips to NewIdeas. Read-out decision_map/dm_screen_read.py.
+- Screen 2b qom_0_k1_live_t3 (~/NewIdeas/QUEUE.md:1189-1192 + 1250): QOM at cf 0 with sure rows at top-1 (rank 0 at 3 bits;
+  union members and resident ranks 1-9 at 4 bits; t3k 1). Lines: all-row flips <= Q1 at 0.99's level (code 1.34 / multi
+  3.69 %) = PASS; <= 1.5x = BETWEEN; above = KILL. Paired McNemar vs qom_0_live_t3 (0.71 / 4.45 / 4.14 %). Prediction
+  [G, NewIdeas]: BETWEEN on code, KILL on chat.
+- qom_0_live_bq_t2 (QUEUE.md:1305-1320, 05:5x): qom_0_live_bq_t3's masks; the gated rows' ranks 0-1 at 2 bits rebuilt from
+  records3's 3-bit codes, w = s3 (2 (q3 >> 1) + 0.5) + b3 (MoonShots' to2bit.py c5af2d3, copied byte for byte into
+  decision_map; dm_t3._proj bits == 2 via scripts/install_dm_t3_2bit.sh in the gap). Self-test [K, 06:3x, through dm_t3.read]
+  OK on L12 e7 and L40 e300: 3-bit unpack exact, 2-bit triple within 0.26 % of the rule, gather_qmm within 0.7 % of dense,
+  ~0.32 relative RMS from the 3-bit weights. Lines (bq_t3's): PASS = <= qom_0_live_bq_t3 + 0.3 points AND <= the level,
+  i.e. <= 1.07 / 5.42 / 3.69 %; BETWEEN <= 2.01 / 8.13 / 5.54 %; KILL above. Paired McNemar vs qom_0_live_bq_t3 (the 2-bit
+  cost) and vs qom_0_live_bq. Prediction [G, NewIdeas]: code BETWEEN (+0.5-1.0 points over 3 bits), chat KILL.
+- RESULTS [K] (Wed 07:06-07:26, one process, 36 windows, 0 row-count warnings; out/SCREEN_read_<arm>.txt):
+  - Screen 2b qom_0_k1_live_t3: 0.59 / 4.65 / 3.24 % = code PASS / multi PASS (IFEval 4.65 % under its level:
+    information, outside the pre-registered domains). McNemar vs qom_0_live_t3: code 9 / 13, z -0.85; IFEval 56 / 49,
+    z +0.68; multi 39 / 71, z -3.05. NewIdeas' prediction (BETWEEN code, KILL chat) missed. Fewer flips than top-2 at
+    3 bits on multi, likely because rank 1 stays at 4 bits when resident. The 24 GB path's lever 2 holds in QOM's form.
+  - qom_0_live_bq_t2: 1.49 / 10.13 / 9.77 % = code BETWEEN / IFEval KILL / multi KILL. McNemar vs qom_0_live_bq_t3: code
+    34 / 10, z +3.62; IFEval 208 / 71, z +8.20; multi 228 / 69, z +9.23 (vs qom_0_live_bq z +5.40 / +11.23 / +12.77).
+    NewIdeas' prediction held. 2 bits on the sure rows' top-2 is too coarse on chat.
+
+## SCREEN 4: QOM AT THE 24 GB POOL (NewIdeas; the orchestrator Wed 07:5x): PRE-REGISTRATION (copied Wed 08:0x; NewIdeas' lines
+~/NewIdeas/QUEUE.md:1343-1390, 07:4x + amendment 07:5x, before any run)
+- Why: every QOM quality result so far kept the 45 GB pool's residents (laysz45_256, C_m mean 295), while the 24 GB prices
+  replay 147 base slots per layer. Screen 4 re-tests at the 24 GB pool (masks suffix _c147, bit-checked, READY).
+- Arms, one process after BigMoE's "morning block done" (scripts/map_slot.sh, MEM ~17 GB, 36 windows each):
+  (C) qom_0_live_bq_c147_t3 = qom_0_live_bq_t3 at the 24 GB pool (t3mask, t3=3, t3k=2, its own masks);
+  (B') qom_0_k1_live_bq_c147_t3keep = the cheap top-1 form: mask qom_0_k1_live_bq_c147 with the t3keep gate (p1_t3:
+  t3=3, t3k=10), so rows the mask cuts take every kept rank from records3 at 3 bits (no LSB read on sure rows); sure rows
+  with nothing dropped stay at 4 bits.
+- Lines, per domain, all-row flips: PASS <= 1.34 / 5.42 / 3.69 %, BETWEEN <= 1.5x (2.01 / 8.13 / 5.54 %), KILL above
+  (the 24 GB verdicts). Paired McNemar: C vs qom_0_live_bq_t3 (the pool's cost at top-2); B' vs C and vs qom_0_k1_live_t3.
+- Predictions [G, NewIdeas]: C code PASS (~1.0 %), IFEval BETWEEN (~7 %), multi BETWEEN or KILL (~6 %); B' code BETWEEN
+  (~1.5 %), IFEval KILL (~9 %), multi BETWEEN or KILL (~5.5-6.5 %).
+- Prices [P, NewIdeas' ledger_top1.py, 24 GB, engine convention]: top-2 + 3-bit 35.7 / 19.4 / 13.9 MB per kept token;
+  top-1 with rank 1 at 3 bits (B''s form) 24.0 / 11.5 / 7.7.
+- RESULTS [K] (Wed 08:33-08:47, one process, 36 windows, 0 row-count warnings; out/SCREEN_read_<arm>.txt):
+  - (C) qom_0_live_bq_c147_t3: 1.07 / 8.07 / 5.99 % = code PASS / IFEval BETWEEN / multi KILL (5.99 > 5.54). The pool's
+    cost vs qom_0_live_bq_t3: code 20 / 10, z +1.83 (no measurable cost); IFEval z +4.93; multi z +2.24. The code FAST
+    stack (top-2 at 3 bits + the gated last row) is map-PASS at the 24 GB pool, at 35.7 MB per kept token [P].
+  - (B') qom_0_k1_live_bq_c147_t3keep: 1.69 / 11.25 / 8.61 % = code BETWEEN / IFEval KILL / multi KILL. Vs C: code 28 / 7,
+    z +3.55; IFEval z +6.83; multi z +6.31. Vs qom_0_k1_live_t3: z +5.08 / +12.48 / +11.39. The cheap top-1 form (24.0 MB
+    per kept token on code [P]) costs measurably on code and fails chat.
+  - NewIdeas' predictions held for both arms.

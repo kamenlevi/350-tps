@@ -11,7 +11,13 @@ install() is called):
   row count (L1-23's trick): x @ Wt with Wt = W.T made contiguous (the MLP's gate / up / down and q_proj; Wt REPLACES W,
   so no extra memory) or (W @ x.T).T (k / v on the block rows, o_proj, the conv kernel projections). Other row counts
   (the 8-row context through k / v) keep nn.Linear's x @ W.T.
+  FORM_ROWS (Wed 2026-11-04; MTP Head's DRAFT17, the orchestrator's route): the row counts that take the forms, default
+  16..64. R-78b (scripts/r78b_rows.py, data/r78b_rows.txt) found both forms bitwise == x @ W.T at EVERY row count
+  16-64 (and 80-1000), on all nine projection shapes, and different at 2-15. So block passes of 17 / 32 positions
+  keep the drafts bitwise and lose form C's per-call weight copy (+8.6 / +9.0 ms per pass, TrainLab REPORT
+  'DRAFT17'). DRAFT_FORM_ROWS="..." (env, read at import) adds rows; never add rows below 16.
 uninstall() restores the originals."""
+import os
 from functools import lru_cache
 import mlx.core as mx
 
@@ -70,8 +76,11 @@ class _LinT:
     pass
 
 
+FORM_ROWS = set(range(16, 65)) | {int(r) for r in os.environ.get("DRAFT_FORM_ROWS", "").split(",") if r.strip()}
+
+
 def _rows16(x):
-    return x.ndim >= 2 and x.size // x.shape[-1] == 16
+    return x.ndim >= 2 and x.size // x.shape[-1] in FORM_ROWS
 
 
 def _forms_on(draft):

@@ -20,7 +20,7 @@ export C45_SCREEN=data/r57/snap/r57_screen_e2e.py C45_DEADLINE=${E2E_DEADLINE:-0
 CC=${E2E_C:-160}
 KEYS="humaneval/HumanEval/68,humaneval/HumanEval/91,humaneval/HumanEval/16,humaneval/HumanEval/6"
 KEYS="$KEYS,math500/test/prealgebra/1640.json,ifeval/1220,ifeval/1561,multi/de3,multi/zh15,agent/bash18,agent/text23"
-REF="$HOME/BigMoE/data/r57/cmb0_224_tokens.json"
+REF="$HOME/BigMoE/data/d45/ref14_tokens.json"   # Wed 08:05: cmb0_224 never existed (the night ran C 160), so chat23 (no HumanEval 16 / 6) made a PASS read "False"
 [ -s "$REF" ] || REF="$HOME/BigMoE/data/r57/chat23_ref_tokens.json"
 MIX="$HOME/BigMoE/scratch/model_mix"
 say "e2e start (pid $$, C $CC, reference $REF)"

@@ -317,15 +317,22 @@ int main(int argc, char **argv) {
     pthread_create(&th, NULL, ka_main, NULL);
     pthread_create(&th, NULL, ping_main, NULL);
 
-    const int big = argc > 2 && !strcmp(argv[2], "big");
+    const int wed = argc > 2 && !strcmp(argv[2], "wed");           /* Wed 09:0x ticket: M-29b repeat + pings at the engine's gaps */
+    const int big = (argc > 2 && !strcmp(argv[2], "big")) || wed;
     static const int NB[] = {4, 8, 15};
     for (int i = 0; big && i < 3; i++) {                                   /* M-29b */
       pt("Zb", "Z0m", NB[i], 0, COPY, &LB, &PB0m, 800, 0, 0, 0);
-      pt("Zb", "Z0pm", NB[i], 0, COPYPAR, &LB, &PB0m, 800, 0, 0, 0);
+      if (!wed) pt("Zb", "Z0pm", NB[i], 0, COPYPAR, &LB, &PB0m, 800, 0, 0, 0);
       pt("Zb", "Z0n", NB[i], 0, BOUNCE, &LB, NULL, 800, 0, 0, 0);
       pt("Zb", "Z3bm", NB[i], 0, DIRECT, &LB4, &P44m, 800, 0, 0, 0);
-      if (argc > 3) pt("Zb", "Z1m", NB[i], 0, DIRECT, &LB, &PCm, 800, 0, 0, 0);   /* exploratory: one contiguous read per record */
+      if (argc > 3 && !wed) pt("Zb", "Z1m", NB[i], 0, DIRECT, &LB, &PCm, 800, 0, 0, 0);   /* exploratory: one contiguous read per record */
     }
+    static const int WG[] = {1200, 2000}, WT[] = {150, 250};
+    for (int i = 0; wed && i < 2; i++) {                                   /* pings at the engine's 1.2-2 ms gaps */
+      pt("Pw", "R0", 2, 0, BOUNCE, &LB, NULL, WG[i], 0, 0, 0);
+      for (int j = 0; j < 2; j++) pt("Pw", "R0", 2, 0, BOUNCE, &LB, NULL, WG[i], 0, 0, WT[j]);
+    }
+    if (wed) pt("Pw", "R0", 2, 0, BOUNCE, &LB, NULL, 0, 0, 0, 0);
     for (int n = 1; !big && n <= 2; n++) {                                 /* Z */
       pt("Z", "Z0", n, 0, COPY, &LB, &PB0, 800, 0, 0, 0);
       pt("Z", "Z0n", n, 0, BOUNCE, &LB, NULL, 800, 0, 0, 0);

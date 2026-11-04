@@ -21,6 +21,12 @@ _UNIFORM = ON and len(set(PLAN)) == 1          # 4444444444: exact 4-bit through
 _POM = int(os.environ.get("BIGMOE_POM", "0") or 0)
 _LP1 = os.environ.get("BIGMOE_POM_LP1") == "1"
 _POM_IX = {}
+# records3 converted in place (docs/PLAN_records3_convert.md): index.json's per-layer "layout" (absent = row-major). A
+# converted layer's tier calls need a kernel router that reads its layout (Leap's REF2 native_3c: 3c-N, + p11 dequant for
+# native+p11); it sets LAYOUT_ROUTER and routes each call by _LAYOUT[0] (tier_call sets it) or t["layout"] (OOO).
+LAYOUTS = {"row-major": 0, "native": 1, "native+p11": 2, "native+p11+pad": 2}   # pad: 4 KB-aligned pieces (zero-copy reads)
+LAYOUT_ROUTER = False
+_LAYOUT = [0]
 STATS = {"calls": 0, "prefill_calls": 0}
 _MSB = [("gate_proj", "w3"), ("gate_proj", "s3"), ("gate_proj", "b3"), ("up_proj", "w3"), ("up_proj", "s3"),
         ("up_proj", "b3"), ("down_proj", "w3"), ("down_proj", "s3"), ("down_proj", "b3")]
@@ -162,6 +168,10 @@ def tier_call(self, x, ids, bm, route, post=None):
     """Decode/verify: ids = expert ids in gate-rank order [..., K]. route(L, ids) -> slots (the streamed gate)."""
     STATS["calls"] += 1
     t = bm["tier"]
+    _LAYOUT[0] = lay = t.get("layout", 0)
+    if lay and (not LAYOUT_ROUTER or _GLU != "3c"):
+        raise RuntimeError(f"tier layer {bm['L']}: records3 layout {lay} needs TIER_GLU 3c with a layout router (REF2 "
+                           "native_3c); BigMoE's own kernels read row-major records only")
     if _OOO and post is not None and _GLU == "3c" and t.get("scores") is not None:
         return _ooo_call(x, ids, bm, t, post, t.pop("scores"), t.pop("shared", None))
     sm = route(bm["L"], ids)                                    # base pool: every rank
@@ -190,21 +200,50 @@ def tier_call(self, x, ids, bm, route, post=None):
 
 
 # ---------------------------------------------------------------- install (ExpertStreamer.install with BIGMOE_TIER)
-def load_index(model_dir):
+def load_index(model_dir, layout_ok=False):
     # BIGMOE_M01=1 (R-44 a): records3m/, the same records with the per-group fields re-packed (the ext unpacks them)
     d = os.path.join(model_dir, "records3m" if os.environ.get("BIGMOE_M01") else "records3")
-    return d, json.load(open(os.path.join(d, "index.json")))
+    ix = json.load(open(os.path.join(d, "index.json")))
+    lays = sorted({r.get("layout", "row-major") for r in ix["layers"].values()})
+    if any(x not in LAYOUTS for x in lays):
+        raise RuntimeError(f"{d}: unknown records3 layout in {lays}")
+    if lays != ["row-major"] and not layout_ok:
+        raise RuntimeError(f"{d} holds converted layers ({lays}); this reader takes row-major records only "
+                           "(docs/PLAN_records3_convert.md)")
+    return d, ix
 
 
-def _shapes(pers4_shapes):
-    """4-bit piece shapes [(out, K/8), (out, K/64), (out, K/64)] x 3 -> MSB-3 and LSB-1 pool piece shapes."""
+def _shapes(pers4_shapes, r=None):
+    """4-bit piece shapes [(out, K/8), (out, K/64), (out, K/64)] x 3 -> MSB-3 and LSB-1 pool piece shapes. A native+p11
+    layer (index entry r) holds its s3 / b3 / b pieces as packed uint32 words of the index's piece sizes."""
     msb, lsb = [], []
     shp = [sh if isinstance(sh[0], int) else sh[0] for sh in pers4_shapes]   # shapes or (shape, dtype) pairs
+    p11 = r is not None and r.get("layout") in ("native+p11", "native+p11+pad")
     for p in range(3):
         (o, w8), (_, g), _ = shp[3 * p:3 * p + 3]
-        msb += [((o, w8 * 3 // 4), mx.uint32), ((o, g), mx.bfloat16), ((o, g), mx.bfloat16)]
-        lsb += [((o, w8 // 4), mx.uint32), ((o, g), mx.bfloat16)]
+        sm = [((r["msb_piece_size"][3 * p + i] // 4,), mx.uint32) for i in (1, 2)] if p11 else [((o, g), mx.bfloat16)] * 2
+        sl = ((r["lsb_piece_size"][2 * p + 1] // 4,), mx.uint32) if p11 else ((o, g), mx.bfloat16)
+        msb += [((o, w8 * 3 // 4), mx.uint32), *sm]
+        lsb += [((o, w8 // 4), mx.uint32), sl]
     return msb, lsb
+
+
+def _part_order(r, part, n):
+    """the record order of a part's pieces (the index lists them per projection; native+p11+pad stores the LSB part's l1
+    planes first): the ext's layer takes its pieces in this order, so its sequential copy / direct preadv matches the file"""
+    off = r.get(f"{part}_piece_off")
+    return sorted(range(n), key=lambda i: off[i]) if off is not None else list(range(n))
+
+
+def _check_part(r, pers, part):
+    """the ext copies a record part piece by piece into the slots: the pool pieces must be the index's, back to back"""
+    off, size = r.get(f"{part}_piece_off"), r.get(f"{part}_piece_size")
+    if off is None:
+        return
+    start = 0 if part == "msb" else r["msb_sz"]
+    o = _part_order(r, part, len(off))
+    assert list(size) == pers and off[o[0]] == start and all(off[o[i + 1]] == off[o[i]] + size[o[i]] for i in range(len(o) - 1)), \
+        (part, pers, off, size)
 
 
 def _nbytes(sh, dt): return int(np.prod(sh)) * (4 if dt == mx.uint32 else 2)
@@ -214,11 +253,14 @@ def make_pools(ext, L, E, C_m, shapes4, rec_dir, r):
     """Base pool for layer L as ext layer L (must be the next add_layer index)."""
     if os.environ.get("BIGMOE_M01"):   # an ext without the M-01 unpack would read records3m's packed fields as raw bf16
         assert getattr(ext, "m01_on", lambda: False)(), "BIGMOE_M01=1 needs an ext built from 6753d83 or later"
-    msb, _ = _shapes(shapes4)
+    msb, _ = _shapes(shapes4, r)
     P = [mx.zeros((C_m, *sh), dt) for sh, dt in msb]
     mx.eval(*P)
     pers = [_nbytes(sh, dt) for sh, dt in msb]
     assert sum(pers) <= r.get("r3_msb_sz", r["msb_sz"]), (L, sum(pers), r["msb_sz"])
+    if r.get("layout", "row-major") != "row-major":
+        assert not os.environ.get("BIGMOE_M01") and not _POM, "M-01 / POM read row-major records only"
+        _check_part(r, pers, "msb")
     assert ext.add_layer(C_m, E, [0] * 9, [0] * 9, pers, P) == L
     ext.set_records_part(L, os.path.join(rec_dir, r["file"]), r["recsz"], 0, r["msb_sz"])
     if _POM:                                       # R-44 b: records3p's seg1 / seg2 beside the records3m part
@@ -233,18 +275,31 @@ def make_pools(ext, L, E, C_m, shapes4, rec_dir, r):
 
 
 def make_sidecar(ext, E, C_l, shapes4, rec_dir, r):
-    _, lsb = _shapes(shapes4)
+    _, lsb = _shapes(shapes4, r)
     P = [mx.zeros((C_l, *sh), dt) for sh, dt in lsb]
     mx.eval(*P)
     pers = [_nbytes(sh, dt) for sh, dt in lsb]
-    Ls = ext.add_layer(C_l, E, [0] * 6, [0] * 6, pers, P)
+    if r.get("layout", "row-major") != "row-major":
+        _check_part(r, pers, "lsb")
+    o = _part_order(r, "lsb", 6)                     # the ext layer's pieces in record order; the name map below stays
+    Ls = ext.add_layer(C_l, E, [0] * 6, [0] * 6, [pers[i] for i in o], [P[i] for i in o])
     ext.set_records_part(Ls, os.path.join(rec_dir, r["file"]), r["recsz"], r["msb_sz"], r["recsz"] - r["msb_sz"])
+    if r.get("layout") == "native+p11+pad":           # BIGMOE_RECORDS_DIRECT: the 3 aligned l1 planes straight into their
+        assert hasattr(ext, "set_direct_split"), "native+p11+pad needs an ext from the lever-1 build"   # slots, the b's via a bounce
+        ext.set_direct_split(Ls, 3)
     if _LP1:                                       # R-44 b LP1: rows of the 4-bit ranks; rank 1 = position 1 of each row
         ext.set_lp1(Ls, PLAN.count("4"))
     return Ls, {p: {f: P[i] for i, (pp, f) in enumerate(_LSB) if pp == p} for p in ("gate_proj", "up_proj", "down_proj")}, P
 
 
 # ---------------------------------------------------------------- exact prefill in plan mode
+def _read_rebuilt(t, ids, rows, dst):
+    if t.get("layout", 0):
+        t["ext"].read_rebuilt_layout(t["path"], t["recsz"], t["msb_sz"], t["pers4"], ids, rows, dst, t["layout"],
+                                     t["rows3"], t["offs"])
+    else:
+        t["ext"].read_rebuilt(t["path"], t["recsz"], t["msb_sz"], t["pers4"], ids, rows, dst)
+
 
 
 def prefill_call(cls, self, x, indices, bm, *a, **kw):
@@ -264,8 +319,7 @@ def prefill_call(cls, self, x, indices, bm, *a, **kw):
     _reuse_drop()                       # R-52: this call's own scratch must not sit beside the kept group buffers
     scr = [mx.zeros((len(uniq), *sh), dt) for sh, dt in t["shapes4"]]
     mx.eval(*scr)
-    t["ext"].read_rebuilt(t["path"], t["recsz"], t["msb_sz"], t["pers4"], uniq.astype(np.int32).tolist(),
-                          list(range(len(uniq))), scr)
+    _read_rebuilt(t, uniq.astype(np.int32).tolist(), list(range(len(uniq))), scr)
     saved = [getattr(getattr(self, proj), field) for proj, field in PIECES]
     for (proj, field), arr in zip(PIECES, scr):
         setattr(getattr(self, proj), field, arr)
@@ -365,8 +419,7 @@ def _prefill_grouped(cls, self, x, indices, ids, uniq, bm, *a, **kw):
 
     def fill(i):
         grp = groups[i]
-        t["ext"].read_rebuilt(t["path"], t["recsz"], t["msb_sz"], t["pers4"], grp.astype(np.int32).tolist(),
-                              list(range(len(grp))), bufs[i % nb])
+        _read_rebuilt(t, grp.astype(np.int32).tolist(), list(range(len(grp))), bufs[i % nb])
 
     saved = [getattr(getattr(self, proj), field) for proj, field in PIECES]
     outs, prev = [], []
@@ -416,14 +469,22 @@ def install_block():
     SF = next((m for m in list(sys.modules.values())       # Scout bundle's sharedfirst, if loaded (by file, not name)
                if getattr(m, "__file__", "") and m.__file__.endswith("Scout/patches/sharedfirst.py")), None)
     orig = Q.SparseMoeBlock.__call__
+    from .stream import GATE_N                              # the streamer's sync-free width (MAXK; a screen may lower it)
 
     def _call(self, x):
         bm = getattr(self.switch_mlp, "_bm", None)
         # rank plans need the sort at every gated width: MTPLX's stock block keeps argpartition order, so a 9-16-row
-        # check would tier experts by position (Leap R-69D, 11-01); uniform plans keep the 8-row path (no sort there)
+        # check would tier experts by position (Leap R-69D, 11-01); uniform plans keep the 8-row path (no sort there).
+        # TIER_COMBINE expects tier_call's combined [..., D], but a call with more ids than the streamer's sync-free width
+        # goes to the sync prefill path, which returns per-expert [..., K, D]: since 11-01 a 9-16-row call under the 24 GB
+        # stack's MAXK 80 (a 12-token prompt) crashed here (W1B 24 GB, Wed 4 Nov 07:42). Such calls take the stock block,
+        # as every 9-16-row call did before 11-01; calls that worked are unchanged.
+        n_ids = x.size // x.shape[-1] * self.top_k if x.ndim >= 2 else 0
         if (bm is None or "tier" not in bm or x.ndim < 2 or x.shape[-2] > (8 if _UNIFORM else 16)
                 or Q._moe_prefill_combine_applies(self, x)
-                or getattr(self, "sharding_group", None) is not None):
+                or getattr(self, "sharding_group", None) is not None
+                or (_COMBINE and _GLU == "3c"
+                    and not (n_ids <= GATE_N[0] and (n_ids <= 92 or n_ids <= bm.get("C", 0))))):
             return orig(self, x)
         if current_attention_phase() == "decode_verify":
             shared = attention_gate(self.shared_expert(x), self.shared_expert_gate(x))

@@ -2758,6 +2758,21 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
 - LINE: PASS if at one lr chat (IFEval or multi) or agent kept per check (cut) >= +6 % vs frozen AND code >= -0.5 % at that
   lr (then: price the update (ms per step x S) and an S = 5 arm, plus a per-session agent arm); KILL if < +2 % on every set
   at both lrs; BETWEEN otherwise. Prediction: KILL 70 %, BETWEEN 25 %, PASS 5 %.
+- TTS1 RESULT: KILL (Wed 11-04 09:29-09:48 shared, pulled forward by the orchestrator; data/tts_replay.txt + _<set>.npz;
+  written 09:5x). Kept per check (cut), frozen -> lr 1e-4 / lr 1e-3: code 9.248 -> 9.238 (-0.1 %) / 1.752 (-81.1 %);
+  IFEval 2.342 -> 2.297 (-1.9 %) / 1.153 (-50.8 %); multi 1.988 -> 1.954 (-1.7 %) / 1.059 (-46.7 %); agent 2.876 -> 2.790
+  (-3.0 %) / 1.173 (-59.2 %). Every set falls at both lrs. Validation max |d hid| 0 in every arm. Update 25-34 ms median
+  per step. Prediction KILL 70 % -> held.
+  - Smoke first (09:01-09:03, 2 multi windows) found a loader bug: d02a's tf_* and agent windows hold one top-32 row per
+    position from off, and the loader read them as rows from gen (misaligned, the target's top-1 matched the answer
+    0.00-0.09). Fixed (94dd7eb, 3627f9d): aligned, it matches 0.936-0.994 on IFEval / multi and 0.899-1.0 on agent (the
+    check's threshold is now 0.80).
+  - Reading: at lr 1e-3 every set collapses within a window (the drafter forgets faster than it adapts). At 1e-4 the small
+    losses are largest where a window has the most updates (agent -3.0 %). No early-regime gain; the caveat above stands
+    (answers <= ~840 tokens, agent 160), so this kills TTS for today's suites, not for long agent sessions.
+  - Memory: peak footprint 17.5 GB (max RSS 4.0 GB) against "MEM 5 GB" in the lock, sized from the smoke's 4.4 GB. Likely
+    MLX's buffer cache over the long agent windows and the 1e-3 arms (up to 6.4K checks); not checked. Swap stayed flat
+    (11.4 -> 10.9 GB). A re-run caps the cache (mx.set_cache_limit) or declares ~18 GB.
 
 ### PR160 read check + SAMELAYER-T (the 05:37 wake's pre-agreed follow-up to tonight's pre-route; written before any run, Wed 11-04 05:5x)
 - pr_160 (BigMoE's night, C 160, ~/BigMoE/data/r57/pr_160_preroute.txt): per-row recall@10, all domains: r57 0.634, full
@@ -2801,3 +2816,76 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
     dump, X = x_{L-1}, Y = x_L = LEAD1CORR's lead-1 setup, 16 layers; sticky/samelayer_t_fake.py): untrained 0.622 ->
     trained 0.742 (+12.0 points) vs LEAD1CORR's 0.612 -> 0.729 (+11.7) = the pipeline reproduces. Lambda grid widened to
     0.1-10 x mean eigenvalue after the check (its picks sat at 1.0).
+  - UPDATE 07:3x: the data landed (BigMoE's 3b done 07:31: 18 files, 2.4 GB; 12 HumanEval = code, 3 IFEval + 3 multi =
+    chat; 123,845 row-layers, layers 1..47). BigMoE's corrected pre-route (~/BigMoE/data/r57/pr2_160_preroute.txt): full
+    0.712 code / 0.827 chat / 0.794 all, p3 0.789 all -> BETWEEN. The re-run prediction above (full code 0.70-0.76, chat
+    0.78-0.84, all ~0.76-0.81 BETWEEN) held on all three. For SAMELAYER-T this puts the untrained baseline at 0.712 code
+    (the low end of my guess): PASS needs +13.8 points on code (and +7.3 on chat); staying out of KILL needs +6.8 on code.
+    The prediction and the LINE stay as registered. Before the run, the script's memory was cut: the per-prompt Grams are
+    rebuilt on the fly instead of stored (peak ~3 GB, under the 5 GB day line), with an independent check of the
+    leave-one-out totals at layer 1. It runs at the 13:47 wake under a CPU share lock, since BigMoE's morning block holds
+    quiet to ~12:50 and Fit12 has 13:05-13:40.
+  - RESULT: BETWEEN (Wed 11-04 09:18-09:29 shared, CPU 8 threads, 648 s, max RSS 3.0 GB; data/samelayer_t.txt; written
+    09:5x). Per-row recall@10, leave-one-prompt-out, untrained -> trained: code (12 HumanEval) 0.706 -> 0.823 (+11.7
+    points), chat 0.821 -> 0.851 (+3.1; IFEval 0.809 -> 0.843, multi 0.831 -> 0.859), all 0.748 -> 0.833 (+8.5). LINE
+    (PASS >= 0.85 code AND >= 0.90 chat; KILL < 0.78 code) -> BETWEEN. Prediction: code 0.80-0.86 held, chat 0.87-0.92
+    missed low; the call (BETWEEN 45 %) held.
+    - Checks: untrained vs BigMoE's corrected 'full' (0.712 code / 0.827 chat): -0.006 / -0.006 (the same rows, pooled
+      per row here). Leave-one-out totals vs a direct computation at layer 1: max rel err 1.5e-15 / 5.4e-15.
+    - Bands (layers 1-7 / 8-39 / 40-47, trained): code 0.777 / 0.825 / 0.854, chat 0.779 / 0.857 / 0.892. The late layers
+      reach the code line; the first 7 stay lowest. Lambda picks 1 x524, 3 x239 (grid edges 0.1 x2, 10 x14).
+    - Reading: the learned map removes ~40 % of code's untrained misses (0.294 -> 0.177) but ~17 % of chat's (0.179 ->
+      0.149). Chat is 6 of 18 prompts (37 % of rows), so the fold fits are code-heavy; a chat-only fit would have 5
+      training prompts per fold. Not scored: the p3 input (the dump holds full's input only; BigMoE's table puts p3 within
+      0.005 of full) and the union per 16-row block (the prefetch's real unit).
+    - Next (not queued: BETWEEN has no pre-registered follow-up): pricing is cheap, since the trained router is the same
+      GEMV (47 x 2.6 MB bf16). Replay the union-per-block misses with the trained forecast in exposure_replay (MoonShots'
+      exposed3, 0.45 ms window). The orchestrator's and MoonShots' call.
+    - UPDATE 10:0x, MoonShots priced it (exploratory, ~/MoonShots/scripts/price_samelayer.py: untrained -> trained recall per
+      layer on M-25b's held-out demand at C 256): code, the demand the forecast fails to name 13.7 -> 8.1 MB per kept
+      token (-40 %), ~-2.4 ms exposed per check as a bound; chat -18 to -19 %, ~-0.1 ms per check. These are my per-row
+      miss ratios (0.294 -> 0.177, 0.179 -> 0.149) carried to the bytes, so they are upper bounds: the prefetch's unit is the
+      union per check (per-row estimates have overstated before, e.g. the reuse map x0.96 vs -40 %). The next cheap step,
+      if the orchestrator wants it: union-per-check recall of the trained forecast from the dump's chk field (CPU, ~11 min).
+
+## DRAFT17: a draft for the bonus row, the block pass at 17 positions (NewIdeas 13:44 for build #6's gated last row; the orchestrator routed it 13:5x) -- pre-registration (written before any run, Wed 11-04 13:58)
+- Question: what does one more draft position per check cost in ms in the engine's drafter pass? (block 17 = the anchor +
+  16 masks, so the check's last row, the bonus row, has a draft to gate; on code 32 % of segments lack one today.)
+- What the code does today: BigMoE's 45 GB default (r57_screen.py, R57_D45 + R57_COMBINE -> K83_EXACT) runs propose() =
+  hidden_states(block, ctx, cache, 1) -> head2s (the 4-bit LM head, two-stage top-16) -> hidden_projection -> Leap's
+  chain_fused, with Leap's draft_fused installed (fused conv, memoized mask, and R-78's 16-row "forms": the MLP's gate / up /
+  down and q_proj keep W transposed; at any other row count they take x @ contiguous(Wt.T).T, a copy of each weight per call).
+- Harness: sticky/draft17_time.py copies that path verbatim. DFlash2 L1-20 (bf16, loaded over incoai's base as the
+  engine does), the target's 4-bit embed / LM head (shard 16). Per arm its own drafter cache, prefilled with CTX rows
+  (600 and 1,900), then +10 new context rows per call (a check's accepted tokens); the mask memo is cleared before each call
+  (the engine builds it once per check); arms interleaved, order reversed every other rep; 5 warm + 40 timed calls; median.
+- Arms: R16 (today); R17 and R32 as the code stands (forms fall back); R17g and R32g with the forms opened to that row count
+  (draft_fused._rows16 patched). Masking the extra position from rows 0-15 (so drafts 1-15 stay as today) changes only the
+  memoized mask: same cost, not timed. The extra draft's accuracy is not measured here.
+- Read (a cost answer, no PASS / KILL): R17 and R17g minus R16, in ms. Expected: R17g +0.1-0.5 ms; R17 as is +3-6 ms (the
+  per-call weight copies, ~0.7 GB written per pass). Sanity: R17 vs R17g give the same drafts on most calls.
+- Lock: quiet, MEM 3 GB, the routed slot after BigMoE's agent leave-one-out (start by 14:30, ~3 min); footprint by
+  /usr/bin/time -l.
+
+### DRAFT17 RESULT: the bonus row's draft costs ~0 ms once the 16-row forms accept 17 rows; +8.6 ms as the code stands (Wed 11-04 14:03; quiet lock, 9 s run; data/draft17_time.txt, .log)
+- The engine's K83 drafter path, L1-20 bf16, median of 40 timed calls per arm, context 600 / 1,900 rows:
+  | arm | positions | ms | vs R16 |
+  |---|---|---|---|
+  | R16 (today) | 16 | 11.11 / 12.23 | - |
+  | R17 as the code stands | 17 | 19.64 / 20.88 | +8.53 / +8.64 |
+  | R17g (forms open to 17) | 17 | 10.94 / 12.37 | -0.16 / +0.14 |
+  | R32 as the code stands | 32 | 20.22 / 21.24 | +9.11 / +9.01 |
+  | R32g (forms open to 32) | 32 | 11.07 / 12.30 | -0.04 / +0.07 |
+  p10-p90 spans are ~1 ms. R17 / R17g and R32 / R32g drafted the same tokens on 100 % of calls. R16 matches the engine's
+  ~10-12 ms pass (K-83: 10.2 ms at C 160).
+- Answer for #6: a 17th position costs nothing measurable (within +-0.2 ms) once draft_fused's R-78 forms accept the
+  block's row count (its _rows16 test). As the code stands it costs +8.6 ms per check: every row count other than 16 makes
+  a fresh copy of the MLP and q_proj weights on each call. Prediction was R17g +0.1-0.5 / R17 +3-6 ms; the fallback is worse
+  than predicted.
+- Also found: 32-row blocks pay the same +9 ms today under K83, which has been in the 45 GB default since 0365ada.
+  r57_screen.py uses R57_ROWS=32 where the copy runs (MATCH 2.5; combo_tue's cmb32). The same one-line change in
+  ~/Leap/scripts/draft_fused.py (Leap's file) removes it.
+- Masking the extra position from rows 0-15 changes only the memoized mask (same cost). The extra draft's accuracy is not
+  measured.
+- Memory: peak footprint 3.38 GB (/usr/bin/time -l), mlx peak 2.48 GB, max RSS 2.46 GB. That is 0.4 GB over the declared
+  MEM 3 GB (the cache limit was 256 MB).

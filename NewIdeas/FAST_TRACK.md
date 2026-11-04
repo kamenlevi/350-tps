@@ -20,7 +20,9 @@ One new bet in flight per line: 45 GB Q1-UNION at cf 0.9 on code (RELAX A / B / 
 3-bit sure rows (FLOOR at scale Wed, live-cut unions asked); 24 GB Q1 at the 24 GB pools (M-18d: x0.658 PASS on
 option A; option B PASS x0.572 with the MTP chain's own gate, Tue 11:1x); 12 GB P1-OEA (pass 1 at top-1 + the block's union members: certificate PASS Tue 10:18 at x0.465 pass-1 reads; mixed
 runs PASS; timing re-test T3R 19:15: x1.065 = BETWEEN but void (a heat PAUSE inside the run); 3-bit stack x1.227 INFO;
-clean 16-prompt re-run T3R2 pre-registered); T0 same-scores held to Thu.
+clean 16-prompt re-run T3R2 PASS Wed 13:1x: x1.148 pooled on shared text over 16 / 16 prompts, 57.3 vs 49.9 tok/s at
+12 GB; 3-bit stack x1.268 INFO; next EvalSuite same-scores at 12 GB behind RELAX + T0); T0 same-scores held to Thu.
+P2-PREFETCH (exact add-on) KILLED Wed 13:1x: x0.901 (late reads fully exposed; pass 2 runs on few checks).
 
 ## 45 GB, ranked by gain x readiness
 > (a quote from the project owner, kept private)

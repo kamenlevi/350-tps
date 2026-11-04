@@ -1,4 +1,6 @@
 """BYTES10 floor replay (Fable C, mission C5, Wed 4 Nov 2026, 00:xx EET). CPU only, one core at nice 15.
+CORRECTED Wed 4 Nov 06:5x: the 00:27 version's keep mask sliced the layer axis (keep[sure, :ks]); its outputs are kept as
+bytes10_replay_bug.*. The fixed run reproduces NewIdeas' data/ledger/bytes10_replay_fix.out (same code, one line).
 Same conventions as NewIdeas' ten_x_ledger.py (plain LRU per layer for the MSB base pool and the LSB sidecar pool,
 the prompt's rows warm both, one session per domain carried across the map's windows in walk order, live-cut blocks with
 the wrong-draft stand-in row p + 97, kept = min(k, fm - A) + 1), so its 45 GB EXACT row should land near the ledger's.
@@ -132,7 +134,7 @@ def block_sets(w, blocks, rule, P):
     for rows, cfs, kp in blocks:
         sure = np.array([thr is not None and c >= thr for c in cfs])
         E = ids[rows]                                                   # [r, 48, 10]
-        keep = np.zeros(E.shape, bool); keep[sure, :ks] = True; keep[~sure, :ku] = True
+        keep = np.zeros(E.shape, bool); keep[sure, :, :ks] = True; keep[~sure, :, :ku] = True   # FIX Wed 06:5x (found by NewIdeas 03:4x): rank axis, not layers; the 00:27 run sliced layers 0-9
         if cold is not None:
             r, pth = cold
             for l in range(48):

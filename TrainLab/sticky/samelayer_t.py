@@ -82,17 +82,20 @@ LAMC = {lam: 0 for lam in LAMS}
 for L in layers:
     tl = time.time()
     R = router(L).astype(np.float64)
-    D = []                                              # per prompt at this layer: n, sx, se, Gxx, Gxe, X, base logits, truth
+    D = []                                              # per prompt at this layer: n, sx, se, X, E, base logits, truth
     for p in P:
         s_ = p["L"] == L
         X = p["X"][s_].astype(np.float64); Y = p["Y"][s_].astype(np.float64)
         B = X @ R.T; E = Y @ R.T - B
-        D.append((len(X), X.sum(0), E.sum(0), X.T @ X, X.T @ E, X, B, top10(Y @ R.T)) if len(X) else None)
+        D.append((len(X), X.sum(0), E.sum(0), X, E, B, top10(Y @ R.T)) if len(X) else None)
     have = [i for i, d in enumerate(D) if d is not None]
-    tot = [sum(D[i][k] for i in have) for k in range(5)]
+    tot = [sum(D[i][k] for i in have) for k in range(3)] + [sum(D[i][3].T @ D[i][3] for i in have),
+                                                            sum(D[i][3].T @ D[i][4] for i in have)]
 
-    def stats(excl):                                    # centered Gram / cross terms of all prompts but excl
-        n, sx, se, gxx, gxe = (tot[k] - sum(D[i][k] for i in excl) for k in range(5))
+    def stats(excl):                                    # centered Gram / cross terms of all prompts but excl; the
+        n, sx, se = (tot[k] - sum(D[i][k] for i in excl) for k in range(3))    # excluded prompts' Grams are rebuilt
+        gxx = tot[3] - sum(D[i][3].T @ D[i][3] for i in excl)                 # on the fly (no 18 x 62 MB store:
+        gxe = tot[4] - sum(D[i][3].T @ D[i][4] for i in excl)                 # peak ~3 GB, under the 5 GB day line)
         mu, e0 = sx / n, se / n
         G = gxx - n * np.outer(mu, mu); C = gxe - n * np.outer(mu, e0)
         return mu, e0, G, C, np.trace(G) / G.shape[0]
@@ -101,8 +104,18 @@ for L in layers:
         return np.linalg.solve(G + lam * sc * np.eye(G.shape[0]), C)
 
     def score(ids, mu, e0, dW):
-        r = np.concatenate([recall(top10(D[i][6] + (D[i][5] - mu) @ dW + e0), D[i][7]) for i in ids])
+        r = np.concatenate([recall(top10(D[i][5] + (D[i][3] - mu) @ dW + e0), D[i][6]) for i in ids])
         return r.mean()
+
+    if L == layers[0]:                                  # independent check of the leave-one-out totals (fold 0)
+        tr0 = have[1:]
+        Xt = np.concatenate([D[j][3] for j in tr0]); Xt -= Xt.mean(0)
+        Et = np.concatenate([D[j][4] for j in tr0]); Et -= Et.mean(0)
+        _, _, G_, C_, _ = stats(have[:1])
+        eg = np.abs(G_ - Xt.T @ Xt).max() / np.abs(G_).max(); ec = np.abs(C_ - Xt.T @ Et).max() / np.abs(C_).max()
+        say(f"  check (layer {L}, fold 0): leave-one-out Gram / cross terms vs direct, max rel err {eg:.1e} / {ec:.1e}")
+        assert eg < 1e-6 and ec < 1e-6,"leave-one-out totals disagree with the direct computation"
+        del Xt, Et
 
     band = next(f"{a}-{b}" for a, b in BANDS if a <= L <= b)
     for i in have:
@@ -120,7 +133,7 @@ for L in layers:
         LAMC[best] += 1
         mu, e0, G, C, sc = stats([i])
         dW = solve(G, C, sc, best)
-        n, X, B, T = D[i][0], D[i][5], D[i][6], D[i][7]
+        n, X, B, T = D[i][0], D[i][3], D[i][5], D[i][6]
         ru = recall(top10(B), T); rt = recall(top10(B + (X - mu) @ dW + e0), T)
         for v, r in (("untrained", ru), ("trained", rt)):
             add([(P[i]["dom"], v, "all"), (P[i]["sub"], v, "all"), (P[i]["dom"], v, band), ("all", v, "all")], r)
@@ -140,7 +153,9 @@ for d in ["code", "chat"] + sorted({p["sub"] for p in P}) + ["all"]:
             f"({100 * (g((d, 'trained', 'all')) - g((d, 'untrained', 'all'))):+.1f} points; {ACC[(d, 'trained', 'all')][1]} row-layers)"
             + ("; bands " + ", ".join(f"{a}-{b} {g((d, 'untrained', f'{a}-{b}')):.3f}/{g((d, 'trained', f'{a}-{b}')):.3f}"
                                       for a, b in BANDS if (d, 'trained', f'{a}-{b}') in ACC) if d in ("code", "chat") else ""))
-say(f"  lambda picks: " + ", ".join(f"{lam:g} x{c}" for lam, c in LAMC.items()) + f"; {time.time() - t0:.0f} s in all")
+import resource
+say(f"  lambda picks: " + ", ".join(f"{lam:g} x{c}" for lam, c in LAMC.items()) + f"; {time.time() - t0:.0f} s in all; "
+    f"max RSS {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**30:.1f} GB")
 c_, h_ = g(("code", "trained", "all")), g(("chat", "trained", "all"))
 v = "PASS" if (c_ >= 0.85 and h_ >= 0.90) else ("KILL" if c_ < 0.78 else "BETWEEN")
 say(f"  LINE (PASS >= 0.85 code AND >= 0.90 chat; KILL < 0.78 code) -> {v} (code {c_:.3f}, chat {h_:.3f})")

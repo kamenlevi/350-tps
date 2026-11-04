@@ -54,3 +54,32 @@ Files: `AUDIT.md` (task 1), `INVENT.md` (task 2), `replay_c1.py` → `replay_c1.
 - **New mechanism, the GATED BONUS ROW:** the one ungated row of a certainty-gated block holds 34 / 65 / 71 % of the block's expert pairs at cf 0; drafting one more token so the gate covers it gives x0.66 / x0.48 / x0.47 at 24 GB (21.5 / 22.3 / 21.3) and x0.68 / x0.49 / x0.44 at 12 GB. Web + NOVELTY: nothing budgets the bonus position (nearest: PSR s7 / AcceptMoE weight positions by reach); tag new. Masks for the map screen built (masks/qom_0_live_bonus, qom_0.5_live_bonus5, q1u_0.9_live_bonus9).
 - **Ranked path at 24 GB:** bonus gate -> sure rows at top-1 + union (11.6 / 12.5 / 11.7) -> 11-bit scales = 9.6 / 10.3 unhalved, 19 / 24 halved; then a learned replacement policy (OPT bound x0.5) and 2-bit sure-row records -> ~13-17 halved. 12 GB: 16.6 / 20.9 / 17.7 unhalved, ~24 halved; <= 10 there needs the resident set to hold the sure rows' top-2 working set (115 / 85 / 80 per layer vs 51 slots). EXACT: 24 GB ~45-60, 12 GB ~90-120 [P]: physics at top-10 routing.
 - Three screens for 13:45 pre-registered in section 5: the gated bonus row on the map (two arms, masks ready), sure rows at top-1 at live cuts, the W1B 24 GB baseline's calibration against the replay (CPU).
+
+## Mission C5 correction (Wed 4 Nov 2026, 06:47-07:3x EET; the self-scheduled ledger check-in)
+
+- **My 00:35 BYTES10 levels were 2-4x too low.** `bytes10_replay.py` line 135 built the keep mask on the layer axis
+  (`keep[sure, :ks]` on a [rows, 48, 10] array): base records were read on layers 0-9 only. Found by NewIdeas at 03:4x, who
+  ran a fixed copy (`~/NewIdeas/data/ledger/bytes10_replay_fix.out`) and corrected their TEN_X_LEDGER.md. Fixed here at
+  06:5x; my rerun (306 s) is identical to their output to the last digit. The 00:35 outputs are `bytes10_replay_bug.*`.
+- **Corrected levels (code / IFEval / multi, MB per kept token, my count; the ledger's before-block count in brackets):**
+  EXACT 45 GB 60.4 / 38.1 / 33.2 (55.4 / 37.7 / 33.0) = W1B's 62.4 [K] within 10 %, no kept scaling; 24 GB 245 / 210 / 183
+  (213 / 200 / 176); 12 GB 637 / 622 / 487 (461 / 546 / 445). FAST QOM cf 0 + 3-bit: 24 GB 61.7 / 86.1 / 83.1; + the gated
+  bonus row 30.8 / 20.0 / 14.2 (x0.50 / x0.23 / x0.17); + top-1 on sure rows 16.8 / 11.8 / 7.9; + rank-class pools 8.8 / 8.7
+  / 6.9; + 11-bit 7.3 / 7.2 / 5.7 unhalved, ~25 / 33 / 32 halved. 12 GB: 24.3 / 26.1 / 18.6 unhalved, ~65 / 104 / 89 halved.
+- **Ledger comparison:** after the fix the two independent replays agree within 10-15 % at 45 / 24 GB on every shared row;
+  the only > 20 % difference is 12 GB EXACT (x1.38): in-loop vs before-block miss counting. The ledger's convention is the
+  reachable one (resident members first); BYTES10.md's tables carry both and read the ledger's as the floor.
+- **Verdicts that changed:** "45 GB is not a cache problem" -> 2/3 per-request footprint, 1/3 capacity (OPT 23.9); QOM's cut
+  is domain-, not pool-dependent (x0.22 / x0.25 / x0.21 on code at 45 / 24 / 12 GB); pinning and rank-class pools: KILL on
+  EXACT stands, withdrawn on the FAST stack (RCP x0.52 / x0.74 / x0.87 at 24 GB); EXACT floors 24 GB ~90-120, 12 GB
+  ~250-400; the 45 GB metric call (process vs decode bytes) matters less: both ~60.
+- **Verdicts that survive:** the mechanism ranking, the gated bonus row's novelty, kept per check flat for EXACT, wasted rows
+  x1.25-1.8, 24 / 12 GB as capacity misses with OPT ~x0.5, the working sets, union growth and bonus-row shares, the masks.
+- **The gated bonus row ran on the map overnight** (NewIdeas / Breakthrough): QOM form PASS code (z -0.28), BETWEEN chat
+  (+1.56 / +1.49 points, under Q1 at 0.99's level); union-only form PASS / BETWEEN / KILL. With the gate file's own cf for
+  the row (NewIdeas' note: my next-segment proxy was one position too far) it is a cf-0 lever: 1,368 / 165 / 7 bonus rows
+  gated at cf 0 / 0.5 / 0.9. Rebuilt the two threshold arms as `masks/q1u_0.9_live_bonus9g` and `masks/qom_0.5_live_bonus5g`
+  (null checks); `bytes10_bonus_masks.py` takes a third argument `g` (default) or `next`.
+- **Lesson for my replays:** assert the mask's rank axis against one block's true union before the first table (a one-line
+  check would have caught it at 00:27). Cost of the pass: ~0.3 % of the week (over the 0.1 % planned: the correction
+  rewrote the deliverable).

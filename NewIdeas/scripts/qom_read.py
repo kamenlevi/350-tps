@@ -27,8 +27,12 @@ def flips(name):
 
 F = {a: flips(a) for a in ["gate_top2_cf099", "gate_top2_cf09", "q1u_0.9_live"] + ARMS}
 def twin(a):   # Wed 03:4x: _t3 / _c164 arms are also paired with their twin (the 3-bit cost / the C 160 cost), as registered;
+    if "_ball_" in a: return a.replace("_ball_", "_bq_")          # Wed 14:0x screen 6 (DRAFT17): all last rows gated vs C, same pool
+    if re.search(r"_c\d+_t3(keep)?$", a):                         # Wed 07:4x screen 4 (the 24 GB pool): top-1 (B') vs top-2 (C)
+        return re.sub(r"_t3keep$", "_t3", a.replace("_k1_", "_")) if "_k1_" in a else re.sub(r"_c\d+_t3$", "_t3", a)
     if a.endswith("_bq"): return a[:-3]                            # Wed 04:4x: screen 1 in QOM's form vs the ungated arm
     if a.endswith("_bq_t3"): return a[:-6] + "_t3"                 # its 3-bit form vs the ungated 3-bit arm
+    if a.endswith("_bq_t2"): return a[:-3] + "_t3"                 # Wed 05:5x: 2-bit sure rows (M-34) vs the 3-bit form
     if not (re.search(r"_k1(_|$)", a) and a.endswith("_t3")):    # top-1 arms pair below, not with their 4-bit twin
         for s_ in ("_t3", "_c164"):   # Wed 04:0x: <arm>_bonus[N] (BYTES10 screen 1) with its ungated arm
             if a.endswith(s_): return a[:-len(s_)]
@@ -38,8 +42,11 @@ def twin(a):   # Wed 03:4x: _t3 / _c164 arms are also paired with their twin (th
     if m_: return f"q1u_{m_.group(1)}_live_t3"
     m_ = re.fullmatch(r"qom_([0-9.]+)_k1_live_t3", a)            # screen 2b: QOM top-1 vs QOM top-2 at 3 bits
     return f"qom_{m_.group(1)}_live_t3" if m_ else None
+def extra(a):   # Wed 07:4x screen 4: (B) also vs the 45 GB-pool top-1 arms (A, if run, and 2b)
+    return (re.sub(r"_c\d+_t3(keep)?$", "_t3", a), "qom_0_k1_live_t3") if re.search(r"_k1_.*_c\d+_t3(keep)?$", a) else ()
 for a_ in ARMS:
-    if twin(a_) and twin(a_) not in F: F[twin(a_)] = flips(twin(a_))
+    for t_ in ((twin(a_),) if twin(a_) else ()) + extra(a_):
+        if t_ not in F: F[t_] = flips(t_)
 lvl = {d: 100 * F["gate_top2_cf099"][d].mean() for d in DOMS}
 say(f"Q1-ON-MISS arms: all-row flips per domain vs Q1 at 0.99's level (code {lvl['code']:.2f} / IFEval {lvl['ifeval']:.2f} / "
     f"multi {lvl['multi']:.2f} %); PASS <= 1x, BETWEEN <= 1.5x, KILL above")
@@ -53,12 +60,12 @@ for a in ["gate_top2_cf09", "q1u_0.9_live"] + ARMS:
         r = 100 * X[d].mean() / lvl[d]; v.append("PASS" if r <= 1 else "BETWEEN" if r <= 1.5 else "KILL")
     say(f"| {a} | " + " | ".join(f"{100 * X[d].mean():.2f} % ({int(X[d].sum())})" for d in DOMS) + f" | {' / '.join(v)} |")
 for a in ARMS:                    # Wed 04:0x: BYTES10 screen 1's second condition (Fable C's line): <= the ungated arm + 0.3 points
-    if re.search(r"_(bonus\d*|bq)$", a) and F[a] is not None and F.get(twin(a)) is not None:
+    if re.search(r"_(bonus\d*|bq|bq_t2)$", a) and F[a] is not None and F.get(twin(a)) is not None:
         say(f"  {a}: vs {twin(a)} + 0.3 points: " + " / ".join(
             f"{d} {100 * F[a][d].mean():.2f} vs {100 * F[twin(a)][d].mean() + 0.3:.2f} ({'ok' if 100 * F[a][d].mean() <= 100 * F[twin(a)][d].mean() + 0.3 else 'OVER'})" for d in DOMS))
 say("\nPaired (McNemar: only-A, only-B, z):")
 for a in ARMS:
-    for b in ("gate_top2_cf099", "q1u_0.9_live") + ((twin(a),) if twin(a) else ()):
+    for b in ("gate_top2_cf099", "q1u_0.9_live") + ((twin(a),) if twin(a) else ()) + extra(a):
         if F[a] is None or F[b] is None: continue
         for d in DOMS:
             x, y = F[a][d], F[b][d]; oa, ob = int((x & ~y).sum()), int((~x & y).sum())

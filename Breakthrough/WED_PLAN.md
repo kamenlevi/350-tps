@@ -28,6 +28,19 @@ FLOOR night 1's steps:
 
 ## 3. Research-day proposals (13:45-23:30), in priority order
 
+**Morning update (Wed 07:1x, SCOREBOARD 45fb226).** On the 42 held-out windows the per-request table is CODE+, not
+GENERAL. pmtc costs on multi (6.70 vs 5.66 %, z +2.78; IFEval z +0.92, code z -1.88), so P1 narrows to code. The
+length-aware table (len: the prompt footprint alone when the prompt has >= 128 tokens) holds on code: 0.81 vs 1.11 %
+(z -1.88), at cached bytes x0.196 vs u8+t3's x0.272 (-28 %) [P, 45 GB plain-LRU replay]. P1 therefore = len on code
+requests only; chat keeps U3 unchanged. P2 is folded into P1. FLOOR night 1: bands BETWEEN; Q1 at 0.999 clean on code
+(0/3163); oea_k8 PASS x3 at 78 windows.
+
+**P1 RESULT (Wed 08:5x).** BigMoE's 5b (u3c_wed.sh, 12 HumanEval, A-B-A-B at C 224, R57_PRESET=45): U3C in len's form vs
+U3 = x0.732 SSD MB per kept token (-27 %), steady tok/s +3.7 % (110.1 vs 106.4 at 15.0 vs 20.5 MB per kept token) = PASS
+by the line (<= 0.85x AND tok/s >= U3's) [K, BigMoE data/u3c/u3c_report.txt]. Mask check of dump_224 (dm_u3c_replay.py):
+PASS (1,248 records bitwise equal; warm follows the 128-token rule on 103 / 367 / 144-token prompts). Next: EvalSuite's
+same-scores on code (FAST). Deployment needs a code-request switch (WED_TESTS caveat).
+
 ### P1. The per-request COLD table in the 45 GB engine
 Owner BigMoE (engine). Mine: the spec, reference masks, the mask check and the read-out.
 - **What it is.** On drafter-unsure rows, drop a rank 4-9 expert unless it is "warm" for this request:

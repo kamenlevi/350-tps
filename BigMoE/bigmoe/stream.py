@@ -493,7 +493,7 @@ class ExpertStreamer:
         self.gate = Gate(nl + nmtp + (nl if _tier.ON else 0))
         self._side0 = nl + nmtp
         if _tier.ON:
-            self._tier_dir, self._tier_idx = _tier.load_index(self.model_dir)
+            self._tier_dir, self._tier_idx = _tier.load_index(self.model_dir, layout_ok=True)   # per-layer layouts below
         for L, layer in enumerate(layers):
             sw = layer.mlp.switch_mlp
             pre = self.prefix_fmt.format(L=L)
@@ -515,6 +515,7 @@ class ExpertStreamer:
                 r = self._records["layers"][str(L)]
                 assert r["E"] == E, f"record layout mismatch at layer {L}"
                 if self._rec_fmt == 3:
+                    assert r.get("layout", "row-major") == "row-major", f"BIGMOE_RECORDS=3 reads row-major records only ({L})"
                     assert r["msb_sz"] >= sum(p * 3 // 4 + 2 * q for p, q in zip(pers[0::3], pers[1::3])), L
                     ext.set_records3(L, os.path.join(self._rec_dir, r["file"]), r["recsz"], r["msb_sz"])
                 else:
@@ -586,7 +587,9 @@ class ExpertStreamer:
             setattr(getattr(sw, proj), field, pool)              # decode reads the tier pools, prefill a 4-bit scratch)
         tier = dict(segs=_tier.segments(_tier.PLAN), base=base, sideP=None, side=None, C_l=C_l, E=E, ext=ext,
                     shapes4=list(zip(sh4, [d[1] for d in dt4])), pers4=pers4,
-                    path=os.path.join(self._tier_dir, r["file"]), recsz=r["recsz"], msb_sz=r["msb_sz"], r=r)
+                    path=os.path.join(self._tier_dir, r["file"]), recsz=r["recsz"], msb_sz=r["msb_sz"], r=r,
+                    layout=_tier.LAYOUTS[r.get("layout", "row-major")], rows3=[sh4[3 * p][0] for p in range(3)],
+                    offs=list(r.get("msb_piece_off", [])) + list(r.get("lsb_piece_off", [])))
         assert all(n in (3, 4) for _, _, n in tier["segs"]), "BIGMOE_TIER: only 4- and 3-bit ranks have record parts"
         assert len(_tier.PLAN) == 10, _tier.PLAN
         object.__setattr__(sw, "_bm", dict(L=L, C=C_m, full=False, gate=self.gate, first=0, pools=P, tier=tier,

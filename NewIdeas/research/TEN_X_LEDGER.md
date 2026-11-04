@@ -51,7 +51,9 @@ For comparison, Fable C's pre-fix code rows:
 
 Notes on the table:
 - "+ gated bonus row" = every bonus row gated ("all"). Fable C's next-draft proxy gives 31.4 / 21.6 / 15.0 at 24 GB.
-- 11-bit is x0.824 on every byte [K MoonShots]. The 45 GB 11-bit cell applies it to the top-1 column.
+- 11-bit (CORRECTED Wed 13:4x, QUEUE erratum): the packed parts are 2,064,384 / 720,896 B, x0.955 / x0.936 per part. The
+  x0.824 used here at 03:4x is MoonShots' NET replay result at the 45 GB C 256 pools (it already counts ~4.6 % more parts
+  per GB), not a per-byte factor. The 45 GB 11-bit cell applies that net factor to the top-1 column.
 
 **3. Under 10 at 24 GB exists on paper, but only in FAST, and only with five levers stacked.** Two of the five still
 need a quality result (the gated bonus row, top-1 on sure rows). The pool policy is exact for any rule (it changes only
@@ -118,7 +120,28 @@ my replay [P], counting each block's misses before the block.
 | + 3-bit sure rows | PASS | PASS | BETWEEN | 54.5 / 84.4 / 81.7 |
 | + the gated last row (QOM form), 4-bit | PASS (free) | BETWEEN, under Q1's level | BETWEEN, under Q1's level | 58.3 / 47.3 / 34.4 |
 | + the gated last row + 3-bit | PASS | BETWEEN | BETWEEN | 35.7 / 19.4 / 13.9 |
-| top-1 on sure rows (cf 0.9, union-only; screen 2) | BETWEEN | KILL | BETWEEN | its QOM form (2b) runs at 13:45 |
+| top-1 on sure rows (cf 0.9, union-only; screen 2) | BETWEEN | KILL | BETWEEN | its QOM form (2b) below |
+| QOM cf 0, top-1 on sure rows, 3-bit (2b, Wed 07:27; a kept rank 1 at 4 bits) | PASS 0.59 % | PASS 4.65 % (information) | PASS 3.24 % | 52.0 / 87.7 / 83.6 (rank 1's LSB read on a miss); the cheap form 44.0 / 79.3 / 78.1 is untested |
+| + the gated last row + 3-bit + 2-bit sure rows (lever 6, 07:27) | BETWEEN 1.49 % | KILL 10.13 % | KILL 9.77 % | off the path |
+| **24 GB POOL (screen 4, 08:48):** QOM cf 0 + the gated last row + 3-bit (C) | **PASS 1.07 %** | BETWEEN 8.07 % | KILL 5.99 % | 35.7 / 19.4 / 13.9 |
+| 24 GB pool: top-1, cheap form (t3keep, every kept expert on a sure row at 3 bits; B') | BETWEEN 1.69 % | KILL 11.25 % | KILL 8.61 % | 24.0 / 11.5 / 7.7: off the path |
+
+**Screen 4 answered the caveat below for the code stack (08:48): PASS at the 24 GB pool (1.07 %), so code's 35.7 MB per
+kept token at 24 GB stands, with the replay calibrated against W1B 24 GB (screen 3). On chat the same stack is BETWEEN /
+KILL at 24 GB; the pool costs +0.30 / +1.98 / +0.70 points against the 45 GB pool.**
+
+**Wed 07:4x caveat: every quality cell above is at the 45 GB pool's residents** (the two 24 GB POOL rows excepted). The QOM masks keep the experts resident
+in laysz45_256's base pools (C_m mean 295 of 512 per layer); the MB column replays 147 slots per layer. At C 164 the
+smaller pool cost +0.23 / +0.79 / +1.02 points (cf 0.5, 4 bits; QUEUE 03:58), and top-1 leans on residency more than
+top-2 (2b passes because a resident rank 1 stays at 4 bits). Screen 4 (QUEUE 07:4x) re-tests the code PASS stack and the
+top-1 stack at a 147-slot pool. Until then, "map-PASS at 24 GB" reads "map-PASS at the 45 GB pool, priced at 24 GB".
+
+**Wed 07:5x: 2b tested the dear form of top-1** (scripts/ledger_top1.py; QUEUE 07:5x). The map served a kept rank 1 at 4
+bits, so an engine that matches it reads rank 1's LSB part on a miss. With the gated last row at 24 GB that is 32.4 /
+21.9 / 15.3, more than top-2 + 3-bit on chat (35.7 / 19.4 / 13.9). The cheap form (a kept rank 1 from its 3-bit base
+record, no LSB on sure rows, the ledger's lever 2 as priced) is 24.0 / 11.5 / 7.7. Its quality is untested. Screen 4's
+B' tests it at the 24 GB pool with the harness's t3keep gate: every kept expert on a sure row at 3 bits, a conservative
+form.
 
 Reading:
 - Code has a map-PASS FAST stack at 35.7 MB per kept token at 24 GB, x0.17 of EXACT.
@@ -298,6 +321,39 @@ Reading:
 
 ## 5. The ranked path to <= 10 at 24 GB, re-priced
 
+**Wed 08:59 re-rank at 24 GB, after screens 3-4 (QUEUE 08:3x-08:59).** The table below is the 03:4x pricing; read these
+first:
+- Lever 1 (the gated bonus row, QOM form + 3-bit) is in the map-PASS code stack at the 24 GB pool: 35.7 / 19.4 / 13.9
+  (chat BETWEEN / KILL there).
+- Lever 2 (top-1 on sure rows) is off the 24 GB path: its cheap form is BETWEEN / KILL / KILL at the 24 GB pool, and
+  the form that passed at the 45 GB pool (2b) reads more than top-2 on chat.
+- Lever 3 (the pool policy) re-priced on the C stack: SLRU x0.94 / x0.91 / x0.96 of LRU's load misses; decayed LFU is
+  worse than LRU (x1.15-2.9). No policy recovers the keep lost to the smaller pool (QUALITY POOL: KILL).
+- Lever 4 (11-bit), CORRECTED 13:4x: x0.898 / x0.888 / x0.894 on the C stack at 24 GB (154 / 49 slots at equal RAM with
+  the packed parts; 12 GB x0.92-0.93). The 08:59 x0.633 / x0.595 / x0.615 double-counted capacity (x0.824 per byte, which
+  already held the extra parts, plus 1 / 0.824 more slots): WITHDRAWN.
+- Code at 24 GB, map-PASS stack, priced (CORRECTED 13:4x): 35.7 -> 32.1 with 11-bit [P]; chat 17.3 / 12.4. The 08:59
+  '22.6 / 11.6 / 8.5' is withdrawn.
+- **Wed 13:28, POOLSPLIT (new lever 5, QUEUE 13:25 / 13:28; 11-bit rows CORRECTED 13:4x):** under the C stack only
+  unsure rows read LSB parts (chat has none left: 0.0 MB per kept with no LSB pool), so the LSB pool's RAM goes to base
+  slots at equal GB. 24 GB 163 / 0: x0.917 / x0.849 / x0.861; with 11-bit 171 / 0: **code 29.3, IFEval 14.5, multi 10.6**
+  [P] (x0.914 / x0.839 / x0.852 of 11-bit alone); keep +21-25 % of the gap to the 45 GB pool. 12 GB 11-bit 65 / 0: 70.1 /
+  54.6 / 39.4. Chat at 24 GB stays above 10 MB; map screen 5 (198 slots) was withdrawn with the 11-bit error. Under 10 at
+  24 GB needs ~x0.34 more on code (~27.5 with SLRU [P]) and ~x0.7 / ~x0.95 on chat, plus chat's quality.
+- **Wed 13:44, TRELLIS FAST STORE (lever 6, QUEUE 13:4x / 13:44): the only path found to <= 10 on code at 24 GB.**
+  Spend the 24 GB pool on QTIP-style trellis records for the sure rows (B10's codes, killed Sun on an EXACT bar).
+  - TRL-2 (276 slots): code 5.8, IFEval 3.0, multi 2.7 [P]. The 2.40 b mix (239 slots): 10.1 / 5.0 / 4.1.
+  - Code's unsure rows add +39 MB if read uncached from v3, so code needs a 17th draft or trellis-served unsure rows.
+  - Quality untested [G]: code PASS-ish at every form; chat BETWEEN / KILL except TRL-3 (185 slots, IFEval 11.4 /
+    multi 8.5).
+  - Costs: encoder, disk, decode kernel.
+- **Wed 14:04, DRAFT17 (lever 7, QUEUE 13:5x / 14:04): a drafted bonus row gates code's last rows that have no next
+  draft today, and those were a third of code's bytes.**
+  - Code at 24 GB: today's stack 35.7 -> 25.2 (x0.706); with 11-bit + POOLSPLIT 29.3 -> 19.5 (x0.665). 12 GB x0.742.
+  - With a trellis store: TRL-2 code 4.0, the 2.40 b mix 7.2 MB per kept token [P].
+  - Cost ~0 ms after Leap's one-line _rows16 fix [K MTP Head 14:03]; quality = map screen 6 (masks READY).
+  - Without a trellis store, code at 24 GB still needs ~x0.51 for 10.
+
 Base: QOM cf 0 + 3-bit sure rows: 61.7 / 86.1 / 83.1. The cf 0 quality is a map PASS. The 3-bit quality is a map PASS
 at cf 0 on code and IFEval; multi needs cf 0.5 for its 3-bit rows (cf 0 is BETWEEN there).
 
@@ -306,7 +362,7 @@ at cf 0 on code and IFEval; multi needs cf 0.5 for its 3-bit rows (cf 0 is BETWE
 | 1 | gated bonus row | x0.50 / x0.23 / x0.17 | x0.75 / x0.62 / x0.59 | screen 1 (a) at cf 0, 13:45 | Breakthrough (map); MTP Head (does DFlash2 give the 16th draft a cf?) |
 | 2 | top-1 on sure rows | x0.55 / x0.59 / x0.56 | x0.77 / x0.80 / x0.78 | screen 2, 13:45 (P1-OEA passed on code at x0.465 pass-1 reads [K]) | Breakthrough |
 | 3 | frequency-aware pool (rank-class pools / SLRU-like; OPT shows the room) | x0.52 / x0.74 / x0.87 (OPT room x0.29 / x0.37 / x0.51 on stack 1) | x0.76 / x0.87 / x0.94 | exact for any FAST rule (policy only); replay | BigMoE (pool policy); screen 3 first |
-| 4 | 11-bit scales + native layout (M-27b) | x0.824 | x0.91 | bitwise | MoonShots / Leap / BigMoE (Thu conversion) |
+| 4 | 11-bit scales + native layout (M-27b) | x0.824 at 03:4x = MoonShots' 45 GB NET figure, not per byte; on the C stack at 24 GB x0.898 / x0.888 / x0.894 (CORRECTED 13:4x) | - | bitwise | MoonShots / Leap / BigMoE (Thu conversion) |
 | 5 | fewer wasted rows (D98) | EXACT x0.79 on code, x0.6 on chat | - | MTP Head's program | MTP Head |
 | 6 | 2-bit sure-row records (MoonShots M-34: a 2-bit read is a 1.54 MB prefix of the 3-bit part) | alone x0.92 / x0.98 / x0.985 (KILL by its line); after lever 1, engine convention (M-34 rerun 05:5x): 24 GB code 35.7 -> 29.7 (x0.833 fixed, x0.777 byte-budget), IFEval 19.4 -> 13.9 (x0.715 / x0.639), multi 13.9 -> 9.9 (x0.712 / x0.627); 12 GB code x0.813 / x0.741, chat x0.71 / x0.54-0.55 [P] | - | quality screen qom_0_live_bq_t2 pre-registered (QUEUE 05:5x); MoonShots' helper to2bit.py (self-tested) handed to Breakthrough as a one-line dm_t3 install; 13:45+ | MoonShots (formula) / Breakthrough (harness) |
 
@@ -359,6 +415,9 @@ inputs.
   longer answers (part B).
 - Plain LRU throughout, unless OPT / PIN / RCP is named. The engine's LRU + popularity reads fewer misses (screen 3).
 - No timing here; bytes only. At 10 MB per kept token the SSD (~12.7 GB/s) leaves ~1,270 tok/s of headroom.
+- Calibration at 24 GB (screen 3, Wed 08:3x; QUEUE): W1B 24 GB at the replay's own 147 / 46 slots misses 226.0 / 247.4
+  MB per kept token on two code prompts against this replay's 212.8 (x1.06 / x1.16; 0.92-1.16 on all six prompts). The
+  replay counts demand misses only: the engine also reads 18-26 % in unused prefetches, and prefill comes on top.
 - The 12 GB line depends on the check design (section 3).
 - Who wrote what:
   - Fable C's replay is Fable C's code; I changed one line. The corrected tables are in

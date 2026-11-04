@@ -23,8 +23,15 @@ def replay(path):
         b[~sure] |= warm[l][E[~sure]]
         kp = b | np.isin(E, np.unique(E[b]))
         if not np.array_equal(kp, Z["keep"][j, :R].astype(bool)): bad.append(j)
-    tbl = "skipped (len, long prompt)" if plen >= 128 and not (warm >= (POP >= 0.05)).all() else \
-          ("holds every cap45-popular expert" if (warm >= (POP >= 0.05)).all() else "MISSING cap45-popular experts")
+    # Wed 07:3x (len's form, code only): a prompt of >= 128 tokens uses its own footprint alone, so warm should NOT hold
+    # the whole cap45 table there (SUSPECT = looks like pmtc); a shorter prompt falls back to pmtc and MUST hold it.
+    allpop = bool((warm >= (POP >= 0.05)).all()); npop = int((POP >= 0.05).sum()); nw = int(warm.sum())
+    if plen >= 128:
+        tbl = (f"SUSPECT: holds every cap45-popular expert on a {plen}-token prompt (len uses the footprint alone)" if allpop
+               else f"footprint only, as len on a long prompt ({nw} warm pairs; cap45 table {npop})")
+    else:
+        tbl = (f"holds every cap45-popular expert (the < 128 fallback to pmtc; {nw} warm pairs)" if allpop
+               else "MISSING cap45-popular experts (the < 128 fallback needs pmtc)")
     first = "; first mismatches: " + ", ".join(f"record {j} (check {int(Z['check'][j]) if 'check' in Z.files else '?'}, layer "
                                                f"{int(Z['layer'][j])})" for j in bad[:3]) if bad else ""
     return (f"{os.path.basename(path)}: {n} records, prompt {plen} tokens: keep {'ALL EQUAL' if not bad else f'{len(bad)} DIFFER'}"
@@ -33,4 +40,4 @@ def replay(path):
 if __name__ == "__main__":
     out = [replay(p) for p in sys.argv[1:]]
     print("\n".join(out))
-    print("U3C MASK CHECK: " + ("PASS" if out and all("ALL EQUAL" in o and "MISSING" not in o for o in out) else "FAIL / INCOMPLETE"))
+    print("U3C MASK CHECK: " + ("PASS" if out and all("ALL EQUAL" in o and "MISSING" not in o and "SUSPECT" not in o for o in out) else "FAIL / INCOMPLETE"))

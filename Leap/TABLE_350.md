@@ -6590,3 +6590,126 @@ shapes, since latency does not depend on the values.
   - **F1-R8: PASS.** -3.0 ms per 8-row chat check at 10K (12 layers x 0.25), on top of F1, bitwise == F1. The flag
     stays default off; it can be switched on wherever F1 is (EvalSuite's AR harness pads every step, so it gains too).
   - **The prediction held:** ~1.2x at 10K and ~1.05x at 2K, as predicted.
+
+## DENSE-N (Leap, pre-registered Wed 2026-11-04 13:5x; BUILD_DAY_1104 #1, the dense pass; the orchestrator's optional quiet slot before 14:40)
+- **Why:** #1 asks for the dense pass ~32 -> ~15-18 ms; FAST wants "a floor-level 16-row 4-bit dense GEMM". REF2's 4-bit
+  dense set (N >= 1024) runs qmm16c at ks 1, nt 1 (ref2._qmm). L1-26 / ab28 (Oct 24) found the fragment-native layout
+  (qmm26.qmm16n) bitwise == qmm16c and x1.15-1.22 faster at (2, 2) / (1, 1) on three shapes, but it was never wired in.
+  The dense weights are resident, so the repack is a one-time cost at load (no SSD or store change; RAM +~1.5 GB while
+  prefill keeps MLX's layout).
+- **Prior art:** L1-26 / ab28 (ours); Marlin / FLUTE-style offline interleaved int4 layouts.
+- **Test** (scripts/dn_check.py, run_dn_check.sh; quiet slot, MEM <= 2.5 GB, ~2 min): random 4-bit codes at the
+  125B's REF2 dense shapes and per-check counts (qkv 36, z 36, out_proj + o_proj 48, q_proj 12, shared down 48; lm_head
+  and R-83's qkv | z concat beside the set), one distinct matrix per call:
+  - (1) bits: qmm16n at (1, 1) / (1, 2) / (1, 4) == qmm16c (1, 1); qmm16c (1, 2) / (1, 4) == (1, 1) (nt only groups
+    tiles, so exact-safe); the FAST arm nF22 == qmm16c (2, 2) (its own numerics);
+  - (2) speed: ab28's interleaved A/B (shuffled rounds x median of 7, paired ratios vs c11), ms per check.
+- **Lines:** PASS = (1) AND the best exact native arm (one nt for the set) saves >= 1.0 ms per check vs c11; KILL = not
+  bitwise, or < 0.4 ms; else BETWEEN. FAST reported against the floor (280 GB/s), no line.
+- **Prediction:** bitwise everywhere; c11 at ~60-70 % of the floor; native (1, 2) ~80 %; saving 1.2-2.0 ms per check
+  (the set's floor ~5.5 ms). 65 % PASS, 25 % BETWEEN, 10 % KILL.
+- **Result (Wed 14:04:00-14:04:17, quiet lock, 17 s; data/dn_runner.log): PASS.**
+  - **Bits:** on every shape, qmm16n at (1, 1) / (1, 2) / (1, 4) == qmm16c (1, 1), and qmm16c (1, 2) / (1, 4) ==
+    (1, 1). nF22 == qmm16c (2, 2), and (2, 2) != (1, 1), as expected.
+  - ms per 16-row check, medians of 10 shuffled rounds (paired ratio vs c11):
+
+    | shape (calls) | c11 (REF2 today) | n12 (native, exact) | FAST nF22 | floor |
+    |---|---|---|---|---|
+    | in_proj_qkv (36) | 2.727 (70 %) | 2.275 (83 %), x1.20 | 2.311 | 1.896 |
+    | in_proj_z (36) | 1.804 (63 %) | 1.508 (75 %), x1.19 | 1.507 | 1.138 |
+    | out_proj + o_proj (48) | 2.505 (61 %) | 2.015 (75 %), x1.24 | 1.968 | 1.517 |
+    | q_proj (12) | 1.252 (61 %) | 1.046 (72 %), x1.19 | 1.019 | 0.758 |
+    | shared down (48) | 0.567 (28 %) | 0.550 (29 %), x1.03 | 0.556 | 0.158 |
+    | **the set** | **8.85** | **7.39: -1.46 ms, x1.20, 74 % of the floor** | 7.36 | 5.47 |
+    | beside: R-83 qkv \| z concat (36) | 4.980 | n11 3.698, x1.33 | 3.679 | 3.033 |
+    | beside: lm_head (1) | 1.868 | n14 1.579, x1.18 | 1.626 | 1.277 |
+
+  - qmm16c's nt alone is worth nothing (c14 -0.04 ms). The layout is the gain. nt 1 / 2 / 4 are within 0.07 ms.
+  - FAST: ks 2 adds nothing over the exact native arm (7.36 vs 7.39). At 74 % of the floor, a "floor-level" FAST GEMM
+    has ~1.9 ms left on this set. Shared down (28 % of its floor: 48 latency-bound calls at K 640) and the small MLX
+    shapes (kern23: ~3.3 ms against a 0.4 ms floor) are the inefficient part, not the big GEMMs.
+  - **The prediction held:** bitwise; c11 61-70 % of the floor; native 72-83 %; saving 1.46 ms in the 1.2-2.0 band.
+  - Worth: -1.46 ms per check (-2.7 ms with R-83's concat on, -0.3 more if the head takes qmm16c), exact. RAM +~1.5 GB
+    for the native copies, because prefill keeps MLX's layout.
+  - Next: the wiring is staged (scripts/ref2_dn_patch.py, CFG dense_native, off). Apply it, run ref2.self_test and
+    dn_wire_check.py, then hand BigMoE the env var (REF2_DENSE_NATIVE=1).
+
+## R-78b: the drafter's R-78 forms at block rows other than 16 (Leap, Wed 2026-11-04 14:1x; the orchestrator's route after MTP Head's DRAFT17)
+- **Why:** draft_fused's forms ran only at exactly 16 rows. At 17 / 32 rows, form C fell back to a per-call weight copy:
+  +8.6 / +9.0 ms per drafter pass (TrainLab REPORT 'DRAFT17'). DRAFT17 (NewIdeas: code's bonus row, x0.67-0.71 code
+  bytes at 24 GB [P]) needs 17-row passes.
+- **Line:** open only the row counts where both forms are bitwise == nn.Linear's x @ W.T, so the drafts stay bitwise.
+- **Result (scripts/r78b_rows.py + r78b_installed.py; data/r78b_rows.txt; share lock, ~1 min):**
+  - Raw forms on the nine projection shapes (q, MLP gate / up / down = C; k, v, o, both conv kernel projections =
+    B), 4 inputs per (shape, rows): **both forms are bitwise at every row count 16-64 and at 80 / 96 / 128 / 200 /
+    256 / 512 / 1000. They differ at 2-15** (MLX's small-M path; form B is also bitwise at 1). That matches R-78's 8 and
+    15 DIFFERS.
+  - Installed drafter (all 45 patched projections of the 5 layers, through their classes): rows 8 (fallback), 16,
+    17, 32 (forms) all bitwise == x @ W.T, 180 / 180 calls.
+- **Change (draft_fused.py):** FORM_ROWS default = 16..64 (was {16}); DRAFT_FORM_ROWS adds rows (never below 16). 16-row
+  passes are unchanged. 17 / 32-row passes lose the copy fallback, bitwise, ~0 ms vs +8.6 / +9.0 (DRAFT17's R17g /
+  R32g). BigMoE's default drafts 16-row blocks only (0 of 308 agent checks ran 32 rows), so its runs are unchanged.
+
+## HC8-1P: the FAST hyper-connection read, 8-bit mixers in one pass over the streams (Leap, pre-registered Wed 2026-11-04 14:2x; BUILD_DAY_1104 #1 FAST; routed: after the _rows16 fix)
+- **Why:** the HC read is the dense pass's biggest excess. It runs ~9.9 ms GPU per check (97 reads) against a 4.5 ms bf16
+  byte floor. The exact road ends near ~6.5 (D1 + D5, HC_READ.md). FAST may change numerics; the gate is EvalSuite
+  same-scores. HC8 (8-bit mixers) halves the bytes, and its quality is already measured: the map's hc8w arm flipped
+  1.44 % of rows (0.00 % of sure rows); EvalSuite decision 4 PASS with a lean; adopted on the 12 GB line.
+- **Design (scripts/hc8r.py), 3 dispatches per read, the streams read once:**
+  - K1: per (32-column tile, stream-aligned K partition) simdgroup:
+    - the pending write h' = h + bo x inj (the reference's bf16 ops; tile 0 stores it);
+    - A = bf16(h' * w_norm) (the norm weight before the GEMM, 1 / rms after it: D2's fold without a weight change);
+    - a code MMA on the 8-bit codes, y = s * P + b * X per 64-group;
+    - fp32 partials, plus per-partition sums of h'^2.
+  - K2: rms per (row, stream), c = sum_p partial_p / rms (fixed order), mix1 = silu(c / 4), inject = 2 sigmoid(c / 4).
+  - K3: up = mix1 @ W_up8^T (code MMA, K 320) with the tail fused in: mixed = mean_s sigmoid(up_s) * h'_s / rms_s * w_s,
+    fp32, one bf16 rounding.
+  - Weights: the HC8 recipe (mx.quantize 8-bit g64 of input_mix_weight_down / up); block_inject stays bf16.
+- **Prior art:** HC8 (Breakthrough round 28; the map's hc8w); D2's row-invariant one-pass read (HC_READ.md); RMSNorm
+  weight folding into the next linear (QuaRot / SpinQuant); split-K GEMM with a fixed-order reduction. New here: the
+  8-bit HC read with the norm moved after the GEMM, at 16 rows on the M5's matrix units.
+- **Test** (scripts/hc8r_screen.py; real HC weights of all 96 mixers; share lock first for correctness, then a quiet
+  timing):
+  - (1) correctness: vs an fp32 MLX emulation of the same FAST math with the same 8-bit weights, every output within
+    bf16 grain (rel rms <= 4e-3); written == the exact read's written, bitwise (the same pending-write ops).
+  - (2) deviation vs the exact read (teacher-forced, per read): rel rms of mixed / inject, reported next to HC8-eager's
+    (MLX's own 8-bit path, the map's numerics).
+  - (3) ms per 96-read chain vs today's S4 + R-82 and kernel B, arms interleaved, median of 40.
+- **Lines** (on the chain, 96 reads): PASS = (1) AND <= 5.0 ms (from ~9.5-9.8); KILL = (1) fails after one fix, or
+  > 7.0 ms (no better than 8-bit bytes alone); BETWEEN otherwise.
+- **Prediction:** ~3.5-4.5 ms per chain (K1 ~13-15 us, K2 ~3, K3 ~14-16, 2 boundaries). (2): mixed rel rms ~1.2-1.5x
+  HC8-eager's. PASS 55 %, BETWEEN 35 %, KILL 10 %.
+- **Result (Wed 14:19-14:20; data/hc8r_screen.txt, hc8r_runner.log): BETWEEN on the pre-registered line. Correct and
+  as accurate as HC8 itself; 6.13 ms per chain.**
+  - (1) Correctness (share lock), first build:
+    - read() vs emulate(): mixed rel rms max 1.48e-3 (median 1.07e-3); inject max 2.3e-4.
+    - written == emulate's and == the exact read's, bitwise on all 96 reads.
+  - (2) Deviation vs the exact read, teacher-forced, median [max] of 96:
+    - mixed: HC8-1P 6.69e-3 [1.47e-2] vs HC8-eager (MLX's own 8-bit path, the map's numerics) 6.70e-3 [1.44e-2]. The
+      one-pass order adds nothing beyond the 8-bit weights, so the hc8w quality evidence carries over.
+    - inject: 3.5e-3 (~1 bf16 ulp; HC8-eager 0).
+  - (3) Quiet, ms per 96-read chain, median of 40:
+
+    | arm | ms |
+    |---|---|
+    | S4g (S4 + R-82) | 9.44 |
+    | B (kernel B) | 8.50 |
+    | HC8-1P NP 8 | 8.37 |
+    | **HC8-1P NP 16** | **6.13: -3.30 vs S4g, -2.37 vs B** |
+
+  - **Verdict: BETWEEN** (PASS line 5.0, KILL line 7.0). The prediction (3.5-4.5) was too optimistic.
+  - NP 8 -> 16 is worth 2.2 ms, so K1 is latency-bound: each 64-group iteration waits for its loads, and there is no
+    prefetch. Next, post-hoc and labelled so: a per-kernel breakdown, then K1 / K3 with the next group's loads issued
+    ahead (S4's GPF), vector A loads, and NP 20 / 40.
+- **Post-hoc (Wed 14:21-14:27; labelled post-hoc, not the verdict):**
+  - Per-kernel breakdown at NP 16 v1 (share lock): K1 38.5 us per read, K2 2.8, K3 22.4. K1 was the problem: all 11
+    column tiles rebuilt the same A tile from scalar 2-byte loads. NP 20 / 40 helped little (34.5 / 33.5 us).
+  - **v2** (scripts/hc8r.py `v=2`; numerics unchanged, written bitwise 96 / 96):
+    - K1: one threadgroup per partition builds A once per 64-group (uint4 loads, threadgroup memory, double-buffered,
+      one barrier); the 11 tile simdgroups' codes are prefetched one group ahead.
+    - K3: mix1 and its group sums staged once per threadgroup; codes prefetched; the tail's loads issued before the GEMM.
+    - **Quiet: NP 20 v2 5.22 ms per chain vs S4g 9.67 / B 8.73 in the same run (NP 16 v2 5.52, NP 40 v2 5.40, v1 NP 16
+      6.38). That's -4.45 ms vs S4g, -3.5 vs kernel B, x0.54.**
+  - v3 (scales / biases prefetched too): 5.40 vs S4g 9.58 (x0.56), no gain (register pressure). Reverted to v2.
+  - Where it stands: ~54 us per read against a weight floor of ~26 us (6.9 MB) + 2 boundaries. Left: K2 folded into K1
+    (last-threadgroup reduction), A loads one group ahead. Next is the ref2 FAST switch, so BigMoE can run an arm.

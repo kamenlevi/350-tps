@@ -2,6 +2,8 @@
 # One-gap map runner for extra arms (Breakthrough, Wed 2026-11-04 04:5x; screens_slot.sh's rules, the arms as arguments).
 # Run ATTACHED (Bash run_in_background):
 #   [INSTALL=<file of dm_ablations.py lines>] [READOUT="<shell commands, cwd decision_map>"] [S_LAST=HH:MM]
+#   [WAIT_PID=<pid>: no start while it lives, e.g. FLOOR night's runner] [PRE="<command run once in the gap with no map
+#   process, after INSTALL: 0 = go, 2 = a map process appeared (wait again), else not run>"] (both Wed 06:3x)
 #   bash map_slot.sh <arm> [<arm> ...]
 # All arms run in ONE map process (one model load), 36 windows (--max 12), --skip-done. It takes the next gap: 10-s
 # checks, 3 clear in a row (FLOOR needs 3 clear checks 60 s apart, then waits with "a map process is running"). Clear =
@@ -25,7 +27,8 @@ kill_tree() { local p=$1 c; for c in $(pgrep -P $p); do kill_tree $c; done; kill
 mid_run() {   # $1 log, $2 tag: its last tagged line is a running step
   [ -f $1 ] && grep -E "^\[$2\]" $1 | tail -1 | grep -qE " go \(|stopping"; }
 why_not() {
-  if pgrep -f "run_map.py" > /dev/null; then echo "a map process is running"
+  if [ -n "$WAIT_PID" ] && kill -0 $WAIT_PID 2>/dev/null; then echo "pid $WAIT_PID is still running"
+  elif pgrep -f "run_map.py" > /dev/null; then echo "a map process is running"
   elif mid_run $FL floor || mid_run $SL screens || mid_run $LOG slot; then echo "a runner of mine is still closing"
   elif quiet_others; then echo "a quiet window (others)"; elif lid_closed; then echo "lid closed"
   elif [ -e "$Q/PAUSE" ]; then echo "PAUSE"; elif [ "$(noswap)" -lt 25 ]; then echo "NO-SWAP < 25 GB"; fi
@@ -65,6 +68,12 @@ while :; do
   install; rc=$?
   [ $rc -eq 1 ] && { say "install failed; dm_ablations.py unchanged; not run"; exit 1; }
   [ $rc -eq 2 ] && { tries=$((tries - 1)); continue; }
+  if [ -n "$PRE" ]; then
+    (cd $DM && eval "$PRE") >> $LOG 2>&1; rc=$?
+    [ $rc -eq 2 ] && { tries=$((tries - 1)); continue; }
+    [ $rc -ne 0 ] && { say "PRE failed (rc $rc); not run"; exit 1; }
+    say "PRE done"; PRE=
+  fi
   peer lock share 40m --cpu 200 --gpu 50 "Breakthrough map arms (the orchestrator): MEM 17 GB (flips, no timing): $names" >> $LOG 2>&1 \
     || { say "share lock not granted"; sleep 30; continue; }
   S0=$(swap_mb); say "go (try $tries: $names; NO-SWAP $(noswap) GB, swap $S0 MB)"

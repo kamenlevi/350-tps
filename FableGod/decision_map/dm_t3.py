@@ -94,6 +94,9 @@ def read(L, ids, lsb=False):
     return out
 
 def _proj(h, W, idx, bits):
+    if bits == 2:   # Wed 06:3x (NewIdeas' qom_0_live_bq_t2, MoonShots' M-34): the MSB part at 2 bits, w = s3 (2 (q3 >> 1) + 0.5) + b3
+        import to2bit   # decision_map/to2bit.py = ~/MoonShots/scripts/to2bit.py at c5af2d3, byte for byte
+        return to2bit.proj2(h, W, idx)
     if bits == 3:
         return mx.gather_qmm(h, W["w3"], W["s3"], W["b3"], rhs_indices=idx, transpose=True, group_size=64, bits=3)
     from bigmoe import tier                                   # read-only import: BigMoE's bit-exact 4-bit rebuild
