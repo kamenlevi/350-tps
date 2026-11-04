@@ -6713,3 +6713,14 @@ shapes, since latency does not depend on the values.
   - v3 (scales / biases prefetched too): 5.40 vs S4g 9.58 (x0.56), no gain (register pressure). Reverted to v2.
   - Where it stands: ~54 us per read against a weight floor of ~26 us (6.9 MB) + 2 boundaries. Left: K2 folded into K1
     (last-threadgroup reduction), A loads one group ahead. Next is the ref2 FAST switch, so BigMoE can run an arm.
+- **Wired (Wed 14:30, ref2 live, default OFF; hc8_wire_check.py PASS on the candidate and live; DENSE-N's check still PASS;
+  self_test PASS):**
+  - ref2 CFG["hc8_fast"] / REF2_HC8_FAST=1 (+ hc8_np / REF2_HC8_NP, default 20): a <= 16-row HC read of a GatedResidual
+    with 8-bit mixers runs hc8r.read v2 at 16 padded rows.
+  - Without the switch, 8-bit mixers take MTPLX's eager chain; bf16 mixers stay on the exact S4 path, bitwise.
+  - The FAST arm's model change: hc8r.hc8_install(model) (the HC8 recipe; ple=False by default). It frees the bf16
+    mixers (keep=False), so it saves ~0.6 GB of RAM at 45 GB as well as ~4.3 ms per check.
+  - Checks (real weights, layers 0-3):
+    - on == hc8r.read bitwise; 1- and 8-row calls == the 16-row call's rows (SD == AR);
+    - off -> eager, written equal, FAST vs eager rel rms <= 5e-3;
+    - bf16 mixers on == off bitwise.

@@ -489,3 +489,35 @@ def emulate(P, h, bo=None, inj=None):
     nv = hw.astype(f32).reshape(16, HC, D) * rinv[:, :, None] * w.reshape(HC, D)
     mixed = mx.mean(mx.sigmoid(up.reshape(16, HC, D)) * nv, axis=1).astype(BF)
     return mixed, hw, inject
+
+
+def hc8_install(model, bits=8, group_size=64, ple=False, keep=False):
+    """the HC8 recipe (Breakthrough round 28 v3n/hc8.py; the map's hc8w / hc8w_mix): every trunk GatedResidual's
+    input_mix_weight_down / up (and, with ple, the PLE layer's key / value projections) -> MLX affine 8-bit g64
+    nn.QuantizedLinear (from_linear); the MTP head's modules are left alone; block_inject stays bf16. A FAST-track model
+    change: prefill and every read then use the 8-bit mixers (MTPLX's eager chain, or ref2's hc8_fast read at <= 16
+    rows). Returns (swapped, MB before, MB after, restore); restore is None unless keep=True (keeping it holds the bf16
+    originals in memory, so the RAM saving only happens with keep=False)."""
+    import mlx.nn as nn
+    from mtplx.models import qwen4_exp as Q
+    TM = getattr(model, "language_model", model)
+    undo, before, after = [], 0, 0
+    for name, mod in TM.named_modules():
+        if name.startswith("mtp"):
+            continue
+        tg = (["input_mix_weight_down", "input_mix_weight_up"] if isinstance(mod, Q.GatedResidual) else
+              ["key_proj", "value_proj"] if ple and isinstance(mod, Q.PLELayer) else [])
+        for attr in tg:
+            lin = getattr(mod, attr)
+            if not isinstance(lin, nn.Linear) or lin.weight.shape[1] % group_size:
+                continue
+            q = nn.QuantizedLinear.from_linear(lin, group_size, bits)
+            mx.eval(q.parameters())
+            before += lin.weight.nbytes
+            after += sum(v.nbytes for k, v in q.items() if isinstance(v, mx.array))
+            setattr(mod, attr, q)
+            undo.append((mod, attr, lin) if keep else None)
+    def restore():
+        for mod, attr, lin in undo:
+            setattr(mod, attr, lin)
+    return len(undo), before / 1e6, after / 1e6, (restore if keep else None)

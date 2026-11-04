@@ -53,6 +53,12 @@ What changes (monkeypatches on MTPLX, read-only):
     nn.QuantizedLinear call (or R-83's concat) are repacked, any other array (a slice) keeps qmm16c. CFG
     dense_native_nt (REF2_DENSE_NATIVE_NT, default 1) only groups tiles per threadgroup (bits unchanged). COUNTS
     dense_native / dense_native_repack; remove() drops the copies. qmm26 is imported on the first switched call.
+  - HC8-1P (Wed 2026-11-04, FAST, NOT exact; CFG["hc8_fast"] or REF2_HC8_FAST=1, off by default; CFG hc8_np /
+    REF2_HC8_NP, default 20): a <= 16-row HC read of a GatedResidual whose mixers are 8-bit g64 nn.QuantizedLinear
+    (scripts/hc8r.py hc8_install, the FAST arm's model change, the HC8 recipe) runs hc8r.read v2 at 16 padded rows: one
+    pass over the streams, the norm after the GEMM, fp32 gates (6.69e-3 rel rms vs the exact read = HC8-eager's
+    6.70e-3; 5.22 vs 9.67 ms per 96-read chain, quiet). Row-invariant (16 padded rows), so SD == AR. Without the
+    switch, 8-bit mixers take MTPLX's eager chain at 16 padded rows. COUNTS hc8_fast. hc8r is imported on first use.
   - R-68 (REF2c candidate, off by default): CFG["gdn_inproj"] runs each GDN layer's qkv / z / b / a projections as one
     4-bit matmul on the row-concatenated packs + 32 zero rows (N 16480 -> 16512, so it takes qmm16c; MTPLX's own
     MTPLX_FUSED_GDN_INPROJ fusion is N 16480 and falls to MLX's call). qkv / z keep their bits, b's (and maybe a's)
@@ -139,11 +145,12 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "nax_hybrid": False, "nax_native": False, "nax_repack_p1": False, "native_3c": False,
        "fatt_verify": os.environ.get("REF2_FATT_VERIFY") == "1", "fatt_r8": os.environ.get("REF2_FATT_R8") == "1",
        "dense_native": os.environ.get("REF2_DENSE_NATIVE") == "1",
-       "dense_native_nt": int(os.environ.get("REF2_DENSE_NATIVE_NT", "1"))}
+       "dense_native_nt": int(os.environ.get("REF2_DENSE_NATIVE_NT", "1")),
+       "hc8_fast": os.environ.get("REF2_HC8_FAST") == "1", "hc8_np": int(os.environ.get("REF2_HC8_NP", "20"))}
 _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
               kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
-              fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0)
+              fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0)
 _ROWS = [R]                                          # F1-R8: the real rows of the attention call being built (_att)
 _ORIG = {}
 _WCAT = {}
@@ -253,6 +260,30 @@ def _lin(self, x):
         return y[:rows].reshape(*lead, y.shape[-1])
     return _ORIG["lin"](self, x)
 
+_HC8 = {}
+def _hc8r():
+    """HC8-1P: scripts/hc8r.py, loaded on first use"""
+    import hc8r
+    return hc8r
+
+def _hc8_params(g):
+    """HC8-1P: the 8-bit mixers' arrays of a GatedResidual as hc8r.read's P (cached per module), or None when its mixers
+    are not 8-bit g64 bf16-scaled nn.QuantizedLinear"""
+    d, u = g.input_mix_weight_down, g.input_mix_weight_up
+    if not (isinstance(d, nn.QuantizedLinear) and isinstance(u, nn.QuantizedLinear)):
+        return None
+    e = _HC8.get(id(g))
+    if e is not None and e[0] is d["weight"] and e[1] is u["weight"]:
+        return e[2]
+    if not (d.bits == 8 and u.bits == 8 and d.group_size == 64 and u.group_size == 64 and "biases" in d and "biases" in u
+            and d["scales"].dtype == mx.bfloat16 and u["scales"].dtype == mx.bfloat16 and "block_inject_weight" in g):
+        return None
+    P = dict(wq=d["weight"], ws=d["scales"], wb=d["biases"], uq=u["weight"], us=u["scales"], ub=u["biases"],
+             wi=g.block_inject_weight.weight.astype(mx.bfloat16), wn=g.hc_norm.weight.astype(mx.bfloat16),
+             hc=int(g.hc_count), d=int(g.hidden_size), lr=int(d["weight"].shape[0]), eps=float(g.hc_norm.eps))
+    _HC8[id(g)] = (d["weight"], u["weight"], P)
+    return P
+
 def _gr(self, hyper_input, pending=None):
     orig = _ORIG["gr"]
     if not _ON[0]:
@@ -262,6 +293,19 @@ def _gr(self, hyper_input, pending=None):
         return orig(self, hyper_input, pending)
     h16 = _pad16(hyper_input.reshape(rows, -1)).reshape(1, R, -1)
     p16 = None if pending is None else tuple(_pad16(p.reshape(rows, -1)).reshape(1, R, -1) for p in pending)
+    q8 = _hc8_params(self) if "block_inject_weight" in self else None
+    if q8 is not None:                               # HC8-1P: 8-bit mixers (the FAST arm) never take the bf16 S4 path
+        bf = mx.bfloat16
+        if CFG["hc8_fast"] and h16.dtype == bf and (p16 is None or all(t.dtype == bf for t in p16)):
+            bo, inj = (None, None) if p16 is None else (p16[0].reshape(R, -1), p16[1].reshape(R, -1))
+            mixed, written, inject = _hc8r().read(q8, h16.reshape(R, -1), bo, inj, NP=CFG["hc8_np"], v=2)
+            COUNTS["hc8_fast"] += 1
+            return (mixed[:rows].reshape(*lead, -1), written[:rows].reshape(hyper_input.shape),
+                    inject[:rows].reshape(*lead, -1))
+        m_, w_, i_ = orig(self, h16, p16)
+        COUNTS["hc_eager16"] += 1
+        return (m_[0, :rows].reshape(*lead, -1), w_[0, :rows].reshape(hyper_input.shape),
+                i_[0, :rows].reshape(*lead, -1))
     if "block_inject_weight" in self:
         if id(self) not in _WCAT:
             _WCAT[id(self)] = mx.concatenate([self.input_mix_weight_down.weight, self.block_inject_weight.weight], axis=0)
@@ -969,6 +1013,7 @@ def reset_counts():
 def remove():
     _ON[0] = False
     _DN.clear()                                      # DENSE-N: drop the native copies (and their weight references)
+    _HC8.clear()                                     # HC8-1P: drop the cached parameter views
 
 def enabled():
     return _ON[0]

@@ -3102,3 +3102,41 @@ so R-01 should find about the same slots, not ~1 GB more.
   the FAST track on every line adopts on EvalSuite same-scores; the exact 12 GB default stays as it is. Next: EvalSuite
   same-scores for t80ck1u at 12 GB, queued behind tonight's RELAX + T0 (NewIdeas orders the 12 GB queue). No Fit12 GPU in
   Kamen's day (13:45-23:30) unless he routes it.
+
+## TRL STORE + MAP SCREEN 7 (Wed 4 Nov 14:1x-14:4x; the orchestrator 14:3x relaying Kamen's direction: published methods
+## that work must be tested in their FAST form; NewIdeas' pre-registration QUEUE 14:3x, commit 3de406e; written before any arm)
+- Why: B3 / B10a / B10-r (25 Oct) killed the data-aware trellis codes on an EXACT-style bar (weight error vs MSB-3, line 1.5x).
+  The FAST track is judged by task results, so the question is new: the decision map with sure rows served from TRL.
+  NewIdeas' replays (QOM + DRAFT17, 24 GB): TRL-2 code 4.0 / the 2.40 b mix 7.2 / today's MSB-3 FAST 19.5 MB per kept [P].
+- Encode (/Users/kamen/Fit12/scripts/fit_trl_store.py, CPU only): B10-r's data-aware recipe for EVERY expert of the chosen
+  layers, from B10-r's stored capture (/Users/kamen/Fit12/data/b10rcap: layers 2 7 12 18 24 30 36 41 46, fit rows R0..R7,
+  32,760 rows): RHT (layer seed for gate / up, 1000 L + e for down) + bf16 row RMS + BlockLDLQ + bitshift trellis L 12 on
+  16 x 16 tiles, 3INST table. Deviations from B10-r: damping FIXED per projection at B10-r's majority validation-best
+  (gate 31/36 and up 32/36 at 0.3, down 18/36 at 0.1) instead of a per-matrix search (3x the encode); down's Hessian built
+  in fp32 (numerically negligible). Form = the 2.40 b mix (gate / up TRL-2, down TRL-3).
+- Harness view: the decoded weight W = Q R^T per (layer, expert, projection) as an MLX 8-bit affine view (group 64, bf16
+  scales / biases): /Users/kamen/Fit12/data/trl/L{L}/e{EEE}_{proj}_k{k}.safetensors, 1.74 MB per matrix, 5.22 MB per
+  expert, 2.67 GB per layer (4 layers 10.7 GB). Reader for Breakthrough's hook: /Users/kamen/Fit12/scripts/trl_view.py
+  (dm_t3's read / _proj contract, gather_qmm bits 8; layout test vs dense 2-4e-7). MLX's CPU qmm with bf16 activations is
+  only bf16-accurate (~5 % here); the GPU kernels accumulate in fp32.
+- Measured (layer 18, experts 0-6): in-sample error vs MSB-3 gate 1.32-1.36x, up 1.31-1.38x (TRL-2), down 0.54-0.65x
+  (TRL-3), consistent with B10-r (held-out TRL-2 1.74-1.85x, TRL-3 ~0.5x); the 8-bit view adds +0.18-0.54 % of TRL's own
+  error. Speed at 4 threads: 35-38 s per expert under taskpolicy -b (E-cores, 5.1-5.4 h per layer); 9.8 s at normal priority.
+- Signal: the map's code set has ~3,300 rows (1 flip = 0.03 points) and C sits 9 flips under the 1.34 % line, so a 4-layer
+  TRL effect is ~1 flip: flips cannot decide a layer subset. NewIdeas' map_kl.py (per-row KL vs REF2-T from the stored top-8
+  log-probs; flips = a + b sqrt(KL), rms 0.07 points on code over ten full-model arms) makes the paired subset informative.
+- Screen 7 (NewIdeas' registration): S = {7, 18, 30, 41}; arms on qom_0_live_ball_c239_t3 (C + DRAFT17 at the mix's
+  239-slot pool): 7-ref (all MSB-3), 7-trl (S from TRL for every kept expert of gated rows), 7-cal (S at MSB-2), 7-cal-all
+  (all 48 layers at MSB-2). est_KL = ref + (trl - ref) x (cal_all - ref) / (cal - ref) -> est flips by the fit; lines PASS <=
+  1.34 / 5.42 / 3.69 %, BETWEEN <= 1.5x, KILL above. NewIdeas' prediction: code ~1.0 % PASS, IFEval ~7.3 %, multi ~6.0 %.
+  Mine (before any arm): code ~1.0-1.2 % (PASS), IFEval ~8-9 % (BETWEEN / KILL), multi ~6.5 % (KILL): the mix's gate / up
+  error is ~1.5x MSB-3's, so the precision cost of sure rows rises by ~half; the 239-slot pool helps 7-ref, not the delta.
+- Timing (the orchestrator 14:3x): encode at NORMAL priority, 4 cores, in chunks of 4 experts that wait while any other
+  session's quiet ticket is queued or held (/Users/kamen/Fit12/scripts/trl_chunks2.sh: peer wait + a share lock per chunk),
+  layer by layer 18, 30, 7, 41; hard stop 21:30; ETA ~20:40; arms ~22:00 beside T0 (share lock). Layer 18 is kept as the
+  bit-reference for a Metal encoder.
+- Option B, the full-model verdict (Kamen's call after tonight): CPU is out of reach (24,576 experts: ~65 h at normal
+  priority, ~250 h in the background). A Metal encoder (Leap): first-order 0.5-1 h of GPU for all experts, ~0.5-1 day to
+  build, checked against layer 18; Hessians for all 48 layers from a ~5 min GPU capture (~8 GB, deleted after); codes on
+  disk: mix 36.2 GB, TRL-2 31.4 GB, TRL-3 46.7 GB (an 8-bit view would be 128 GB); a decode path in the map (Leap's B10(b)
+  TA / TB trellis-decode kernels exist for k 2 as a benchmark; k 3 and the map wiring are new).

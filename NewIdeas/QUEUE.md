@@ -1763,3 +1763,37 @@ block 32 (net ~+2 % under this cost model unless the drafter nears the oracle); 
   * Use: code PASS -> the mix store is a code-FAST candidate at 24 GB (7.2 MB per kept [P]), and the full ~36 GB store +
     encoder go to Kamen. Chat BETWEEN / KILL -> chat stays on the MSB-3 FAST stack (14.3 / 10.6).
   * Cost: four map arms (~28 min GPU, share lock) after Fit12's encode (~9 h at 4 threads for 4,096 experts [G]).
+- Wed 14:3x: AMENDMENT to screen 7 (before any run; Fit12 14:2x answers + its catch).
+  * Fit12's catch, checked: code has 3,366 map rows (1 flip = 0.03 points), and C's margin to 1.34 is ~9 flips. A
+    4-8-layer TRL subset moves code by ~1 flip, so flip counts cannot resolve it.
+  * The fix: a continuous read-out. The map stores each row's top-8 ids + log-probs for REF2-T and every arm.
+    - scripts/map_kl.py computes mean per-row KL(REF2-T || arm) on the reference's top-8 + a tail bucket.
+    - Over ten C-family full-model arms, flips = a + b sqrt(KL) fits with rms 0.07 points on code (max 0.10), 0.37 IFEval,
+      0.15 multi (data/ledger/map_kl_fit.txt).
+    - KL at the lines: code 0.0082, IFEval 0.0164, multi 0.0114. C at 147 slots: 0.0057 / 0.0386 / 0.0313.
+  * S = {7, 18, 30, 41} (the layers B10-r's Hessian capture covers). Form = the 2.40 b mix, data-aware (B10-r's recipe;
+    damping gate / up 0.3, down 0.1; in-sample error vs MSB-3 gate 1.33x, up 1.35x, down 0.64x). Files = an MLX 8-bit
+    affine view (5.22 MB per expert, 2.67 GB per layer), read like records3 (gather_qmm bits 8).
+  * Primary metric: per domain est_KL = KL_ref + (KL_trl - KL_ref) x (KL_cal_all - KL_ref) / (KL_cal - KL_ref), with
+    the four arms of 14:1x on qom_0_live_ball_c239_t3. Then est_flips = the fit above. Lines on est_flips: PASS <= 1.34 /
+    5.42 / 3.69 %, BETWEEN <= 1.5x, KILL above. The raw flips and the factor (KL_cal_all - KL_ref) / (KL_cal - KL_ref)
+    are reported beside them. If KL_cal - KL_ref < 2x its paired standard error on a domain, that domain is "no estimate".
+  * Prediction [G] (KL from the arms above: MSB-3's sure-row contribution x the mix's error ratio ~1.1-1.4): code est KL
+    ~0.005 -> ~1.0 % PASS; IFEval ~0.031 -> ~7.3 % BETWEEN; multi ~0.030 -> ~6.0 % KILL. 7-ref (C + DRAFT17 at 239
+    slots, all MSB-3) is a full-model measurement on its own.
+  * Encode time decides the date: background QoS 5.4 h per layer (4 layers ~22 h); normal priority 1.35 h per layer
+    (~5.4 h, by ~20:00 if started now) needs the orchestrator's OK by day.
+  * Resolution, measured 14:3x (same rule, 45 GB pool vs 147 slots: qom_0_live_bq_t3 vs qom_0_live_bq_c147_t3):
+    - paired KL z = 8.1 / 18.5 / 10.9 (code / IFEval / multi) vs paired flips z = 1.8 / 4.9 / 2.2: KL is ~4-5x stronger in z.
+    - The harness is deterministic (the capture re-run has 0 flips), so a paired difference has no run noise. Its z is
+      ~sqrt(rows) / CV of the per-row shift, independent of the effect's size. A small 4-layer TRL effect stays
+      detectable if its per-row shape is like this pair's (CV ~7 on code). (My 14:31 note to the orchestrator said
+      "about 10x finer": the measured figure is ~4-5x in z.)
+- Wed 14:4x: DRAFT17 INDEPENDENTLY RE-DERIVED (MoonShots 5679af7, its own replay on different capture checks):
+  - code at 24 GB 35.6 -> 25.7 (x0.723) vs my 35.7 -> 25.2 (x0.706);
+  - 12 GB x0.772 vs my x0.742;
+  - chat x0.99-1.00.
+  It agrees within ~2-4 %. The findings note (~/FableGod/findings/2026-11-04_1434_draft17.md) carries both. Quality is
+  still screen 6's (tonight).
+- Wed 14:4x: THE SWEEP, extraction done: research/SWEEP_CANDIDATES.md (33 candidates with sources). Pricing and the
+  ranking go to research/SWEEP.md (due Thu morning).

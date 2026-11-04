@@ -3,9 +3,10 @@
 # REF2-T re-decodes six IFEval rows and their tokens are compared with reference runs' rows: the two IFX reproduction
 # rows (ifeval/3409, ifeval/2439) and four 308-525-token IFX rows (results/r3check_keys.txt; 1,614 tokens stored).
 # Check 1 = before the conversion (row-major store), check 2 = after it (converted store). Both use variant
-# ref2tf0 = ref2t on snap/leap-7f43a3f with F1's flags off (fatt_verify, fatt_r8): Leap's per-layer layout router and
-# tierglu_3cn / p11 for the P11PAD format (7624eb0, 22:52: the padded native + p11 records that BigMoE's A/B and
-# conversion write). 90456ce's kernels predate that format, so ref2tn is dropped. The same variant is F1's control
+# ref2tf0 = ref2t on snap/leap-c805fd0 with the FAST flags off (fatt_verify, fatt_r8, hc8_fast; PREREG_f1 rev. 2):
+# Leap's per-layer layout router and tierglu_3cn / p11 (byte-identical to 7f43a3f's) for the P11PAD format (7624eb0,
+# 22:52: the padded native + p11 records that BigMoE's A/B and conversion write). 90456ce's kernels predate that
+# format, so ref2tn is dropped; snapshot: snap/bigmoe-da8e7a6. The same variant is F1's control
 # (PREREG_f1), so the checks validate that code on both layouts. Only the store differs between them, so check 2 ==
 # check 1 is the conversion's test; check 1 == ref2t.r2 (the stored IFX rows, snap/bigmoe-6c64148 + snap/leap-faff8e5)
 # is information on the newer code. Everything else is runner 38's ref2t.r2 recipe (TIERENV, C 192). Shared GPU,
