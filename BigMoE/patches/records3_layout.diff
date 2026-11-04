@@ -1,5 +1,5 @@
 --- bigmoe/tier.py	2026-11-01 07:42:38
-+++ bigmoe/tier.py	2026-11-03 17:31:57
++++ bigmoe/tier.py	2026-11-03 22:48:22
 @@ -21,6 +21,12 @@
  _POM = int(os.environ.get("BIGMOE_POM", "0") or 0)
  _LP1 = os.environ.get("BIGMOE_POM_LP1") == "1"
@@ -7,7 +7,7 @@
 +# records3 converted in place (docs/PLAN_records3_convert.md): index.json's per-layer "layout" (absent = row-major). A
 +# converted layer's tier calls need a kernel router that reads its layout (Leap's REF2 native_3c: 3c-N, + p11 dequant for
 +# native+p11); it sets LAYOUT_ROUTER and routes each call by _LAYOUT[0] (tier_call sets it) or t["layout"] (OOO).
-+LAYOUTS = {"row-major": 0, "native": 1, "native+p11": 2}
++LAYOUTS = {"row-major": 0, "native": 1, "native+p11": 2, "native+p11+pad": 2}   # pad: 4 KB-aligned pieces (zero-copy reads)
 +LAYOUT_ROUTER = False
 +_LAYOUT = [0]
  STATS = {"calls": 0, "prefill_calls": 0}
@@ -24,7 +24,7 @@
      if _OOO and post is not None and _GLU == "3c" and t.get("scores") is not None:
          return _ooo_call(x, ids, bm, t, post, t.pop("scores"), t.pop("shared", None))
      sm = route(bm["L"], ids)                                    # base pool: every rank
-@@ -190,23 +200,44 @@
+@@ -190,23 +200,52 @@
  
  
  # ---------------------------------------------------------------- install (ExpertStreamer.install with BIGMOE_TIER)
@@ -50,7 +50,7 @@
 +    layer (index entry r) holds its s3 / b3 / b pieces as packed uint32 words of the index's piece sizes."""
      msb, lsb = [], []
      shp = [sh if isinstance(sh[0], int) else sh[0] for sh in pers4_shapes]   # shapes or (shape, dtype) pairs
-+    p11 = r is not None and r.get("layout") == "native+p11"
++    p11 = r is not None and r.get("layout") in ("native+p11", "native+p11+pad")
      for p in range(3):
          (o, w8), (_, g), _ = shp[3 * p:3 * p + 3]
 -        msb += [((o, w8 * 3 // 4), mx.uint32), ((o, g), mx.bfloat16), ((o, g), mx.bfloat16)]
@@ -62,20 +62,28 @@
      return msb, lsb
  
  
++def _part_order(r, part, n):
++    """the record order of a part's pieces (the index lists them per projection; native+p11+pad stores the LSB part's l1
++    planes first): the ext's layer takes its pieces in this order, so its sequential copy / direct preadv matches the file"""
++    off = r.get(f"{part}_piece_off")
++    return sorted(range(n), key=lambda i: off[i]) if off is not None else list(range(n))
++
++
 +def _check_part(r, pers, part):
 +    """the ext copies a record part piece by piece into the slots: the pool pieces must be the index's, back to back"""
 +    off, size = r.get(f"{part}_piece_off"), r.get(f"{part}_piece_size")
 +    if off is None:
 +        return
 +    start = 0 if part == "msb" else r["msb_sz"]
-+    assert list(size) == pers and off[0] == start and all(off[i + 1] == off[i] + size[i] for i in range(len(off) - 1)), \
++    o = _part_order(r, part, len(off))
++    assert list(size) == pers and off[o[0]] == start and all(off[o[i + 1]] == off[o[i]] + size[o[i]] for i in range(len(o) - 1)), \
 +        (part, pers, off, size)
 +
 +
  def _nbytes(sh, dt): return int(np.prod(sh)) * (4 if dt == mx.uint32 else 2)
  
  
-@@ -214,11 +245,14 @@
+@@ -214,11 +253,14 @@
      """Base pool for layer L as ext layer L (must be the next add_layer index)."""
      if os.environ.get("BIGMOE_M01"):   # an ext without the M-01 unpack would read records3m's packed fields as raw bf16
          assert getattr(ext, "m01_on", lambda: False)(), "BIGMOE_M01=1 needs an ext built from 6753d83 or later"
@@ -91,7 +99,7 @@
      assert ext.add_layer(C_m, E, [0] * 9, [0] * 9, pers, P) == L
      ext.set_records_part(L, os.path.join(rec_dir, r["file"]), r["recsz"], 0, r["msb_sz"])
      if _POM:                                       # R-44 b: records3p's seg1 / seg2 beside the records3m part
-@@ -233,10 +267,12 @@
+@@ -233,20 +275,33 @@
  
  
  def make_sidecar(ext, E, C_l, shapes4, rec_dir, r):
@@ -100,12 +108,18 @@
      P = [mx.zeros((C_l, *sh), dt) for sh, dt in lsb]
      mx.eval(*P)
      pers = [_nbytes(sh, dt) for sh, dt in lsb]
+-    Ls = ext.add_layer(C_l, E, [0] * 6, [0] * 6, pers, P)
 +    if r.get("layout", "row-major") != "row-major":
 +        _check_part(r, pers, "lsb")
-     Ls = ext.add_layer(C_l, E, [0] * 6, [0] * 6, pers, P)
++    o = _part_order(r, "lsb", 6)                     # the ext layer's pieces in record order; the name map below stays
++    Ls = ext.add_layer(C_l, E, [0] * 6, [0] * 6, [pers[i] for i in o], [P[i] for i in o])
      ext.set_records_part(Ls, os.path.join(rec_dir, r["file"]), r["recsz"], r["msb_sz"], r["recsz"] - r["msb_sz"])
++    if r.get("layout") == "native+p11+pad":           # BIGMOE_RECORDS_DIRECT: the 3 aligned l1 planes straight into their
++        assert hasattr(ext, "set_direct_split"), "native+p11+pad needs an ext from the lever-1 build"   # slots, the b's via a bounce
++        ext.set_direct_split(Ls, 3)
      if _LP1:                                       # R-44 b LP1: rows of the 4-bit ranks; rank 1 = position 1 of each row
-@@ -245,8 +281,15 @@
+         ext.set_lp1(Ls, PLAN.count("4"))
+     return Ls, {p: {f: P[i] for i, (pp, f) in enumerate(_LSB) if pp == p} for p in ("gate_proj", "up_proj", "down_proj")}, P
  
  
  # ---------------------------------------------------------------- exact prefill in plan mode
@@ -121,7 +135,7 @@
  def prefill_call(cls, self, x, indices, bm, *a, **kw):
      """Exact 4-bit prefill, the reference's own call shape (stream._sync_call): a scratch of exactly the experts this call
      uses (sorted ids), filled from records3 with the CPU rebuild, and compact order-preserving ids into it. (A full-E
-@@ -264,8 +307,7 @@
+@@ -264,8 +319,7 @@
      _reuse_drop()                       # R-52: this call's own scratch must not sit beside the kept group buffers
      scr = [mx.zeros((len(uniq), *sh), dt) for sh, dt in t["shapes4"]]
      mx.eval(*scr)
@@ -131,7 +145,7 @@
      saved = [getattr(getattr(self, proj), field) for proj, field in PIECES]
      for (proj, field), arr in zip(PIECES, scr):
          setattr(getattr(self, proj), field, arr)
-@@ -365,8 +407,7 @@
+@@ -365,8 +419,7 @@
  
      def fill(i):
          grp = groups[i]

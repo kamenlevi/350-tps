@@ -62,13 +62,29 @@ def parse(arm):
     if m: return None, int(m.group(1)), int(m.group(1))
     m = re.fullmatch(r"hyb_([0-9.]+)_u(\d+)", arm)
     if m: return float(m.group(1)), 2, int(m.group(2))
+    m = re.fullmatch(r"hyb_([0-9.]+)_k(\d+)_u(\d+)", arm)    # Wed 04:0x: sure rows keep top-k (k 1 = BYTES10 screen 2), unsure top-u
+    if m: return float(m.group(1)), int(m.group(2)), int(m.group(3))
     m = re.fullmatch(r"reach_([0-9.]+)_([0-9.]+)", arm)        # Q1-UNION <thr> + REACH-CUT below tau (k0 2 on those rows)
     if m: return float(m.group(1)), 2, 10
     m = re.fullmatch(r"top_k(\d+)", arm)                     # control: plain top-k on realized rows, no union members
     if m: return None, int(m.group(1)), int(m.group(1))
     m = re.fullmatch(r"qom_([0-9.]+)", arm)                  # Q1-ON-MISS: Q1-UNION + experts resident in the base pool
     if m: return float(m.group(1)), 2, 10
+    m = re.fullmatch(r"qom_([0-9.]+)_k(\d+)", arm)          # Wed 04:0x: QOM with sure rows at top-k (k 1: + resident ranks 1-9)
+    if m: return float(m.group(1)), int(m.group(2)), 10
     raise SystemExit(f"unknown arm {arm}")
+
+
+def live_segments_nxt(k, m, A, dc):
+    """live_segments plus, per segment, the cf of the draft its last row verifies (-1.0: none left). The drafter drafts
+    the whole block in one pass and the live cut drops only inputs, so for a cut segment that draft already exists."""
+    segs, a0, kk, dd = [], A, k, [float(x) for x in dc[:m]]
+    while True:
+        L = int((np.cumprod(dd) >= LIVE_T).sum()) if dd else 0
+        if L >= kk or L == len(dd):
+            segs.append((kk, L, a0, dd, dd[L] if L < len(dd) else -1.0)); return segs
+        segs.append((L, L, a0, dd[:L], dd[L]))
+        a0, kk, dd = a0 + L + 1, kk - L - 1, dd[L + 1:]
 
 
 def pool_sizes():
@@ -86,14 +102,23 @@ def touch(c, e, C):
 
 
 def masks(out_dir, arm):
-    live = arm.endswith("_live"); arm0 = arm[:-5] if live else arm
+    t3 = arm.endswith("_t3"); arm_ = arm[:-3] if t3 else arm   # <arm>_t3 (Tue 23:0x): sure rows' ranks 0-1 off in the mask, so
+    # the harness's ('t3mask',) gate serves them from records3 at 3 bits (Breakthrough's hyb_t3 convention); pools unchanged
+    mc = re.search(r"_c(\d+)$", arm_)                      # <arm>_c<N> (Tue 23:2x): qom's base pool = N slots per layer
+    cpool = int(mc.group(1)) if mc else None                  # (e.g. _c164 = the uniform C 160 line), not laysz45_256's C_m
+    if mc: arm_ = arm_[:mc.start()]
+    bq = arm_.endswith("_bq"); arm_ = arm_[:-3] if bq else arm_   # <arm>_live_bq (Wed 04:4x, BYTES10 screen 1 in QOM's form): each
+    # live segment's last row (the bonus row, or the discarded last row after a miss) is gated by the draft it verifies,
+    # like a drafted row (QOM: ranks 0-1 + union members + resident ranks 2-9); exact when no draft is left
+    live = arm_.endswith("_live"); arm0 = arm_[:-5] if live else arm_
+    if bq and not live: raise SystemExit("_bq needs a _live arm")
     thr, ks, ku = parse(arm0); plain = arm0.startswith("top_k")
     tau = float(arm0.split("_")[2]) if arm0.startswith("reach_") else None
-    qom = arm0.startswith("qom_"); CL = pool_sizes() if qom else None
+    qom = arm0.startswith("qom_"); CL = ([cpool] * 48 if cpool else pool_sizes()) if qom else None
     base = json.load(open(os.path.join(OUT, "baseline.json")))
     G = dm_gate.load()
     od = os.path.join(out_dir, arm); os.makedirs(od, exist_ok=True)
-    st, qs = {}, {}
+    st, qs, bqn = {}, {}, {}
     for dom, wf in dm_gate.WALK.items():
         Z = np.load(os.path.join(dm_gate.TD, wf))
         cache = [OrderedDict() for _ in range(48)]               # qom: the base pool per layer, carried across windows
@@ -110,13 +135,18 @@ def masks(out_dir, arm):
                     for l in range(48):
                         for e in ids[p, l].tolist(): touch(cache[l], e, CL[l])
             for (k0_, m0_, A0_), dc0_ in zip(Z[f"{i}_checks"].tolist(), Z[f"{i}_dcf"].tolist()):
-              for (k, m, A, dc) in (live_segments(k0_, m0_, A0_, dc0_) if live else [(k0_, m0_, A0_, dc0_)]):
+              segs_ = live_segments_nxt(k0_, m0_, A0_, dc0_) if live else [(k0_, m0_, A0_, dc0_, -1.0)]
+              if live: assert [x[:4] for x in segs_] == live_segments(k0_, m0_, A0_, dc0_)
+              for (k, m, A, dc, nxt) in segs_:
                     last, fm = min(A + m, N - 1), min(A + k, N - 1)
                     rows, cfs = [], []
                     for p in range(A, last + 1):
-                        if p <= fm: rows.append(p); cfs.append(-1.0 if live and k == m and p == A + m else g[p])  # live
+                        if p <= fm: rows.append(p); c_ = -1.0 if live and k == m and p == A + m else g[p]  # live
                                                      # cut: the kept drafts' bonus row verifies no draft (exact)
-                        else: rows.append((p + 97) % N); cfs.append(dc[p - A] if p - A < m else -1.0)
+                        else: rows.append((p + 97) % N); c_ = dc[p - A] if p - A < m else -1.0
+                        if bq and p - A == m and nxt >= 0:       # _bq: the last row verifies the next draft (engine)
+                            c_ = nxt; bqn[dom] = bqn.get(dom, 0) + int(p <= fm)
+                        cfs.append(c_)
                     if not rows: continue                        # a live segment past the window's end
                     cfs = np.array(cfs)
                     k0 = np.full(len(rows), ku) if thr is None else np.where(cfs >= thr, ks, ku)
@@ -138,6 +168,9 @@ def masks(out_dir, arm):
                                     mem = keep[p, l, k0[j]:].copy()
                                     keep[p, l, k0[j]:] |= np.isin(ids[p, l, k0[j]:], res)
                                     q[0] += 10 - k0[j]; q[1] += int(mem.sum()); q[2] += int((keep[p, l, k0[j]:] & ~mem).sum())
+                                if t3 and thr is not None and k0[j] == ks:   # a sure row of this check (never the
+                                    keep[p, l, :ks] = False                 # live bonus row: its cf is -1); its top-ks
+                                    # ranks go to the t3 gate (harness t3k = ks; ks 2 = every arm before Wed 04:0x)
                         if qom:                                  # kept resident experts are used: touch them (all sure rows)
                             for j, r in enumerate(rows):
                                 if k0[j] < 10:
@@ -148,9 +181,10 @@ def masks(out_dir, arm):
     for dom, (u, ux, kp, rl) in st.items():
         print(f"{arm} {dom}: union x{u / ux:.3f} per check, experts kept per realized row-layer {kp / max(rl, 1):.2f} of 10",
               flush=True)
+        if bq: print(f"  {arm} {dom}: realized bonus rows gated by their next draft: {bqn.get(dom, 0)}", flush=True)
         if qom:
             n, mem, res, ld, ms = qs[dom]
-            print(f"  qom {dom} (pool {os.environ.get('QOM_C', 'm')}): sure-row rank 2-9 pairs {n}: kept as union members "
+            print(f"  qom {dom} (pool {cpool or os.environ.get('QOM_C', 'm')}): sure-row rank 2-9 pairs {n}: kept as union members "
                   f"{100 * mem / max(n, 1):.1f} %, + resident {100 * res / max(n, 1):.1f} % = {100 * (mem + res) / max(n, 1):.1f} %; "
                   f"load miss rate {100 * ms / max(ld, 1):.1f} % of {ld} loads", flush=True)
     if arm.startswith("q1u_") and not live:                 # self-check against Breakthrough's own masks

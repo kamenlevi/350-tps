@@ -27,6 +27,11 @@ TAGS = {
         "S1": "the standard greedy speculative loop", "SC1": "FR-Spec", "D-22": "EAGLE-3 training-time test",
         "E2": "drafter data scaling", "REPETITION": "MTPLX loop_guard", "L2-10": "MTPLX sparse prefill lane",
         "SMALL35": "DFlash on Qwen3.6-35B (z-lab)",
+        # Tue 3 Nov: sub-rows the merge fix surfaced (a session's 2nd+ row under one ID)
+        "L1-10#3": "SAM decoding (suffix-automaton longest-match lookup)",
+        "DFLASH2": "token trees over drafter candidates (SpecInfer / Sequoia)",
+        "R-16": "entropy-coded weights decoded on the GPU (EntroLLM, DFloat11, tile-level ANS)", "TRL-3": "QTIP",
+        "E2#2": "drafter data scaling", "PF1": "double-buffered next-layer prefetch (FlexGen / MoE-Lightning)",
     },
     "adapted": {
         "F24B16": "expert budgets in verify (MoE-Spec, AcceptMoE)", "FM1": "expert budgets + JIT prefetch",
@@ -53,13 +58,31 @@ TAGS = {
         "B12_NORM=MASS": "top-k cut without renormalising",
         "D1I": "chunked + layer-major prefill (FlexGen, MoE-Lightning)", "LMP4/PK4": "FlexGen layer-major prefill",
         "PF2": "FlexGen layer-major prefill", "#18": "FlexGen layer-major prefill",
+        "M-29#3": "anticipatory device wake: an early PCIe wake before the doorbell (US 11789658), HotOS '15 "
+                  "anticipatory CPU wake-up (Software Engagement with Sleeping CPUs); ours: a software 4 KB read timed "
+                  "by the MoE router's launch, on Apple's internal SSD",
+        "EXACT": "expert offloading with LRU pools (MoE-Infinity, Mixtral-offloading), made exact by the gate",
+        "S45-T": TM + " + " + HOB, "PASS-LEVEL": "expert budgets in verify (MoE-Spec)", "D2#2": HOB + " + " + ANY,
+        "RND20/RND25#2": ANY + " + " + HOB, "RND18#3": ANY + " / HOBBIT",
+        "T3R": "QTIP base + a residual refinement for the top ranks",
+        "R-62P": "expert skipping by residency (SwapMoE / AdapMoE)",
+        "T0": "self-speculative decoding with a cheap pass of the same model (Draft & Verify, LayerSkip); here a top-2-expert pass certified by max softmax",
+        "T2": "self-speculative decoding with a cheap pass of the same model (Draft & Verify, LayerSkip); MTP 4-row checks", "T3": "self-speculative decoding with a cheap pass of the same model (Draft & Verify, LayerSkip); 16-row checks (cf. the staged check)",
+        "P1-OEA": "OEA union members (2511.02237)", "P2-PREFETCH": "JIT prefetch (ProMoE)",
+        "S2": "runahead route prediction (SP-MoE, ProMoE)", "R-40#2": TM, "R-40#3": TM, "REF2#2": TM,
+        "R-40#18": TM + " (fixed KV split sizes)", "PF3": "FlexGen layer-major prefill",
+        "Q1U-T3": "OEA union (2511.02237) + low precision for drafter-sure rows (HOBBIT-style); the certainty keying is ours (M-18)",
+        "REACH-CUT": "reach probability as a product of draft confidences (EAGLE-2 / SpecDec++), used here to cut the verifier's experts",
+        "UNION-STACK": "OEA (2511.02237) stacked with our certainty gate",
+        "DM-Q1": "PSR §7 (2610.34721): the verify block's expert demand weighted by the drafter's confidence, one set per block, rerouted; ours: a per-row expert count, no reroute, no renorm",
+        "M-18": "PSR §7 (2610.34721): the verify block's expert demand weighted by the drafter's confidence, one set per block, rerouted; ours: a per-row expert count, no reroute, no renorm",
+        "M-18D": "PSR §7 (2610.34721): the verify block's expert demand weighted by the drafter's confidence, one set per block, rerouted; ours per row, at the 24 GB default",
+        "QOM": "cache-conditional experts / cache-aware routing (2412.00099, Cache-Prior, BuddyMoE); ours: no rerouting, only drafter-sure rows, only the experts that would miss",
     },
     "new": {
-        "DM-Q1": "the VERIFIER's experts cut per row by certainty; prior art cuts draft length / selection "
-                 "(EcoSpec, DraftExpert, EVICT)",
-        "M-18": "the VERIFIER's experts cut per row by the drafter's certainty (EcoSpec / DraftExpert / EVICT cut drafts)",
         "DM": "reuse of the previous position's MoE output; prior art caches / prefetches experts across tokens "
               "(ST-MoE) or skips them (MoDES), none found reusing outputs",
+        "DM#10": "reuse of the previous position's MoE output (as DM: none found reusing outputs)",
     },
 }
 ENGINEERING = """CONCURRENT JT1 PS R-69B REC2 RECORDS=3 S45-STACK W1 ITEM R-24 R-69 S10 S45 S45B-2 3C PLANE R-44A R-48 EXPERT
@@ -68,7 +91,10 @@ R-13D R-36 R-59 R-61 R-65 R-70 R-73 R-74 R-81 R-82 R-83 REBUILD.PY REF2C R-06A R
 R-78 R-79 RND22B 24 BP1 CACHE-ONLY FFX GROUPED HEAD_EACH LIFETIME M24B MEM1 MOV MTP_C N-GRAM NO-COPY R-01 R-41E R-45 R-45T
 R-45V R-46 T1 V3P D1D FOLD-EXACT FRS1 GROW M-5 R-34 RES3 L2-11 PF4 PFG1 PFM PFR PF_WARM R-52 R-53 STREAMING B6D B8 CMP3
 FR-SPEC G1/G2/#12 GATE GATE-STAMPS GDN_EXACT GS1 LC1 LONG1 ORDER-PRESERVING R-41 R1B REF2 B8-NONDET B8MR-HAZARD L1-24S
-MMA-TILE POS-2 R-40 R-56B R-56C R-58G WV1-WV3""".split()
+MMA-TILE POS-2 R-40 R-56B R-56C R-58G WV1-WV3 M-29 M-29#2 M-29#4
+L1-15#2 GDN#2 B5A R-09#2 R-15#2 R-40#4 R-40#5 R-40#6 R-40#10 R-40#11 R-40#12 R-40#14 R-40#15 R-40#16 R-40#17 V3#2
+R-38#3 FOLD-EXACT#2 FOLD-FAST#3 FOLD-FAST R-45#2 M-26 W24-SP#2 M-01 3C#2 3C#3 RECORDS4#2 EXACT#2 FUSED#3 M-28#3 F1#2 X1#2
+B1#2 R-45U SGB HT1 T2S T3#2 UNION-THETA UNION-STACK-24 CALLS-SHARE D-22#3 D-24#2 KWALL#2""".split()
 rows = []
 for tag, d in TAGS.items():
     rows += [(k, tag, v) for k, v in d.items()]

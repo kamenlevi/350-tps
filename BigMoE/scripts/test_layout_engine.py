@@ -13,7 +13,7 @@ import json, os, sys, tempfile
 import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PKG = os.path.join(ROOT, sys.argv[1] if len(sys.argv) > 1 else "scratch/stage_layout")
-sys.path.insert(0, os.path.join(ROOT, "ext", "build_nat"))
+sys.path.insert(0, os.path.join(ROOT, "ext", os.environ.get("TEST_EXT_BUILD", "build_nat")))
 sys.path.insert(0, PKG)
 import mlx.core as mx
 import bigmoe_ext as ext
@@ -62,7 +62,8 @@ for part in ("msb", "lsb"):                                     # today's record
     T._check_part(ix0["layers"]["20"], list(ix0["layers"]["20"][f"{part}_piece_size"]), part)
 base, P = T.make_pools(ext, 0, 512, 8, SH4, d, r20)
 Ls, sideP, PS = T.make_sidecar(ext, 512, 8, SH4, d, r20)
-assert Ls == 1 and P[1].shape == (8, 8804) and P[1].dtype == mx.uint32 and PS[1].shape == (8, 8804), (P[1].shape, PS[1].shape)
+assert Ls == 1 and P[1].dtype == mx.uint32 and P[1].shape == (8, r20["msb_piece_size"][1] // 4) and \
+    PS[1].shape == (8, r20["lsb_piece_size"][1] // 4), (P[1].shape, PS[1].shape)   # packed (8804) or padded (9216) words
 rng, n = np.random.default_rng(11), 0
 with open(os.path.join(d, r20["file"]), "rb") as f:
     for _ in range(3):

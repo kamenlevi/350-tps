@@ -11,7 +11,8 @@
 #   B  CPU: Q1-UNION 0.9 masks for the 78 (dm_q1u_masks.py), + the masks of any arm listed in data/floor1/extra_arms.txt
 #   C  q1u_cf09 [+ the listed arms] (78)
 #   R  read-outs (DM_OUT each): dm_day9_read.py (bands by class), dm_floor_read.py (section 5's lines), dm_q1u_read.py
-# Start conditions per step (3 clear checks 60 s apart): after FIRST, no other session's quiet window (held or waited for),
+# Start conditions per step (3 clear checks 60 s apart): after FIRST, no map process (Tue 19:2x: the 00:30 prefix,
+# night_prefix.sh, runs first), BigMoE's turns seen once (or 02:00), no other session's quiet window (held or waited for),
 # no PAUSE, the lid open, NO-SWAP >= 25 GB. Guard every 30 s under a run: the DEADLINE stops the tree; swap growth > 2 GB
 # over the step's start stops the tree; another session's quiet window, the lid, or PAUSE > 5 min stop it (3 strikes);
 # then the step waits and resumes. A step that ends with names missing and no guard stop counts as a failure; two
@@ -27,8 +28,22 @@ swap_mb() { sysctl -n vm.swapusage | sed -E 's/.*used = ([0-9.]+)M.*/\1/' | cut 
 noswap() { vm_stat | awk '/page size of/ {ps=$8} /^Pages (free|speculative|purgeable):/ || /^File-backed pages:/ {v=$NF; sub("[.]","",v); s+=v} END {printf "%d", s*ps/1e9}'; }
 quiet_others() { peer ls 2>/dev/null | grep -v "^You:" | grep -qE "quiet lock until|benchmarking: quiet lock|waiting for a quiet window"; }
 lid_closed() { ioreg -r -k AppleClamshellState -d 1 | grep -q '"AppleClamshellState" = Yes'; }
-why_not() {
-  if quiet_others; then echo "a quiet window (others)"; elif lid_closed; then echo "lid closed"
+big_others() { peer ls 2>/dev/null | grep -v "^You:" | grep -oE "shared run.*MEM [0-9]+ GB" | grep -oE "MEM [0-9]+" | awk '$2 >= 5 {f = 1} END {exit !f}'; }
+BMLATE=${FLOOR_BMLATE:-$(date -j -f "%Y-%m-%d %H:%M:%S" "2026-11-04 02:00:00" +%s)}; BMFLAG=$F78/.bigmoe_seen   # Tue 22:2x:
+# FLOOR_BMLATE=0 drops the gate (BigMoE now queues first and waits for memory inside its lock; FLOOR yields to its ticket)
+bigmoe_first() { # Tue 19:2x (the orchestrator's order prefix -> BigMoE's turns -> FLOOR; BigMoE needs NO-SWAP >= 33 GB to
+  # queue, so a FLOOR step started right after the prefix would hold it off): wait until BigMoE has held or queued a quiet
+  # window once tonight, or 02:00 at the latest; from then on the usual gates
+  [ -f $BMFLAG ] && return 0
+  if peer ls 2>/dev/null | grep "larger-than-RAM MoE" | grep -qE "quiet lock until|benchmarking: quiet lock|waiting for a quiet window" \
+     || [ $(date +%s) -ge $BMLATE ]; then touch $BMFLAG; return 0; fi
+  return 1
+}
+why_not() {      # a map process = another runner's (tonight's 00:30 prefix, night_prefix.sh): never two at once
+  if pgrep -f "run_map.py" > /dev/null; then echo "a map process is running"
+  elif ! bigmoe_first; then echo "BigMoE's turns go first (not seen yet; 02:00 at the latest)"
+  elif [ "$(date +%H)" -ge 15 ] && big_others; then echo "another job over 5 GB (day rule, to 00:00)"
+  elif quiet_others; then echo "a quiet window (others)"; elif lid_closed; then echo "lid closed"
   elif [ -e "$Q/PAUSE" ]; then echo "PAUSE"; elif [ "$(noswap)" -lt 25 ]; then echo "NO-SWAP < 25 GB"; fi
 }
 wait_clear() {   # 0 = clear to start; 1 = the deadline passed
@@ -70,7 +85,7 @@ run_step() {     # run_step <tag> <DM_OUT dir> <max windows> <names...>
   done
   say "$tag: all names written"; return 0
 }
-say "armed: first start $(date -r $FIRST '+%a %H:%M'), deadline $(date -r $DEADLINE '+%a %H:%M')${DRY:+ (DRY)}"
+rm -f $BMFLAG; say "armed: first start $(date -r $FIRST '+%a %H:%M'), deadline $(date -r $DEADLINE '+%a %H:%M')${DRY:+ (DRY)}"
 if [ -z "$DRY" ]; then $PY test_reuse.py > $F78/test_reuse.txt 2>&1; tail -1 $F78/test_reuse.txt | grep -q "ALL OK" || { say "unit test FAILED ($F78/test_reuse.txt); nothing runs"; exit 4; }; fi
 # S0 (the orchestrator Tue 14:5x, NewIdeas 14:54): the 12 GB pass-1 stack (P1-K1 capped to 4 kept ranks, at 3 bits) and
 # top_k8, on the 36 windows in the map's own out dir; NewIdeas reads them (p1_cert_read.py / live_read.py)

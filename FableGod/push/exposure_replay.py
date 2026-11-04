@@ -98,3 +98,85 @@ for lab, kw in (("today", dict(fixed_ms=0.28, joint=False, r=0.0)), ("D1 all", d
                 ("D2 alone r 0.85", dict(fixed_ms=0.28, joint=False, r=0.85)), ("D1 + D2 r 0.85", dict(fixed_ms=0.10, joint=True, r=0.85))):
     e, b = exposed(cover=0.50, **kw); print(f"  {lab:20s} busy {b:5.1f} exposed {e:5.1f} ms per check")
 live = live_save
+
+# ---- rev 3 (Tue 22:5x): M-30 QUEUEMIX / M-29 SSDMICRO2 pricing [K ~/MoonShots/data/ssdmicro3.txt, ssdmicro2.txt] ----
+# Forecasts are CHAINED: issued the moment L's demand burst returns, they read like a back-to-back call (their own first
+# byte ~0.12 ms + bytes), and they must finish before L+1's row (window = max(dem, cover) + 1.0 ms); what does not fit
+# lands on L+1's demand at fair share (M-30: +165 us per unfinished record), i.e. the excess is exposed. The demand burst
+# keeps its first byte whatever is in flight (M-30); the wake is the keepalive's / ping's (inside fixed_ms). 'mixed' =
+# the charter's wording (forecasts issued with the demand): the demand is extended by the forecast bytes (M-30 M arms).
+def exposed2(fixed_ms, joint, r, cover, mixed=False, lead_fixed=0.12):
+    out = []; busy = []; nb_ = []
+    for bm_, sm_ in zip(bmA, smA):
+        e = 0.0; b = 0.0; nburst = 0
+        for L in range(NL):
+            nb, ns = bm_[L] * live, sm_[L] * live
+            calls = (1 if nb > 0 else 0) + (1 if ns > 0 else 0)
+            if joint and calls == 2: calls = 1
+            nburst += calls
+            byt = (nb * MB_B + ns * MB_S) / 12.7
+            dem = (1 - r) * byt + fixed_ms * calls
+            fc = (r * byt * 1.25 + lead_fixed) if (r > 0 and byt > 0) else 0.0
+            b += dem + fc
+            if mixed:
+                e += max(0.0, dem + fc - cover)
+            else:
+                window = max(dem, cover) + 1.0
+                e += max(0.0, dem - cover) + max(0.0, dem + fc - window)
+        out.append(e); busy.append(b); nb_.append(nburst)
+    return np.mean(out), np.mean(busy), np.mean(nb_)
+ARMS3 = (("today (0.283 per call, two rows)", dict(fixed_ms=0.283, joint=False, r=0.0)),
+         ("S1 JOINT (2 x 0.283 - 0.120)", dict(fixed_ms=0.446, joint=True, r=0.0)),
+         ("+ S2 keepalive / ping (-0.044)", dict(fixed_ms=0.402, joint=True, r=0.0)),
+         ("+ S3 zero-copy A (-0.096: M-28's outside part)", dict(fixed_ms=0.306, joint=True, r=0.0)),
+         ("+ S3 zero-copy B (-0.173: M-29's 2-record saving)", dict(fixed_ms=0.229, joint=True, r=0.0)),
+         ("D1 floor (0.16)", dict(fixed_ms=0.16, joint=True, r=0.0)),
+         ("D1 A (0.306) + D2 r 0.85 chained", dict(fixed_ms=0.306, joint=True, r=0.85)),
+         ("D1 A (0.306) + D2 r 0.50 chained", dict(fixed_ms=0.306, joint=True, r=0.50)),
+         ("D1 B (0.229) + D2 r 0.85 chained", dict(fixed_ms=0.229, joint=True, r=0.85)),
+         ("D1 floor + D2 r 0.85 chained", dict(fixed_ms=0.16, joint=True, r=0.85)),
+         ("D1 A + D2 r 1.0 chained (oracle)", dict(fixed_ms=0.306, joint=True, r=1.0)),
+         ("D1 A + D2 r 0.85 MIXED (charter's 'join the open burst')", dict(fixed_ms=0.306, joint=True, r=0.85, mixed=True)),
+         ("D1 A + D2 r 0.50 MIXED", dict(fixed_ms=0.306, joint=True, r=0.50, mixed=True)))
+for cover_ms, tag in ((0.50, "live ~10-row cover 0.50 ms"), (0.25, "chat-like cover 0.25 ms")):
+    print(f"\n== rev 3 (M-30 chained pricing), {tag} ==")
+    for lab, kw in ARMS3:
+        e, b, nbu = exposed2(cover=cover_ms, **kw)
+        print(f"  {lab:58s} bursts {nbu:4.1f}  fixed {kw['fixed_ms']*nbu:5.1f}  busy {b:5.1f}  exposed {e:5.1f} ms per check")
+
+# chained AND capped (the engine's sizing rule): L+1's forecast is cut to the window left after L's demand burst
+# (max(dem, cover) + 1.0 - dem - its first byte 0.12 - a 0.10 ms margin, so the next demand never lands on unfinished
+# forecasts, M-30); the records that do not fit stay demand misses of L+1 (read under L+1's cover, no precision overhead).
+def exposed3(fixed_ms, joint, r, cover, margin=0.10, lead_fixed=0.12, prec=0.8):
+    out = []; busy = []; ffit = []
+    for bm_, sm_ in zip(bmA, smA):
+        e = 0.0; b = 0.0; fsum = 0.0; fwant = 0.0
+        for L in range(NL):
+            nb, ns = bm_[L] * live, sm_[L] * live
+            calls = (1 if nb > 0 else 0) + (1 if ns > 0 else 0)
+            if joint and calls == 2: calls = 1
+            byt = (nb * MB_B + ns * MB_S) / 12.7
+            if byt <= 0: continue
+            dem = (1 - r) * byt + fixed_ms * calls
+            want = r * byt / prec
+            avail = max(0.0, (max(dem, cover) + 1.0) - dem - lead_fixed - margin)
+            fit = min(want, avail)
+            dem += (want - fit) * prec
+            fc = (fit + lead_fixed) if fit > 0 else 0.0
+            b += dem + fc; fsum += fit; fwant += want
+            e += max(0.0, dem - cover)
+        out.append(e); busy.append(b); ffit.append(fsum / fwant if fwant > 0 else 1.0)
+    return np.mean(out), np.mean(busy), np.mean(ffit)
+ARMS4 = (("D1 A (0.306) + D2 r 0.85 capped", dict(fixed_ms=0.306, joint=True, r=0.85)),
+         ("D1 A (0.306) + D2 r 0.50 capped", dict(fixed_ms=0.306, joint=True, r=0.50)),
+         ("D1 B (0.229) + D2 r 0.85 capped", dict(fixed_ms=0.229, joint=True, r=0.85)),
+         ("D1 B (0.229) + D2 r 0.50 capped", dict(fixed_ms=0.229, joint=True, r=0.50)),
+         ("D1 floor (0.16) + D2 r 0.85 capped", dict(fixed_ms=0.16, joint=True, r=0.85)),
+         ("D1 A + D2 r 1.0 capped (oracle)", dict(fixed_ms=0.306, joint=True, r=1.0)),
+         ("D1 A + D2 r 0.85 capped, precision 1.0", dict(fixed_ms=0.306, joint=True, r=0.85, prec=1.0)),
+         ("S2 only (0.402) + D2 r 0.85 capped (no zero-copy)", dict(fixed_ms=0.402, joint=True, r=0.85)))
+for cover_ms, tag in ((0.50, "live ~10-row cover 0.50 ms"), (0.25, "chat-like cover 0.25 ms"), (0.75, "16-row cover 0.75 ms")):
+    print(f"\n== rev 3 chained + capped (sizing rule), {tag} ==")
+    for lab, kw in ARMS4:
+        e, b, f = exposed3(cover=cover_ms, **kw)
+        print(f"  {lab:52s} busy {b:5.1f}  exposed {e:5.1f} ms per check  forecast bytes that fit {100*f:4.0f} %")

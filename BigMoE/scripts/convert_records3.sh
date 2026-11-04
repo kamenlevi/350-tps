@@ -1,6 +1,6 @@
 #!/bin/bash
 # The ONE in-place records3 conversion (Kamen approved Tue 3 Nov ~17:3x via the orchestrator; docs/PLAN_records3_convert.md):
-# models/bare/records3 row-major -> native+p11 with Leap's ~/Leap/scripts/convert_records_p11.py (90456ce; its output ==
+# models/bare/records3 row-major -> native+p11+pad (4 KB-aligned pieces, Tue 22:5x) with Leap's ~/Leap/scripts/convert_records_p11.py (90456ce; its output ==
 # BigMoE's scripts/r3layout_ref.py byte for byte on L0 / L20 / L47). Run BY HAND, never armed, and only when all of these hold
 # (the script refuses otherwise):
 #   - ~/EvalSuite/results/RELAX_DONE and ~/EvalSuite/results/T0_DONE exist (the orchestrator 11-03 17:2x);
@@ -36,7 +36,7 @@ if [ $TEST = 0 ]; then
 $PY -I -S -c 'import json, sys, time; d = json.load(open(sys.argv[1])); sys.exit(0 if d.get("mode") == "quiet" and d.get("until", 0) > time.time() + 600 else 1)' \
   "$HOME/.claude-peers/locks/${CLAUDE_PID:-none}.json" 2>/dev/null || die "no quiet lock with >= 10 min left for CLAUDE_PID=${CLAUDE_PID:-unset}"
 fi
-git -C "$HOME/Leap" merge-base --is-ancestor 90456ce HEAD 2>/dev/null || die "~/Leap is not at 90456ce or later"
+git -C "$HOME/Leap" merge-base --is-ancestor 7624eb0 HEAD 2>/dev/null || die "~/Leap is not at 7624eb0 (P11PAD) or later"
 [ -n "$(lsof +D "$R3" 2>/dev/null)" ] && die "records3 files are open: $(lsof +D "$R3" 2>/dev/null | awk 'NR>1 {print $1"("$2")"}' | sort -u | tr '\n' ' ')"
 say "preflight OK ($([ $TEST = 1 ] && echo test mode || echo "RELAX_DONE, T0_DONE, heads-up $(( ($(date +%s) - CONV_HEADSUP) / 60 )) min ago"), nothing open); --check"
 CK=$($PY "$TOOL" "$R3" 2>&1); echo "$CK" >> "$LOG"   # the check mode always exits 1 ("read-only check done"): read its lines
@@ -45,20 +45,20 @@ echo "$CK" | grep -q '^check: 0 scale pieces' && echo "$CK" | grep -q 'read-only
 [ -e $MD5A ] && die "$MD5A exists: a conversion ran before; look first"
 say "converting (md5 of the row-major files first)"
 t0=$(date +%s)
-$PY "$TOOL" "$R3" --md5 $MD5A --yes >> "$LOG" 2>&1 || die "the conversion stopped (rc $?): the store may be mixed; re-run resumes, or --inverse"
+$PY "$TOOL" "$R3" --pad --md5 $MD5A --yes >> "$LOG" 2>&1 || die "the conversion stopped (rc $?): the store may be mixed; re-run resumes, or --inverse"
 say "converted in $(( $(date +%s) - t0 )) s; md5 of the converted files"
 (cd "$R3" && md5 -r L*.bin) > $MD5B
 $PY - "$MODEL" >> "$LOG" 2>&1 <<'EOF' || die "index check failed"
 import json, os, sys
 sys.path.insert(0, os.environ.get("CONV_BIGMOE") or os.path.expanduser("~/BigMoE"))   # (test: the staged patch)
 ix = json.load(open(os.path.join(sys.argv[1], "records3", "index.json")))["layers"]
-bad = [L for L, r in ix.items() if r.get("layout") != "native+p11" or "rowmajor" not in r or r["recsz"] != 2785280]
-assert not bad, f"layers not native+p11 / without their rowmajor entry: {bad}"
+bad = [L for L, r in ix.items() if r.get("layout") != "native+p11+pad" or "rowmajor" not in r or r["recsz"] != 2785280]
+assert not bad, f"layers not native+p11+pad / without their rowmajor entry: {bad}"
 import bigmoe.tier as T
 try:
     T.load_index(sys.argv[1]); raise SystemExit("load_index took a converted store")
 except RuntimeError:
     pass
-print(f"index OK: {len(ix)} layers native+p11, rowmajor entries kept; load_index refuses row-major readers")
+print(f"index OK: {len(ix)} layers native+p11+pad, rowmajor entries kept; load_index refuses row-major readers")
 EOF
-say "DONE: $R3 is native+p11 (md5s: $MD5A before, $MD5B after). Tell all sessions."
+say "DONE: $R3 is native+p11+pad (md5s: $MD5A before, $MD5B after). Tell all sessions."

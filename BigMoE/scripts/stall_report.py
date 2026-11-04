@@ -193,6 +193,33 @@ def analyse(tag):
         say(f"read bursts per check {n_:.1f}: SSD idle before them median {1e3 * np.median(g):.3f} ms; after >= 0.25 ms "
             f"{100 * (g >= 25e-5).mean():.0f} %, >= 1 ms {100 * (g >= 1e-3).mean():.0f} % -> at MoonShots' ~60 us each, "
             f"~{0.06 * n_ * (g >= 25e-5).mean():.1f} ms per check a keepalive could recover")
+    # JOINT read (the orchestrator Wed 04:0x: "76.5 bursts in both arms" came from the per-kind count above, which can never
+    # drop): per (pass, layer) with base AND sidecar reads, the gap = the sidecar's first start - the base's last end
+    # (< 0 = they overlap), the layer's whole read span, bursts per check with an overlapping base + sidecar counted once,
+    # and the share of sidecar reads JOINT issued early (trace tag 2)
+    gp, spn, merged = [], [], 0
+    for p in P:
+        for d in p["lay"].values():
+            rb = [x for x in d["rd"] if abs(x[2] - MB["base"]) < 1e-9]; rs_ = [x for x in d["rd"] if abs(x[2] - MB["side"]) < 1e-9]
+            merged += (1 if rb else 0) + (1 if rs_ else 0)
+            if rb and rs_:
+                gap = min(x[0] for x in rs_) - max(x[1] for x in rb)
+                gp.append(gap); spn.append(max(x[1] for x in rb + rs_) - min(x[0] for x in rb + rs_))
+                merged -= gap < 0
+    side_n = [0, 0]
+    side_ls = {int(m[1]) for m in laymap if len(m) > 1 and m[1] is not None and int(m[1]) >= 0}   # the sidecar's ext layers
+    for r in S["runs"]:
+        if r.get("paused"):
+            continue
+        for x in r.get("rd") or []:
+            if int(x[0]) in side_ls:
+                side_n[0] += 1; side_n[1] += int(x[2]) == 2
+    if gp:
+        gp = np.array(gp); spn = np.array(spn)
+        say(f"JOINT read: sidecar reads issued early by JOINT {side_n[1]} of {side_n[0]} ({100 * side_n[1] / max(side_n[0], 1):.0f} %); "
+            f"layers with base + sidecar reads {len(gp) / len(P):.1f} per check: sidecar start - base end median "
+            f"{1e3 * np.median(gp):.3f} ms ({100 * (gp < 0).mean():.0f} % overlap), whole layer read span median "
+            f"{1e3 * np.median(spn):.3f} ms; bursts per check with an overlapping base + sidecar counted once {merged / len(P):.1f}")
     # per-miss service ms on the wall clock vs fanwatch's SSD temperature (the orchestrator 23:2x, the cloud auditor's
     # SSD-heat idea: +15 % per miss above 65 C?); the dump's anchor maps UPTIME_RAW to the wall clock
     if anc:

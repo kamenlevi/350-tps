@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.expanduser("~/Leap/scripts"))
 PROJ = ("gate_proj", "up_proj", "down_proj")
 SH = {"gate_proj": (640, 2560), "up_proj": (640, 2560), "down_proj": (2560, 640)}
 ALIGN = 16384
+PADW = 9216                    # native+p11+pad: the MSB scale pieces' words (36,864 B = 9 x 4 KB)
 _POS = [(11 * j >> 5, 11 * j & 31) for j in range(32)]
 
 
@@ -147,7 +148,7 @@ def unpack(w, n):
 def pieces(r):
     """The record's pieces from an index.json layer entry (any layout): (name, part, proj, off, size, dtype, per, packed)."""
     out = []
-    p11 = r.get("layout") == "native+p11"
+    p11 = r.get("layout") in ("native+p11", "native+p11+pad")
     for p, pr in enumerate(PROJ):
         for k, (nm, dt, per) in enumerate((("w3", np.uint32, 6), ("s3", np.uint16, 1), ("b3", np.uint16, 1))):
             out.append((nm, "msb", pr, r["msb_piece_off"][3 * p + k], r["msb_piece_size"][3 * p + k], dt, per, p11 and k > 0))
@@ -156,25 +157,40 @@ def pieces(r):
     return out
 
 
-def layout_p11(r):
-    """The native+p11 index entry for a row-major (or native) records3 layer entry r."""
+def layout_p11(r, pad=False):
+    """The native+p11 index entry for a row-major (or native) records3 layer entry r. pad (BigMoE + MoonShots' M-29, Tue
+    22:5x): "native+p11+pad", every piece 4 KB-aligned in the record for zero-copy slot reads. The MSB scale pieces are
+    zero-padded to PADW words (36,864 B, so msb_sz is unchanged), and the LSB part holds the three l1 planes first, then
+    the three b pieces unpadded (lsb_sz unchanged). The index arrays keep their logical order (per projection: w3, s3, b3
+    / l1, b) with these physical offsets."""
     q = {k: v for k, v in r.items() if k not in ("recsz", "msb_sz", "lsb_sz", "msb_piece_off", "msb_piece_size",
                                                  "lsb_piece_off", "lsb_piece_size", "layout")}
     mo, ms, lo, ls = [], [], [], []
     off = 0
     for p, pr in enumerate(PROJ):
         o, i = SH[pr]
-        for k, sz in enumerate((r["msb_piece_size"][3 * p], 4 * piece_words(o * i // 64), 4 * piece_words(o * i // 64))):
+        pw = 4 * (PADW if pad else piece_words(o * i // 64))
+        for k, sz in enumerate((r["msb_piece_size"][3 * p], pw, pw)):
             mo.append(off); ms.append(sz); off += sz
     msb_sz = -(-off // ALIGN) * ALIGN
-    off = msb_sz
-    for p, pr in enumerate(PROJ):
-        o, i = SH[pr]
-        for k, sz in enumerate((r["lsb_piece_size"][2 * p], 4 * piece_words(o * i // 64))):
-            lo.append(off); ls.append(sz); off += sz
+    if pad:
+        lo, ls = [0] * 6, [0] * 6
+        off = msb_sz
+        for k in (0, 1):                                   # all l1 planes, then all b pieces
+            for p, pr in enumerate(PROJ):
+                o, i = SH[pr]
+                sz = r["lsb_piece_size"][2 * p] if k == 0 else 4 * piece_words(o * i // 64)
+                lo[2 * p + k], ls[2 * p + k] = off, sz
+                off += sz
+    else:
+        off = msb_sz
+        for p, pr in enumerate(PROJ):
+            o, i = SH[pr]
+            for k, sz in enumerate((r["lsb_piece_size"][2 * p], 4 * piece_words(o * i // 64))):
+                lo.append(off); ls.append(sz); off += sz
     lsb_sz = -(-(off - msb_sz) // ALIGN) * ALIGN
-    q.update(layout="native+p11", recsz=msb_sz + lsb_sz, msb_sz=msb_sz, lsb_sz=lsb_sz, msb_piece_off=mo, msb_piece_size=ms,
-             lsb_piece_off=lo, lsb_piece_size=ls)
+    q.update(layout="native+p11+pad" if pad else "native+p11", recsz=msb_sz + lsb_sz, msb_sz=msb_sz, lsb_sz=lsb_sz,
+             msb_piece_off=mo, msb_piece_size=ms, lsb_piece_off=lo, lsb_piece_size=ls)
     return q
 
 
@@ -184,9 +200,10 @@ def _piece_shape(pr, per, dt):
     return o, kg, o * kg * per
 
 
-def to_p11(raw, r):
-    """raw: (E, recsz) uint8 records of a ROW-MAJOR layer (entry r) -> (E, recsz') uint8 native+p11 records."""
-    q = layout_p11(r)
+def to_p11(raw, r, pad=False):
+    """raw: (E, recsz) uint8 records of a ROW-MAJOR layer (entry r) -> (E, recsz') uint8 native+p11 records (pad:
+    native+p11+pad; padding bytes are zero)."""
+    q = layout_p11(r, pad)
     E = raw.shape[0]
     out = np.zeros((E, q["recsz"]), np.uint8)
     for (nm, part, pr, off, sz, dt, per, _), (_, _, _, off2, sz2, _, _, packed) in zip(pieces(r), pieces(q)):

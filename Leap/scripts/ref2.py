@@ -39,6 +39,13 @@ What changes (monkeypatches on MTPLX, read-only):
     C 224, -3 ms per cycle). CFG["gdn_exact"]; frozen copy in ~/Leap/third_party/ms_gdn. No bits change.
   - R-62 (REF2c candidate, off by default): CFG["att_single"] runs each 16-row attention call as one fused SDPA instead
     of MTPLX's 12 head chunks (the key buckets stay; past 512 keys the bits differ from the chunked calls).
+  - F1 (FAST-K, off by default; Leap Tue 2026-11-03, TABLE_350 'F1-SWITCH', EvalSuite PREREG_f1): CFG["fatt_verify"]
+    (or REF2_FATT_VERIFY=1), read per call, runs each bool-mask 16- / 8-row verify call as fs4 (fatt16s, KS 4; batch-
+    and N-invariant, so no key buckets or class re-runs) instead of MTPLX's 12 head chunks. Not bitwise == REF2-T
+    (~2e-3); SD == AR holds by fs4's invariance (the AR pads to 16 rows, so it takes fs4 too). COUNTS fatt_verify /
+    verify_old / verify_old_eligible. fs4 is imported on its first call (lazy modules: fatt16s.py, fatt16.py).
+    F1-R8 (CFG["fatt_r8"] or REF2_FATT_R8=1, off by default, only with fatt_verify): a padded call with <= 8 real rows
+    (8-row checks, AR steps) runs fs4's R 8 form on its first 8 rows: bitwise == F1's rows (B6 INV (e)); COUNTS fatt_r8.
   - R-68 (REF2c candidate, off by default): CFG["gdn_inproj"] runs each GDN layer's qkv / z / b / a projections as one
     4-bit matmul on the row-concatenated packs + 32 zero rows (N 16480 -> 16512, so it takes qmm16c; MTPLX's own
     MTPLX_FUSED_GDN_INPROJ fusion is N 16480 and falls to MLX's call). qkv / z keep their bits, b's (and maybe a's)
@@ -122,10 +129,13 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "kb_step": 512, "tiers": True, "gdn_exact": True, "tier_nax4": False, "tier_nax_ooo": False, "att_single": False,
        "gdn_inproj": False, "att_rope": False, "idx_prep": False, "hc_write": False, "hc_gate": False,
        "gdn_inproj_x": False, "gdn_body": False, "hc_b": False,
-       "nax_hybrid": False, "nax_native": False, "nax_repack_p1": False, "native_3c": False}
+       "nax_hybrid": False, "nax_native": False, "nax_repack_p1": False, "native_3c": False,
+       "fatt_verify": os.environ.get("REF2_FATT_VERIFY") == "1", "fatt_r8": os.environ.get("REF2_FATT_R8") == "1"}
 _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
-              kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0)
+              kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
+              fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0)
+_ROWS = [R]                                          # F1-R8: the real rows of the attention call being built (_att)
 _ORIG = {}
 _WCAT = {}
 
@@ -194,7 +204,11 @@ def _att(self, x, cache):
     S = x.shape[1]
     if _ON[0] and S < R and isinstance(cache, Q.QSACache):
         xp = mx.concatenate([x, mx.repeat(x[:, -1:], R - S, axis=1)], axis=1)
-        out = _ORIG["att"](self, xp, cache)
+        _ROWS[0] = S                                  # F1-R8: the verify SDPA may compute only the real rows
+        try:
+            out = _ORIG["att"](self, xp, cache)
+        finally:
+            _ROWS[0] = R
         cache.trim(R - S)
         COUNTS["attention"] += 1
         return out[:, :S]
@@ -718,6 +732,11 @@ def _sdpa_one(q, k, v, *, scale, mask):
     COUNTS["att_single"] += 1
     return mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask=mask)
 
+def _fatt16s():
+    """F1: fs4 (scripts/fatt16s.py, which imports fatt16.py), loaded on the first switched call only"""
+    from fatt16s import fatt16s
+    return fatt16s
+
 def _sdpa_at(q, k, v, mask, scale, n):
     """MTPLX's own verify SDPA with k / v zero-padded to n keys and the mask extended (False / -inf)"""
     orig = _sdpa_one if CFG["att_single"] else _ORIG["vsdpa"]
@@ -735,7 +754,19 @@ def _verify_sdpa(q, k, v, *, scale, mask):
     """R-40 STEP 3m / 4c: a 16-row call runs in its class: at its own N in the bands, at the bucket's length past
     kb_from (zero-padded, masked). REF2's AR pads attention to 16 rows, so the AR step at position p calls it with
     p + 16 keys; in a 16-row check with N keys row j sits at N - 16 + j, so its AR step had N + j keys. Rows whose AR
-    class differs from the check's are recomputed in one more call in their class and selected in exactly."""
+    class differs from the check's are recomputed in one more call in their class and selected in exactly.
+    F1 (CFG fatt_verify, off by default): a bool-mask 16- / 8-row call runs fs4 instead (batch- and N-invariant)."""
+    elig = (mask is not None and mask.dtype == mx.bool_ and q.shape[2] in (16, 8) and q.shape[0] == 1
+            and q.shape[3] % 32 == 0 and q.shape[1] % k.shape[1] == 0 and (mask.ndim == 2 or mask.shape[-3] == 1))
+    if _ON[0] and CFG["fatt_verify"] and elig:
+        COUNTS["fatt_verify"] += 1
+        if CFG["fatt_r8"] and q.shape[2] == 16 and _ROWS[0] <= 8 and (q.shape[1] // k.shape[1]) % 2 == 0:
+            COUNTS["fatt_r8"] += 1                    # F1-R8: <= 8 real rows (padded by _att): fs4's R 8 form on the first 8,
+            y8 = _fatt16s()(q[:, :, :8], k, v, scale, mask[..., :8, :], ks=4)   # == the R 16 call's rows (B6 INV (e));
+            return mx.concatenate([y8, mx.zeros_like(y8)], axis=2)            # the padding rows' outputs are discarded
+        return _fatt16s()(q, k, v, scale, mask, ks=4)
+    COUNTS["verify_old"] += 1
+    COUNTS["verify_old_eligible"] += int(elig)
     orig = _ORIG["vsdpa"]
     S, N = q.shape[2], k.shape[2]
     if not _ON[0] or not CFG["sdpa_classes"] or S != R or mask is None:

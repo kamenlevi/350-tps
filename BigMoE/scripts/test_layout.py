@@ -7,7 +7,8 @@ scratch copies written by scripts/r3layout_ref.py (never on records3). Per scrat
   (c) the guard: native+p11 offsets on a row-major file abort (a p11 piece without its header);
   (d) the tier pools (base MSB part + LSB sidecar, piece sizes from the converted index) load 24 experts through the
       loader (ext.ensure): every slot holds its record's part bytes, piece by piece.
-usage: .venv/bin/python scripts/test_layout.py [scratch dirs...]   (default scratch/r3p11 scratch/r3nat)"""
+usage: .venv/bin/python scripts/test_layout.py [scratch dirs...]   (default scratch/r3p11 scratch/r3nat; native+p11+pad
+copies too, e.g. scratch/r3p11pad: the pool check takes each part's pieces in record order)"""
 import json, os, subprocess, sys
 import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -20,7 +21,7 @@ R3 = os.path.join(ROOT, "models", "bare", "records3")
 SH = {"gate_proj": (640, 2560), "up_proj": (640, 2560), "down_proj": (2560, 640)}
 ROWS3 = [SH[p][0] for p in ("gate_proj", "up_proj", "down_proj")]
 PERS4 = [n for o, i in SH.values() for n in (o * i // 2, o * i // 64 * 2, o * i // 64 * 2)]
-CODE = {"row-major": 0, "native": 1, "native+p11": 2}
+CODE = {"row-major": 0, "native": 1, "native+p11": 2, "native+p11+pad": 2}
 ix0 = json.load(open(os.path.join(R3, "index.json")))["layers"]
 
 
@@ -81,6 +82,8 @@ def main(dirs):
         path = os.path.join(ROOT, D, e["file"])
         for part, (po, ps, a, b) in (("MSB", (e["msb_piece_off"], e["msb_piece_size"], 0, e["msb_sz"])),
                                      ("LSB", (e["lsb_piece_off"], e["lsb_piece_size"], e["msb_sz"], e["recsz"]))):
+            o_ = sorted(range(len(po)), key=lambda i: po[i])    # record order (native+p11+pad: the l1 planes first)
+            po, ps = [po[i] for i in o_], [ps[i] for i in o_]
             assert all(po[i + 1] == po[i] + ps[i] for i in range(len(po) - 1)) and po[0] == a, (part, po, ps)
             C = 8
             pools = [mx.zeros((C, s), mx.uint8) for s in ps]

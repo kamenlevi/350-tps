@@ -6029,5 +6029,564 @@ shapes, since latency does not depend on the values.
   - S's code paths smoke (2 s phases): a4x4, which cycles four different-weight models, slowed the GPU +11.2 % at
     26.2 experts/ms (gain +18.5 %). The single-model a4 was +2.4 / +6.4 % in WHOLE-CHIP, so on-chip reuse may have
     flattered it. A4x4 + C-Q4 together: s +34 %, gain +22 %. A hint only; the quiet run decides.
-  - Armed: scripts/run_wc2_night.sh (attached; waits for 00:30, no PAUSE / HOLD, then a quiet lock in the FIFO; H then
-    S; swap guard; unlock). Logs: data/wc2_night.log, wc2_handoff.txt, wc2_sustained.log.
+  - Armed: scripts/run_wc2_night.sh (attached; no PAUSE / HOLD, then a quiet lock in the FIFO; H then S; swap guard;
+    unlock). Logs: data/wc2_night.log, wc2_handoff.txt, wc2_sustained.log.
+  - Re-armed 18:0x on the orchestrator's timing fix. The ticket is queued no earlier than 00:44, because Fit12's quiet
+    slot is 00:30-00:43:30 and it drops a grant after 00:35:30. The cap is a HARD ~10 min: H at most 150 s, S at most
+    420 s, each killed at its cap, lock 11 min.
+  - **Deviation from the S pre-registration (forced by the cap):** 12 s phases instead of 20, and a 45 s warm-up
+    instead of 60; still 3 rounds of {a4x4, q4, a4x4 + q4}, each between alone phases.
+> (a quote from the project owner, kept private)
+    overnight"):** the night runner was stopped (19:00). The run goes now (`WC2_NOW=1`), by day, under a quiet lock
+    with Kamen on the Mac (PowerPoint, Chrome, Spotify). The order became M-28 -> Fit12 -> WC2: Fit12 was granted at
+    19:00:53 while no ticket of mine was in yet.
+    - scripts/wc2_load.py records the background load beside H and S: per app, CPU from ps time deltas and GPU from
+      ioreg AGXDeviceUserClient accumulatedGPUTime; the runner's tree is kept apart. It also logs GPU utilization,
+      swap and available memory, plus a 10 s baseline before H. Outputs: data/wc2_load.jsonl, data/wc2_marks.txt,
+      data/wc2_load_summary.txt.
+    - Lines and caps are unchanged. If the noise makes S unreadable, S is re-run alone at night (the orchestrator).
+- **RESULT (Tue 19:08:56-19:22:57, quiet lock, by day with Kamen on the Mac; data/wc2_handoff.txt,
+  data/wc2_sustained.log, data/wc2_load_summary.txt): H = KILL at the best split (BETWEEN at the other K); S =
+  UNREADABLE (two heat freezes). The handoff eats the gain, so the bet stops, as agreed with the orchestrator.**
+  - **H [K]** (19:09:06-19:09:35, no freeze; per layer, 20 checks of 48 layers; stand-in GPU layer 0.700 ms at 206 GB/s;
+    window 62 experts, hot-set use 0.71):
+
+    | K | C handoff | D ANE alone | **C - D** (the line) | C - predict inside | B split | **B / A** |
+    |---|---|---|---|---|---|---|
+    | 4 | 331.3 us | 244.5 | 86.8 us | 102.6 | 720.8 | 0.980 |
+    | 8 | 464.6 | 386.3 | **78.4 us** | 104.0 | 700.7 | 0.953 |
+    | 12 | 659.7 | 512.6 | **147.1 us** | 132.2 | 694.9 | **0.945** (best) |
+    | 16 | 773.1 | 657.6 | 115.5 us | 129.9 | 725.7 | 0.987 |
+
+    - A, the GPU-only layer: 735.2 us. The round trip alone: E1 (GPU-signalled event) 151.8 us, E2 (BigMoE's post
+      kernel + a CPU-signalled wait) 128.7 us.
+    - Against the lines: no K is near PASS (the overhead is never <= 50 us; B / A never <= 0.9). At the best split
+      (K 12, 0.945) the overhead is 147 us >= 135: **KILL**. K 4 / 8 / 16 are BETWEEN (78-116 us).
+    - What it means: the best split is only 5.5 % faster per layer (+5.8 % throughput; K 8: +4.9 %), against the
+      ~+18 % [P] without handoffs. 48 handoffs cost ~3.8-7.1 ms per check, 11-20 % of the 35.3 ms GPU check, so they
+      eat ~2/3-3/4 of the gain. The split's unhidden cost is ~33 us (K 8) to ~61 us (K 12) over the ideal max(GPU share,
+      ANE call).
+    - The pre-registered prediction held: H BETWEEN-to-KILL; (d) at K 16 0.658 ms (pred. ~0.65); overhead 78-147 us
+      (pred. 60-150).
+  - **S: UNREADABLE, not a result.** The heat watcher (fanwatch, the 5000 rpm day cap) froze the research jobs, my
+    runner included, twice:
+    - 19:11:13-19:15:57 (284 s by the sampler's gap) and 19:18:38-19:22:01 (204 s); 488 s of S's 801 s were frozen.
+    - The chip went HOT (thermal state 1) 37 s into S (19:10:12).
+    - The "none" phases spread 0.68-1.25 ms per call (a 1.8x range), and one q4 phase ran 0 s.
+    - The printed "PASS ['a4x4']" (s -7.5 %, gain +41 %) is an artefact of the freezes: a negative slowdown is noise.
+    - Exit 145 = 128 + 17, consistent with SIGSTOP (17 on macOS).
+  - **Background load (scripts/wc2_load.py; CPU in cores, GPU in % of wall time, my runner's tree apart):**
+    - 10 s baseline: 1.50 cores, GPU 7.2 % (Spotify 3.5 %, WindowServer 1.8, Terminal 1.7). The "claude" CPU
+      (0.21-0.34 cores) is the Claude CLIs themselves.
+    - During H: 1.22 cores, GPU 3.0 % (max 5.6).
+    - During S: 1.50 cores (max 2.85), GPU 8.2 % (max 33; WindowServer 5.2 %).
+    - Swap +0, available >= 29 GB.
+    - So H's noise is small against its 80-150 us effects; S's problem is heat, not the apps.
+  - **Cap overrun (my bug, fixed):** run_capped counted its own loop seconds, and the freeze stopped the runner too, so
+    S ran 801 s wall against the 420 s cap and outlived the 11-min lock (19:19) by ~4 min. No grant was waiting or
+    made in that time (turns.jsonl), and PAUSE was set by the heat. run_capped now caps on the wall clock ($SECONDS;
+    tested), and the load summary flags freezes ("FROZEN ... s").
+  - [K] By day under the 5000 rpm fan cap, a sustained GPU + ANE + 4-core CPU load is frozen within ~1.5 min, so
+    sustained co-run numbers need the night (fans uncapped).
+  - **Decision:** per the orchestrator ("if 48 handoffs per check eat the gain, we stop there"), the per-layer
+    GPU -> ANE split is stopped. S's night re-run is moot for this bet and is not armed; it is one command if wanted.
+    The one lever left [untested, not pursued without routing]: an ANE dispatch far cheaper than Core ML's ~130 us
+    fixed cost per call (a private-API path), which would need <= ~50 us per round trip to matter.
+
+## W1-PICKUP the release -> GPU pickup of a loader call (Leap, pre-registered Tue 2026-11-03 19:3x EET; the orchestrator's routing 19:2x for the WALL 1 SPRINT, BigMoE leads; native/w1_pickup.swift)
+- **Why:**
+  - Of the ~0.28 ms per loader call, ~96 us sits outside the I/O path [K M-28]: the last record's copy ~53 us, the
+    release ~8, the pickup 0-40, the plan ~10-30 (Fable A's WALL1_D1_SPEC).
+  - The pickup is GPU-side. OOO waits for the loader with a one-thread kernel (ext bigmoe_spin) that polls FRESH line
+    pairs: 128 pairs per (layer, pass) region, 192 ints each at MAXK 160. It idles 32 x 1.1^p FMA iterations between
+    polls, because a running kernel never sees a CPU store on a line it has already read [K WHOLE-CHIP-2].
+  - The release writes the stamped slots into all 128 pairs (~82 KB), then the tags. Event mode (an MTLSharedEvent per
+    layer, encodeWait in the next command buffer) is the engine's other path.
+  - [K SC5]: the pickup adds +35-40 us after 0.6-1 ms stalls and +130 after 2 ms.
+- **Prior art:**
+  - MLX 0.32.2 (BigMoE's venv) has a Fence "fast mode" (MLX_METAL_FAST_SYNCH=1, Metal 3.2+): one-thread kernels
+    fence_wait / fence_update over a `volatile coherent(system) device uint*`, with seq_cst `thread_scope_system`
+    fences under `#pragma METAL internals`. They are compiled in mlx.metallib.
+  - My wc_spintest never tried coherent(system).
+  - An MLX issue reports a deadlock with fast synch in a distributed pipeline, so correctness gets its own check here.
+- **Harness.** Each trial is one command buffer: an m1 marker (BigMoE's post pattern: a device atomic store + fence),
+  then the wait, then an m2 marker. The CPU (user-interactive QoS) sees m1, waits w, releases (timed), then times until
+  it sees m2. Arms:
+  - **A, today:** bigmoe_spin verbatim (G1 = G2 = 1.1, KNEE 0, PAIRS 128, RS 192, n = 160 stamped slots, a 128-region
+    ring like the engine's) with the engine's release (all pairs, a fence, then the tags). The kernel also bumps
+    status[32 + got], S0's planned histogram, so each trial's pair index maps to its pickup time.
+  - **B, coherent:** one thread polls ONE row, the same lines every poll, with coherent(system) loads and system
+    fences. The CPU writes the row once (stamped words, a release fence, the tags). Same decode and stamp check as A,
+    with an iteration cap (a timeout is counted).
+  - **M:** MLX's own compiled fence_wait from mlx.metallib on a timestamp word. It runs only if B has no timeout,
+    because it has no cap.
+  - **C, event:** end the encoder -> encodeWaitForEvent(ev, seq) -> the next encoder; the release is
+    setSignaledValue(seq) (BigMoE's event mode).
+  - **N, null:** m1 -> m2 with no wait (the markers' floor).
+  - w in {-1 (released before the commit: a hidden burst), 0, 50, 200, 600, 1000, 2000} us; 300 trials per (arm, w),
+    interleaved in a shuffled order each round.
+- **Metrics:**
+  - release = the CPU time of the release writes or signal;
+  - pickup = t(m2 seen) - t(release done), median and p90;
+  - overshoot(w) = pickup(w) - pickup(-1);
+  - correctness: every trial's decoded slots equal the released ones, and no timeouts.
+- **Lines** (B is the fastest-correct-form candidate; C is recorded):
+  - **PASS:** B is correct on every trial AND its pickup median is <= 10 us and p90 <= 20 us at w = 0.6, 1 and 2 ms
+    AND B's release + pickup is <= A's - 25 us (median) at w = 1 ms. Then BigMoE gets a drop-in (kernel + release
+    writer) behind a flag, for an engine A/B with S0.
+  - **KILL:** B sees no release (timeouts) or any wrong slot, or it beats A by < 10 us at w = 1 ms. Then today's spin
+    stays, and the pickup is not where the 96 us is.
+  - **BETWEEN** otherwise.
+- **Prediction [G]:**
+  - A: overshoot ~5-10 % of w (+30-60 us at 0.6-1 ms, +100-150 at 2 ms); its floor (w = -1) 5-15 us over N; release
+    3-8 us.
+  - B: works, pickup 1-6 us flat, release < 1 us -> PASS. M about equal to B.
+  - C: 40-120 us flat (the command processor's wake), release 2-10 us.
+- **The engine prize [P]:**
+  - ~23 exposed bursts per check x ~40 us + 83 releases x ~5 us is ~1.3 ms per check at 45 GB (~+1.3 % tok/s, ~+0.7 %
+    halved). Small alone.
+  - A ~us pickup is what S7b (a per-expert release while the burst lands) and lever 2's in-flight forecast waits need.
+- **The hook with BigMoE's S0 (Wed):**
+  - (1) A's p -> time table on this Mac, so S0's status[32 + p] histogram reads as a pickup bound without the
+    BIGMOE_DELAY_US calibration.
+  - (2) If PASS, a drop-in coherent spin + one-row release behind a flag (BigMoE's edit, in its repo). S0's t_rel then
+    bounds release + pickup directly.
+- **Budget:** ~1 h of build and smokes (share lock, tiny). The measurement is ~1 min under a short quiet lock (one GPU
+  thread + one CPU core, no heat). By day: short bursts only.
+- **Smoke findings (Tue 19:37-19:39, share lock, 3-5 trials per cell; NOT the measurement):**
+  - [K] The m1 marker written BigMoE's post way (device atomic stores + a device-scope fence) reached the CPU only
+    ~30 ms after the commit, while the spin kernel ran on and touched almost no memory. With no wait (N), both markers
+    appeared together at the end of the command buffer (~140 us). As a system-scope store (MLX's fence_update), the
+    marker leg is ~3 us. The measurement therefore uses system-scope markers.
+  - Today's spin (A): release ~9.7 us (82 KB into 128 pairs). Pickup 47 us at w = 0 (pair ~3), 85 us at w = 600
+    (pair ~40).
+  - B (coherent spin): correct on every trial, also on one REUSED row (B1). Release 0.2 us. Pickup 10-15 us, polls
+    ~1.06 us apart.
+  - C (event): release 2-2.5 us, pickup 17 us at w = 0 but **368 us at w = 600**.
+- **Addendum, pre-registered before it runs (Tue 19:4x): P, the post's visibility to the CPU (the GPU -> CPU half;
+  the "see" stage, ~0.005 ms [G] in the D1 spec).**
+  - Per trial: m1 (system scope) -> a post kernel writing a stamped row the way BigMoE's post does (device scope) ->
+    [P1 only: a 64 MB read kernel, the hit work's traffic] -> a hold (B's spin, released by the CPU once it sees the
+    post, or after 5 ms) -> m2.
+  - The CPU times m1 seen -> the post's tag seen. Arms: P0 (device-scope post, the GPU idle after it), P1 (device
+    scope + 64 MB of traffic), PS (the post's tags at system scope, idle after).
+  - **Line:** if P1's or P0's median visibility delay is >= 20 us over PS's, the engine's post should publish its tags
+    at system scope. That is a kernel-only change, exact (the same words), and S0 can time it with a system-scope stamp
+    word in the post. Under 5 us: the post is not part of the 96 us.
+  - **Prediction [G]:** P0 is visible only at a flush point (ms, or the command buffer's end, capped at 5 ms here); P1
+    becomes visible when the traffic evicts the line (tens to a few hundred us); PS is ~3 us.
+- **RESULT (Tue 19:41:29-19:41:39 and 19:43:38-19:43:42, quiet locks; 300 trials per cell, interleaved;
+  data/w1_pickup.txt, data/w1_pickup_P.txt): PASS. The coherent(system) spin (B) is correct on all 4,200 trials,
+  the reused row (B1) included. Release + pickup goes from ~23-80 us today to ~3-4 us, flat in the wait.**
+
+  | arm (median us) | release | pickup w -1 | w 0 | w 50 | w 200 | w 600 | w 1000 | w 2000 |
+  |---|---|---|---|---|---|---|---|---|
+  | A today (spin + 128-pair release) | 6.4-7.9 | 16.7 | 15.7 | 16.2 | 28.9 | 17.6 (p90 67) | **73.5** | 67.2 |
+  | B coherent spin, ring of rows | 0.17-0.21 | 3.9 | 3.7 | 2.9 | 2.9 | 2.9 | **2.9** | 2.9 |
+  | B1 coherent spin, ONE reused row | 0.17 | 3.8 | 3.6 | 2.8 | 2.8 | 2.8 | 2.8 | 2.8 |
+  | M MLX's own fence_wait (flag only) | 0.21-0.25 | 2.0 | 1.8 | 1.2 | 1.2 | 1.2 | 1.2 | 1.2 |
+  | C MTLSharedEvent | 0.9-2.3 | 2.2 | 12.1 | 96.0 | 76.6 | 78.3 | 77.2 | **360.5** |
+  | N markers alone | | | 1.0 | | | | | |
+
+  - **Today's spin, A, read as the engine pays it:**
+    - Its poll schedule on this Mac (the time from the spin's start to pickup at pair p): p0 17 us, p6 22, p26 73,
+      p41 236, p52 623, p58 1080, p65 2074 us. The gap between polls is ~10 % of the elapsed wait.
+    - A burst landing at a random moment pays half a gap on top of the ~17 us floor: ~+29 us at 0.6 ms, ~+54 at
+      1 ms, ~+104 at 2 ms. That matches [K SC5]. The fixed-w medians above sample single phases of this schedule
+      (w 600 falls just before p52).
+    - Even a hidden burst pays the floor: 6 fresh-line misses + the decode = 16.7 us, against B's 3.9.
+  - **C:** the event's wake costs 77-96 us after >= 50 us of waiting and 360 us after 2 ms, so it is not a
+    candidate.
+  - **Against the lines:**
+    - B is correct on every trial.
+    - B's pickup median is 2.9 us and its p90 3.1 at w = 0.6, 1 and 2 ms (lines: <= 10 and <= 20).
+    - At w = 1 ms, B's release + pickup is 3.1 us against A's 80.0 (line: >= 25 us better).
+    - **PASS.**
+  - **The prediction held,** except two cells: C was worse at 2 ms (360 us, pred. 40-120), and A's floor was
+    15.7 us over N (pred. 5-15).
+- **P, the post's visibility to the CPU (all line tags, the engine loader's criterion; P2 / P1 = 8 / 64 MB of reads
+  after the post):**
+  - P0, device scope, idle GPU: 293/300 not all visible within 5 ms; the few that were, at ~1.8 ms.
+  - P2, device scope + 8 MB: 20.0 us (p90 26.9).
+  - P1, device scope + 64 MB: 23.0 us (p90 26.8).
+  - PS, system scope, idle GPU: **7.4 us** (p90 7.6), 0 bad.
+  - Device-scope rows: 0.7-1.7 % of trials still had stale words after all tags, the engine's rare stamp re-reads
+    (b45s: ~50 of ~80k posts).
+  - **What it means:**
+    - A device-scope post reaches the CPU only when something after it flushes or evicts its lines: ~20 us after
+      the next real dispatch, not ~5 us (the D1 spec's [G]). It does not arrive at all while the GPU only spins.
+  - **The P line is met only through P0, the idle case.** With traffic after the post, system scope saves 13-16 us,
+    under the 20 us line. Worth taking as insurance against a post followed by little GPU work, and lane-parallel
+    writes may bring PS's 7.4 us to ~2 us [G].
+- **The engine prize [P], 45 GB C 256: ~23 exposed bursts and 83 calls per check:**
+  - Release -6.3 us per call.
+  - Pickup -13 us at the floor and ~-40 more on an exposed burst.
+  - Post -13-16 us on exposed calls.
+  - In all ~1.7-2.0 ms per check, ~+2 % tok/s at the bound (~+1 % halved): exact, kernel + release-writer only.
+  - The bigger value: a ~3 us pickup makes per-expert releases (S7b) and lever 2's in-flight forecast waits cheap.
+    Each would cost 17-100 us with today's spin.
+- **Caveats:**
+  - This is a harness, not the engine: MLX's encoder and buffers, OOO's concurrent work beside the spin, and the
+    real wait distribution all differ. The engine A/B decides.
+  - `coherent(system)` and system-scope fences need `#pragma METAL internals : enable` (undocumented; MLX uses it
+    in production behind MLX_METAL_FAST_SYNCH). So the old path stays as the fallback behind a flag.
+- **Hook for BigMoE's S0 (Wed), proposed:**
+  - (1) The p -> time table above, so the status[32 + p] histogram reads as time.
+  - (2) Drop-ins with reference code in native/w1_pickup.swift: BIGMOE_SPIN_COHERENT (w1_coh_spin: one simdgroup
+    polls ONE row; the release writes one row, not 128 pairs) and BIGMOE_POST_SYS (w1_post_sys).
+  - (3) The engine A/B (default vs spin-coherent vs + post-sys, traced). Line, proposed: stall_report's cadence a
+    minus burst a falls >= 0.03 ms AND tokens identical.
+- **Handoff (Tue 19:4x-19:5x; BigMoE 19:4x: "W1-PICKUP joins Wed's build", plan 42939ed):** patches/w1_pickup.
+  - w1_pickup.patch against BigMoE's ext at ec08cec, two flags, both default OFF:
+    - BIGMOE_SPIN_COHERENT: a one-simdgroup coherent spin on pair 0, and the release writes pair 0 only.
+    - BIGMOE_POST_SYS: post_ids through a system-scope pointer, with macros that preprocess to today's statements.
+  - Checks: it applies cleanly and passes c++ -fsyntax-only with BigMoE's flags. test/kcheck (the exact kernel texts,
+    on the GPU) PASS:
+    - the spin's slots exact over 400 trials, the -1 / -2 codes included;
+    - the fast path, a late-fixed stale word (polled again) and the timeout all as today;
+    - post_ids: the patched default and POST_SYS write bitwise-identical rows and dep to today's kernel.
+  - Base and sidecar spins never share a row: the region is keyed by (seq, L), and the sidecar has its own L.
+  - BigMoE puts them into ext/build_w1 on Wed. Thu's traced arms add + SPIN_COHERENT / + POST_SYS. BigMoE splits
+    tonight's stall by zero-hit layers, to see whether the post's late "see" is the bigger lever.
+
+## KV8 8-bit K / V as a long-context SPEED lever at 45 GB (Leap, pre-registered Tue 2026-11-03 21:3x EET; the orchestrator 21:2x after NewIdeas' Strata prior-art pass; FAST-Q; scripts/fatt16q.py, kv8_screen.py, kv8_layout_probe.py; data/kv8_screen.txt)
+- **Why:**
+  - Strata (a llama.cpp fork tuned for this model) keeps K / V in int8. At ~10K keys attention adds ~23.5 ms per
+    check (FIXED-PART), and agent turns live there.
+  - TRIED has KV8 only as a 12 GB memory lever (KILL on footprint) and as a parked napkin (+20-45 % at 100K).
+- **Prior art and priors:**
+  - llama.cpp's q8_0 KV cache and its flash-attention dequant; MLX-LM's QuantizedKVCache (kv_bits 8, group 64, two
+    quantized_matmuls); KIVI / KVQuant (per-channel K); SageAttention (int8 QK^T with K smoothing: subtracting the
+    channel mean shifts each row's scores by a constant, which softmax cancels exactly).
+  - Fable B's LONG_CONTEXT F2 says "~0 speed": the K / V bytes are ~1 of 24 ms at 10K, and the dequant adds work to a
+    latency-bound kernel.
+  - My B6-G found that K / V re-reads are not fs4's limit; its per-block serial chain is.
+  - The one mechanism by which 8 bits can cut THIS cost (compute) is int8 matrix ops. M27-C [K]: MPP matmul2d does
+    int8 x int8 -> int32 at 1.73x bf16 (25.6 vs 14.7 T MAC/s).
+  - Layout [K] (kv8_layout_probe.py, 21:31): MPP's get_multidimensional_index confirms fs4's hard-coded bf16 layout.
+    The int8 (16, 32, 32) tiles follow it extended to 32 dims, and the int32 score tile has exactly fs4's float layout,
+    so fs4's online softmax runs on it unchanged.
+- **Arms** (SDPA level, R 16, B6's synthetic setup with the indexer's mask, N 2K / 10K / 20K):
+  - mlx1: MLX's one bf16 call.
+  - mlxq8: MLX-LM's quantized SDPA path (8 bits, group 64), the published MLX form.
+  - fs4: bf16.
+  - **q8s, the storage form** (llama.cpp / Strata): int8 K / V (smoothed; per-token per-head scales) converted to bf16
+    for fs4's MMAs. K's scale multiplies the scores; V's scale folds into P; V's mean is added at the output.
+  - **q8m, the MMA form** (SageAttention-style): Q in int8 per (head, row), int8 x int8 -> int32 QK^T on the (16, 32,
+    32) descriptor (8 runs per block instead of 16). The scores are float(acc) x s_q x s_k x scale; PV as in q8s.
+  - Quantization of K / V happens on the cache write, so it is not timed. Q's quantization in q8m is timed.
+- **Error:**
+  - Every arm's output vs fp64 attention on the bf16 inputs (mean |diff| / RMS, and the max), and vs fs4.
+  - At N 10K also on REAL-weight K / V: layer 3's projections, k_norm and RoPE over random hidden states, B6's layer
+    harness, captured in the verify call.
+  - Logits: kernel-independent (a fake-quant engine run of the same int8 K / V). Run only if the speed line passes;
+    EvalSuite judges quality after that.
+- **Lines** (ms per call, 8 chained, median of 20, a quiet lock; per check = 12 layers x the difference):
+  - **PASS:** the best 8-bit fs4 form is >= 1.25x faster than fs4 at 10K AND >= 1.2x at 20K, with a mean error
+    <= 1e-2 vs fp64.
+  - **KILL:** both forms < 1.10x at 10K, or the error is > 1e-2.
+  - **BETWEEN** otherwise.
+- **Prediction:**
+  - q8s 0.90-1.05x (the converts add work to a chain-bound loop; the bytes were never the limit).
+  - q8m 1.05-1.30x (QK^T is about half the chain, run at 1.7x; softmax and PV remain).
+  - Errors: q8s ~3-6e-3, q8m ~5-9e-3, mlxq8 ~3-5e-3.
+  - mlxq8 slower than mlx1 (two dense quantized matmuls plus a softmax over all keys).
+  - Verdict: PASS 10 %, BETWEEN 50 %, KILL 40 %.
+  - Even a PASS is ~1-1.5 ms per check at 10K on top of fs4. The big long-context lever stays F1 itself: fs4's
+    adoption, ~23.5 -> ~13 ms at 10K.
+- **Budget:** ~1 h build; the screen ~3 min (< 1 GB). Timing under a short quiet lock; the error parts can share.
+- **RESULT (Tue 21:36 accuracy on a share lock, 21:36:58-21:37:01 timing on a quiet lock; data/kv8_screen.txt,
+  data/kv8_runner.log): BETWEEN.** The best 8-bit form (q8m) is 1.15x vs fs4 at 10K and 1.17x at 20K, so -0.8 /
+  -1.7 ms per check on top of fs4. The error clause holds on synthetic and real-weight K / V, and FAILS on a stress
+  case with outlier K channels.
+
+  | N, ms per call (R 16) | mlx1 | mlxq8 (MLX-LM) | fs4 | q8s (storage) | q8m (int8 MMA) |
+  |---|---|---|---|---|---|
+  | 2K | 0.144 | 0.471 | 0.138 | 0.138 (1.00x) | 0.147 (0.94x) |
+  | 10K | 0.485 | 1.016 | 0.515 | 0.464 (1.11x) | **0.450 (1.15x)** |
+  | 20K | 1.146 | 1.834 | 0.987 | 0.893 (1.11x) | **0.846 (1.17x)** |
+
+  | mean (max) \|diff\| / RMS vs fp64 | mlx1 | mlxq8 | fs4 | q8s | q8m |
+  |---|---|---|---|---|---|
+  | synthetic, 2K / 10K / 20K | 2.3e-3 | 6.6-7.6e-3 | 1.75e-3 | 6.9e-3 | 7.7-7.8e-3 |
+  | outlier K, 10K (8 channels x 6, offsets) | 3.4e-3 | **1.32e-2** | 1.7e-3 | **1.51e-2** (0.31) | **1.60e-2** (0.26) |
+  | real-weight K / V, 10K (layer 3) | 1.6e-3 | 4.7e-3 | 5.7e-4 | 4.4e-3 | 5.0e-3 |
+
+  - fs4 reproduces B6 (0.515 / 0.987 ms; 1.75e-3).
+  - The real-weight K is flat (channel RMS max / median 1.1) because the hidden states are random. Real text can
+    give K outliers (massive activations; RoPE turns a shared bias into a rotating one that the mean subtraction
+    removes only in part), so the stress case is the open risk.
+  - **Harness bug, fixed:** MLX-LM's `queries *= scale` rebinds the CALLER's array in MLX. The first accuracy run
+    (21:35) therefore fed fs4 / q8s / q8m a q scaled by 1/16 and is VOID; it is marked in the data file. The arm
+    now uses a verbatim copy with `queries = queries * scale`.
+  - **What it means:**
+    - 8 bits buy ~11 % from the bytes (q8s) and ~15 % with int8 QK^T (q8m) at 10-20K, nothing at 2K. Both are below
+      the 1.25x line. QK^T is only part of fs4's per-block chain, and softmax and PV stay.
+    - MLX-LM's published int8 path is 2-3x SLOWER than MLX's bf16 call (0.31-0.62x). Two dense quantized matmuls
+      over every key, so in MLX it is a memory saver only.
+    - Per check at 45 GB: -0.8 ms at 10K and -1.7 at 20K, ~1-2 % of the cycle, on top of fs4. The long-context
+      lever stays F1 itself: fs4 in place of REF2-T's chunk set, ~23.5 -> ~13 ms per check at 10K (B6), FAST-K
+      certification.
+  - **The prediction held:** q8s 0.90-1.05x predicted, 1.00-1.11x measured (slightly better at long N); q8m
+    1.05-1.30x predicted, 1.15-1.17x measured; mlxq8 slower than mlx1; BETWEEN.
+  - **Not run, by the line:** the logit-level check (it was tied to PASS).
+  - **What would move it:** per-channel K handling (KIVI-style channel scales folded into Q, or a SmoothQuant-style
+    migration) for the outlier case, then real-text K / V, then EvalSuite. That only pays if ~1 ms per check at
+    10-20K matters; not started without routing.
+- **Decision (the orchestrator 21:4x): KV8 stops at BETWEEN.** ~1 ms per check at 10K isn't worth the outlier-K risk.
+  F1 (fs4 in place of REF2-T's chunk set, ~23.5 -> ~13 ms per check at 10K) is the long-context lever. NewIdeas
+  queues its FAST-K certification with EvalSuite after Thursday's RELAX.
+
+## F1-SWITCH fs4 in REF2's QSA verify calls, a default-off flag (Leap, pre-registered Tue 2026-11-03 22:3x EET; the orchestrator 22:3x, "tonight"; EvalSuite's PREREG_f1 63cd47e needs it; scripts/ref2.py, f1_switch_smoke.py; data/f1_switch_smoke.txt)
+- **What:** `ref2.CFG["fatt_verify"]`, default False, also settable by `REF2_FATT_VERIFY=1`.
+  - It is read PER CALL in ref2's `_verify_sdpa`, the hook on MTPLX's `Q._verify_sdpa`, so a variant's ref2_cfg can
+    set it (EvalSuite's ask 1).
+  - When on, a bool-mask verify call with 16 or 8 rows runs fs4 (fatt16s, KS 4) and skips REF2-T's key buckets and
+    class re-runs: fs4 is N-invariant by construction (B6 INV (c)).
+  - Everything else (prefill chunks, other masks, other row counts, REF2 off) takes today's path unchanged.
+  - REF2's `_att` pads every attention call under 16 rows to 16, so 8-row checks and the AR's 1-row steps reach it as
+    16-row calls and take fs4 too. That is what makes SD == AR hold under F1.
+  - Per-process counts (EvalSuite's ask 2, its gate 2): COUNTS["fatt_verify"] (through fs4), COUNTS["verify_old"]
+    (every other verify call) and COUNTS["verify_old_eligible"] (16- / 8-row bool-mask calls that took the old path:
+    must be 0 with the flag on).
+  - fs4 is imported lazily on the first switched call. The lazy modules for snapshots are scripts/fatt16s.py and
+    scripts/fatt16.py.
+  - Atomic write; ref2.self_test after the edit (ref2 is live-imported).
+- **Smoke (f1_switch_smoke.py; layer 3's real weights; B6's layer harness, 1,024-row prefill chunks of random hidden
+  states; T0 2K and 10K):**
+  - (1) self_test PASS, and fatt16s not imported after apply() with the flag off.
+  - (2) Flag off == the pre-switch ref2 (data/ref2_before_f1.py), BITWISE: y of a 16-row and an 8-row verify call,
+    in two subprocesses, compared bit for bit.
+  - (3) The switch takes effect. Flag on: every verify call of the checks and AR steps goes through fs4 and
+    verify_old_eligible stays 0. Flag off: none does. y(on) vs y(off) mean |diff| / RMS ~2e-3 (B6: 2.2-2.4e-3).
+  - (4) **SD == AR at the layer level, bitwise.** A check of 16 (and of 8) real rows at positions T0..T0+R-1 against
+    REF2's AR: each row run alone (padded to 16 by `_att`) on the cache grown one token at a time. Row r's output must
+    equal the check's row r bit for bit. Run with the flag on (F1) and off (REF2-T's own property, the control).
+  - (5) Speed sanity: ms per 16-row layer call at 10K, flag on vs off (B6: fs4 1.141, ref2t 1.936).
+- **Line:**
+  - **PASS** = (1)-(4) all hold, and (5) is within +-15 % of B6's fs4 number.
+  - Anything else is FAIL: fixed before the switch goes to EvalSuite. If (4)'s control fails, the test is wrong,
+    not the switch.
+  - The model-level token gates (flag off == REF2-T tokens; live == AR) are EvalSuite's step 0 on its harness.
+- **Prediction:** PASS (85 %). The likeliest snag is (4): any other component of the layer that is not
+  row-invariant would show in the control as well.
+- **RESULT (Tue 22:27, share lock beside Breakthrough's run at ~50 % GPU; data/f1_switch_smoke.txt): (1)-(4) PASS.
+  (5) failed under the shared GPU and is being re-run under a quiet lock (scripts/run_f1_speed.sh -> data/f1_runner.log).**
+  - (1) self_test PASS. With the flag off, apply() leaves fatt16s unloaded.
+  - (2) Flag off == the pre-switch ref2, BITWISE, for 16- and 8-row verify calls at 2K and 10K (each version in its
+    own subprocess).
+  - (3) The counts are exact.
+    - Flag on: the check and its R AR steps are R + 1 calls through fs4, verify_old_eligible 0.
+    - Flag off: 0 through fs4.
+    - y(on) vs y(off): 1.9-2.3e-3 (B6: 2.2-2.4e-3).
+  - (4) **SD == AR at the layer level, BITWISE, with the flag on:** 16/16 and 8/8 at 2K and 10K. REF2-T's own
+    control (flag off) holds too, 16/16 and 8/8.
+  - (5) Shared: flag off 2.584 ms (B6 ref2t 1.936), on 1.711 (B6 fs4 1.141), 1.51x. Both arms are 33-50 % over
+    B6's quiet numbers, i.e. the other run's load. The quiet A-B-A-B re-run decides (5).
+  - Handed to EvalSuite: commit, flag, counts keys, lazy modules.
+
+## S7B-PROBE can the expert kernel start on each expert as it lands? (Leap, pre-registered Tue 2026-11-03 22:3x EET; Wednesday's kernel package, the orchestrator 22:3x "prepare your kernel tests"; WALL1_D1_SPEC S7b "per-expert release, GPU-side with Leap"; native/s7b_probe.swift)
+- **Why:**
+  - Today the GPU waits for a whole burst's release, then runs phase 2. The last record's copy (~53 us) and much of a
+    burst's SSD bytes sit on the GPU's clock.
+  - With W1-PICKUP's ~3 us coherent pickup, a per-expert release becomes affordable: a phase-2 threadgroup would start
+    on expert e as soon as e lands.
+  - Two facts decide whether that is safe and fast, and the first also bears on today's engine's correctness.
+- **A, bandwidth:** a 256 MB shared buffer streamed by many threadgroups (uint4, summed so the loads stay live) through
+  (i) plain device loads, (ii) `volatile coherent(system)` loads, (iii) `coherent(device)` loads (if it builds).
+  GB/s from the GPU timestamps, median of 10.
+- **B, stale data:** a 2 MB "slot" the GPU has already read (pattern P0) is rewritten by the CPU (P1), then released
+  through a coherent flag. The GPU re-reads it in four ways, counting the words still P0:
+  - B1: plain loads in the SAME kernel, after its coherent wait;
+  - B2: plain loads in the NEXT dispatch of the same encoder (today's engine: spin kernel -> phase 2);
+  - B3: as B2, with a buffer memory barrier between;
+  - B4: as B1, with coherent(system) loads.
+  - 20 trials each.
+- **Lines:**
+  - A: coherent streaming >= 0.8x plain = the per-expert path can read weights coherently; < 0.5x = it cannot.
+  - B: any stale word in B2 or B3 is a correctness finding for TODAY's engine; it goes to BigMoE at once with the
+    case.
+  - B1 stale + B4 clean + A >= 0.8x -> C uses coherent weight loads. B1 clean -> plain loads after a coherent wait are
+    enough.
+- **C (Wed morning, after A / B):** 8 experts x 2.1 MB land 50-100 us apart (a CPU memcpy plus a per-expert release).
+  A phase-2 stand-in (each expert's threadgroups read the record and do NAX6-like work, ~10 us) waits per expert, vs
+  waiting for all.
+  - Line: >= 30 % of the burst's land-to-done span hidden, with results bitwise equal to wait-all.
+- **Prediction [G]:**
+  - A: coherent ~0.6-0.9x plain (uncached, but streaming hides latency).
+  - B1 stale (the same kernel keeps its L1 / L2 lines). B2 / B3 clean, because dispatch boundaries invalidate. If B2
+    is stale, today's engine relies on luck.
+  - C: ~30-50 % of the span hidden.
+- **(5) quiet re-run (Tue 22:31:51, quiet lock, after a heat pause cleared; data/f1_runner.log): PASS.**
+  - Flag off 2.047 ms (B6 ref2t 1.936); flag on 1.179 ms (B6 fs4 1.141, +3.3 %); 1.74x. A-B-A-B; the passes agree
+    within 2 %.
+  - **F1-SWITCH: PASS, (1)-(5).** The switch is ready for EvalSuite's step 0 (commit 0002e2e; the runner fixes come
+    with this entry).
+- **RESULT A + B (Tue 22:32:53, share lock beside Breakthrough's run at ~50 % GPU; data/s7b_probe.txt):**
+  - **A, PASS:** 256 MB streamed at 219.7 GB/s with plain loads, 239.1 with coherent(system) (1.09x), 212.7 with
+    coherent(device). A first run (22:32:37) gave 209.5 / 194.3 / 163.9 (0.93x). Coherent(system) loads stream at
+    plain speed, so the per-expert path can read weights coherently.
+  - **B, a correctness finding [K]:**
+
+    | case (2 MB slot, 20 trials) | stale words per trial | trials with any |
+    |---|---|---|
+    | B0 control: first read after the rewrite | 0 | 0 / 20 |
+    | B1 plain loads, same kernel | 524,288 (all) | 20 / 20 |
+    | **B2 plain loads, NEXT dispatch (spin -> phase 2)** | **505,808-524,288** | **20 / 20** |
+    | B3 = B2 + memoryBarrier(.buffers) | 0-524,288 | 16 / 20 |
+    | B4 coherent(system) loads, same kernel | 0 | 0 / 20 |
+
+    - Inside one command buffer, a CPU rewrite of memory the GPU read earlier IS NOT SEEN by later dispatches while
+      the GPU still caches those lines. A buffer memory barrier does not fix it; coherent(system) loads do, at no
+      bandwidth cost (A).
+    - Today's engine: the loader rewrites slots while a check's command buffer runs, and phase 2 reads them with plain
+      loads. At 45 GB steady state a slot is reused about a check later, after GBs of traffic have evicted its lines,
+      which fits the bitwise runs.
+    - **The hazard:** any path that rewrites a slot the GPU read recently in the same command buffer (two passes per
+      check over the same pools, tier / ghost copies, small pools with fast reuse, S7b-like reuse) would read the OLD
+      weights silently. Slot data carries no stamps; the routing rows and tables do.
+    - Sent to BigMoE and the orchestrator at once (the pre-registered rule).
+  - **The prediction held:** B1 stale, B4 clean. **It did not hold:** B2 / B3 were predicted clean.
+  - **For S7b:** C reads the weights with coherent(system) loads (B4 clean, A at plain speed). C runs Wednesday
+    morning.
+- **B5 and a re-run with per-trial patterns (Tue 22:35:54, share lock; data/s7b_probe2.txt). Patterns now differ per
+  trial, so an earlier trial's lines cannot pass as fresh.**
+  - A: plain 281.6, coherent(system) 284.5 (1.01x), coherent(device) 276.8 GB/s; the GPU was freer this time.
+  - B0 0 / 20; B1 stale 19 / 20; **B2 stale 20 / 20**; **B3 (barrier) stale 20 / 20 (all words)**; B4 0 / 20.
+  - **B5, the slot last read by an EARLIER (completed) command buffer and rewritten while the NEXT one runs: 0 stale,
+    0 / 20.** A command-buffer boundary between the GPU's last read and the rewrite is enough.
+  - So BigMoE's reading of today's engine holds: a victim's last read sits in an earlier command buffer.
+  - The hazard is exactly a read, then a CPU rewrite, then a re-read inside ONE command buffer. The fix for such paths
+    is coherent(system) slot reads (free: 1.01x) or a command-buffer boundary.
+  - BigMoE runs (c) tonight at C 160 (every token vs REF2-T). (a), default-off coherent slot reads for 3c-N / NAX6-N
+    (and 3c if MPP allows) with a bandwidth check on the real kernels, is Leap's for Wednesday.
+- **B6 (Tue 22:37:27, share lock beside Breakthrough's run; data/s7b_probe3.txt): the B2 pattern with the re-read
+  through a PLAIN kernel parameter cast to `volatile coherent(system)` inside the body (all an MLX metal_kernel can do;
+  the cast also compiles in MLX): 0 stale, 0 / 20.**
+  - So BigMoE's ask (a) can be built in MLX kernels by casting the pool pointers.
+  - Caution: B6's trial took 379 us against ~165-185 for the other cases. Its scalar strided coherent loads through the
+    cast look ~2x slower on the 2 MB read. Probe A's coherent loads were uint4 and ran at plain speed.
+  - The real expert kernels' speed with cast-coherent pool reads decides the cost (Wednesday, (a)).
+  - The same run repeated B2 (stale 17 / 20) and B3 (stale 19 / 20); B0, B4 and B5 stayed 0 / 20.
+
+## COH coherent(system) slot reads in the expert kernels, default off (Leap, pre-registered Tue 2026-11-03 22:4x EET; BigMoE's ask (a) after S7B-PROBE, 22:3x; scripts/tierglu_coh.py, coh_check.py; data/coh_check.txt)
+- **Why:**
+  - S7B-PROBE B: inside ONE command buffer, a CPU rewrite of a slot the GPU read earlier is not seen by later
+    dispatches. Coherent(system) reads fix it (B4, and B6 through a cast).
+  - Today's engine is safe by command-buffer boundaries (B5). Per-expert release (S7b), lever 2's in-flight forecast
+    reads and two-pass checks at 12 GB break that argument, so BigMoE wants a default-off safety net.
+- **What (tierglu_coh.py, built from the LIVE sources by string substitution, so no live module changes tonight):**
+  - NAX6-N's kernels A / B and 3c-N's kernels with the pool pointers (codes, LSB words, scales, biases; never the
+    activations or slot ids) cast to coherent(system).
+  - Two forms: **cn** (`coherent(system) const device`, non-volatile, so the compiler may still vectorize the 6-word
+    code loads) and **cv** (`volatile coherent(system)`, B6's proven form). Both use the same arithmetic, so they should
+    be bitwise == the plain kernels.
+- **Test (coh_check.py, real layer-20 pools from data/native_sample, P11's full-layer routing):**
+  - (1) Bits: every output == the plain kernel, NAX6-N and 3c-N, S 16.
+  - (2) Speed: ms per call (8 chained, median of 20), plain vs cn vs cv, S 16.
+  - (3) Freshness in the kernel itself: one slot's records rewritten by the CPU between two calls in ONE command
+    buffer. Plain must show the hazard (stale output), cn / cv the fresh output. Only if (1) and (2) allow.
+- **Lines:** PASS = (1) bitwise AND the better form costs <= 3 % per call on both kernels. KILL = not bitwise, or
+  > 15 % on either. BETWEEN otherwise (then the safety net costs that much, and BigMoE weighs it per path).
+- **Prediction [G]:** cn ~0-4 % (probe A: coherent streaming at plain speed); cv 10-30 % (B6: scalar volatile cast
+  loads ~2x on the probe). PASS 55 % (via cn), BETWEEN 35 %, KILL 10 %.
+- **RESULT (Tue 22:44, share lock beside Breakthrough's run, rough speed; data/coh_check.txt, data/s7b_probe4.txt):
+  KILL by the line. Per kernel: NAX6-N's safety net is free, 3c-N's costs +26 %.**
+  - Building it took two fixes. My SYS block must come AFTER NAX6's MPP header; placed before it, `coherent(system)`
+    is an "invalid argument". 3c-N needed a coherent overload of the 3c header's tg_codes3, which reads the codes
+    through `row` and `src`.
+  - (1) Bits: every window, both kernels, both forms bitwise == plain.
+  - (2) ms per call (layer 20, S 16, 4 code windows):
+
+    | kernel | plain | cn | cv |
+    |---|---|---|---|
+    | NAX6-N | 0.666 | 0.671 (+0.7 %) | 0.698 (+4.8 %) |
+    | 3c-N | 1.410 | 1.781 (+26.3 %) | 1.808 (+28.2 %) |
+
+  - Freshness of the non-volatile form [K]: S7B-PROBE B7 (the B2 pattern through a non-volatile coherent(system)
+    cast) read 0 stale in 20 / 20. So **cn is a real safety net**; cv is not needed. That run repeated B2 / B3 stale
+    20 / 20 and B4-B6 at 0, and B6 ran at 167 us, so the earlier 379 us was noise.
+  - Why 3c-N pays: its codes come in as 3-6 single-byte loads per lane (tg_codes3), and coherent byte loads are
+    slow; NAX6-N loads 6 words. A tg_codes3 that loads covering 32-bit words and extracts the bytes could close most
+    of that [G], not built.
+  - For BigMoE: on the FAST NAX6-N paths, cn is the safety net (+0.7 %). On the exact 3c-N path, a command-buffer
+    boundary is the cheaper fix (B5) unless the word-load rewrite pays off. Integration (a default-off ref2 flag that
+    swaps the kernels) waits for BigMoE's pick of paths.
+  - **The prediction held in part:** cn ~0-4 % on NAX6-N held; cv 10-30 % was wrong for NAX6-N (+4.8 %); 3c-N's
+    +26 % was not foreseen.
+
+## P11PAD the "native+p11+pad" records format: zero-copy-aligned pieces (Leap, Tue 2026-11-03 22:4x-22:5x EET; BigMoE's proposal 22:4x after MoonShots' M-29; an engineering change gated by bitwise / md5 checks, no prediction; scripts/p11.py, tierglu_3cn.py, tierglu_nax6n.py, convert_records_p11.py, p11pad_check.py; data/p11pad_check.txt)
+- **Why:**
+  - M-29 (MoonShots, f1a98b3): reading records straight into the slots saves ~173 us per 2-record call, but only if
+    every piece is 4 KB-aligned in the file and in the pool (today's unaligned direct path is +843 us).
+  - The converted layout can carry that alignment for free.
+- **The format:**
+  - MSB s3 / b3 pieces zero-padded from 8804 to 9216 words (36,864 B = 9 x 4 KB), so msb_sz stays 2,064,384.
+  - LSB part ordered l1_g, l1_u, l1_d, then b_g, b_u, b_d (b unpadded), so lsb_sz stays 720,896 and the l1 planes
+    sit at 4 KB multiples.
+  - The index keeps the logical piece order with these physical offsets; the base word stays at 11 * NB11 = 8800.
+- **What changed:**
+  - p11.layout_p11(r, pad) / to_p11(raw, r, pad); pieces() takes the new layout name.
+  - 3c-N and NAX6-N read the pieces' stride from the pools' shapes: PWM_C (MSB s3 / b3 / b2) and PWL_C (LSB b),
+    template constants, in place of PW11's constant. The asserts relax to >= piece_words and a multiple of 4.
+  - convert_records_p11.py --pad. Forward runs from row-major only; --inverse takes either p11 layout.
+  - Unpadded pools get today's constants, so the old instantiations are unchanged.
+- **Checks:**
+  - **(A) Layout, layers 20 and 44 (P11PAD check, candidates loaded by path before the live modules):** sizes kept;
+    every MSB piece and l1 plane 4 KB-aligned; padded records -> row-major bitwise; each packed piece == the
+    unpadded one + zero padding.
+  - **(B) Kernels, 128 experts x 2 layers, every expert at 4- and 3-bit ranks:** tier_glu_n (+ scores), phases,
+    pairs, split and NAX6-N on PADDED p11 pools == UNPADDED == bf16, bitwise (4 / 4 calls each).
+  - **(C)** ref2.self_test PASS with the candidates, and again after the atomic install (backups
+    data/{p11,tierglu_3cn,tierglu_nax6n}_before_pad.py).
+  - **Tool, on scratch copies of L00 / L20 / L47:**
+    - --pad forward: layouts correct and aligned, the row-major entry kept, the md5 list == the P11 test's
+      committed one.
+    - --inverse: 3 / 3 md5s match the originals.
+    - The plain (unpadded) forward / inverse also still 3 / 3.
+    - The scratch copies were deleted by exact path.
+  - **A bug the tool's own verify caught, fixed:** the inverse's back-transform check rebuilt the unpadded layout,
+    so it refused, and the layer stayed untouched.
+- **Not done here:** a cmp against BigMoE's independent reference (r3p11 regenerated in the padded layout); BigMoE's
+  call.
+
+## F1-R8 fs4's 8-row form for checks and AR steps with <= 8 real rows (Leap, pre-registered Tue 2026-11-03 22:5x EET; extends F1-SWITCH; FAST-K, bitwise == F1 by INV (e); scripts/ref2.py, f1r8_check.py; data/f1r8_check.txt)
+- **Why:**
+  - REF2's `_att` pads every call under 16 rows to 16, so chat's 8-row checks (BigMoE's t 0.3 chat setting) and every
+    AR step reach fs4 as 16-row calls, and fs4 computes 16 rows whose padding outputs are thrown away.
+  - fs4's R 8 form stacks two heads of a kv head in one tile and computes only 8 rows. B6: 0.311 vs 0.517 ms per call
+    at 10K (1.66x).
+  - B6's INV (e) PASS says R 8's rows == the first 8 rows of the R 16 call, bit for bit.
+  - B6's "no gain at the layer level" for 8-row calls ran THROUGH the padding, i.e. R 16.
+- **What:**
+  - `_att` records the call's real row count, and CFG["fatt_r8"] (default False, read per call; only with
+    fatt_verify) routes a padded verify call with <= 8 real rows to fatt16s at R 8 on q's first 8 rows.
+  - The output's padding rows (discarded by `_att`) are zeros. COUNTS["fatt_r8"].
+- **Test (f1r8_check.py, B6 / F1's layer harness, layer 3, T0 2K and 10K):**
+  - (1) Bits: 8-row checks and 1-row AR steps give real-row outputs with fatt_r8 on == off, bitwise; SD (16-row
+    check) == AR with fatt_r8 on, bitwise.
+  - (2) Counts: every <= 8-row call takes R 8.
+  - (3) Speed: ms per 8-row layer call at 10K and 2K, on vs off (B6's method, a quiet lock).
+- **Lines:** PASS = (1) and (2) hold and the 8-row layer call is >= 1.15x faster at 10K. KILL = any bit differs or
+  < 1.05x. BETWEEN otherwise.
+- **Prediction:** bits PASS (INV (e)). Speed at 10K: the SDPA's ~0.2 ms saved of a ~1.1 ms layer call is ~1.2x; at
+  2K, ~1.05x. PASS 60 %.
+- **What it would be worth [P]:** -2.4 ms per 8-row chat check at 10K on top of F1 (12 layers x 0.2), and EvalSuite's
+  AR harness (every step padded) runs faster.
+- **Cross-check (Tue 22:5x): my tool's --pad output == BigMoE's independent reference (~/BigMoE/scratch/r3p11pad),
+  byte for byte:** cmp identical, md5s equal for L00 / L20 / L47 (98fcba62..., 1f375d00..., f770f6d1...), and the
+  index entries match on layout, sizes and piece offsets. BigMoE's reader (test_layout.py) PASSes on them too. My
+  scratch copies were deleted by exact path.
+- **(1) + (2) (Tue 22:57, share lock beside Breakthrough's run; data/f1r8_check.txt): PASS.**
+  - At T0 2K and 10K, with fatt_verify on, fatt_r8 on == off bitwise for an 8-row check and for 16 one-row AR steps
+    (16 / 16).
+  - SD (a 16-row check, fs4 R 16) == the AR steps with fatt_r8 on: 16 / 16.
+  - Counts: on {r8 17, fs4 18} (the 8-row check + 16 AR steps took R 8, the 16-row check did not); off {r8 0, fs4 18}.
+  - ref2.self_test PASS after the edit (atomic; backup data/ref2_before_r8.py; both flags default off).
+  - (3) speed is queued under a quiet lock (scripts/run_f1r8_speed.sh -> data/f1r8_runner.log).
+- **(3) speed (Tue 22:58:24, quiet lock; data/f1r8_runner.log): PASS, 1.22x at 10K.**
+  - ms per 8-row layer call, A-B-A-B: 10K 1.402 -> 1.151 (1.22x); 2K 0.505 -> 0.480 (1.05x). No heat pause during
+    the run.
+  - **F1-R8: PASS.** -3.0 ms per 8-row chat check at 10K (12 layers x 0.25), on top of F1, bitwise == F1. The flag
+    stays default off; it can be switched on wherever F1 is (EvalSuite's AR harness pads every step, so it gains too).
+  - **The prediction held:** ~1.2x at 10K and ~1.05x at 2K, as predicted.

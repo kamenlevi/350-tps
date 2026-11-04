@@ -142,6 +142,13 @@ def hyb_t3(arm, thr):
     def setup(): PERT.update(rmask=arm + "_t3", gate=("t3mask",), t3=3, t3k=2, renorm=False)   # t3 rows from the mask
     return setup
 ABLATIONS["hyb_0.9_u8_t3"] = hyb_t3("hyb_0.9_u8", 0.9); ABLATIONS["q1u_cf09_t3"] = hyb_t3("q1u_cf09", 0.9)   # NewIdeas 07:3x
+ABLATIONS["hyb_cold4_t3"] = hyb_t3("hyb_cold4", 0.9)   # Tue 19:xx: Fable C's COLD-CUT screen (UNION_STACK sec 5), dm_cold_masks.py
+ABLATIONS["cold6_all"] = q1_union("cold6_all")          # its chat form (every row: ranks 0-5 + popular 6-9 + members)
+ABLATIONS["hyb_0.9_u8_live_t3"] = hyb_t3("hyb_0.9_u8_live", 0.9)   # its control: hyb_0.9_u8_t3 at live checks (dm_cold_masks selfcheck)
+ABLATIONS["hyb_cold4_lowo_t3"] = hyb_t3("hyb_cold4_lowo", 0.9)   # Tue 19:5x (0a565a6): COLD with an in-domain leave-one-window-out prior
+ABLATIONS["hyb_cold4_pmt_t3"] = hyb_t3("hyb_cold4_pmt", 0.9)     # Tue 20:2x (4236037): the table = the request's own prompt
+ABLATIONS["hyb_cold4_pmtc_t3"] = hyb_t3("hyb_cold4_pmtc", 0.9)   # the same OR cap45 (a corpus table + the request's footprint)
+ABLATIONS["hyb_cold4_len_t3"] = hyb_t3("hyb_cold4_len", 0.9)     # Tue 22:3x (12b3d63): pmt's table if the prompt has >= 128 rows, else pmtc's
 for _arm in ("top_k2", "oea_k2", "oea_k1"):            # NewIdeas Tue 09:10 (37f8e37, QUEUE.md "P1-OEA"): all-rows pass-1 arms
     ABLATIONS["p1_" + _arm] = q1_union(os.path.expanduser(f"~/NewIdeas/data/dm_masks/{_arm}"))   # its masks, read-only
 for _arm in ("p1c_oea_k1_p08", "p1c_top_k2_p08", "q1u_0.9_live", "reach_0.9_0.5_live", "top_k8"):   # NewIdeas 10:24 / 10:38 / 11:08
@@ -220,3 +227,14 @@ def ablation(name):
     if not m.group(6): return base
     def setup(): base(); PERT.update(topk=int(m.group(6)), renorm=False)
     return setup
+for _arm in ("qom_0.5_live", "qom_0_live"):   # NewIdeas Tue 23:02 (QUEUE.md): QOM with ranks 0-1 of sure rows at 3 bits
+    ABLATIONS[_arm + "_t3"] = hyb_t3(os.path.expanduser(f"~/NewIdeas/data/dm_masks/{_arm}"), 0.9)   # rmask <arm>_t3 (its masks)
+ABLATIONS["qom_0.5_live_c164"] = q1_union(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0.5_live_c164"))   # NewIdeas 23:21 (fe52587): QOM at C 160 pools
+ABLATIONS["qom_0_live_bonus"] = q1_union(os.path.expanduser("~/FableGod/fablec/masks/qom_0_live_bonus"))   # Fable C BYTES10 screen 1(a) (the orchestrator Wed 04:0x): qom_0_live, every bonus row gated
+def t3k_mask(path, k):   # NewIdeas screen 2 (QUEUE.md:1181-1185, the orchestrator Wed 04:08): ranks < k of the gated rows at 3 bits (dm_t3), the rest from the masks
+    def setup(): PERT.update(rmask=path, gate=("t3mask",), t3=3, t3k=k, renorm=False)
+    return setup
+ABLATIONS["hyb_0.9_k1_u10_live_t3"] = t3k_mask(os.path.expanduser("~/NewIdeas/data/dm_masks/hyb_0.9_k1_u10_live_t3"), 1)   # sure rows: rank 0 only
+ABLATIONS["q1u_0.9_live_t3"] = t3k_mask(os.path.expanduser("~/NewIdeas/data/dm_masks/q1u_0.9_live_t3"), 2)   # its top-2 twin
+ABLATIONS["qom_0_live_bq"] = q1_union(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0_live_bq"))   # NewIdeas: screen 1 in QOM's form (QUEUE.md:1214-1222; the orchestrator Wed 04:47): the gated last row also keeps resident ranks 2-9
+ABLATIONS["qom_0_live_bq_t3"] = hyb_t3(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0_live_bq"), 0.9)   # its 3-bit form (masks qom_0_live_bq_t3, t3k 2); pre-approved only if bq is not KILL (NewIdeas' read-out)

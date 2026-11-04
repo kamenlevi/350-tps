@@ -168,9 +168,20 @@ PROMPTS = {
     "math": [MATH_ASK + q for q in GSM],
 }
 V0 = {1: 42, 2: 59, 3: 74, 4: 87, 5: 94, 6: 107, 7: 117, 8: 123}
+if os.environ.get("S10B_KEYS"):                            # W1B (docs/WALL1_BENCH.md): EvalSuite's prompts by key, e.g. S45's
+    _SET = {"humaneval": "humaneval", "math500": "math", "gsm8k": "math", "ifeval": "ifeval", "multi": "multi", "agent": "agent"}
+    _items = {}
+    PROMPTS = {}
+    for _k in os.environ["S10B_KEYS"].split(","):            # six; their prompt ids are used as they are (EvalSuite's template)
+        _s = _SET[_k.split("/")[0]]
+        if _s not in _items:
+            _items[_s] = [json.loads(l) for l in open(os.path.expanduser(f"~/EvalSuite/data/items/dec_{_s}.jsonl"))]
+        PROMPTS.setdefault(_s, []).append(next(x for x in _items[_s] if x["key"] == _k)["prompt_ids"])
 
 
 def ids_of(t):
+    if isinstance(t, list):                                    # S10B_KEYS: EvalSuite's prompt ids as they are
+        return list(t)
     i = tok.apply_chat_template([{"role": "user", "content": t}], add_generation_prompt=True, enable_thinking=False)
     return list(i if isinstance(i[0], int) else i["input_ids"])
 
@@ -270,7 +281,7 @@ for dom, texts in PROMPTS.items():
         np.savez(os.path.join(OUT, name + ".npz"), **d)
         sha = hashlib.sha1(str(list(out)).encode()).hexdigest()[:10]
         rows_v = int(d["rows"][d["L"] == 0].sum())                 # verify rows = layer-0 rows (every trunk layer sees them)
-        meta["prompts"].append(dict(name=name, domain=dom, idx=i, text_sha=hashlib.sha1(text.encode()).hexdigest()[:10],
+        meta["prompts"].append(dict(name=name, domain=dom, idx=i, text_sha=hashlib.sha1((text if isinstance(text, str) else str(text)).encode()).hexdigest()[:10],
                                     n_tok=len(out), tok_s=s["tok_s"], passes=s["passes"], sha=sha, wall=wall,
                                     calls=int(len(d["L"])), verify_rows=rows_v, x_rows=int(d["x"].shape[0]),
                                     paused=PAUSED["pause_s"] - p0["pause_s"], n_gap=PAUSED["n_gap"] - p0["n_gap"],

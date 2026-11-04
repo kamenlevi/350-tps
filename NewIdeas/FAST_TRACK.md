@@ -13,12 +13,30 @@ practice = the NAX hybrid for padded tiles (MonoMoE, ORT's MoE GEMV path). Every
 adapted; the new ones get their first same-scores test this week.
 Tue 06:4x: Q1-UNION's union step is published (OEA, Opportunistic Expert Activation, arXiv 2511.02237, ICML 2026), so
 45 #2 is now 'adapted + a new gate': setting each row's base expert count by the drafter's certainty is the new part.
+Tue 23:1x (MoonShots' sweep): PSR §7 (arXiv 2610.34721, 26 Oct) already weights the verify block's expert demand by the
+drafter's confidence (one set per block, rerouted), so the certainty gate is adapted too. Ours: a per-row count, no
+reroute, no renormalisation.
 One new bet in flight per line: 45 GB Q1-UNION at cf 0.9 on code (RELAX A / B / C, Thu 00:30; with live-length checks: code PASS, chat BETWEEN), +
 3-bit sure rows (FLOOR at scale Wed, live-cut unions asked); 24 GB Q1 at the 24 GB pools (M-18d: x0.658 PASS on
 option A; option B PASS x0.572 with the MTP chain's own gate, Tue 11:1x); 12 GB P1-OEA (pass 1 at top-1 + the block's union members: certificate PASS Tue 10:18 at x0.465 pass-1 reads; mixed
-runs PASS; timing at the line on shared text, re-test T3R pre-registered); T0 same-scores held to Thu.
+runs PASS; timing re-test T3R 19:15: x1.065 = BETWEEN but void (a heat PAUSE inside the run); 3-bit stack x1.227 INFO;
+clean 16-prompt re-run T3R2 pre-registered); T0 same-scores held to Thu.
 
 ## 45 GB, ranked by gain x readiness
+> (a quote from the project owner, kept private)
+   bsolutely fine with all of this"); a FAST mode may depend on the cache state. Conditions: EvalSuite certifies it under
+   >= 2 different prompt orders (histories); EXACT stays the default and history-independent; the logical-cache variant
+   (PSR, repeatable per request) later.
+   - Rule: drafter-sure rows skip only the rank 2-9 experts that would miss; everything resident is used. Reads = Q1's.
+   - Map (Tue 22:59, live-cut checks): cf 0.5 flips 0.36 / 2.68 / 1.63 % (lines 1.34 / 5.42 / 3.69), cf 0.9 0.48 / 2.24 /
+     1.44 %: PASS / PASS / PASS, the lowest flips of any FAST arm. Details under item 2.
+   - Price [P] (capture, C 256): cf 0.5 SSD MB per kept token -60 / -37 / -33 %; with 3-bit sure rows -81 / -53 / -45 %.
+   - Steps: cf 0 (~05:00) -> qom_0.5_live_t3 (pre-registered) and the C 160 arm (the masks assume C 256 pools; day runs
+     at C 160 drop more) -> BigMoE's engine path (U3's 3-bit sure-row path + the resident keep) -> EvalSuite under two
+     prompt orders.
+   - EvalSuite's certification template (23:22, docs/PREREG_TEMPLATE_cachedep.md, 099ce88): two histories (canonical + a
+     seeded shuffle, one process each), PASS required in both; a repeat of H1's first 50 rows must match; run in
+     BigMoE's engine at the shipped C.
 1. The expert kernel (Fable mission 27): NAX6 42-43 ms vs 3c 50-56 ms per 16-row check. NAX7-F is KILLED, so exact NAX
    work ends at NAX6 (a new reference: -8..-13 ms, one same-scores test). FAST design C, int8 x int8 on the matrix units
    (M27-C), is a rough PASS at 1.55-1.73x bf16, i.e. the expert call ~42 -> ~25-27 ms (~-15 ms per check, model). Leap
@@ -27,6 +45,23 @@ runs PASS; timing at the line on shared text, re-test T3R pre-registered); T0 sa
    path): its compact arm is +10.4 % on the expert call at S 16 (+15 % at S 8, which matters for chat's short checks; +6 %
    at S 32), ~-4 ms per 16-row check. Bits differ, so EvalSuite judges it with the FAST arms. It needs the small-group split
    on the GPU first (gpu_grp, no host sync). Bundle it into item 1's same-scores test: one reference change, one test.
+1c. F1, the long-context attention kernel (FAST-K; ranked Tue 21:39, the orchestrator 21:3x). Leap's fs4 = FATT16 (R-66's
+   fused flash-attention-2 on the matrix units) in place of REF2-T's chunked SDPA in the 12 QSA layers.
+   - Batch- and N-invariant by construction (INV PASS on every form). More accurate than MLX vs fp64 (mean 1.75e-3 vs
+     2.29e-3), but not bitwise to REF2-T: a FAST-K reference change.
+   - Speed [K B6, layer level, 16-row calls]: 1.77x at 2K, 1.70x at 10K, 1.53x at 20K. Attention per check 23.5 -> ~13
+     ms at 10K. Fable B: attention is the only check term that grows with context, ~1.37 ms per 1K keys.
+   - Price [P]: code at ~2K keys ~-5 ms per check (~+5 %); agent turns at ~10K -10.5 ms (~+13 % decode); 16-20K -13..-15
+     ms (~+15 %). It matters most for Kamen's agent work.
+   - KV8 on top: BETWEEN (Leap 21:3x: -0.8 ms at 10K; K-outlier risk), not pursued.
+   - Status:
+     - the kernel is built;
+     - the ENGINE SWITCH: Leap's Wed by-day item (fs4 in the QSA verify path, a default-off flag; BigMoE's WED_TESTS
+       item 7 'when Leap asks');
+     - then a token / INV smoke;
+     - then EvalSuite's FAST-K same-scores, PRE-REGISTERED Tue 21:53 (63cd47e): decision 4 on the core 210 vs ref2t +
+       RULER 24 at 16K (<= 1 net lost), agent 29 as flags, AT14 timing; ~3.5 h GPU, earliest Fri after the conversion
+       checks.
 2. Q1, top-2 experts on drafter-sure rows (cf >= 0.99), kept weights never renormalised: code SSD MB per kept token x0.60,
    implied 63.6 -> 70-76 tok/s; sure rows at 3 bits (no LSB read) x0.46 -> 72-79 (Breakthrough's arm tonight). 0.09 % of
    gated code rows flip. Test: EvalSuite RELAX arm A (Thu 00:30).
@@ -50,6 +85,17 @@ runs PASS; timing at the line on shared text, re-test T3R pre-registered); T0 sa
    (paired vs the 16-row arm z +2.2 / +4.3 / +2.6; vs Q1 at 0.99 z -0.5 / +2.5 / +0.3). So Q1-UNION 0.9 is a CODE
    lever live. Chat needs cf 0.99 (Q1 at 0.99 is the line; the union only adds experts): chat SSD -10.5 / -8.4 %.
    RELAX rev 3's A / B / C run code, math and agent sets only. SSD prices are live and stand.
+   Q1-ON-MISS (QOM; pre-registered 554dfe0; map Tue 22:59, Breakthrough's prefix): a sure row keeps ranks 0-1, its union
+   members AND every rank 2-9 expert already resident in the base pool after the check's loads; only the rank 2-9 experts
+   that would MISS are dropped. Reads = Q1's at the same cf. On live-cut checks:
+   - cf 0.9: 0.48 / 2.24 / 1.44 % all-row flips = PASS / PASS / PASS;
+   - cf 0.5: 0.36 / 2.68 / 1.63 % = PASS / PASS / PASS (vs q1u_0.9_live z -4.6 / -8.9 / -6.7).
+   The lowest flips of any FAST arm on the map; keeping the resident experts fixes Q1-UNION's chat problem.
+   - Price at cf 0.5 [P] (capture, C 256): SSD MB per kept token -60.4 / -36.9 / -33.4 %; SSD-only model, code HE68 /
+     HE91, 84.7 / 62.1 -> 138.9 / 83.2 tok/s (halve). GPU work stays near exact's union: an SSD lever, not a compute one.
+   - Cache-state dependent: Kamen's decision 2 (research/PUSH_SHORTLIST.md).
+   - Next: qom_0.5_live_t3 (pre-registered 23:0x: the 3-bit bound for QOM-full, reads -80.7 / -52.6 / -44.9 %); cf 0 at
+     ~05:00; the engine = U3's 3-bit sure-row path + the resident keep (BigMoE), then EvalSuite's same-scores.
 2b. Sketch-on-miss: KILL (Tue 02:1x, Breakthrough SCOREBOARD 7a79270). Whitened shadows on held-out real activations have
    output error 0.92 at rank 32 and 0.89 at rank 64 (a drop is 1.0; the GO bar was 0.5), and plain SVD 0.99 / 0.97: the
    expert spectrum is too flat for a low-rank stand-in. Gain 0.

@@ -11,7 +11,10 @@ Steps:
               saved row-major entry (inverse).
 Extra disk at any time: one layer (~1.43-1.50 GB). Resumable (layers already in the target layout are skipped), reversible
 (--inverse; the md5s then match the originals). Refuses under 112 GB free or when lsof shows open files.
-Usage: [BigMoE venv] convert_records_p11.py DIR [--inverse] [--layers 0 1 ...] [--md5 FILE] [--yes]"""
+--pad (Tue 22:5x, agreed with BigMoE after MoonShots' M-29): forward to "native+p11+pad": the MSB scale pieces zero-padded
+to 9216 words and the LSB part ordered l1, l1, l1, b, b, b, so every MSB piece and every l1 plane is 4 KB-aligned for
+zero-copy slot reads; recsz / msb_sz / lsb_sz unchanged. --inverse takes either p11 layout back to row-major.
+Usage: [BigMoE venv] convert_records_p11.py DIR [--inverse] [--pad] [--layers 0 1 ...] [--md5 FILE] [--yes]"""
 import argparse, hashlib, json, os, subprocess, sys, time
 import numpy as np
 sys.path.insert(0, os.path.expanduser("~/Leap/scripts"))
@@ -20,7 +23,8 @@ import p11
 FLOOR, CHUNK = 112e9, 64
 ap = argparse.ArgumentParser()
 ap.add_argument("dir")
-ap.add_argument("--inverse", action="store_true", help="native+p11 -> row-major")
+ap.add_argument("--inverse", action="store_true", help="native+p11 (+pad) -> row-major")
+ap.add_argument("--pad", action="store_true", help='forward to "native+p11+pad" (4 KB-aligned pieces; BigMoE + M-29, Tue 22:5x)')
 ap.add_argument("--layers", type=int, nargs="*")
 ap.add_argument("--md5", help="md5 list of the row-major files: written before a forward run, verified after --inverse")
 ap.add_argument("--yes", action="store_true", help="actually convert (default: read-only check)")
@@ -28,10 +32,11 @@ a = ap.parse_args()
 D = os.path.abspath(os.path.expanduser(a.dir))
 ix_path = os.path.join(D, "index.json")
 ix = json.load(open(ix_path))
-want = "row-major" if a.inverse else "native+p11"
+want = "row-major" if a.inverse else ("native+p11+pad" if a.pad else "native+p11")
 layers = a.layers if a.layers is not None else sorted(int(k) for k in ix["layers"])
 lay = lambda L: ix["layers"][str(L)].get("layout", "row-major")
-bad_src = [L for L in layers if lay(L) not in ("row-major", "native+p11")]
+bad_src = [L for L in layers if lay(L) not in ("row-major", "native+p11", "native+p11+pad")
+           or (not a.inverse and lay(L) not in ("row-major", want))]          # forward: from row-major only
 if bad_src:
     sys.exit(f"refused: layers {bad_src} are in another layout ({lay(bad_src[0])}); convert them back first")
 todo = [L for L in layers if lay(L) != want]
@@ -91,12 +96,12 @@ for L in todo:
     if a.inverse:
         q, rr = r, rowmajor_entry(r)
         fwd = lambda x: p11.from_p11(x, q, rr)
-        back = lambda y: p11.to_p11(y, rr)[0]
+        back = lambda y: p11.to_p11(y, rr, pad=q.get("layout") == "native+p11+pad")[0]   # the check rebuilds q's own layout
         r_out, rec_in, rec_out = rr, q["recsz"], rr["recsz"]
     else:
-        q = p11.layout_p11(r)
+        q = p11.layout_p11(r, pad=a.pad)
         q["rowmajor"] = {k: v for k, v in r.items() if k != "rowmajor"}
-        fwd = lambda x: p11.to_p11(x, r)[0]
+        fwd = lambda x: p11.to_p11(x, r, pad=a.pad)[0]
         back = lambda y: p11.from_p11(y, q, r)
         r_out, rec_in, rec_out = q, r["recsz"], q["recsz"]
     E = r["E"]

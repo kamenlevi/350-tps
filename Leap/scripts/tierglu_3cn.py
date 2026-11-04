@@ -72,7 +72,7 @@ _OFF_A = "(j0 / 32) * (KG * 32) + (j0 % 32)"
 _OFF_B = "(d0 / 32) * (NG * 32) + (d0 % 32)"
 _A_P11 = [
     ("constexpr int KB3 = K * 3 / 8, KG = K / G, KL = K / 8;",
-     "constexpr int KB3 = K * 3 / 8, KG = K / G, KL = K / 8; constexpr uint NB11 = N * KG / 32, PW11 = (11 * NB11 + 4) / 4 * 4;\n"
+     "constexpr int KB3 = K * 3 / 8, KG = K / G, KL = K / 8; constexpr uint NB11 = N * KG / 32, PW11 = PWM_C, PWL11 = PWL_C;\n"
      "    threadgroup float p11_tg[2 * 2 * RA * KG];                // per simdgroup: RA x KG scales, then RA x KG biases", 1),
     ("const device T* s3 = (sg == 0 ? s3g : s3u) + ((size_t)e * (N / 32) + j0 / 32) * (KG * 32) + (j0 % 32);",
      f"const P11P s3_p11 = p11p((const device uint*)(sg == 0 ? s3g : s3u), e, PW11, NB11, {_OFF_A});\n"
@@ -80,7 +80,7 @@ _A_P11 = [
      "    p11_fill(p11_s, s3_p11, RA, KG, lane);\n"
      "    const P11T s3 = {p11_s, RA};", 1),
     ("const device T* bl = (sg == 0 ? bg : bu) + ((size_t)el * (N / 32) + j0 / 32) * (KG * 32) + (j0 % 32);",
-     f"const P11P bl_p11 = p11p((const device uint*)(sg == 0 ? bg : bu), el, PW11, NB11, {_OFF_A});\n"
+     f"const P11P bl_p11 = p11p((const device uint*)(sg == 0 ? bg : bu), el, PWL11, NB11, {_OFF_A});\n"
      "        p11_fill(p11_s + RA * KG, bl_p11, RA, KG, lane);\n"
      "        simdgroup_barrier(mem_flags::mem_threadgroup);\n"
      "        const P11T bl = {p11_s + RA * KG, RA};", 1),
@@ -93,7 +93,7 @@ _A_P11 = [
 ]
 _B_P11 = [
     ("constexpr int NB3 = N * 3 / 8, NG = N / G, NL = N / 8;",
-     "constexpr int NB3 = N * 3 / 8, NG = N / G, NL = N / 8; constexpr uint NB11 = D * NG / 32, PW11 = (11 * NB11 + 4) / 4 * 4;\n"
+     "constexpr int NB3 = N * 3 / 8, NG = N / G, NL = N / 8; constexpr uint NB11 = D * NG / 32, PW11 = PWM_C, PWL11 = PWL_C;\n"
      "    constexpr int P11_NS = NR > 2 ? NR : 2;                  // simdgroups per threadgroup: nsg (2) or the ranks (BC)\n"
      "    threadgroup float p11_tg[P11_NS * 2 * RB * NG];", 1),
     ("const device T* s3 = s3d + ((size_t)e * (D / 32) + d0 / 32) * (NG * 32) + (d0 % 32);",
@@ -102,7 +102,7 @@ _B_P11 = [
      "    p11_fill(p11_s, s3_p11, RB, NG, lane);\n"
      "    const P11T s3 = {p11_s, RB};", 1),
     ("const device T* bl = bd + ((size_t)el * (D / 32) + d0 / 32) * (NG * 32) + (d0 % 32);",
-     f"const P11P bl_p11 = p11p((const device uint*)bd, el, PW11, NB11, {_OFF_B});\n"
+     f"const P11P bl_p11 = p11p((const device uint*)bd, el, PWL11, NB11, {_OFF_B});\n"
      "        p11_fill(p11_s + RB * NG, bl_p11, RB, NG, lane);\n"
      "        simdgroup_barrier(mem_flags::mem_threadgroup);\n"
      "        const P11T bl = {p11_s + RB * NG, RB};", 1),
@@ -144,11 +144,14 @@ def _kern(kind, p11=False):
 
 
 def _dims(msb_n, b2=None):
-    """(N, D, p11): p11 pools hold uint32 [C, 8804] pieces, so the row counts come from w3 [C, rows, ...]"""
+    """(N, D, p11): p11 pools hold uint32 [C, >= 8804] pieces (native+p11+pad pads the MSB ones to 9216 words; the stride
+    is read from the pools' shapes, the base word stays at 11 * NB11), so the row counts come from w3 [C, rows, ...]"""
     s3 = msb_n["gate_proj"]["s3"]
     if s3.dtype == mx.uint32:
         N, D = msb_n["gate_proj"]["w3"].shape[1], msb_n["down_proj"]["w3"].shape[1]
-        assert s3.shape[-1] == P11.piece_words(N * 40) and msb_n["down_proj"]["s3"].shape[-1] == P11.piece_words(D * 10), s3.shape
+        assert s3.shape[-1] >= P11.piece_words(N * 40) and s3.shape[-1] % 4 == 0, s3.shape
+        assert all(msb_n[p][k].shape[-1] == s3.shape[-1] for p in PROJ for k in ("s3", "b3")), "one MSB piece stride"
+        assert P11.piece_words(D * 10) == P11.piece_words(N * 40)
         assert b2 is None or all(v.dtype == mx.uint32 for v in b2.values()), "p11 pools need p11 b2 pools"
         return N, D, True
     return s3.shape[1], msb_n["down_proj"]["s3"].shape[1], False
@@ -171,6 +174,10 @@ def _common(x, msb, lsb, msb_slot, lsb_slot, plan, b2):
            L["gate_proj"]["l1"], L["up_proj"]["l1"], L["gate_proj"]["b"], L["up_proj"]["b"], ms, ls]
     inb = [d["w3"], d["s3"], d["b3"], bb["down_proj"], L["down_proj"]["l1"], L["down_proj"]["b"], ms, ls]
     tmpl = [("T", x.dtype), ("NR_C", R), ("MASK4_C", m4), ("MASK2_C", m2), ("R4_C", max(r4, 1))]
+    if msb["gate_proj"]["s3"].dtype == mx.uint32:             # p11: the pieces' strides from the pools (MSB s3 / b3 / b2; LSB b)
+        pwl = L["gate_proj"]["b"].shape[-1]
+        assert all(L[p]["b"].shape[-1] == pwl for p in PROJ) and all(v.shape[-1] == msb["gate_proj"]["s3"].shape[-1] for v in bb.values())
+        tmpl = tmpl + [("PWM_C", msb["gate_proj"]["s3"].shape[-1]), ("PWL_C", pwl)]
     return R, ina, inb, tmpl
 
 

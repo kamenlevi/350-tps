@@ -1,6 +1,8 @@
 """Merge the sessions' TRIED parts (~/TRIED/<session>.md) into ~/TRIED/TRIED.md (Kamen, Sun 1 Nov 2026).
 One idea per line in the README shape: idea | wall | line | exact | verdict | number | date | source.
-Ideas with the same ID (the first word before ':') are merged into one line that keeps every session's verdict and source.
+Ideas with the same ID (the first word before ':') from DIFFERENT sessions are merged into one line that keeps every
+session's verdict and source. A session's own 2nd, 3rd ... row under one ID (sub-ideas such as M-29's four results) stays
+its own line, keyed ID#2, ID#3 ... (the key novelty.tsv uses for it).
 Usage: python3 -I tried_merge.py [~/TRIED]"""
 import collections, os, re, sys
 
@@ -28,6 +30,7 @@ def verdict_of(f):
 
 
 rows, counts, bad = [], collections.Counter(), collections.Counter()
+seen = collections.Counter()  # (session, ID) -> rows so far: a session's 2nd+ row under one ID is a distinct sub-idea
 for s in SESSIONS:
     p = os.path.join(D, f"{s}.md")
     if not os.path.exists(p):
@@ -42,6 +45,9 @@ for s in SESSIONS:
         parts += [""] * (8 - len(parts))
         idea = parts[0]
         key = re.split(r"[:\s]", idea, 1)[0].upper().rstrip(".,")
+        seen[(s, key)] += 1
+        if seen[(s, key)] > 1:  # (Tue 3 Nov fix: 270 rows under 97 shared IDs had collapsed into their first row's text)
+            key = f"{key}#{seen[(s, key)]}"
         rows.append(dict(session=s, n=n, idea=idea, key=key, wall=wall_of(parts[1]), fields=parts[1:8],
                          verdict=verdict_of(parts[4])))
         counts[s] += 1

@@ -2610,3 +2610,194 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   cheap tree pass (cat) gets +2-14 %; a static EAGLE-2-style tree sits between. Whether it pays is the cheap row's cost
   (Fable B's ROW_WALL) plus the cheap pass's fixed cost; the exact pass's rows stay at ~10-12. Sent to Breakthrough and
   the orchestrator; the static-tree arm next if Breakthrough wants it.
+
+### LEAD1CORR (prep for WALL1's 'learned L+1 predictor', exploratory, CPU; Tue 11-03 18:4x-18:58; sticky/lead1_corr.py, data/lead1_corr.txt)
+- BigMoE's 45 GB capture cap45 (6 prompts, every row's MoE input at every layer + its true top-10), leave-one-prompt-out.
+  Plain = layer L+1's router on layer L's MoE input (R-57's forecast). Corrected = a per-layer full-rank ridge map x_L ->
+  x_{L+1} (residual form; lambda from an inner prompt), then L+1's router on the forecast (SlotStream / CORR style).
+- Per-row recall of L+1's true top-10, layers L+1 = 2..47, pooled over held-out prompts: @10 plain 0.612 -> corrected 0.729
+  (+11.7 points; every held-out prompt +11-12); @16 0.739 -> 0.851. The router here is routers.npz (fp16; it reproduces the
+  captured top-10 sets on 0.86 of rows), so the gain is relative.
+- Context [K]: Fit12's corrected forecast in R-57b-R's replay had recall 0.693 (line 0.75); tonight's pre-route on L's partial
+  MoE output has its own line p3 >= 0.85 / p6 >= 0.90 @10. Cost of the map: 46 x 2560^2 (0.6 GB bf16; rank-128 would be ~60 MB,
+  untested), ~13 MFLOP per row and layer.
+- Use: if the pre-route misses its line, the same ridge correction on the pre-route's input (L's partial output) is the
+  follow-up; it needs those vectors captured (cap45 has only x_L). No verdict here (no line).
+
+### S2 (Fable B's pre-registered screen, ROW_WALL.md sec 5; run by MTP Head on the orchestrator's routing, Tue 11-03 19:4x-19:42; sticky/s2_route.py, data/s2_route.txt): PASS by the letter, carried by D2's kept +15 % assumption
+- Replay: BigMoE's cap45 through the adopted C 256 per-layer pools exactly as Fable B's row_split.py (MoonShots' laysz45
+  loader, real 8-bit router: self-check 0.982; LRU + 30 x popularity; prompts 2-6), rows capped at the live chain's 10.
+  The cheap chain over rows 1-9 one cycle early takes the exact routes (no drift: cap45 has no cheap-pass states).
+- Misses per check (rows 0-9, MSB + LSB): code 292 (25 checks), math 204 (146); 7-8 % only on row 0 (the base union, which
+  the cheap chain never sees). Recall of the exact pass's misses: TOP-2 chain code 0.517 / math 0.457; ALL-RESIDENT 0.932 /
+  0.917. Requests per hit 1.00 by construction.
+- Model (ROW_WALL sec 3, code rows 9.84, kept 10.54, the replay's misses; base 126 ms -> 83.4 tok/s): TOP-2 (16 rows x 0.6
+  ms + dense extra 9.8), no drift: route-only +3.5 %, with D2's kept +15 % +19.0 %; drift 0.1: +1.5 / +16.7 %; drift 0.2:
+  -0.4 / +14.6 %. ALL-RESIDENT (2.64 ms rows): route-only -6.9 %, with kept +15 % +7.1 %.
+- LINE (Fable B: top-2 recall >= 0.45 with <= 1.3 requests per hit and the model >= +10 % on code PASS; recall < 0.30 or the
+  model < +4 % KILL): recall 0.517, model +19.0 % -> PASS by the letter. Reading [G]: the route prediction alone is +3.5 % (KILL
+  side by itself) and goes to ~0 at 20 % route drift; the PASS is D2's kept +15 % (the cheap chain pre-verifying the next
+  check's start), which this screen does not test, and ROW_WALL's own section 2 puts a cheap verdict's excess at 0.04
+  tokens per row on code (16 rows ~ +6 % kept, not +15). Next would be measuring that kept gain and the route drift (a
+  top-2 pass's real routes), not the recall.
+
+### M-23b FIRSTMISS-MTP RESULT: KILL (code -1.1 %, chat -0.9 % vs t 0.3; MoonShots' pre-registered row in ~/NewIdeas/QUEUE.md; run by MTP Head Tue 11-03 20:26-20:31, CPU; sticky/m23b.py, data/m23b.txt; written 20:32)
+- Harness: MoonShots' stop45.py coupled walks on Breakthrough's 36 capture windows (read-only imports; walk / evaluate with a
+  pluggable feature function), SSD-aware tok/s at C 256 + M-17, EXACT gate, 2 folds by window, mu tuned per head on the
+  train fold, 2 seeds. Heads A (stop45's), B (+ Fable B's content signals for the drafted token, context through the anchor
+  token), C_d (+ the MTP head's flag / top-1 p / p of the draft at depths < d, from tree3_map; d chosen on the train fold =
+  1 in both folds of every domain), charged d x 2.2 ms per check.
+- Test folds, vs t 0.3 (kept / rows per check; tok/s): code t 0.3 8.00 / 10.62, 86.2; A -1.5 %; B +0.6 %; C1 -1.1 % (MTP cost
+  hidden +1.3 %), C2 -4.1 % (+0.5), C3 -5.8 % (+1.1); oracle +12.3 %. IFEval: A +2.3, B +2.2, C1 -1.7 (hidden +3.4), C3 -8.7
+  (hidden +6.1); oracle +21.7. Multi: A +2.4, B +2.4, C1 -0.1 (hidden +5.9), C3 -7.9 (hidden +8.6); oracle +17.1.
+- LINE (code C_d vs t 0.3: >= +3 % PASS, < +1 % KILL): -1.12 % -> KILL; C_d vs B -1.74 %. Chat (IFEval + multi pooled, reported
+  apart): -0.89 % -> KILL; C_d vs B -3.11 %.
+- Diagnostic (cf >= 0.99 rows, the MTP flag at depth 0: marks >= 0.30 of first misses, flags <= 0.05 of rows): code 262 rows,
+  flags 0.004, 0 first misses (undefined); IFEval flags 0.003, marks 0 / 4; multi flags 0.054, marks 9 / 10. Too few cf >= 0.99
+  first misses on the capture walks to judge (any depth: code 4 / 4 marked, IFEval 2 / 9, multi 11 / 14).
+- Reading [G]: the MTP head is a real second opinion (cost hidden: chat +3.4-8.6 %), but each MTP step on the critical path
+  (2.2 ms) costs more than the rows it saves. On the shipped chat path the MTP chain already runs (its features are free there),
+  but its own running-confidence cut already uses them; this harness replays DFlash2's walks, so that case is not measured.
+  Prediction (MoonShots): code BETWEEN (+1-3 %), chat BETWEEN-PASS; came KILL / KILL.
+
+### CPUMTP (the orchestrator 20:4x: run the MTP head's draft steps on the CPU during the GPU's gate spins) -- prior art + pre-registration (written before any run, Tue 11-03 20:34)
+- Idea: the GPU spins ~42 ms per check on SSD gates (c45l_256), the CPU idles; an MTP step on the CPU would hide its 2.2 ms,
+  making M-23b's cost-hidden gain real, or letting the MTP chain draft ahead while the GPU verifies (PEARL-style post-verify).
+- Prior art (adapted): Ghidorah (arXiv 2505.23219: hetero-core model parallelism, CPU + GPU on unified memory, Medusa),
+  DuoDecoding (arXiv 2503.00784: the draft on the CPU, the target on the GPU), PEARL (parallel draft / verify). TRIED: A7
+  (MoonShots 10-23: the MTP drafter on CPU / ANE in parallel, KILL: drafter share 8-11 % of a pass = the ceiling), M-19
+  CPUDRAFT (MoonShots 11-02: DFlash2 on the CPU, KILL: MLX's CPU 4-bit matmul is a reference loop, 1.4 s per linear; CPU
+  aggregate 35-57 GB/s at 4-8 threads), Leap's WHOLE-CHIP-2 (ANE handoffs 78-147 us per layer, KILL).
+- Desk bound first (M-23b, data/m23b.txt): with the MTP cost fully hidden, C_d on code is +0.5-1.3 % vs t 0.3 (below M-23b's
+  +3 % line even when free); on chat M-23b's +3.4-8.6 % is against DFlash2-t 0.3, while chat ships on the MTP chain (D-23d
+  +24.5 % over DFlash2). So hiding the cost cannot make M-23b pass; a CPU MTP step matters only for drafting ahead.
+- Step 1 (now, < 4 GB, ~2 min, sticky/cpu_head_bench.py): the lm_head part of an MTP step (248,320 x 2560; 358 MB at 4-bit,
+  1.47 ms on the GPU, HEADBENCH) on the CPU: MLX CPU stream 4-bit / bf16 / fp32, numpy (Accelerate) fp32, and a 32K-row
+  subset (a reduced draft vocabulary), alone and beside a GPU load (the GPU lm_head in a loop in another process).
+  The head is a floor for the whole step (the MTP layer adds its own weights).
+  LINE: PASS (worth Step 2) if the best full-vocab head beside the GPU load is <= 3.0 ms (a whole step can then fit the
+  ~5.6 ms per draft a code check leaves: 15 drafts in ~84 ms); KILL if it is > 5.6 ms AND the 32K-subset head is > 3.0 ms;
+  BETWEEN otherwise (only a reduced-vocab CPU head could keep pace). Prediction: KILL 80 % (M-19's 35-57 GB/s).
+- CPUMTP STEP 1 RESULT: KILL (Tue 11-03 20:35; sticky/cpu_head_bench.py, data/cpu_head_bench.txt; ~4.2 GB, under a share lock).
+  The lm_head on the CPU, median per step (+ argmax), alone / beside a GPU process running the 4-bit head in a loop: MLX CPU
+  4-bit ~2.6 s (a reference loop, scaled from 8K rows); MLX bf16 55 / 72 ms; fp32 (2.54 GB) MLX 19.9 / 39.2 ms, numpy
+  (Accelerate) 20.0 / 38.7 ms; the 32K-row subset fp32 2.7 / 5.1 ms. GPU 4-bit: 1.47 ms (HEADBENCH).
+  LINE: best full-vocab head beside the GPU load 38.7 ms (> 5.6) and the subset 5.1 ms (> 3.0) -> KILL (prediction KILL 80 %).
+  [K] side number: the CPU alone streams fp32 at ~125-128 GB/s on this M5 Pro (2.54 GB in 20 ms), well above M-19's 35-57
+  GB/s through MLX's 4-thread path; beside a bandwidth-bound GPU kernel it falls to ~65 GB/s. A hand-written 4-bit CPU head
+  at that rate would still need ~2.9 ms alone / ~5.5 ms beside the GPU for the 358 MB, above the GPU's 1.47 ms: the CPU can
+  hide an MTP step only where the GPU idles (gate spins), and with M-23b's cost-hidden ceiling of +0.5-1.3 % on code there
+  is nothing to win on the shipped paths. Not pursued; no Step 2.
+
+### MoonShots' WALL 2 sweep (~/MoonShots/research/sweep_1103/WALL2_KEPT.md, Tue 11-03 22:5x): three drafter items taken -- pre-registrations (written before any run, Tue 11-03 23:2x-00:0x)
+- Context: the night chain (BigMoE's quiet lock to 04:28, then FLOOR to 13:00) blocks every program, so these are scripted and
+  pre-registered tonight and run as small tests from Wed 13:45 (share lock, MEM <= 6 GB). Prior-art pass = MoonShots' sweep
+  (45 searches, 25 pages, grep evidence in WALL2_KEPT.md); the TTS paper re-read here (arXiv HTML): Adam, K = 1 step per round
+  best, S = 1 best acceptance / S = 5 best throughput, forward KL to the target over all canvas rows with decreasing weights;
+  lr, lambda and the parameter set are NOT stated; gains +15-17 % over the first 10K tokens, +183-245 % at 20-30K; no short-
+  output numbers.
+
+#### SELGAP: DFlash2's selector on vs off (MoonShots' 10-minute check on DCore, arXiv 2610.24993)
+- Question: DCore puts a trained causal tail (DSpark / Domino) at ~+19 % kept over plain DFlash (Qwen3-8B, T 0, B 16). TRIED
+  SD-ARtail is KILL on paper because DFlash2 already has a first-order selector. How much does that selector add over plain
+  DFlash (each position's own argmax) here?
+- Measurement (sticky/selector_gap.py, ~1 min GPU): the HPD-0 k-head walks (data/d02b_walk_kh_{code,ifeval,multi}.npz: the
+  drafter's normed hidden at every draft position, the teacher-forced selector picks); unary argmax = the 4-bit lm_head on the
+  stored hidden. Both teacher-forced at HPD-0's anchors (exact up to the first miss), kept = accepted + 1 per 16-row check, no
+  cut. Validation: the selector picks must sit in the recomputed exact top-16; the own chain's k must equal the walk's.
+- LINE (MoonShots): selector gap < +10 % -> a trained tail deserves a screen (proposal: a DSpark-style tail on L1-20);
+  >= +10 % -> the selector already holds most of a tail's gain, SD-ARtail's KILL stands. Prediction: code +8-14 %, chat
+  +4-9 %, i.e. split (code KILL-side, chat screen-side), 50 / 50 overall.
+- Prior art read after writing the line (DCore HTML, Table 1, Qwen3-8B, B 16, greedy, low / high entropy): DFlash 6.78 / 4.03,
+  DFlare 7.06, D-PACE 7.46, DCore 7.59 / 4.39 (no tail: target-layer mixing + position-weighted CE, drafting 1.79 ms as
+  DFlash), Domino 8.10 / 4.83, DSpark 8.04 / 4.79 (a parallel 5-layer backbone + a token-dependent correction path; DSpark's
+  is a Markov head, ~78 M params at 8B; drafting 2.64-2.71 ms). Greedy throughput: DCore best (772.6 vs 755.8 / 752.7 TPS);
+  the tails pay only under sampled drafting. Our selector is DSpark's family (first order over the top-16, 0.30 ms after
+  R-77 CHAIN), so a NEW tail must beat it, and Domino ~ DSpark says a richer tail adds ~1 % over a first-order one. The
+  line stands; a sub-10 % gap would point at our selector's capacity (rank-limited bilinear) more than at a missing tail.
+- RESULT (Wed 11-04 05:42-05:43, beside FLOOR's CPU map under a share lock; data/selector_gap.txt): selector gap code +6.7 %
+  (kept 9.744 vs 9.131 unary argmax, 634 checks), IFEval +3.0 % (2.447 / 2.376, 2690), multi +2.8 % (2.065 / 2.008, 3114).
+  P(depth >= 15) on code 0.276 vs 0.142 (the selector doubles the long runs); at depth 1 ON = OFF (0.940 / 0.938, 0.629 /
+  0.639, 0.505 / 0.505: no predecessor drafted yet). Validation: own-chain k equals the walk's on every check; picks outside
+  the recomputed top-16 0.13 / 0.26 / 0.18 % (near-ties of the f16-stored hidden). Prediction (code +8-14, chat +4-9) missed
+  low on both.
+  - VERDICT by the letter: gap < +10 % everywhere -> a trained tail deserves a screen.
+  - Reading against DCore's Table 1: on code our first-order selector already holds a DSpark-class gain (+6.7 % vs
+    DSpark-over-DCore +5.9 % at low entropy), and Domino adds +0.7 % over DSpark -> no tail screen on code. On chat ours is
+    +3 % vs DSpark's +9.1 % at high entropy: the one open item is a stronger selector for chat. Cap by the depth arithmetic:
+    a tail acts from depth 2, and chat checks end at depth 0-1 in 36-50 % of cases; doubling the selector's measured effect
+    would add +3 % on chat. Not queued: small against the D98 bar; offered to the orchestrator.
+
+#### TOOLSPEC (a): schema tokens among DFlash2's agent first misses (ToolSpec, arXiv 2604.13519)
+- Measurement (sticky/toolspec_screen.py, CPU seconds): the 12 held-out agentic turns (data/d02b_walk_d02a_agent.npz, 637
+  official-loop checks, kept 4.8 per check); the 125B writes tool calls as XML (<tool_call>, <function=N>, <parameter=P>,
+  </parameter>, </function>, </tool_call>). For each first miss: on a tag token at all (upper bound), and FSM-fillable
+  (excluding the value-ending token, the next-parameter-or-end choice, call / stop, and NAME tokens).
+- Caveat recorded first: each capture starts inside a tool call (gen after '<parameter=...>'), 160 tokens, mostly values.
+- LINE (MoonShots): PASS >= 10 % of agent first misses FSM-fillable AND kept bound >= x1.05; KILL tag share < 4 % OR kept
+  bound < x1.02; BETWEEN otherwise. Prediction: KILL 75 % (tags are the drafter's easiest tokens; misses sit in values).
+- RESULT (Wed 11-04 05:42, CPU seconds; data/toolspec_screen.txt): KILL. 637 checks, kept per check 3.01 on this set (k + 1,
+  official loop; the 4.8 above was MoonShots' agent base, not these 12 turns). Tag tokens 12.7 % of the answer tokens.
+  First misses 625: on a tag token 45 (7.2 %), FSM-fillable 14 (2.2 %). Kept bound x1.007 (FSM); x1.023 even if every
+  tag first miss were filled. KILL by the OR (kept < x1.02); the PASS side (x1.05) is out of reach even at the upper bound.
+  Caveat: the '="' and '">' pieces of parameter tags count as NAME (decision) chars here; reclassifying them moves at most
+  a few of the 45 and stays under x1.023. Prediction (KILL 75 %) held.
+
+#### TTS1: test-time LoRA on DFlash2, teacher-forced replay (TTS step 1 as MoonShots specified, adapted to our captures)
+- Replay (sticky/tts_replay.py, GPU ~20 min, ~4 GB): the live official loop with the t 0.3 cut (kept = min(k, L) + 1) on code
+  (24 HumanEval+ windows, Leap's captures, hard CE), IFEval (30), multi (24), agent (12) (D-02a captures: soft CE to the
+  125B's top-32). After every check one Adam step on LoRA r 16 / alpha 32 on every Linear of the 5 layers' attention and MLP,
+  with L1-20's training loss (soft CE + the selector's CE with the true predecessor) on the VERIFIED rows only (accepted
+  drafts + the bonus row: leak-free; TTS also trains on the rows after the first rejection, which a teacher-forced replay does
+  not have). Context K / V as the drafting pass cached them (no recompute: live semantics). Reset per window. Arms: lr 0
+  (frozen, same code path), 1e-4, 1e-3. Validation: the update's forward reproduces the drafting pass (max |d hid| ~ 0).
+- Caveat recorded first: our answers stop at ~840 tokens (agent 160); TTS's published gains are averaged over 10K+ tokens
+  and grow with length, so this tests the early regime only. MoonShots' step 0 on Breakthrough's 36 windows: chat kept per
+  check flat or rising with position (2.4 -> 2.7, 1.9 -> 2.1), code falling (12.7 -> 5.7: HumanEval's echoed signature and
+  docstring early). A KILL here kills TTS for today's suites, not for long agent sessions (those need long 125B captures).
+- LINE: PASS if at one lr chat (IFEval or multi) or agent kept per check (cut) >= +6 % vs frozen AND code >= -0.5 % at that
+  lr (then: price the update (ms per step x S) and an S = 5 arm, plus a per-session agent arm); KILL if < +2 % on every set
+  at both lrs; BETWEEN otherwise. Prediction: KILL 70 %, BETWEEN 25 %, PASS 5 %.
+
+### PR160 read check + SAMELAYER-T (the 05:37 wake's pre-agreed follow-up to tonight's pre-route; written before any run, Wed 11-04 05:5x)
+- pr_160 (BigMoE's night, C 160, ~/BigMoE/data/r57/pr_160_preroute.txt): per-row recall@10, all domains: r57 0.634, full
+  0.565, p3 0.565, p6 0.566 -> KILL by its line (PASS p3 >= 0.85 AND p6 >= 0.90; KILL p3 < 0.75). Code 0.553 / 0.475,
+  chat 0.667 / 0.602 (r57 / full).
+- READ CHECK (code reading, no run): 'full', 'p3' and 'p6' score L+1's router on `nxt.attn_hyper_connection(h)[0]`
+  (~/BigMoE/data/r57/snap/r57_screen_s160.py:521 and :526; scripts/r57_screen.py the same) = L+1's ATTENTION-side
+  hyper-connection read. In qwen4_exp every block's read has its own hc_norm weight and its own learned read mix
+  (ref/qwen4_exp.py:1243-1290; there are no input / post-attention layernorms), and the router sees the MLP-side read
+  `mlp_hyper_connection(hyper, pending=(attn_out, inject))`. The pre-attention forecast of L+1's router input is the
+  MLP-side read with no attention write: `nxt.mlp_hyper_connection(h)[0]` (pending=None).
+  - Two signs the measured read is not the router's: 'full' holds strictly more information than r57 (L's MoE output added)
+    yet scores 7 points lower, and NewIdeas' L2-08 measured the MLP-side read of the pre-attention streams (QUEUE L2-08,
+    ~/NewIdeas/scripts/tf_samelayer125.py:62, data/samelayer/results.txt) at per-row recall@10 0.735 code / 0.820
+    IFEval + multi, against pr_160's 'full' 0.475 / 0.602.
+  - Prediction for a re-run with the MLP-side read (BigMoE's code and verdict, not mine): full code 0.70-0.76, chat
+    0.78-0.84; p3 within 0.01 of full -> 'all' ~0.76-0.81 = BETWEEN by the letter (code alone may stay < 0.75).
+- SAMELAYER-T (MoonShots' WALL1_SSD item 3 = WALL2_KEPT item 4, arXiv 2511.10676 "Pre-Attention Expert Prediction":
+  linear maps on the pre-attention activations, 93-97.6 % on 15-30B MoEs): per layer L, a trained forecast router
+  W_L = R_L + dW_L (2560 -> 512) on L's MLP-side read of the pre-attention streams (the corrected 'full' input), ridge on
+  L's true router logits, residual form (lambda from an inner prompt; dW = 0 is the untrained forecast); also scored on the
+  p3 input (L-1's partial output written), its live timing. Leave-one-prompt-out, per-row recall@10 of L's true top-10.
+  - Run cost: none over the untrained pre-route (W_L replaces the router weight in the same GEMV; 48 x 2.6 MB bf16 =
+    126 MB resident).
+  - Data: a new teacher-forced capture (the 125B exact streaming through NewIdeas' tf_samelayer125 path, C 51, ~13 GB,
+    ~15-20 min): per decode row and layer the MLP-side pre-attention read (2560) and L's true MoE input (2560) + top-10;
+    tf_code + tf_ifeval + tf_multi, every 8 (~5K rows). Or BigMoE's corrected pre-route re-run with those vectors saved.
+  - LINE (MoonShots' item-3 screen, unchanged): PASS recall@10 >= 0.85 code AND >= 0.90 chat; KILL < 0.78 code (less
+    than +0.05 over the untrained read); BETWEEN otherwise. Then: exposure_replay exposed3 with the forecast window
+    0.45 ms (MoonShots' [G]: D2's exposure ~12.4 -> ~6-9 ms per check).
+  - Prediction (LEAD1CORR's ridge gave +11.7 points at lead 1; MoEPrefetch's rank-128 correction +12 on the D1 tap):
+    code 0.80-0.86, chat 0.87-0.92 -> PASS 35 %, BETWEEN 45 %, KILL 20 %.
+  - When: not tonight (main at 39 % against the orchestrator's <= 45 % at 13:45; night = scheduled jobs only). The capture
+    is one > 5 GB GPU job: Wed day in a free slot, else Wed night, routed by the orchestrator.
+  - UPDATE 05:5x: BigMoE confirmed the read bug, withdrew the KILL (~/BigMoE 958ea4b: full = L+1's MLP-side read at its start,
+    PLE included; p3 / p6 on the MLP side; fullA = the old read as a control) and dumps the data in its re-run (WED_TESTS 3b,
+    R57_PR_DUMP=1: data/r57/pr_dump/pr2_160_NN.npz, 18 prompts, ~124K row-layers, decode verify rows incl. rejected drafts;
+    X = full's input, Y = the true MoE input, f32). No capture of mine needed.
+  - Script (sticky/samelayer_t.py, CPU): ridge on the logit residual (Y - X) R_L^T with R_L the real 8-bit router, folded
+    into the router at run time; leave-one-prompt-out, lambda from two inner prompts. Check before the data (cap45 as a fake
+    dump, X = x_{L-1}, Y = x_L = LEAD1CORR's lead-1 setup, 16 layers; sticky/samelayer_t_fake.py): untrained 0.622 ->
+    trained 0.742 (+12.0 points) vs LEAD1CORR's 0.612 -> 0.729 (+11.7) = the pipeline reproduces. Lambda grid widened to
+    0.1-10 x mean eigenvalue after the check (its picks sat at 1.0).

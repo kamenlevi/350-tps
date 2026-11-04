@@ -16,6 +16,7 @@ PROJ = ("gate_proj", "up_proj", "down_proj")
 SH = {"gate_proj": (640, 2560), "up_proj": (640, 2560), "down_proj": (2560, 640)}   # (O, I) per projection
 PAGE = 16384
 P11_WORDS = 8804                                        # 800 blocks x 11 words + the base word, padded to 16 B
+PAD4K = 36864                                           # native+p11+pad: an MSB scale piece's 4 KB-aligned slot (9 x 4 KB)
 
 
 def native(x, O, KG, per):
@@ -63,14 +64,17 @@ def entry(r, layout):
     e["layout"] = layout
     if layout == "native":
         return e
-    m, l, mo, ms, lo, ls = 0, 0, [], [], [], []
+    pad = layout == "native+p11+pad"                    # (Leap + BigMoE 11-03 22:4x on MoonShots' M-29: zero-copy reads need
+    sc = PAD4K if pad else 4 * P11_WORDS                # 4 KB-aligned pieces in the file and the pools; the MSB part keeps its
+    m, mo, ms = 0, [], []                               # size: 3 x (614,400 + 2 x 36,864) = 2,064,384)
     for p in range(3):
-        for sz in (r["msb_piece_size"][3 * p], 4 * P11_WORDS, 4 * P11_WORDS):
+        for sz in (r["msb_piece_size"][3 * p], sc, sc):
             mo.append(m); ms.append(sz); m += sz
     msb = -(-m // PAGE) * PAGE
-    for p in range(3):
-        for sz in (r["lsb_piece_size"][2 * p], 4 * P11_WORDS):
-            lo.append(msb + l); ls.append(sz); l += sz
+    lo, ls, l = [0] * 6, [0] * 6, 0                     # the index keeps the per-projection order (l1, b) x 3
+    order = [0, 2, 4, 1, 3, 5] if pad else range(6)     # pad: the three l1 planes first (4 KB-aligned), then the packed b's
+    for k in order:
+        lo[k] = msb + l; ls[k] = r["lsb_piece_size"][k] if k % 2 == 0 else 4 * P11_WORDS; l += ls[k]
     lsb = -(-l // PAGE) * PAGE
     e.update(recsz=msb + lsb, msb_sz=msb, lsb_sz=lsb, msb_piece_off=mo, msb_piece_size=ms, lsb_piece_off=lo,
              lsb_piece_size=ls)
@@ -79,7 +83,7 @@ def entry(r, layout):
 
 def convert(rec, r, e):
     """one row-major record (uint8 [r['recsz']]) -> the layout of entry e"""
-    p11 = e["layout"] == "native+p11"
+    p11 = e["layout"] in ("native+p11", "native+p11+pad")
     out = np.zeros(e["recsz"], np.uint8) if p11 else rec.copy()
     mo, lo = r["msb_piece_off"], r["lsb_piece_off"]
     if p11:                                             # today's padding must be zero (so the inverse is exact)
@@ -106,7 +110,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("src")
     ap.add_argument("dst")
-    ap.add_argument("--layout", choices=("native", "native+p11"), required=True)
+    ap.add_argument("--layout", choices=("native", "native+p11", "native+p11+pad"), required=True)
     ap.add_argument("--layers", type=int, nargs="+", required=True)
     a = ap.parse_args()
     S, D = os.path.realpath(a.src), os.path.realpath(a.dst)

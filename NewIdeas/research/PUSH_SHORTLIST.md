@@ -60,7 +60,7 @@ under every FAST stack. Fable A's D1 is therefore worth MORE on top of the FAST 
 | 6 | One-call OOO (Fable C; engine) | EXACT | engineering | -3.7 ms per check ~ +6-7 % [P] | medium | NOT pre-registered yet | - |
 | 7 | COLD-CUT: unsure rows drop cold ranks >= 4 (Fable C) | FAST | adapted | bytes x0.35 vs u8 + t3's x0.46 (-22 % at C 320) -> +2.5-3 % halved | 50 % PASS (Fable C) | map arm hyb_cold4_t3 (UNION_STACK sec 5) | needs a map slot |
 | 8 | Top-2 cheap chain as a route predictor for the next exact pass (Fable B D2) | EXACT | adapted | +7 % code halved, 0 chat | BETWEEN 50 % / PASS 35 % (Fable B) | S2, 5-min CPU replay (recall >= 0.45 at <= 1.3 requests per hit) | today, Fable B |
-| 9 | Q1-ON-MISS / MISS-CUT (NewIdeas / Fable C) | FAST, cache-dependent | adapted | on code dominated by the union cuts (no group cut). As a stack layer: HYB-MISS x0.35. QOM-full (theta 0 + LSB-on-miss) cuts SSD busy 51 -> 10 ms per check [P] | high on quality (94-98 % of experts kept) | map Wed after 15:00 (+ Breakthrough's res_c256) | Wed |
+| 9 -> now first on the FAST track | Q1-ON-MISS / MISS-CUT (NewIdeas / Fable C). **Map PASS / PASS / PASS at cf 0.9 and 0.5 (Tue 22:59); Kamen's decision 2 = YES (23:1x)** | FAST, cache-dependent | adapted | on code dominated by the union cuts (no group cut). As a stack layer: HYB-MISS x0.35. QOM-full (theta 0 + LSB-on-miss) cuts SSD busy 51 -> 10 ms per check [P] | high on quality (94-98 % of experts kept) | map Wed after 15:00 (+ Breakthrough's res_c256) | Wed |
 | 10 | WHOLE-CHIP: CPU / ANE computes part of each layer's experts beside the GPU (Leap) | FAST numerics | adapted | +20 % expert throughput if PASS; ~80-110 GB/s idle during the expert kernel [K] | 15 % (Leap) | TABLE_350 micro-screen | Leap's call |
 
 ### B. Step changes beyond one stream (Lunatic)
@@ -107,5 +107,5 @@ under every FAST stack. Fable A's D1 is therefore worth MORE on top of the FAST 
 
 **Decisions for Kamen:**
 1. Does an aggregate over his parallel agent sessions count (Route W)?
-2. Is a FAST mode whose outputs depend on the cache state (QOM / MISS-CUT) acceptable?
+> (a quote from the project owner, kept private)
 3. Re-base EXACT on all-3-bit (Route X)? Only if t3_all passes chat same-scores.

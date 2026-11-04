@@ -5,7 +5,8 @@ contiguous: one load instruction of a simdgroup touches ~6 lines of codes instea
 ops, so tier_glu_nax6n == tier_glu_nax6 bitwise (n7_native.py checks it).
 repack(pools) builds the native copy of NAX6's msb / lsb dicts (numpy, on the CPU).
 p11 (Tue 17:2x, TABLE_350 'P11'): pools whose s3 / b3 / b arrays are uint32 [C, 8804] (scripts/p11.py's 11-bit pieces)
-run kernels that read them through P11P (the same floats as the bf16 pieces); bf16 pools are untouched."""
+run kernels that read them through P11P (the same floats as the bf16 pieces); bf16 pools are untouched. Tue 22:5x
+(native+p11+pad): the MSB / LSB piece strides come from the pools' shapes (MSB pieces padded to 9216 words; LSB b 8804)."""
 import os, sys
 from functools import lru_cache
 import numpy as np
@@ -47,12 +48,12 @@ assert _CORE_N in _A_N and _CORE_N in _B_N
 # 32-row tile, so its bit offset is fixed; srow[32 * g] / brow[32 * g] read group g)
 _CORE_NP = _swap(_CORE_N, [
     ("constexpr int KB3 = S_K * 3 / 8, KG = S_K / 64, KL = S_K / 8;",
-     "constexpr int KB3 = S_K * 3 / 8, KG = S_K / 64, KL = S_K / 8; constexpr uint NB11 = S_O * KG / 32, PW11 = (11 * NB11 + 4) / 4 * 4;"),
+     "constexpr int KB3 = S_K * 3 / 8, KG = S_K / 64, KL = S_K / 8; constexpr uint NB11 = S_O * KG / 32, PW11 = PWM_C, PWL11 = PWL_C;"),
     ("const device T* srow = s3p + ((size_t)e * (S_O / 32) + n0 / 32) * (KG * 32) + lane;",
      "const P11R srow = p11r(s3p, e, PW11, NB11, (n0 / 32) * (KG * 32) + lane);"),
     ("const device T* brow;", "P11R brow = {};"),
     ("brow = blp + ((size_t)el * (S_O / 32) + n0 / 32) * (KG * 32) + lane;",
-     "brow = p11r(blp, el, PW11, NB11, (n0 / 32) * (KG * 32) + lane);"),
+     "brow = p11r(blp, el, PWL11, NB11, (n0 / 32) * (KG * 32) + lane);"),
     ("brow = (tier == 2 ? b2p : b3p) + ((size_t)e * (S_O / 32) + n0 / 32) * (KG * 32) + lane;",
      "brow = p11r(tier == 2 ? b2p : b3p, e, PW11, NB11, (n0 / 32) * (KG * 32) + lane);"),
 ])
@@ -303,7 +304,9 @@ def tier_glu_nax6n(x, msb_n, lsb_n, msb_slot, lsb_slot, plan="4433333333", grp=N
     p11 = msb_n["gate_proj"]["s3"].dtype == mx.uint32             # p11 pools: uint32 [C, 8804] pieces
     if p11:
         N, D = msb_n["gate_proj"]["w3"].shape[1], msb_n["down_proj"]["w3"].shape[1]
-        assert msb_n["gate_proj"]["s3"].shape[-1] == P11.piece_words(N * 40) and b2 is None
+        pwm, pwl = msb_n["gate_proj"]["s3"].shape[-1], lsb_n["gate_proj"]["b"].shape[-1]   # strides from the pools (native+p11+pad)
+        assert pwm >= P11.piece_words(N * 40) and pwm % 4 == 0 and pwl >= P11.piece_words(N * 40) and pwl % 4 == 0 and b2 is None
+        assert all(msb_n[p][k].shape[-1] == pwm for p in PROJ for k in ("s3", "b3")) and all(lsb_n[p]["b"].shape[-1] == pwl for p in PROJ)
     else:
         N = msb_n["gate_proj"]["s3"].shape[1]
         D = msb_n["down_proj"]["s3"].shape[1]
@@ -316,6 +319,8 @@ def tier_glu_nax6n(x, msb_n, lsb_n, msb_slot, lsb_slot, plan="4433333333", grp=N
     ms = msb_slot.astype(mx.int32).reshape(-1)
     g, u, d = (msb_n[p] for p in PROJ)
     tmpl = [("T", x.dtype), ("NR_C", R), ("MASK4_C", m4), ("MASK2_C", m2), ("R4_C", max(r4, 1)), ("DIAG_C", 0), ("GS_C", 1)]
+    if p11:
+        tmpl = tmpl + [("PWM_C", pwm), ("PWL_C", pwl)]
     xs = rowsum64(x) if xs is None else xs
     (h,) = (_kan_p11 if p11 else _kan)()(inputs=[x, xs, g["w3"], u["w3"], g["s3"], u["s3"], g["b3"], u["b3"], bb["gate_proj"], bb["up_proj"],
                           L["gate_proj"]["l1"], L["up_proj"]["l1"], L["gate_proj"]["b"], L["up_proj"]["b"], ms, ls,

@@ -64,6 +64,8 @@ struct Layer {
   // records3 converted in place (fmt 3 readers only; docs/PLAN_records3_convert.md): 0 row-major, 1 native, 2 native+p11;
   // rows per projection, the record's 15 piece offsets (index msb_piece_off + lsb_piece_off), today's row-major sizes
   int layout = 0; int64_t rows3[3] = {0, 0, 0}, loff[15] = {}, rm_msb = 0, rm_len = 0;
+  int direct_n = -1;                                // BIGMOE_RECORDS_DIRECT: read the first n pieces straight in, the rest
+                                                    // via a bounce (-1 = all straight in; native+p11+pad's LSB part: 3)
   int64_t part_off = 0, part_len = 0;              // fmt 1 on a part of a record (tier pools: records3 MSB or LSB part)
   int pom_fd = -1; int64_t pom_recsz = 0, seg1 = 0, seg2 = 0;   // R-44 b (BIGMOE_POM): records3p beside the records3m part
   int pom_r2 = 0, lp1 = 0, rank_k = 0;              // POM's R2 (base pool) / LP1 (sidecar); ids per routing row (gate ranks)
@@ -109,18 +111,20 @@ static std::atomic<int64_t> g_vt_hits{0}, g_vt_ins{0}, g_vt_purged{0}, g_vt_drop
 // call, how its experts were found (resident, prefetched on time / late, queued read cancelled into demand, demand miss
 // predicted-but-unissued / unpredicted). Read with ext.trace_reads() / ext.trace_cov().
 static bool g_rtrace = getenv("BIGMOE_TRACE") != nullptr;
-struct RdEv { int L, e, tag; double t0, t1; };           // tag 0 demand, 1 prefetch
+struct RdEv { int L, e, tag; double t0, t1, tp0, tp1; };   // tag 0 demand, 1 prefetch, 2 joint; S0: tp0 / tp1 = the pread
 struct CovEv { int L, seq, need, hit, pf_ready, pf_late, q_demand, pred_unissued, unpred; double t; };
 static std::mutex g_rmu;
 static std::vector<RdEv> g_rd;
 static std::vector<CovEv> g_cov;
 static thread_local int t_rd_tag = 0;
+static thread_local double t_p0 = 0, t_p1 = 0;            // S0 (BIGMOE_TRACE): the last read_record's start / end
 
 #include <sys/uio.h>
 // one expert record -> 9 destinations with a single preadv (16 KB-aligned record, contiguous pieces); short reads
 // continue from where they stopped
 static void read_record(int fd, int64_t off, struct iovec* iov, int n) {
   int i = 0;
+  if (g_rtrace) t_p0 = now_s();
   while (i < n) {
     ssize_t r = preadv(fd, iov + i, n - i, off);
     if (r <= 0) { fprintf(stderr, "bigmoe: record preadv failed\n"); abort(); }
@@ -128,6 +132,7 @@ static void read_record(int fd, int64_t off, struct iovec* iov, int n) {
     while (i < n && r >= (ssize_t)iov[i].iov_len) { r -= iov[i].iov_len; i++; }
     if (i < n && r > 0) { iov[i].iov_base = (uint8_t*)iov[i].iov_base + r; iov[i].iov_len -= r; }
   }
+  if (g_rtrace) t_p1 = now_s();
 }
 
 // records3 -> 4-bit pieces, bit-exact (exact mode on the plane records): q = 2m + l per weight, s = s3 / 2.
@@ -405,8 +410,21 @@ static void read_expert(const Layer* lp, int e, uint8_t* const* dst, bool par = 
   read_record(lp->rec_fd, (int64_t)e * lp->recsz + lp->part_off, &one, 1);
   if (g_m01 && (lp->rec_fmt == 3 || lp->part_len)) { m01_expert(lp, buf, dst, par); return; }
   if (lp->rec_fmt == 1) {
+    // BIGMOE_COPY_PAR (wall 1, MoonShots' M-29: a lone base record's copy tail 122 -> 81 us): with few jobs in the call
+    // (par), the pieces go to their slots on three threads, one per projection (3 or 2 pieces each); same bytes, same slots
+    static const bool cpar = getenv("BIGMOE_COPY_PAR") != nullptr;
+    const size_t np = lp->pieces.size();
+    if (cpar && par && np % 3 == 0) {
+      const uint8_t* rb = buf;
+      dispatch_apply(3, dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^(size_t p) {
+        int64_t o = 0;
+        for (size_t i = 0; i < p * (np / 3); i++) o += lp->pieces[i].per;
+        for (size_t i = p * (np / 3); i < (p + 1) * (np / 3); i++) { memcpy(dst[i], rb + o, lp->pieces[i].per); o += lp->pieces[i].per; }
+      });
+      return;
+    }
     int64_t o = 0;
-    for (size_t i = 0; i < lp->pieces.size(); i++) { memcpy(dst[i], buf + o, lp->pieces[i].per); o += lp->pieces[i].per; }
+    for (size_t i = 0; i < np; i++) { memcpy(dst[i], buf + o, lp->pieces[i].per); o += lp->pieces[i].per; }
     return;
   }
   // records3: MSB part = per proj (w3, s3, b3), LSB part at msb_sz = per proj (l1, b); the 3 projections in parallel.
@@ -445,10 +463,27 @@ static void load_jobs(Layer& ly, const std::vector<std::pair<int, int>>& jobs, c
       }
       const double t_r0 = g_rtrace ? now_s() : 0;
       int n = (int)lp->pieces.size();
+      if (direct && lp->rec_fmt == 1 && !(g_m01 && lp->part_len) && lp->direct_n >= 0 && lp->direct_n < n) {
+        // a split part (native+p11+pad's LSB: three 4 KB-aligned l1 planes, then the packed b pieces): ONE preadv, the
+        // aligned leading pieces straight into their slots, the rest into an aligned bounce, then copied into theirs
+        const int dn = lp->direct_n;
+        int64_t tail = 0;
+        for (int i = dn; i < n; i++) tail += lp->pieces[i].per;
+        Bounce tb(tail);
+        struct iovec iov[16];
+        for (int i = 0; i < dn; i++) { iov[i].iov_base = lp->pieces[i].pool + (int64_t)s * lp->pieces[i].per; iov[i].iov_len = lp->pieces[i].per; }
+        iov[dn].iov_base = tb.p; iov[dn].iov_len = (size_t)tail;
+        read_record(lp->rec_fd, (int64_t)e * lp->recsz + lp->part_off, iov, dn + 1);
+        int64_t o = 0;
+        for (int i = dn; i < n; i++) { memcpy(lp->pieces[i].pool + (int64_t)s * lp->pieces[i].per, tb.p + o, lp->pieces[i].per); o += lp->pieces[i].per; }
+        if (g_rtrace) { double t_r1 = now_s(); std::lock_guard<std::mutex> lk(g_rmu); g_rd.push_back({Li, e, tag, t_r0, t_r1, t_p0, t_p1}); }
+        return;
+      }
       if (direct && lp->rec_fmt == 1 && !(g_m01 && lp->part_len)) {   // (M-01 parts unpack from the bounce)
         struct iovec iov[16];
         for (int i = 0; i < n; i++) { iov[i].iov_base = lp->pieces[i].pool + (int64_t)s * lp->pieces[i].per; iov[i].iov_len = lp->pieces[i].per; }
         read_record(lp->rec_fd, (int64_t)e * lp->recsz + lp->part_off, iov, n);
+        if (g_rtrace) { double t_r1 = now_s(); std::lock_guard<std::mutex> lk(g_rmu); g_rd.push_back({Li, e, tag, t_r0, t_r1, t_p0, t_p1}); }
         return;
       }
       // default: ONE page-aligned read into a per-thread bounce buffer (Scout: aligned single reads are the fastest
@@ -458,7 +493,7 @@ static void load_jobs(Layer& ly, const std::vector<std::pair<int, int>>& jobs, c
       const int md = mp ? (*mp)[j] : 0;
       if (md) pom_read(lp, e, d, md, jp->size() < 4);
       else read_expert(lp, e, d, jp->size() < 4);
-      if (g_rtrace) { double t_r1 = now_s(); std::lock_guard<std::mutex> lk(g_rmu); g_rd.push_back({Li, e, tag, t_r0, t_r1}); }
+      if (g_rtrace) { double t_r1 = now_s(); std::lock_guard<std::mutex> lk(g_rmu); g_rd.push_back({Li, e, tag, t_r0, t_r1, t_p0, t_p1}); }
     });
     return;
   }
@@ -881,6 +916,59 @@ static std::mutex g_tmu;
 static std::vector<TraceEv> g_tr;
 static bool g_inline = getenv("BIGMOE_INLINE") != nullptr;   // test only: mechanics without the wait
 static std::vector<MTL::SharedEvent*> g_events;   // one per layer, value = pass seq (out-of-order safe)
+// W1-PICKUP (Leap: ~/Leap/TABLE_350.md 'W1-PICKUP', patches/w1_pickup; MLX's MLX_METAL_FAST_SYNCH pattern). Both OFF by
+// default: today's kernels and release are the fallback (with the flags off the kernels preprocess to today's code).
+// BIGMOE_SPIN_COHERENT=1: the spin is one simdgroup polling ONE row (pair 0 of its (layer, pass) region) with
+//   coherent(system) loads and system-scope fences; the release writes that row only. Each spin keeps its own row: the
+//   region is keyed by (seq, L), and JOINT's sidecar spin has its own L (side0 + L). Harness [K]: release 0.2 us, pickup
+//   2.9 us flat (50 us - 2 ms waits) vs 6.5 us + 17-74 us today. BIGMOE_SPIN_COH_CAP = polls before the timeout
+//   (default 1000000, ~0.25 s at ~0.25 us per poll; today's 128 back-off pairs end after ~0.2 s).
+// BIGMOE_POST_SYS=1: post_ids writes the routing row through a coherent(system) pointer with system-scope fences, so the
+//   loader sees it in ~7 us. Device-scope stores reach the CPU only when a later dispatch flushes them [K]: ~20 us after
+//   the next real dispatch, ms if only the spin follows. Same words, same order.
+static bool g_spin_coh = getenv("BIGMOE_SPIN_COHERENT") && atoi(getenv("BIGMOE_SPIN_COHERENT"));
+static bool g_post_sys = getenv("BIGMOE_POST_SYS") && atoi(getenv("BIGMOE_POST_SYS"));
+static const char* k_sys_scope = R"(#pragma METAL internals : enable
+#include <metal_stdlib>
+#ifndef __METAL_MEMORY_SCOPE_SYSTEM__
+#define __METAL_MEMORY_SCOPE_SYSTEM__ 3
+namespace metal { constexpr constant thread_scope thread_scope_system = static_cast<thread_scope>(__METAL_MEMORY_SCOPE_SYSTEM__); }
+#endif
+)";
+static const char* k_spin_coh = R"(
+      using namespace metal;
+      // W1-PICKUP: dep = [ok, slots...] from post_ids. ok -> copy; else one simdgroup polls pair 0 of this (pass,
+      // layer)'s release region with coherent(system) loads (it sees the CPU's stores without fresh lines or back-off);
+      // a stale word polls again; timeout -> status[0]++ (the pass is reported invalid), as today.
+      #ifndef COUNT_FAST
+      #define COUNT_FAST 1
+      #endif
+      kernel void bigmoe_spin(device const int* dep [[buffer(0)]], volatile coherent(system) device int* reg [[buffer(1)]],
+                              constant int4& m [[buffer(2)]], device atomic_int* status [[buffer(3)]],
+                              device int* out [[buffer(4)]], uint lane [[thread_index_in_simdgroup]]) {
+        const int seq = m.y, n = m.z, nl = RS / 32;
+        if (dep[0] == 1) {
+          for (int i = (int)lane; i < n; i += 32) out[i] = dep[1 + i];
+          if (COUNT_FAST && lane == 0) atomic_fetch_add_explicit(status + 16, 1, memory_order_relaxed);
+          return;
+        }
+        const uint STAMP = (((uint)seq) & 0x3FFu) << 22;
+        for (int it = 0; it < COH_CAP; it++) {
+          atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_system);
+          if (!simd_all(reg[32 * min((int)lane, nl - 1)] == seq)) continue;           // every line's tag
+          atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_system);
+          bool good = true;
+          for (int i = (int)lane; i < n; i += 32) {
+            uint w = (uint)(i < 31 ? reg[1 + i] : i < 62 ? reg[32 + 1 + (i - 31)] : i < 93 ? reg[64 + 1 + (i - 62)] : reg[32 * (i / 31) + 1 + i % 31]);
+            good = good && (w & 0xFFC00000u) == STAMP;
+            out[i] = (w & 0x3FFFFFu) >= 0x3FFFFEu ? (int)(w & 0x3FFFFFu) - 0x400000 : (int)(w & 0x3FFFFFu);   // -1, -2 (LP1)
+          }
+          if (simd_all(good)) return;
+          if (lane == 0) atomic_fetch_add_explicit(status + 17, 1, memory_order_relaxed);   // fresh tags, a stale word
+        }
+        if (lane == 0) atomic_fetch_add_explicit(status, 1, memory_order_relaxed);
+        for (int i = (int)lane; i < n; i += 32) out[i] = 0;
+      })";
 
 static array* g_route_arr = nullptr;
 static array* g_tab_arr = nullptr;
@@ -895,8 +983,17 @@ static MTL::ComputePipelineState* post_pso() {
     std::string srcs = "#define PLINES " + std::to_string(g_plines) + "\n#define XLINES " + std::to_string(g_xlines) + "\n" + R"(
       #include <metal_stdlib>
       using namespace metal;
+      #ifndef POST_SYS            // W1-PICKUP: BIGMOE_POST_SYS writes the row at system scope (CPU-visible at once)
+      #define ROW_T device atomic_int*
+      #define RST(IDX, VAL) atomic_store_explicit(&row[IDX], VAL, memory_order_relaxed)
+      #define RSCOPE thread_scope_device
+      #else
+      #define ROW_T volatile coherent(system) device int*
+      #define RST(IDX, VAL) (row[IDX] = (VAL))
+      #define RSCOPE thread_scope_system
+      #endif
       // writes [seq, n, ids0..29 | seq, ids30..39 | seq, np, preds0..29 | PLINES x (seq, 31 more preds)]
-      kernel void bigmoe_post_ids(device const int* ids [[buffer(0)]], device atomic_int* route [[buffer(1)]],
+      kernel void bigmoe_post_ids(device const int* ids [[buffer(0)]], ROW_T route [[buffer(1)]],
                                   constant int4& m [[buffer(2)]], device int* dep [[buffer(3)]],
                                   device const int* tab [[buffer(5)]], device const int* preds [[buffer(6)]],
                                   constant int& np [[buffer(7)]], uint t [[thread_position_in_grid]]) {
@@ -918,20 +1015,24 @@ static MTL::ComputePipelineState* post_pso() {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         if (t != 0) return;
         dep[0] = atomic_load_explicit(&ok, memory_order_relaxed);
-        device atomic_int* row = route + m.x * (96 + 32 * PLINES + 32 * XLINES);
+        ROW_T row = route + m.x * (96 + 32 * PLINES + 32 * XLINES);
         const uint STAMP = (((uint)m.y) & 0x3FFu) << 22;               // every id / pred word carries seq & 0x3FF
-        atomic_store_explicit(&row[65], np, memory_order_relaxed);                 // line 3: next-layer predictions
+        RST(65, np);                 // line 3: next-layer predictions
         int tot = min(30 + 31 * PLINES, (np & 255) + ((np >> 8) & 255) + ((np >> 16) & 255));   // n(L+1) | n(L+2) << 8 | n(L+3) << 16
         for (int i = 0; i < tot; i++)
-          atomic_store_explicit(&row[i < 30 ? 66 + i : 97 + 32 * ((i - 30) / 31) + (i - 30) % 31], (int)((((uint)preds[i]) & 0x3FFFFFu) | STAMP), memory_order_relaxed);
-        atomic_store_explicit(&row[1], n, memory_order_relaxed);
-        for (int i = 0; i < n; i++) atomic_store_explicit(&row[i < 30 ? 2 + i : i < 61 ? 33 + (i - 30) : 96 + 32 * PLINES + 32 * ((i - 61) / 31) + 1 + (i - 61) % 31], (int)((((uint)ids[i]) & 0x3FFFFFu) | STAMP), memory_order_relaxed);
-        atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
-        for (int j = 0; j < PLINES + XLINES; j++) atomic_store_explicit(&row[96 + 32 * j], m.y, memory_order_relaxed);
-        atomic_store_explicit(&row[64], m.y, memory_order_relaxed);
-        atomic_store_explicit(&row[32], m.y, memory_order_relaxed);
-        atomic_store_explicit(&row[0], m.y, memory_order_relaxed);
+          RST(i < 30 ? 66 + i : 97 + 32 * ((i - 30) / 31) + (i - 30) % 31, (int)((((uint)preds[i]) & 0x3FFFFFu) | STAMP));
+        RST(1, n);
+        for (int i = 0; i < n; i++) RST(i < 30 ? 2 + i : i < 61 ? 33 + (i - 30) : 96 + 32 * PLINES + 32 * ((i - 61) / 31) + 1 + (i - 61) % 31, (int)((((uint)ids[i]) & 0x3FFFFFu) | STAMP));
+        atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, RSCOPE);
+        for (int j = 0; j < PLINES + XLINES; j++) RST(96 + 32 * j, m.y);
+        RST(64, m.y);
+        RST(32, m.y);
+        RST(0, m.y);
+#ifdef POST_SYS
+        atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_system);   // publish now
+#endif
       })";
+    if (g_post_sys) srcs = std::string(k_sys_scope) + "#define POST_SYS 1\n" + srcs;   // W1-PICKUP
     NS::Error* err = nullptr;
     auto* lib = dev->newLibrary(NS::String::string(srcs.c_str(), NS::UTF8StringEncoding), nullptr, &err);
     if (!lib) { fprintf(stderr, "bigmoe: post kernel compile failed\n"); abort(); }
@@ -986,6 +1087,9 @@ static MTL::ComputePipelineState* spin_pso() {
         if (got < 0) { atomic_fetch_add_explicit(status, 1, memory_order_relaxed); for (int i = 0; i < n; i++) out[i] = 0; return; }
         if (x == 12345.0f) out[0] = 0;                // out[] was decoded from the stamped pair above
       })";
+    if (g_spin_coh)   // W1-PICKUP: one simdgroup polls ONE row with system-scope loads
+      srcs = std::string(k_sys_scope) + (getenv("BIGMOE_NOCOUNT") ? "#define COUNT_FAST 0\n" : "") + "#define RS " + std::to_string(g_rs) + "\n"
+             + "#define COH_CAP " + std::string(getenv("BIGMOE_SPIN_COH_CAP") ? getenv("BIGMOE_SPIN_COH_CAP") : "1000000") + "\n" + k_spin_coh;
     NS::Error* err = nullptr;
     auto* lib = dev->newLibrary(NS::String::string(srcs.c_str(), NS::UTF8StringEncoding), nullptr, &err);
     if (!lib) { fprintf(stderr, "bigmoe: spin kernel compile failed\n"); abort(); }
@@ -1489,7 +1593,7 @@ static void loader_main() {
       }
       __atomic_thread_fence(__ATOMIC_ACQUIRE);
       any = true; last[L] = seq;
-      double t_seen = now_s();
+      double t_seen = now_s(), t_e0 = 0, t_e1 = 0;   // S0: t_e0 / t_e1 = ensure() start / end
       g_last_serve.store(t_seen, std::memory_order_relaxed);   // BIGMOE_SSD_KEEPALIVE_US: decoding
       g_st.wait_ns += (int64_t)((now_s() - t_idle) * 1e9);
       int n = row[1];
@@ -1516,7 +1620,9 @@ static void loader_main() {
         if (g_s10b) s10b_rec(L, seq, ids_copy, n);
         if (g_jit) { g_srv[L] = seq; if (g_early) { if (g_s10b_res) s10b_res(L, seq); schedule(L, seq, row); pump(); } }
         if (g_side0 > 0 && L < g_nbase) joint_side(L, seq);   // JOINT: the sidecar row's reads first, in the background
+        t_e0 = g_trace ? now_s() : 0;
         ensure(L, ids_copy, n, g_ring + ring_off(L, (uint64_t)seq));
+        t_e1 = g_trace ? now_s() : 0;
         if (L + 1 < g_nl) {                         // remember L+1's look-ahead set for the miss split
           int np0 = row[65], k1 = std::min(np0 & 255, g_pcap);
           Layer& nx = g_layers.at(L + 1); nx.pred.assign(k1, 0);
@@ -1549,10 +1655,12 @@ static void loader_main() {
       __atomic_thread_fence(__ATOMIC_RELEASE);
       if (g_delay_us > 0) { double t0 = now_s(); while (now_s() - t0 < g_delay_us * 1e-6) {} }   // test only
       g_st.gated++;
+      const double t_r0 = g_trace ? now_s() : 0;    // S0: the release writes start
       if (g_reg) {   // spin mode: write [seq, slots...] into every line pair of this (layer, pass) region
         int32_t* reg = g_reg + ((int64_t)((uint64_t)seq * g_nl + L) % g_reg_n) * g_pairs * g_rs;
         const int32_t* sl = g_ring + ring_off(L, (uint64_t)seq);
-        for (int64_t p = 0; p < g_pairs; p++) {
+        const int64_t npairs = g_spin_coh ? 1 : g_pairs;   // W1-PICKUP: the coherent spin polls pair 0 only
+        for (int64_t p = 0; p < npairs; p++) {
           int32_t* l0 = reg + p * g_rs; int32_t* l1 = l0 + 32; int32_t* l2 = l0 + 64;
           for (int i = 0; i < n && i < 31; i++) l0[1 + i] = stamp_enc(sl[i], seq);     // stamped words
           for (int i = 31; i < n && i < 62; i++) l1[1 + (i - 31)] = stamp_enc(sl[i], seq);
@@ -1560,7 +1668,7 @@ static void loader_main() {
           for (int i = 93; i < n; i++) l0[32 * (i / 31) + 1 + i % 31] = stamp_enc(sl[i], seq);   // R-55: lines 3..5
         }
         __atomic_thread_fence(__ATOMIC_RELEASE);
-        for (int64_t p = 0; p < g_pairs; p++) {
+        for (int64_t p = 0; p < npairs; p++) {
           int32_t* l0 = reg + p * g_rs;
           for (int j = g_rs / 32 - 1; j >= 3; j--) __atomic_store_n(l0 + 32 * j, seq, __ATOMIC_RELAXED);   // R-55
           if (g_rs >= 96) __atomic_store_n(l0 + 64, seq, __ATOMIC_RELAXED);
@@ -1600,7 +1708,9 @@ static void loader_main() {
           prefetch(g_fam0 + L + 1, pr, std::min(n1, g_pf_side), seq);
       }
       if (g_trace) { std::lock_guard<std::mutex> lk(g_tmu); g_tr.push_back({L, (int64_t)seq, 1, t_seen, t_rel});
-                     if (slow_call) g_tr.push_back({L, (int64_t)seq, 4, t_seen, t_rel}); }   // 4 = slow (had misses)
+                     if (slow_call) g_tr.push_back({L, (int64_t)seq, 4, t_seen, t_rel});   // 4 = slow (had misses)
+                     if (t_e1 > 0) g_tr.push_back({L, (int64_t)seq, 5, t_e0, t_e1});   // S0: ensure() (plan + loads)
+                     g_tr.push_back({L, (int64_t)seq, 6, t_r0, t_rel}); }              // S0: the release writes
       t_idle = t_now;
     }
     if (!any) {
@@ -1655,7 +1765,8 @@ void SpinWait::eval_gpu(const std::vector<array>& in, std::vector<array>& out) {
   // fence each spin against the previous one (~45 us/layer). The kernel's atomics need no tracking.
   if (getenv("BIGMOE_STATUS_OUT")) enc.set_output_array(*g_status_arr, 3); else enc.set_input_array(*g_status_arr, 3);
   enc.set_output_array(o, 4);
-  enc.dispatch_threads(MTL::Size(1, 1, 1), MTL::Size(1, 1, 1));
+  const int nt = g_spin_coh ? 32 : 1;                // W1-PICKUP: the coherent spin is one simdgroup
+  enc.dispatch_threads(MTL::Size(nt, 1, 1), MTL::Size(nt, 1, 1));
 }
 static array spin_wait(const array& dep, int L, int seq, int n) {
   return array({n}, int32, std::make_shared<SpinWait>(default_stream(Device::gpu), L, seq, n), {dep});
@@ -1890,7 +2001,13 @@ NB_MODULE(bigmoe_ext, m) {
                                   std::vector<int64_t> rows3, std::vector<int64_t> offs) {
     rebuilt(path, recsz, msb_sz, pers4, ids, rows, dst, layout, rows3, offs);
   });
-  m.def("layout_max", [] { return 2; });   // the highest records3 layout the fmt 3 readers take (Python's guard)
+  m.def("layout_max", [] { return 2; });
+  m.def("set_direct_split", [](int L, int n) {   // native+p11+pad: the LSB part's 3 aligned l1 planes straight in, b via bounce
+    std::lock_guard<std::mutex> lk(g_mu);
+    Layer& ly = g_layers.at(L);
+    if (n < 0 || n > (int)ly.pieces.size()) { fprintf(stderr, "bigmoe: set_direct_split %d of %zu pieces\n", n, ly.pieces.size()); abort(); }
+    ly.direct_n = n;
+  });   // the highest records3 layout the fmt 3 readers take (Python's guard)
   m.def("record_rowmajor", [](std::string path, int64_t recsz, int64_t msb_sz, std::vector<int64_t> pers4, int layout,
                               std::vector<int64_t> rows3, std::vector<int64_t> offs, int e, array out) {
     // test: expert e's record of a converted layer, back to today's row-major record, into out (uint8, >= rm_len bytes)
@@ -1991,7 +2108,7 @@ NB_MODULE(bigmoe_ext, m) {
   m.def("set_joint", [](int side0, int nbase, double wait_us) {   // JOINT: sidecar row of base layer L = side0 + L
     std::lock_guard<std::mutex> lk(g_mu); g_side0 = side0; g_nbase = nbase; g_joint_wait = wait_us * 1e-6; });
   m.def("trace_reads", []() { std::lock_guard<std::mutex> lk(g_rmu); std::vector<std::vector<double>> o;
-    for (auto& r : g_rd) o.push_back({(double)r.L, (double)r.e, (double)r.tag, r.t0, r.t1}); g_rd.clear(); return o; });
+    for (auto& r : g_rd) o.push_back({(double)r.L, (double)r.e, (double)r.tag, r.t0, r.t1, r.tp0, r.tp1}); g_rd.clear(); return o; });
   m.def("trace_cov", []() { std::lock_guard<std::mutex> lk(g_rmu); std::vector<std::vector<double>> o;
     for (auto& c : g_cov) o.push_back({(double)c.L, (double)c.seq, (double)c.need, (double)c.hit, (double)c.pf_ready,
                                        (double)c.pf_late, (double)c.q_demand, (double)c.pred_unissued, (double)c.unpred, c.t});

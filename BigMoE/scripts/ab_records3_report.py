@@ -1,7 +1,8 @@
-"""THE records3 CONVERSION A/B's report (scripts/ab_records3.sh): per arm (abB / abB2 converted, abA row-major, abBr converted
-again) every token vs data/ab/ref_tokens.json, steady tok/s (checks >= 2) and SSD MB per kept token per domain, the median
+"""THE records3 CONVERSION A/B night's report (scripts/ab_records3.sh): per arm (abA / abA2 row-major around abB / abB2
+native+p11) every token vs data/ab/ref_tokens.json, steady tok/s (checks >= 2) and SSD MB per kept token per domain, the median
 steady tok/s over prompts, lifetime peak; then the two pre-registered lines on abB2 vs abA (mine: docs/PLAN_records3_convert.md
-section 4; M-27b: ~/NewIdeas/QUEUE.md), B vs A (the smaller parts alone) and abBr vs abB (drift across the night).
+section 4; M-27b: ~/NewIdeas/QUEUE.md) against A = the mean of abA / abA2, B vs A (the smaller parts alone) and abA2
+vs abA (drift across the night).
 usage: .venv/bin/python scripts/ab_records3_report.py [C=224] -> data/ab/ab_report.txt"""
 import json, os, sys
 import numpy as np
@@ -26,7 +27,7 @@ def J(tag, kind):
 
 
 A = {}
-for t in ("abB", "abB2", "abA", "abBr"):
+for t in ("abA", "abB", "abB2", "abB2z", "abA2"):
     rs = [r for r in (J(t, "runs") or []) if not r.get("bad")]
     if not rs:
         continue
@@ -44,7 +45,7 @@ for t in ("abB", "abB2", "abA", "abBr"):
 say(f"THE records3 CONVERSION A/B at C {CC} (quiet): per domain steady tok/s / SSD MB per kept token")
 say("| arm | store, sizes | tokens == ref | code | math | chat | agent | median steady | peak GB |")
 say("|---|---|---|---|---|---|---|---|---|")
-WHAT = {"abB": "native+p11, M-17", "abB2": "native+p11, packed45", "abA": "row-major, M-17", "abBr": "native+p11, M-17 (again)"}
+WHAT = {"abA": "row-major, M-17", "abB": "native+p11+pad, M-17", "abB2": "native+p11+pad, packed45", "abB2z": "+ zero-copy reads", "abA2": "row-major, M-17 (again)"}
 for t, a in A.items():
     cells = [f"{a['d'][d_]['tpsw']:.1f} / {a['d'][d_]['mb']:.1f}" if d_ in a["d"] else "-" for d_ in ("code", "math", "chat", "agent")]
     say(f"| {t} | {WHAT[t]} | {a['n'] - len(a['bad'])} / {a['n']}{' BAD ' + ','.join(a['bad']) if a['bad'] else ''} | "
@@ -56,25 +57,41 @@ def rel(x, y):
 
 
 say()
-if "abB2" in A and "abA" in A and not ("code" in A["abB2"]["d"] and "code" in A["abA"]["d"]):
-    say("no code prompts in abB2 / abA: the lines need them")
-elif "abB2" in A and "abA" in A:
-    b2, a = A["abB2"], A["abA"]
+def merged(tags):
+    """A = the mean of the row-major arms that ran (abA, abA2): A brackets B, so the night's drift cancels"""
+    xs = [A[t] for t in tags if t in A]
+    if not xs:
+        return None
+    d = {dom: {k: float(np.mean([x["d"][dom][k] for x in xs if dom in x["d"]])) for k in ("tpsw", "mb")}
+         for dom in ("code", "math", "chat", "agent") if all(dom in x["d"] for x in xs)}
+    return dict(d=d, tps=float(np.mean([x["tps"] for x in xs])), med=float(np.mean([x["med"] for x in xs])))
+
+
+AA = merged(("abA", "abA2"))
+if "abB2" in A and AA and not ("code" in A["abB2"]["d"] and "code" in AA["d"]):
+    say("no code prompts in abB2 / A: the lines need them")
+elif "abB2" in A and AA:
+    b2, a = A["abB2"], AA
     tok_ok = all(not v["bad"] and v["n"] > 0 for v in A.values())
     mb = rel(b2["d"]["code"]["mb"], a["d"]["code"]["mb"])
     st, md = rel(b2["tps"], a["tps"]), rel(b2["med"], a["med"])
     mine = "KILL" if (not tok_ok or mb > -3) else "PASS" if (mb <= -10 and st >= 0) else "BETWEEN"
     m27 = "KILL" if (not tok_ok or mb > -5 or md < 1) else "PASS" if (mb <= -10 and md >= 3) else "BETWEEN"
-    say(f"abB2 vs abA: every token equal in every arm {tok_ok}; code SSD MB per kept token {mb:+.1f} %; steady tok/s (mean of "
+    say(f"abB2 vs A (mean of abA / abA2): every token equal in every arm {tok_ok}; code SSD MB per kept token {mb:+.1f} %; steady tok/s (mean of "
         f"domains) {st:+.1f} %; median steady {md:+.1f} %")
     say(f"LINE (BigMoE, PLAN 4): {mine}   |   LINE (M-27b): {m27}   (MoonShots' held-out prediction: code MB -15.0 % at C 224)")
     if not tok_ok:
         say("-> a token differs: --inverse + md5 (the store goes back to row-major), then find why")
-if "abB" in A and "abA" in A and "code" in A["abB"]["d"] and "code" in A["abA"]["d"]:
-    b, a = A["abB"], A["abA"]
-    say(f"abB vs abA (the smaller parts alone, same slot counts): code MB {rel(b['d']['code']['mb'], a['d']['code']['mb']):+.1f} % "
+if "abB" in A and AA and "code" in A["abB"]["d"] and "code" in AA["d"]:
+    b, a = A["abB"], AA
+    say(f"abB vs A (the smaller parts alone, same slot counts): code MB {rel(b['d']['code']['mb'], a['d']['code']['mb']):+.1f} % "
         f"(expected about -4.5 % MSB / -6.4 % sidecar bytes per miss), steady {rel(b['tps'], a['tps']):+.1f} %")
-if "abBr" in A and "abB" in A and "code" in A["abBr"]["d"] and "code" in A["abB"]["d"]:
-    say(f"abBr vs abB (drift across the night): steady {rel(A['abBr']['tps'], A['abB']['tps']):+.1f} %, code MB "
-        f"{rel(A['abBr']['d']['code']['mb'], A['abB']['d']['code']['mb']):+.1f} %")
+if "abA2" in A and "abA" in A and "code" in A["abA2"]["d"] and "code" in A["abA"]["d"]:
+    say(f"abA2 vs abA (drift across the night): steady {rel(A['abA2']['tps'], A['abA']['tps']):+.1f} %, code MB "
+        f"{rel(A['abA2']['d']['code']['mb'], A['abA']['d']['code']['mb']):+.1f} %")
+open(os.path.expanduser("~/BigMoE/data/ab/ab_report.txt"), "w").write("\n".join(L) + "\n")
+if "abB2z" in A and "abB2" in A and "code" in A["abB2z"]["d"] and "code" in A["abB2"]["d"]:
+    say(f"abB2z vs abB2 (zero-copy reads, M-29): steady {rel(A['abB2z']['tps'], A['abB2']['tps']):+.1f} %, median "
+        f"{rel(A['abB2z']['med'], A['abB2']['med']):+.1f} % (MB per kept token unchanged by design: "
+        f"{rel(A['abB2z']['d']['code']['mb'], A['abB2']['d']['code']['mb']):+.1f} %)")
 open(os.path.expanduser("~/BigMoE/data/ab/ab_report.txt"), "w").write("\n".join(L) + "\n")

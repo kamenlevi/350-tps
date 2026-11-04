@@ -2507,3 +2507,229 @@ sure / tie / mid (dmargin), code | IFEval | multi:
   costs 65-195 ms per cycle against a 96.8 ms cycle, whatever its fidelity; and MoonShots' M-16 already measured the
   resident-only pass's agreement with exact (code 0.97-0.996, chat 0.85-0.985 of rows at C 224), which answers the FAST
   line. The masks stay in out/res_c256; Wed's day slot runs NewIdeas' three QOM arms only.
+
+## COLD-CUT (FAST; Fable C's ~/FableGod/fablec/UNION_STACK.md section 5; the orchestrator Tue 18:5x: "run small breakthrough tests now"): PRE-REGISTRATION (Tue 19:1x, before the masks are built)
+- Arm hyb_cold4_t3 (the 36 windows, decision_map/out, LIVE checks: live_segments, t 0.3). Sure rows (DFlash2 cf >= 0.9,
+  the map's realizable gate) keep ranks 0-1 as base, served at 3 bits from records3 (dm_t3, the gate ("t3mask",), as
+  hyb_0.9_u8_t3). Unsure rows keep ranks 0-3 plus every rank 4-9 whose expert is popular: share >= 0.05 in Fable C's
+  ~/FableGod/fablec/masks/pop_cap45.npy (the share of cap45's 176 live checks whose exact layer-union holds it; six
+  prompts, HumanEval 68 / 91 and four MATH-500, none of them a map window). Every realized row also keeps the experts
+  already in its check's union (the rows' base sets; rows after the first miss by the stand-in p + 97). Prompt rows exact.
+  Builder decision_map/dm_cold_masks.py; runner scripts/cold_slot.sh; read-out dm_cold_read.py -> out/COLD_read.txt.
+- Checks before the GPU run: (1) the builder's u8_t3 rule equals dm_q1u_masks.py's hyb_0.9_u8:t3 at live lengths bit for
+  bit on all 36 windows; (2) Fable C's mask check: union bytes on the map's code blocks (base experts x 2,162,688 B + the
+  4-bit rows' ranks 0-1 x 770,048 B, no cache) <= x0.55 of EXACT's. If either fails, the arm does not run.
+- Lines (Fable C's), all-row flips on code vs the baseline argmax: PASS <= Q1 at 0.99's 1.34 % (then it replaces u8 + t3
+  in the FLOOR arms: -22 % bytes at C 320 in Fable C's replay); BETWEEN <= 2.0 % (then r 6 / p 0.05 next); KILL above
+  (cold experts matter: drop the family, MISS-CUT too). Gated code flips (cf >= 0.99) expected unchanged (0-1 of 2,211).
+  IFEval / multi columns are information (chat takes OEA).
+- Added (mine): the CONTROL hyb_0.9_u8_live_t3 (hyb_0.9_u8_t3's rule at the same live checks, = the arm COLD-CUT would
+  replace; no live u8 + t3 number exists) in the same process. COLD's own cost = McNemar only-COLD vs only-control flips
+  on code: |z| < 2 = no measurable cost over u8 + t3 (then the bytes cut is free whatever the absolute line says).
+- The chat form cold6_all (every row ranks 0-5 + popular 6-9 + members, no gate, no 3-bit rows) runs only if
+  hyb_cold4_t3 PASSes, in a later slot; lines = dm_oea_read.py's on IFEval / multi (PASS <= Q1 at 0.99's 5.42 / 3.69 %,
+  BETWEEN <= 1.5x, KILL above; oea_k8's 16-row 3.83 / 3.07 % quoted, no live oea_k8 exists).
+- Prediction. Fable C [G]: 50 % PASS / 35 % BETWEEN / 15 % KILL. Mine [G]: BETWEEN, ~1.5-1.9 % on code (PASS 20 % /
+  BETWEEN 65 % / KILL 15 %): the live checks already put Q1-UNION 0.9 at 1.25 % (42 flips vs the line's 45), and the
+  3-bit sure rows (+0.2 pp at 16 rows) and the unsure-row cut come on top. COLD vs its control: |z| < 2. Union bytes on
+  code ~x0.45-0.50 of EXACT's (no cache; Fable C's x0.35 at 45 GB includes the cache).
+- Slot: the masks are CPU (1 core, ~2 min) after 19:40, once no quiet window is held or waited for. The flips need
+  the 125B map run (~10 min, MEM 17 GB, GPU share 50), which waits for NO-SWAP >= 25 GB like the QOM arms (16 GB at 19:02
+  with Kamen's apps open). It does not start after 23:45.
+- Added Tue 19:4x, before the GPU run (CPU checks; decision_map/dm_cold_masks.py, dm_cold_lru.py -> out/COLD_lru.txt):
+  self-check ALL EQUAL (36 windows); Fable C's mask check on code x0.471 <= x0.55: OK. No-cache union bytes vs EXACT
+  (code / IFEval / multi): hyb_cold4_t3 x0.471 / 0.617 / 0.632; u8_t3 (the control's rule) x0.440 / 0.675 / 0.702.
+  Unsure rows keep 9.29 / 7.36 / 7.23 of 10 experts under COLD vs 8.48 / 8.38 / 8.34 under u8: on code COLD drops FEWER
+  pairs than u8. With the cache [K replay, plain LRU at laysz45_256's C_m, prompts warm it, carried across windows]:
+  SSD bytes vs EXACT, code / IFEval / multi: hyb_cold4_t3 x0.254 / 0.498 / 0.532; u8_t3 x0.295 / 0.597 / 0.641
+  (COLD -14 % / -17 % / -17 % vs u8 + t3; Fable C's cap45 replay -24 % on code). So cold = missed holds on the map's
+  blocks: on code COLD keeps more experts AND reads fewer bytes. Prediction updated [G]: COLD vs the control on code
+  |z| < 2 (it drops fewer pairs), the absolute line set by the control's level; chat, where the cross-domain prior cuts
+  deeper than u8, is the risk for the chat form. Halved gain for decisions: ~-7 % bytes vs u8 + t3 at 45 GB.
+  Tag: adapted (Fable C; SwapMoE / AdapMoE lineage). General: needs only a corpus popularity table, so any MoE model.
+- RESULT Tue 19:55 (map run 19:45-19:55, ~10 min; out/COLD_read.txt): **hyb_cold4_t3 PASS on code by the pre-registered
+  line: 1.25 % all-row flips (42 of 3,360; line 1.34 %); gated code flips 0 / 2,211.** The CONTROL hyb_0.9_u8_live_t3
+  (u8 + t3 at the same live checks, first live number): 1.37 % (46). COLD's cost over it on code: only-COLD 11 vs
+  only-control 15, McNemar z -0.78 = no measurable cost; with the 45 GB LRU it reads -14 % bytes (x0.254 vs x0.295 of
+  EXACT's). So on code COLD-CUT dominates u8 + t3 (equal quality, fewer bytes) [K map + K replay].
+  Chat (information; the domain switch gives chat OEA): COLD 10.60 % IFEval / 11.37 % multi vs the control's 7.74 / 5.54
+  (z +6.1 / +11.7) and Q1 at 0.99's 5.42 / 3.69 = KILL level. Cause [G, to test]: Fable C's prior is code + math
+  (cap45's six prompts), so on chat it marks needed experts cold: COLD's unsure chat rows keep 7.36 / 7.23 of 10 vs u8's
+  8.38 / 8.34; the dropped "cold" experts are chat / multilingual specialists. Prediction scored: mine (BETWEEN, cost
+  |z| < 2) half right (PASS; no cost); Fable C's 50 % PASS right on code.
+- FOLLOW-UP PRE-REGISTRATION (Tue 19:5x, before any build or run): is the chat failure the PRIOR's domain or cold-dropping
+  itself? Arm hyb_cold4_lowo_t3 = hyb_cold4_t3's rule with an IN-DOMAIN prior: per window, the share of the SAME domain's
+  OTHER map windows' live checks whose exact layer-union holds the expert (leave-one-window-out on the map's own routing
+  captures; pop_cap45's definition). Beside it, the pre-registered chat form cold6_all (cap45 prior). One process, ~9 min.
+  Lines, chat (IFEval and multi), vs the control's 7.74 / 5.54 %: McNemar |z| < 2 on both = the prior's domain was the
+  cause, COLD works with a domain-covering prior (GO: a corpus prior covering chat in the engine's table, next a mixed
+  prior); z >= 2 on either = cold experts matter on chat even in-domain (COLD stays code-only). Code: information (an
+  in-domain prior on code; PASS line 1.34 % as before). cold6_all: as pre-registered (IFEval / multi PASS <= 5.42 / 3.69 %,
+  BETWEEN <= 1.5x, KILL above). Prediction [G]: lowo chat z < 2 on IFEval, >= 2 on multi (languages spread thin over 12
+  windows); cold6_all BETWEEN on both. Bytes (45 GB LRU) printed beside for both arms.
+- Added Tue 20:0x, before the follow-up's GPU run (CPU; dm_cold_masks.py rewritten with a per-window prior, its rebuilt
+  hyb_cold4_t3 / cold6_all masks equal the ones the 19:45 run used bit for bit, 36 / 36 each): hyb_cold4_lowo_t3 bytes check
+  on code x0.485 <= x0.55 OK. Unsure rows keep 9.54 / 8.54 / 8.36 of 10 (code / IFEval / multi; u8: 8.48 / 8.38 / 8.34;
+  COLD-cap45: 9.29 / 7.36 / 7.23). Cached SSD bytes vs EXACT [K replay, 45 GB LRU]: lowo x0.267 / 0.363 / 0.372;
+  COLD-cap45 x0.254 / 0.498 / 0.532; u8_t3 x0.295 / 0.597 / 0.641; OEA k8 (live) x0.708 / 0.726 / 0.729; cold6_all
+  x0.625 / 0.703 / 0.703. So with an in-domain prior COLD keeps as many experts per unsure chat row as u8 yet reads
+  -39 / -42 % chat bytes vs u8 + t3 and about half of OEA k8's: if its chat flips show no cost over the control, it is the
+  chat byte lever too (halved: ~-20 %). Caveat: the prior comes from the same benchmark's other windows (other prompts,
+  same style); a corpus prior is the engine's version.
+- FOLLOW-UP RESULT Tue 20:12 (map run 20:02-20:12; out/COLD_read.txt): **by the pre-registered line, COST on multi ->
+  COLD stays code-only.** hyb_cold4_lowo_t3 (in-domain leave-one-window-out prior) vs the control on chat: IFEval 7.68 %
+  vs 7.74 % (only-lowo 96 / only-control 98, z -0.14: no cost, at x0.363 vs x0.597 of EXACT's cached bytes = -39 %);
+  multi 6.67 % vs 5.54 % (108 / 68, z +3.02: cost). Code 1.37 % (= the control, z 0.00). Prediction (mine) right:
+  IFEval no cost, multi cost. So cold-dropping is free where the table matches the text (code with cap45's code prompts,
+  IFEval in-domain) and costs where it under-covers it (chat with a code + math table; multilingual even in-domain:
+  4 languages x 3 windows, the rare experts carry the language).
+  Chat form cold6_all (cap45 prior): IFEval 5.00 % PASS / multi 4.84 % BETWEEN (vs Q1 at 0.99: z -0.89 / +2.78), code
+  0.65 %; cached chat bytes x0.703 vs OEA k8's x0.726-0.729 at live checks (-3 %): no byte lever on chat. Not pursued.
+  Engine note: BigMoE's eviction prior (data/seed45/prior45.npz, scripts/seed45_prior.py) is the same cap45 code + math
+  table, so a COLD rule on the engine's table repeats the chat failure.
+
+## COLD-CUT WITH THE REQUEST'S OWN PROMPT AS THE TABLE (the orchestrator Tue 20:1x: "Yes to the last shot at 'general' ... Pre-register it first (lines on multi, IFEval and code vs the same controls)"): PRE-REGISTRATION (Tue 20:2x, before the masks)
+- Tag: adapted. One search (arXiv 2607.00466 ELDR, IJCAI 2026 DoMoE, arXiv 2604.23150) found the prefill expert footprint
+  used to place, cluster or prefetch, not to cut experts; nothing found doing the cut. Token-repeatable (the prompt's
+  routing is fixed before decoding), needs no corpus: if it holds on every domain, a general method for any MoE model.
+- Two arms, hyb_cold4_t3's rule (sure rows top-2 at 3 bits + members; unsure rows ranks 0-3 + popular ranks 4-9 +
+  members; live checks), the table from the prefill: hyb_cold4_pmt_t3 = popular iff the request's own prompt rows routed
+  to the expert at least once (any rank); hyb_cold4_pmtc_t3 = that OR Fable C's cap45 >= 0.05 (a corpus table plus the
+  request's footprint). CPU profile before the run (kept experts and bytes only): unsure rows keep 9.07 / 7.86 / 7.53
+  (pmt) and 9.73 / 8.91 / 8.89 (pmtc) of 10 vs u8's 8.48 / 8.38 / 8.34; cached bytes vs EXACT (45 GB LRU) x0.199 / 0.329 /
+  0.343 (pmt) and x0.285 / 0.520 / 0.539 (pmtc) vs u8_t3's x0.295 / 0.597 / 0.641. Map prompts are short on chat
+  (median 52 IFEval / 27 multi rows: ~145 / ~88 experts per layer seen) and longer on code (181 rows, ~249).
+- Lines per arm, vs the same control hyb_0.9_u8_live_t3 (code 1.37 / IFEval 7.74 / multi 5.54 %), McNemar on each
+  domain: GENERAL = z < 2 on all three (no measurable cost anywhere) at fewer cached bytes than the control on all three;
+  CODE+ = no cost on code and IFEval only; else COLD stays code-only (cap45 table). If both arms are GENERAL, pmt (fewer
+  bytes) is the method. Absolute lines beside (Q1 at 0.99: 1.34 / 5.42 / 3.69 %).
+- Prediction [G]: pmtc GENERAL (it keeps more experts than u8 everywhere), at -3 / -13 / -16 % bytes vs u8 + t3 (halved
+  ~-1 / -7 / -8 %); pmt costs on multi (the shortest prompts, 7.5 kept) and maybe IFEval, so CODE+ at best.
+- Slot: both arms in one process (~11 min, MEM 17 GB) this evening if the gates clear; else in the 00:30 prefix (with QOM
+  and the layout check that is ~25 min). Read-out lines in dm_cold_read.py (PROMPT lines).
+- RESULT Tue 20:28 (map run 20:18-20:28; out/COLD_read.txt PROMPT lines): **hyb_cold4_pmtc_t3 = GENERAL by the line**
+  (the request's prompt footprint OR the cap45 table): vs the control, code 1.13 % vs 1.37 % (z -1.79), IFEval 8.42 % vs
+  7.74 % (z +1.63), multi 5.77 % vs 5.54 % (z +0.62): no measurable cost on any domain, at cached bytes x0.285 / 0.520 /
+  0.539 vs the control's x0.295 / 0.597 / 0.641 (-3 / -13 / -16 %; halved ~-1.5 / -6.5 / -8 %) [K map + K replay].
+  Honest edge: IFEval sits near the line (+0.7 pp, z 1.63); a scale check (78 windows) would firm it up.
+  hyb_cold4_pmt_t3 (prompt footprint alone) = code-only: code 1.25 % (z -0.78) but IFEval 9.16 % (z +3.33) and multi
+  6.92 % (z +3.56): short chat prompts (median 52 / 27 rows) don't reveal the experts the answer needs. Information: on
+  CODE (prompts median 181 rows) it reads x0.199 of EXACT's cached bytes at no cost: -33 % vs u8 + t3, -22 % vs
+  COLD-cap45 (x0.254) at the same 1.25 %. Predictions (mine) right on both arms.
+  Mechanism: COLD-cap45 failed chat (z +6 / +12) because a code + math table calls chat specialists cold; adding the
+  request's own prefill footprint restores them (the prompt is in the same language and domain as the answer) while the
+  experts neither table knows stay dropped, and those are the ones that miss. So per request the table is: a generic
+  corpus table + the request's prompt footprint, which needs no domain switch and no per-domain corpus. Tag: adapted
+  (footprint known from ELDR / DoMoE-style work; used as a cut: not found in one search). General: any MoE with a router.
+- Added Tue 22:3x (CPU, information; out/COLD_lru_c51.txt): the byte win depends on the RAM point. With 12 GB's cache
+  (C 51 per layer, plain LRU) every COLD table reads MORE than u8 + t3: code / IFEval / multi pmtc x0.324 / 0.627 / 0.638,
+  COLD-cap45 x0.294 / 0.543 / 0.574 vs u8_t3 x0.274 / 0.557 / 0.573 (pmtc +18 / +13 / +11 %). "Cold = missed" needs a
+  cache that holds the warm set (45 GB's C_m ~295 per layer vs a warm set of ~250-300); at C 51 the warm experts miss too,
+  and COLD keeps more of them than u8 does. So COLD-CUT (any table) is a 45 GB-class lever, not a 12 GB one.
+
+## LENGTH-AWARE COLD TABLE + THE AT-SCALE CHECK: PRE-REGISTRATION (Tue 22:3x, before any mask or run at 78 windows)
+- Arm hyb_cold4_len_t3: hyb_cold4_t3's rule with the table = the request's prompt footprint alone when its prompt has
+  >= 128 rows (pmt), else footprint OR cap45 (pmtc). POST-HOC on the 36: every code prompt there has >= 136 rows and
+  every chat prompt <= 120, so on the 36 it IS pmt on code + pmtc on chat (code no cost at -33 % bytes; chat GENERAL).
+  It needs an out-of-sample test before any claim.
+- Test: FLOOR night 1's step C (78 windows, tonight) runs hyb_cold4_t3, the control hyb_0.9_u8_live_t3, hyb_cold4_pmtc_t3
+  and (appended now) hyb_cold4_len_t3. VERDICTS ON THE 42 HELD-OUT WINDOWS ONLY (the 78 minus the map's 36), each vs the
+  control at the same windows, McNemar per domain: GENERAL = z < 2 on code, IFEval and multi AND fewer cached bytes than
+  the control (45 GB LRU replay) on all three; else as before (CODE+ / code-only). pmtc's held-out verdict confirms or
+  withdraws tonight's GENERAL (be67ff0); len's decides the length-aware table. Prediction [G]: both GENERAL; len at
+  about -25-33 % bytes on code, as pmtc on chat.
+- Added Tue 22:3x (CPU, information; out/COLD_lru.txt): U3 (Q1-UNION 0.9 + t3, unsure rows exact = the engine's FAST
+  mode) reads x0.390 / 0.810 / 0.867 of EXACT's cached bytes at 45 GB, so the per-request table pmtc is -27 / -36 / -38 %
+  vs U3 and len (code: the footprint alone) -49 % on code. On quality it matches u8 + t3, not U3 (U3 keeps all ten
+  experts on unsure rows): an engine FAST step decided by task results.
+
+## STALE-SLOT CHECK OF THE MAP'S C 51 PATH (the orchestrator 22:3x, forwarding Leap 50de28c: a CPU slot rewrite inside one command buffer is not seen by later dispatches): PRE-REGISTRATION (Tue 22:4x)
+- At risk: the map runs BigMoE's streamed engine at C 51 with the spin gate (persistent per-layer slot pools that
+  the ext fills in place; up to 160 ids per gate call vs 51 slots), so a layer's slot can be refilled between gate calls.
+- Evidence already in hand [K]: three later runs equal the baseline bit for bit (tk and lp) on all 36 windows, 10,316
+  rows. They are capture, topk10 (the identity arm) and xcapture (extra GPU traffic), run at different times and loads.
+  So no timing-dependent staleness shows. A stale pattern that repeats identically per run is not excluded by this.
+- Decisive check: the baseline with BIGMOE_GATE=event (its id copy pushes the command buffer past MLX's limit, so MLX
+  commits a buffer per gate call: no slot is reread inside the buffer it was refilled in) on 9 windows (--max 3),
+  DM_OUT=out_stale/event, against the stored out/baseline.json. PASS = tk and lp bitwise equal on every window: the
+  spin path computed with the right weights, so past map verdicts stand. FAIL = any difference: the affected arms get
+  re-run in event mode and their verdicts are flagged. Prediction [G]: PASS.
+- Slot: after BigMoE's night ticket ends, before FLOOR's first step (scripts/stale_check.sh; ~3-8 min, MEM 17 GB).
+- WITHDRAWN Tue 22:5x, before any run (code read, ~/BigMoE/bigmoe/stream.py + mtplx generation.py). The map's runs NEVER
+  take the spin gate. Each window is one prefill chunk (MTPLX's auto chunk 2,048 rows > every window), so every MoE call
+  carries hundreds to thousands of ids and takes stream._sync_call, the synchronous prefill path. The spin gate needs
+  <= 160 ids AND (<= 92 or <= C), i.e. <= 9 rows. _sync_call has a command-buffer boundary between every slot rewrite
+  and the next read of that slot, which is Leap's own listed fix:
+  - np.array(indices) waits for the GPU before any load;
+  - mx.eval runs between slot groups ("before the next group can evict these");
+  - mx.eval(y) ends each layer.
+  So the map's verdicts (all arms, incl. the certificates at C 51 and COLD-CUT) are structurally clear of the
+  within-buffer staleness, and the three bitwise re-runs agree. The event-mode check would test the same path. It would
+  also fail at import (event mode needs BIGMOE_MAXK <= 61; the map runs 160).
+  The risk sits in DECODE engines (verify calls of <= 16 rows take the spin gate): BigMoE's 45 GB engine and the live
+  12 GB bt_b12 (B12's 4-row calls), plus any two-pass that refills pools between passes without a sync. Their check is
+  the same engine with and without a command-buffer boundary per pass or layer, bitwise (owners BigMoE / Fit12).
+- Fit12 22:5x on its 12 GB paths: T3 never refills a pool pass 1 read inside one command buffer. A CPU sync
+  (mx.eval + tolist) separates the passes, and every <= 4-row exact call ends with one. Inside a call there is one post
+  per pool per layer, its ids fit the pool (<= 38 vs C_m 47, <= 32 vs C_l 32), and the loader evicts from the LRU tail
+  (slots last read a call earlier). Evidence that discriminates [K, Fit12]: the MTP decode path (= the live 12 GB
+  engine's) bitwise equal at C_m 51 / 59 / 65; G1 at C_m 47 / C_l 32 = the exact loop alone. Pool size changes which slots
+  are rewritten when, so staleness would make outputs depend on C. The live spin path at C_m ~51 is therefore covered.
+  Fit12's ~5-min sync-every-MoE-layer A/B is the confirmation if the orchestrator schedules it.
+
+## RECORDS3 LAYOUT CHECK (BigMoE's converted store + build_nat; prefix item, the orchestrator Tue): RESULT Wed 03:28 = PASS [K]
+- ctrl = baseline + t3_top2_all on 3 windows with today's store and ext (out_layout/ctrl); test = the same with
+  BIGMOE_EXT_BUILD=build_nat and DM_R3=r3_overlay (out_layout/test). Test vs ctrl and test vs the stored out/: all
+  bitwise equal (decision_map/out_layout/LAYOUT_check.txt). BigMoE's layout patch (Wed 13:40) is clear on the map side.
+- Also run this night, read by NewIdeas (no verdict here): qom_0_live, qom_0.5_live_t3, qom_0_live_t3, qom_0.5_live_c164
+  (36 windows each, 03:22-03:58), and FLOOR night 1's S0 (p1_oea_k1_ku4_t3, top_k8; 03:10-03:21).
+
+## WED NIGHT MAP SCREENS IN ONE FLOOR GAP (the orchestrator Wed 04:0x / 04:08): PRE-REGISTRATION (Wed 04:1x, before any run)
+Runner scripts/screens_slot.sh (one map process, 36 windows, live checks, MEM 17 GB share lock, the next gap between FLOOR
+night 1's steps); read-out decision_map/dm_screen_read.py -> out/SCREEN_read_<arm>.txt. All-row flips vs the baseline argmax
+per domain; Q1 at 0.99's level (gate_top2_cf099) = 1.34 / 5.42 / 3.69 % (code / IFEval / multi; recomputed, equal).
+- Screen 1(a), Fable C's BYTES10 (line written ~/FableGod/fablec/BYTES10.md:217-219, Wed 00:3x, before any run):
+  qom_0_live_bonus = qom_0_live's masks with every drafted bonus row gated to ranks 0-1 + the block's union members (masks
+  ~/FableGod/fablec/masks/qom_0_live_bonus, bytes10_bonus_masks.py, a subset of qom_0_live's keep, checked on one window).
+  PASS = <= qom_0_live's own + 0.3 points AND <= the level; BETWEEN = otherwise <= 1.5x the level; KILL = above. Paired
+  McNemar vs qom_0_live. qom_0_live's own flips [K, out/qom_0_live.json]: 0.42 / 2.53 / 1.77 %, so PASS needs <= 0.72 /
+  2.83 / 2.07 %; BETWEEN up to 2.01 / 8.13 / 5.54 %. Prediction [G, Fable C]:
+  PASS on code, BETWEEN on chat. Why it matters [P, NewIdeas' corrected ledger]: the 24 GB FAST start is 54.5 / 84.4 /
+  81.7 MB per kept token with the bonus row exact vs 35.7 / 19.4 / 13.9 with it gated.
+- Screen 2, NewIdeas (lines ~/NewIdeas/QUEUE.md:1181-1185, Wed 04:0x, before any run): hyb_0.9_k1_u10_live_t3 = sure rows
+  (cf >= 0.9) keep rank 0 at 3 bits (dm_t3, t3k 1) + the block's union members at 4 bits; unsure rows and the bonus row
+  exact. Twin q1u_0.9_live_t3 (the same with t3k 2). PASS = <= the level; BETWEEN = <= 1.5x; KILL = above; paired McNemar
+  vs the twin. Prediction [G, Fable C]: BETWEEN on code (+0.3-0.6 points over top-2), KILL on chat. Joins the run only if
+  the gap starts before 09:00 (FLOOR's D + B + C + R must still end by 13:00); otherwise it waits for 13:45.
+- RESULTS [K] (Wed 04:37-04:55, one map process, 36 windows, 0 row-count warnings; out/SCREEN_read_<arm>.txt):
+  - Screen 1(a) qom_0_live_bonus: 0.65 / 6.12 / 6.50 % = code PASS / IFEval BETWEEN / multi KILL (qom_0_live 0.42 / 2.53
+    / 1.77 %). McNemar vs qom_0_live: code 14 / 6, z +1.79; IFEval 158 / 36, z +8.76; multi 193 / 25, z +11.38. Fable C's
+    prediction held on code; chat was worse (multi KILL). Gating the bonus row to ranks 0-1 + union is free on code only.
+  - Screen 2 hyb_0.9_k1_u10_live_t3: 1.60 / 8.36 / 4.84 % = code BETWEEN / IFEval KILL / multi BETWEEN; twin
+    q1u_0.9_live_t3 1.34 / 6.62 / 4.33 %. McNemar vs the twin: code 21 / 12, z +1.57; IFEval 114 / 55, z +4.54; multi
+    72 / 54, z +1.60. Fable C's prediction held (code BETWEEN at +0.26 points; chat KILL on IFEval).
+
+## SCREEN 1 IN QOM'S FORM, qom_0_live_bq (NewIdeas; the orchestrator Wed 04:47): PRE-REGISTRATION (copied Wed 04:5x; NewIdeas' line
+~/NewIdeas/QUEUE.md:1214-1229, Wed 04:4x, before any run)
+- Arm: qom_0_live with each live segment's last row gated by the draft it verifies; the row keeps ranks 0-1 + the block's
+  union members + the resident ranks 2-9 (QOM's own keep, 0 extra SSD reads). Masks ~/NewIdeas/data/dm_masks/qom_0_live_bq
+  (q1_union, READY, 36 windows). Runner scripts/map_slot.sh, the gap after the screens run (or the next FLOOR gap).
+- Lines (screen 1's): all-row flips <= qom_0_live + 0.3 points (0.72 / 2.83 / 2.07 %) AND <= 1.34 / 5.42 / 3.69 % = PASS;
+  <= 1.5x the level (2.01 / 8.13 / 5.54 %) = BETWEEN; above = KILL. Paired McNemar vs qom_0_live and vs qom_0_live_bonus.
+  Prediction [G, NewIdeas]: ~0.5 / 3.9 / 3.6 %: code PASS, chat BETWEEN.
+- Screen 1(a) for reference [K, 04:4x]: qom_0_live_bonus 0.65 / 6.12 / 6.50 % = code PASS / IFEval BETWEEN / multi KILL.
+- Conditional (pre-approved by the orchestrator if bq is not KILL on NewIdeas' read-out; NewIdeas says go):
+  qom_0_live_bq_t3 = the same with every sure row's ranks 0-1 at 3 bits (hyb_t3, t3k 2), paired vs qom_0_live_t3.
+- RESULT qom_0_live_bq [K] (Wed 05:02-05:06, 36 windows, 0 row-count warnings; out/SCREEN_read_qom_0_live_bq.txt):
+  0.39 / 4.09 / 3.26 % = code PASS / IFEval BETWEEN / multi BETWEEN (NewIdeas' prediction ~0.5 / 3.9 / 3.6 % held). McNemar
+  vs qom_0_live: code 6 / 7, z -0.28; IFEval 96 / 43, z +4.50; multi 77 / 24, z +5.27. Vs qom_0_live_bonus: code 5 / 14,
+  z -2.06; IFEval 77 / 146, z -4.62; multi 55 / 170, z -7.67. QOM's resident keep on the gated row removes most of
+  screen 1(a)'s chat cost (IFEval 6.12 -> 4.09 %, multi 6.50 -> 3.26 %), and code has no cost at all.
+- qom_0_live_bq_t3 RUNS (Wed 05:0x, the same gap; not KILL on any domain = the orchestrator's pre-approval). Line, by
+  analogy with screen 1 (NewIdeas' QUEUE gives the pairing only): <= qom_0_live_t3 + 0.3 points AND <= the level = PASS;
+  <= 1.5x the level = BETWEEN; KILL above. qom_0_live_t3 [K]: 0.71 / 4.45 / 4.14 %, so PASS needs <= 1.01 / 4.75 / 3.69 %;
+  BETWEEN up to 2.01 / 8.13 / 5.54 %. McNemar vs qom_0_live_t3 and vs qom_0_live_bq (written before the result).
+- RESULT qom_0_live_bq_t3 [K] (Wed 05:07-05:12): 0.77 / 6.09 / 5.29 % = code PASS / IFEval BETWEEN / multi BETWEEN.
+  McNemar vs qom_0_live_t3: code 9 / 7, z +0.50; IFEval 102 / 46, z +4.60; multi 92 / 51, z +3.43. Vs qom_0_live_bq (the
+  3-bit cost): code 17 / 4, z +2.84; IFEval 130 / 62, z +4.91; multi 118 / 46, z +5.62. On code the gated row is free in
+  both forms; 3 bits adds measurable flips, though code stays under the level.

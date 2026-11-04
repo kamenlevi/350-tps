@@ -54,6 +54,10 @@ def run(rules, seeds):
     D = B.d23(); KEPT = np.array([sum(c["kept"] for c in cks) for _, cks, _ in P], float)
     arms = {"C 256": (S256, None), "C 300 fitted": (S300, None), "C 320 fitted": (S320, None),
             "C 256 + tier(300)": (S256, S300), "C 256 + tier(320)": (S256, S320)}
+    if os.environ.get("VT_BASE"):                          # any base sizes file (e.g. uniform C 160) + VT_PLUS "64/32" slots
+        SB = json.load(open(os.environ["VT_BASE"])); pm, pl = (int(x) for x in os.environ.get("VT_PLUS", "64/32").split("/"))
+        U = {"C_m": [k + pm for k in SB["C_m"]], "C_l": [k + pl for k in SB["C_l"]]}
+        arms = {"base": (SB, None), f"base + tier {pm}/{pl}": (SB, U)}
     if os.environ.get("VT_ARMS") == "224":                # BigMoE's tier smoke vt1_224: C 224 + 64 base / 32 sidecar slots
         S224 = json.load(open(os.path.join(LZ.OUT, "laysz45_224.json")))
         U = {"C_m": [k + 64 for k in S224["C_m"]], "C_l": [k + 32 for k in S224["C_l"]]}
@@ -86,8 +90,9 @@ if __name__ == "__main__":
     t0 = time.time(); seeds = int(os.environ.get("BAND45_SEEDS", "2"))
     rules = {r: B.RULES[r] for r in ("EXACT", "Q1 0.9") if r in B.RULES}
     out = run(rules, seeds)
-    base = np.mean(out[("EXACT", "C 224" if os.environ.get("VT_ARMS") == "224" else "C 256")])
-    print(f"| rule | arm | SSD MB per kept token (all six prompts) | vs {'C 224' if os.environ.get('VT_ARMS') == '224' else 'C 256'} EXACT |")
+    bk = "base" if os.environ.get("VT_BASE") else ("C 224" if os.environ.get("VT_ARMS") == "224" else "C 256")
+    base = np.mean(out[("EXACT", bk)])
+    print(f"| rule | arm | SSD MB per kept token (all six prompts) | vs {bk} EXACT |")
     print("|---|---|---|---|")
     for (r, an), v in out.items():
         print(f"| {r} | {an} | {np.mean(v):.1f} | {100 * (np.mean(v) / base - 1):+.1f} % |")
