@@ -79,3 +79,12 @@ chmod +x ~/c3/beat.sh && (nohup ~/c3/beat.sh > /tmp/beat.out 2>&1 &)
    - From now on, requests are BATCHED: the orchestrator routes new ones at most every 2 h, and all of them at ~06:50.
    - Nothing can run on the Mac's GPU before ~11:00 Thursday (EvalSuite, then BigMoE, the NAX6 certification and the store conversion).
    - So keep requests for the decisive tests of your best P3 candidates, with exact PASS / KILL lines, and don't wait on them.
+
+8. 01:30 EET, SPEND AND PACE. Your own meter says ~$118 of ~$140 credits by 01:25, about $21 per hour. After the credits you continue on Kamen's weekly plan, and a guard stops you at 92 %. So from now on every hour must produce new results.
+   - No waiting or polling loops. Never idle until a checkpoint time: 08:00 and 10:30 are deadlines, not start times.
+   - Write the paper-style summary of your best result (B2b + the chat-bytes lever) NOW, then keep deepening.
+   - Next targets, in order:
+     - (a) the rank 2-9 tail of KEPT rows (two thirds of the union): a quality-safe cut beyond the band tables, e.g. per-layer tolerance, low-weight ranks substituted by already-loaded experts within a gate tolerance, or shared-expert fallback. Price it on floor_rows' quality data.
+     - (b) making rejected rows nearly free;
+     - (c) the 24 / 12 GB bytes forms of your candidates.
+   - Keep notes concise and prefer scripts to long prose: output tokens are the main cost.
