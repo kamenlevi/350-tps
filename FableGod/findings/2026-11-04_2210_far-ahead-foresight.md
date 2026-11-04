@@ -43,3 +43,8 @@
   - It also tests a confidence-adaptive horizon (SPICE-style, published) and a per-layer horizon (possibly new).
   - With perfect knowledge the gain saturates by ~96 far tokens at K 266 (F 64: -18.9 %; F 96 = F 128: -20.3 %).
     A real draft decays with distance, so the real optimum is likely shorter. Untested.
+- Idea added 22:18: two forecasters together, near (next 1-2 checks, precise) + far (8+ checks, broad), like a hybrid branch
+  predictor. Three combinations: tiered eviction, a per-layer chooser, a distance-weighted score.
+  - Prior art: hybrid / tournament branch predictors (McFarling 1993) and multi-predictor cache replacement in CPUs.
+    MoE-SpeQ's hierarchical cache is the nearest MoE work.
+  - CPU test queued in FAR's frame (FAR.md section 8).

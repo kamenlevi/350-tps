@@ -195,6 +195,42 @@ dropped even on PASS, and FAR-SET is filed under bytes.
 **What it does not test:** the engine-side hiding of the far chain (a later A/B), the pseudo-router at scale, and the memo's
 live cost.
 
+> (a quote from the project owner, kept private)
+The main verdict stays the PASS / KILL above (H 8, F >= 96). The read-out is extended, on the same capture, to:
+1. **Grid.** Far horizon F in {16, 32, 48, 64, 96, 128, 160, 192} tokens x eviction look-ahead H in {4, 8, 16} checks, at
+   K 266 and 147. At each decision the forecast = the far draft's first F tokens' routes (the perfect map first, the ridge
+   pseudo-router second), assigned to the coming checks by position (cumulative kept), cut at H checks; scored as recall /
+   precision on "resident used again within H checks" split by layer band (0 / 1-7 / 8-47, the bands of 1a) and by domain
+   (code = HumanEval 68 / 91, math = the three MATH500 + gsm8k; cap45 has no chat prompt: chat needs its own capture), plus
+   the miss cut and stalled layers vs LRU from the full replay. 24 replays per K, ~5 s each = ~4 min CPU, one share lock.
+   Decisions whose origin is too stale for a given F (origin horizon left < F) are scored at the shorter view and counted;
+   the origin decisions alone give the clean F curve. Ceiling expectation from 7a [K]: on the true path the gain saturates
+   at F ~ H x kept (code 8 x 10.5 = 84-96, math 8 x 6 = 48-64); F beyond that pays only with H 16. The drift of the real
+   chain sets the other end: the sweep finds where precision on old residents (1g) falls below ~0.6 per band and domain.
+2. **Adaptive rules, scored on the same recorded chains (zero extra GPU):**
+   (a) SPICE-style per-origin horizon (published, adapted): the chain runs while its running confidence (the product, or an
+   EMA, of its per-step top-1 probability) stays above tau; emulated by cutting the recorded 192-step chain at the first
+   step below tau, tau in {0.5, 0.3, 0.1}; the capture must record p_top1 per far step.
+   (b) Acceptance-rate horizon (free proxy): F_o = c x the recent kept per check (c in {6, 8, 12}): code gets ~90-130,
+   math ~50-70 tokens automatically.
+   (c) Per-layer horizon (possibly new): F_L per band = the largest F at which that band's precision on old residents
+   stays >= 0.6 (expected [G]: the full F in layers 0-7, where routes are token-driven, shorter in 8-47, where the memo
+   and recency carry more); applied as a per-layer cut of the same forecast, no extra compute.
+   Line: an adaptive rule replaces the fixed F only if it beats the best fixed F at equal mean horizon by >= 1 point of miss
+   cut at K 266 (and never loses on the other K).
+3. **Capture spec, settled with BigMoE (22:3x-22:4x; BigMoE builds it Thursday, records it in its HANDOVER):** the 6 cap45
+   prompts generate 448 tokens (256 + 192) in the exact loop at C 160; origins every 8th check (~38, ~22 with the full 192
+   horizon), F = 192 far steps of the MTP head chain per origin (far tokens + head hidden recorded, ~1 MB per origin) and
+   one prefill-style 125B pass over the 192 far rows (top-10 per layer per row; ~3-5 s and ~35-40 GB SSD per origin, the
+   pools flushed after it: the live misses right after an origin are not LRU's, the CPU replay is unaffected); ~6-7 min,
+   MEM ~33-35 GB. Per far step also: p_top1 and the top-2 logit margin (SPICE rule), the head's top-4 ids (a later
+   alternatives-union test of the rejected-rows gap). Optional: the far rows' MoE input at layers 1 and 3 (~2 MB per origin)
+   for a pseudo-router on the 125B's shallow state as a comparison. **The PASS / KILL verdict is read at F 96** (the
+   FAR-SET design point; 7a: the ceiling saturates at F 96 for H 8) with 64 and 128 as sensitivity; 38 origins are enough
+   for the K 266 line (it is a full replay over every decision, each using its last origin; 7a: S 8 needs F >= 128, and
+   F 192 covers it). 12 prompts are not needed for the line; the code domain rests on 2 prompts and chat is absent, so the
+   per-domain split is code vs math tonight; chat needs its own capture later if the sweep matters.
+
 ## 4. Arithmetic [P on K]
 EXACT at 45 GB today: 126 ms per check at 10.5 kept = 83 tok/s; SSD wait ~55-60 ms of it [P GOAL.md]. Miss cuts from this
 replay (K 266, C 160; the live default is C 256, so these are relative):
