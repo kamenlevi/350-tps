@@ -1,4 +1,4 @@
-"""Leap 2026-10-23: speed estimates for Kamen's model question (uses model_speed.py's calibrated model)."""
+> (a quote from the project owner, kept private)
 import sys, os
 sys.path.insert(0, os.path.expanduser("~/Leap/scripts"))
 import model_speed as ms

@@ -342,7 +342,7 @@ or they predate the list but were missing from it:
 - **Not scanned:**
   - compiled .so files and binaries;
   - the publish mirrors under ~/.local/share/github-mirrors (copies, not run);
-  - directories outside the ten sessions, except ~/.local/share/usage-pace (clean).
+  - directories outside the ten sessions, except ~/.local/share/pacer (clean).
 - **Byte-pricing scripts** with row-major constants (2,162,688 / 770,048) read no store. Examples: laysz45.py and its ~20
   importers, ten_x_ledger.py, s10c_ab.py, draft17*.py. Their MB-per-token figures for the converted store need the packed
   sizes (2,064,384 / 720,896).

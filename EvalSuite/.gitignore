@@ -1,0 +1,9 @@
+data/
+cache/
+results/*/raw/
+models/
+.venv/
+__pycache__/
+*.pyc
+results/
+snap/

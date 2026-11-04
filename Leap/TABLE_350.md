@@ -232,7 +232,7 @@ Tags: **published** = shown elsewhere, untested here; **here** = measured on thi
   - Pruning barely shrinks a check's bytes (distinct experts per layer, 16 rows: 72 -> 63-68; 54-57 with top-8). Its
     value is residency.
   - At 45 GB the whole 256-pool at 3.5 b (~30 GB) is resident: zero misses.
-  - **CLOSED (22:39): Kamen (relayed by the orchestrator at ~22:38) rejected pruning ("No I don't want to use half of the experts").** All 512
+> (a quote from the project owner, kept private)
     experts per layer stay; no pruning or merging. The residency lesson carries over to all-expert methods below.
 - **All 512 experts at 24 GB (22:41; scripts/resid27.py; same traces and replay):**
   - Misses per token, code, 16-row checks:
@@ -498,7 +498,7 @@ Tags: **published** = shown elsewhere, untested here; **here** = measured on thi
     small model nor an affordable tree extracts it.
 
 ## L1-23 (Leap, pre-registered 20:26; MoonShots' L1-01b): bit-exact 16-row kernels for the 125B's dense layers
-- **Why:** Kamen (~20:00): "make the kernel allow for 95+ percent of the hardware". MoonShots measured the 125B's dense
+> (a quote from the project owner, kept private)
   shapes (data/b8mr/denseinv.txt). A bit-exact 16-row check today chunks its rows (12 + 4 for the 4-bit shapes, 5s for
   the bf16 hyper-connection mixers), because MLX's kernels change numerics with the row count. Its dense layers take
   ~57 ms (4-bit ~37.5, bf16 ~17.5, 8-bit ~1.7), against a ~12 ms floor and ~16 ms for 1-row decode. Exactness costs
@@ -637,7 +637,7 @@ Tags: **published** = shown elsewhere, untested here; **here** = measured on thi
     parts (attention, GDN core, routing, glue) are not measured here.
   - Rounding changes once, for decode and verify together.
 
-## L1-26 (Leap, pre-registered 23:26; Kamen's "mend to fit the GPU" item a): a fragment-native 4-bit weight layout
+> (a quote from the project owner, kept private)
 - **Why:** L1-24 / L1-25. The 16-row paths are ALU-bound on unpacking.
   - qmm16c's lane reads 8-byte pieces of 4 weight rows per 64-value group.
   - It spends 3 ops (shift, mask, or 0x4300) per 4-bit value to make a bf16 operand.
@@ -700,7 +700,7 @@ Tags: **published** = shown elsewhere, untested here; **here** = measured on thi
 - Item (b), the drafter on the Neural Engine, is KILLED on arithmetic. Drafting is 3-8 % of a check and has to wait for
   the check's result (prior art: Mirror-SD 2510.13161).
 
-## L1-27 (Leap, pre-registered 23:36; Kamen's "mend" item a): 4-bit weights fed to the tensor units AS 4-bit
+> (a quote from the project owner, kept private)
 - **Why:** L1-24 / L1-26. The few-row paths are ALU-bound on unpacking: experts reach 82 % of the floor with the
   native layout, the dense shapes 77-86 %.
   - The installed SDK (26.5; MPPTensorOpsMatMul2d.h) lists **bfloat x uint4b_format -> float** for matmul2d.
@@ -3156,7 +3156,7 @@ Data: data/b5_slice.txt (timings, 20 checks per variant), data/b5_gpu.txt (trace
     - BigMoE (engine owner) gets the finding: its shipped plain-path gather costs ~8 ms per layer-call in
       allocations. For its own stock paths a reused scratch buffer (no clear_cache) may be a cheap exact win too;
       that is BigMoE's to screen.
-- **R-50b (Kamen via the orchestrator, Thu 20:5x: "did you test it", i.e. does R-50 carry over to the 45 GB setup;
+> (a quote from the project owner, kept private)
   pre-registered Thu 21:02; scripts/r50b_screen.py, runner_r27.sh after runner 26, ~2 min):** warm 16-row checks,
   gather vs slot, at the 45 GB line's REF2 configuration (C 192), with the needed experts resident.
   - Setup: no drafter; REF2 + SB on; PF1 for prefills only.
@@ -3399,7 +3399,7 @@ R-59 at C 224, warm 16-row REF2b check, ms per check (x its bytes floor at 280 G
     cycle at C 224.
   - Exact-safe if qmmg's per-output accumulation order is kept: only memory access changes, e.g. more loads in flight.
     A candidate kernel row, after R-62 / R-61.
-- **HOLD (Kamen 11:5x, "Hold it for now"):** no runs and no locks until he lifts it (PAUSE / HOLD kept by
+> (a quote from the project owner, kept private)
   hold_guard.sh). Reading, planning and writing only.
 - **R-62 RESULT (Sat 19:58, runner 52, Kamen's 19:55-20:45 hour; shared GPU, rough; data/r62_att16.txt): BETWEEN.** One
   SDPA call per layer is 2.1-2.8x faster than MTPLX's 12 head chunks, but bit-identical only below 512 keys.
@@ -4404,7 +4404,7 @@ R-59 at C 224, warm 16-row REF2b check, ms per check (x its bytes floor at 280 G
   cycle's excess, the miss burst 58-73 % of the cold ones', the drafter's window 18-23 % of all three. A6 goes to
   BigMoE by cause.
 
-## DAY9 (Kamen Mon 10:3x: "run all 9 tests"; ~/FableGod/DAY9_2026-11-02.md): Leap's items, pre-registered Mon 10:59 EET
+> (a quote from the project owner, kept private)
 - **C0 / NEW-2 timeline (condition 5; scripts/c0_timeline.py):** BigMoE's r57_screen.py (e3210bf, the 45 GB default:
   R57_PRESET=45 = REF2-T + gate + t 0.3 + OOO + TIER_COMBINE + K-73) with probes. At checks 1, 2, 5, 10, 15, 30 the cache
   is rolled back (mtplx rollback_after_verify) and the check re-run:
@@ -6036,7 +6036,7 @@ shapes, since latency does not depend on the values.
     420 s, each killed at its cap, lock 11 min.
   - **Deviation from the S pre-registration (forced by the cap):** 12 s phases instead of 20, and a 45 s warm-up
     instead of 60; still 3 rounds of {a4x4, q4, a4x4 + q4}, each between alone phases.
-  - **Second deviation (the orchestrator 18:5x, Kamen's plan change: "small breakthrough tests run NOW, not
+> (a quote from the project owner, kept private)
     overnight"):** the night runner was stopped (19:00). The run goes now (`WC2_NOW=1`), by day, under a quiet lock
     with Kamen on the Mac (PowerPoint, Chrome, Spotify). The order became M-28 -> Fit12 -> WC2: Fit12 was granted at
     19:00:53 while no ticket of mine was in yet.

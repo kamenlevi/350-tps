@@ -3,7 +3,7 @@
 **What:** Fit12's TRL codes (the 2.40 b mix: gate / up k 2, down k 3; or TRL-3: k 3 everywhere) for all 24,576
 experts, as a trl-v1 store that the TRL-NAX kernel serves.
 
-**Gate:** Kamen's OK after screen 7 (the orchestrator 20:0x: "no disk writes of a full store yet").
+> (a quote from the project owner, kept private)
 
 ## 0. Status of the parts (all verified Wed 20:1x-21:2x)
 | part | file | check |
