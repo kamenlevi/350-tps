@@ -7063,3 +7063,384 @@ Pre-registered before the run (scripts/nax_micro.py, data/nax_micro.txt; layer 2
     kernel (its grouping was shared), which is about that much (~18 us at S 16), so empty rows cost ~nothing.
   - With NAX-ABL / NAX-OCC: NAX6-N's hot loop has no cheap cut left. The 16-row op padding is fixed (no 8-row shape,
     K-62c). What's left for the expert kernel is structural (NAX7's fewer dispatches) or bytes.
+
+## BP-0: DFlash2's block pass by part (Leap, Wed 2026-11-04 16:1x; the orchestrator's route 15:5x: the drafter is 10.7 ms of a 100.2 ms code check in BigMoE's all-in C 160 arm, 6.3 with D7b quiet; byte floor ~1-3 ms)
+Pre-registered before the run (scripts/bp_profile.py, data/bp_profile.txt; R-79's loader: DFlash2 + l120_ft bound to
+the real 4-bit embed / lm_head, ~3.5 GB; share lock, rough).
+- Arms: bf16 + R-76 / R-78 forms (K83, the engine's exact drafter) and D7b (layers 4-bit). Parts timed alone:
+  hidden_states, compute_logits (the 4-bit lm_head at 16 rows, 248K vocab), the two-stage top-16, the selector's
+  hidden_projection, chain_fused. Plus the head alone: full vs screened (FR-Spec top-32K + 2K session rows).
+- **Prediction (bf16):** propose ~9-11 ms; hidden_states ~6-7, compute_logits ~1.6-2.0, top-16 ~0.3-0.6, projection
+  + chain ~0.5. Screened head ~0.25-0.35 ms vs ~1.6-2.0 full.
+- **Use:** the drafter's outputs are verified, so any change that keeps acceptance is allowed (drafts bitwise where the
+  form allows, acceptance unchanged on replays where it doesn't). The biggest part with a known cut gets built first:
+  likely the screened draft head (~-1.5 ms per check if acceptance holds), then the layers' bytes (8-bit layers: half
+  of bf16's bytes, nearly lossless, unlike D7b's 4-bit -1.3 % code kept).
+- **Result (16:06, share lock, GPU ~free; data/bp_profile.txt; 2 interleaved rounds):**
+
+  | arm | propose | hidden_states | compute_logits | top-16 | projection | chain |
+  |---|---|---|---|---|---|---|
+  | bf16 + forms (K83) | 10.21-10.25 ms | 7.74-7.85 | 2.50-2.52 | 0.09-0.10 | 0.20 | 0.24-0.25 |
+  | D7b (4-bit layers, MLX's own qmm: no REF2 here) | 9.76-9.84 | 7.31-7.35 | 2.51-2.53 | 0.09-0.10 | 0.20-0.21 | 0.24-0.26 |
+
+  - The head alone at 16 rows: full 248K vocab 2.149 ms, screened (FR-Spec 32K + 2K session rows) 0.454 ms.
+  - Reading [P]: hidden_states is ~76 % of the propose. Its bf16 bytes are ~0.85 GB (floor ~3.4 ms at 250 GB/s), so
+    it runs at ~2.3x its byte floor. The head is ~25 %, and a screened head cuts ~1.7 ms of it. Top-16, projection and
+    chain are ~0.55 ms together. D7b's 6.3 ms (R-85b) came with REF2's qmm16c inside the propose.
+  - Plan: (1) the screened draft head (FAST-safe, acceptance replay); (2) the layers' bytes: 8-bit layers on a 16-row
+    kernel (~half bf16's bytes, near lossless) or D7b with qmm16c; (3) what's left of hidden_states (attention, convs,
+    norms).
+
+## BP-1: DFlash2's draft head screened to FR-Spec 32K + session tokens (Leap, Wed 2026-11-04 16:2x; from BP-0)
+Pre-registered before the run (scripts/bp_screen_check.py, data/bp_screen_check.txt).
+- **What:** head2s's compute_logits over ScreenedHead's rows (FR-Spec top-32K + the window's prompt ids + each check's
+  committed ids, cap 4096) instead of the full 248K vocab; the same two-stage top-16; subset indices mapped back to
+  token ids. Drafts are verified, so the output stays exact.
+- **Replay:** MTP Head's D7B-1 / DA-1 engine-order walk (copied): the bf16 drafter with K83's wiring, the 24 code / math
+  windows of ~/Leap/data/dfl2d_*, cut t 0.3, paired per window.
+- **Prediction:** kept per check x0.995-1.000 on code and math (FR-Spec covers ~98.3 % of code tokens, and the session
+  rows cover most of the rest). Propose -1.5..-1.8 ms.
+- **Line:** adopt (offer BigMoE an R57 switch) at kept >= x0.995 on both. KILL below x0.981 (at a 90 ms cycle, -1.7 ms is
+  worth ~1.9 % of kept). In between, report it as a trade.
+- **Result (16:08, share lock; data/bp_screen_check.txt; 52 s, peak 1.9 GB): BETWEEN, a trade.**
+  - Code (24 windows): kept 9.248 -> 9.183, x0.9930 (90 % CI x0.987-x0.998; lower in 4, higher in 1). Propose 9.92 ->
+    8.13 ms.
+  - Math (60 windows): kept 6.671 -> 6.595, x0.9885 (CI x0.983-x0.993; lower in 21, higher in 6). Propose 9.60 -> 7.70
+    ms.
+  - Net at a 100 ms cycle: code +1.1 %, math +0.75 %; at 40 ms, code +3.8 % [P]. The misses are true tokens outside
+    FR-Spec 32K + session.
+  - Next, BP-1b: a 64K base (more coverage, head ~0.75 ms) to clear x0.995.
+- **BP-1b pre-registered (16:1x):** base = FR-Spec top-65,536 + session (cap 4096). Prediction: kept >= x0.997 on code
+  and math, propose -1.3..-1.5 ms. Same lines.
+- **BP-1b result (16:09): BETWEEN again.** Code x0.9944 (CI x0.989-x0.999; lower in 3, higher in 1), math x0.9940 (CI
+  x0.991-x0.997). Propose -1.51 ms (code 10.02 -> 8.51, math 9.67 -> 8.16).
+  - Doubling the base recovers only part of the loss. A changed candidate set also moves the selector's softmax
+    confidences, and so the t 0.3 cut, even where the true token is in the set [P].
+  - Net [P]: at a 100 ms code cycle 32K +1.1 % / 64K +0.95 %; at 40 ms +3.8 % / +3.2 %. Math +0.85 % / +1.0 % at 100 ms.
+  - Verdict: an exact-safe speed trade, not a clean PASS. Offered to BigMoE as an R57 switch with both bases; their
+    steady tok/s A/B decides.
+- **BP-1c pre-registered (17:0x):** base = FR-Spec top-98,304 + session (SVH's base: on the stored streams no generated
+  token falls outside it on code, 0.007 % on math). Prediction: kept x0.998-1.002 on both (candidate sets change only
+  rarely). Line: >= x0.997 on both -> build the fast form (qmm16c over the subset in the drafter's head, ~-0.9 ms per
+  propose vs the full head on qmm16c). Else KILL.
+- **BP-1c result (16:53, share lock): PASS.** Code kept 9.248 -> 9.248, **x1.0000** (no window changed); math 6.671 ->
+  6.668, **x0.9995** (1 window lower). Propose with MLX's kernels 9.95 -> 8.68 (code), 9.51 -> 8.35 (math).
+- **BP-9 pre-registered (17:0x; scripts/bp_sub_check.py, d7b_nax.DraftSubset / screened_head2s):** the fast form on
+  qmm16c with D8-NAX (the exact default's drafter candidate): full head on qmm16c vs subset on qmm16c, the walk
+  feeding session ids. Prediction: kept x0.999-1.001; propose -0.8..-1.0 ms (~6.8 -> ~5.9). Line: kept >= x0.998 and
+  >= 0.6 ms faster -> offer BigMoE.
+- **BP-9 result (16:55, share lock, GPU ~free; data/bp_sub_check.txt): PASS.** Propose D8 + head on qmm16c 7.13 / 6.83 /
+  6.76 -> D8 + subset on qmm16c **5.84 / 5.84 / 5.77 ms (-0.99)**. Kept: code 9.290 -> 9.290 (x1.0000, no window
+  changed), math 6.675 -> 6.671 (x0.9995, one window). The exact default's drafter: bf16 + forms 10.4 -> D8-NAX 7.5 ->
+  + head on qmm16c 6.8 -> + subset **5.8 ms**: -4.6 ms per code check at unchanged acceptance.
+
+## BP-2: the drafter layers' bytes (Leap, Wed 2026-11-04 16:1x; from BP-0: hidden_states 7.8 ms, ~2.1x the bf16 floor)
+- **BP-2a pre-registered (scripts/bp_q8_bench.py, data/bp_q8_bench.txt): the drafter's projections at their shapes**
+  (q 4096x2560, k / v 1024x2560, o 2560x4096, gate / up 7680x2560, down 2560x7680 at 16 rows; fc 2560x12800 at 8 rows):
+  bf16 nn.Linear vs R-78's x @ Wt vs MLX quantized_matmul 8-bit / 4-bit g64 vs qmm16c (4-bit, 16 rows).
+  - Prediction: bf16 projections ~5-5.5 ms per propose. MLX 8-bit at 60-75 % of its byte floor, ~2.5-3 ms. qmm16c 4-bit
+    ~1.5 ms.
+  - Line: MLX 8-bit <= 0.6x bf16 -> an 8-bit drafter needs no new kernel (next: its acceptance replay, D7B-1's walk with
+    bits 8). Else build a 16-row 8-bit NAX kernel (MPP's bf16 x uint8 from threadgroup memory).
+
+## BP-3: DFlash2's hidden_states by ablation (Leap, Wed 2026-11-04 16:1x; BP-0: 7.8 of a 10.2 ms propose)
+Pre-registered before the run (scripts/bp_hs_ablate.py, data/bp_hs_ablate.txt; bf16, plain modules; timing only).
+- Arms: no-proj (every nn.Linear a same-shape fill), no-sdpa (attention returns the queries), no-conv (the grouped
+  dynamic convs are identities), no-norm, skeleton (all four).
+- Prediction (share of hidden_states saved): projections ~45-50 % (BP-2a: ~3.8 ms bf16), attention ~15-20 %, convs
+  ~8-12 %, norms ~5 %, skeleton ~15-20 % left.
+- Use: with BP-2a (MLX's quantized_matmul at 16 rows is slow; qmm16c 1.46 ms for all 4-bit projections), it picks
+  the build: the projections' bytes (an 8-bit NAX kernel, or D7b on qmm16c) vs the non-projection work.
+- **Result (16:11, share lock; data/bp_hs_ablate.txt): projections 74 %.** hidden_states 8.08 ms: no-proj 2.14 (-74 %),
+  no-sdpa 6.26 (-23 %), no-conv 7.10 (-12 %), no-norm 8.00 (-1 %), skeleton 0.58 (-93 %). The projections (k / v twice,
+  fc, the conv kernel projections) are ~5.9 ms; attention ~1.8; convs ~1.0.
+
+## BP-4: D7b on the NAX kernel (Leap, Wed 2026-11-04 16:2x)
+- **Finding that motivates it:** r57_screen calls ref2.remove() before every propose. So the D7b drafter (R57_D7B=code,
+  in BigMoE's all-in FAST code preset) runs MLX's 16-row 4-bit quantized_matmul, which BP-2a timed no faster than
+  bf16; BP-0's D7b propose is 9.8 vs bf16's 10.2 ms. The preset likely pays D7b's -1.3 % code kept (D7B-1) for almost
+  no speed. R-85b's 6.3 ms D7b propose had REF2's qmm16c inside.
+- **Build (scripts/d7b_nax.py):** install(draft) turns the D7b drafter's eligible 4-bit QuantizedLinears into NaxQL:
+  <= 16-row bf16 calls run qmm16c (padded rows), whatever REF2's state. Same 4-bit weights; only the fp32
+  accumulation order differs from MLX's kernel.
+- **Pre-registered (scripts/bp_d7b_nax_check.py, data/bp_d7b_nax_check.txt):** D7b-NAX propose 6.0-7.0 ms (D7b MLX
+  ~9.8, bf16 + forms ~10.2). Kept per check x0.995-1.005 vs D7b-MLX on code and math (engine-order walk).
+- **Line:** propose <= 7.5 ms with kept within +-0.5 % of D7b-MLX -> offer it to BigMoE as the D7b drafter's kernel
+  (R57_D7B arms). Otherwise KILL.
+- **Result (16:14, share lock; data/bp_d7b_nax_check.txt; 79 s, peak 2.6 GB): PASS.**
+  - ms per propose (3 interleaved rounds): bf16 + forms 10.16-10.25; D7b (MLX qmm) 9.30-9.40; **D7b-NAX 7.21-7.43** (-2.05
+    ms vs D7b, -2.9 vs bf16).
+  - Kept per check (engine-order walk):
+    - code: bf16 9.248, D7b 9.130, D7b-NAX 9.091. D7b-NAX / D7b x0.9957 (90 % CI x0.989-x1.003).
+    - math: bf16 6.671, D7b 6.524, D7b-NAX 6.536. D7b-NAX / D7b x1.0019 (CI x0.998-x1.006).
+  - 45 NaxQL modules (9 per layer: q k v o gate up down + 2 conv kernel projections); 870 MLX calls left (the
+    1,000-row context prefills).
+  - Verdict: the FAST code preset's R57_D7B=code drafter gets ~-2 ms per code check at the same acceptance. D7b still
+    costs -1.3..-1.7 % code kept vs bf16 (D7B-1); the 4-bit-aware fine-tune is the fix for that.
+- **BP-4n pre-registered (16:2x; scripts/bp_d7b_naxn_check.py):** the same on DENSE-N's layout
+  (d7b_nax.install(native=True): qmm16n on a native copy, +~0.26 GB). Prediction: bitwise == D7b-NAX (per module and
+  whole proposes: DENSE-N's ks-1 guarantee), propose -0.2..-0.5 ms vs D7b-NAX.
+
+## BP-5: an 8-bit 16-row NAX kernel for the drafter (Leap, Wed 2026-11-04 16:2x; for the exact default's bf16 drafter)
+Pre-registered before any run (scripts/qmm16c8.py, qmm16c8_check.py; data/qmm16c8_check.txt).
+- **Why:** the bf16 drafter's projections are ~5.9 of its 8.1 ms hidden_states (BP-3). 4-bit (D7b) costs 1.3-1.7 %
+  code kept; 8-bit RTN g64 should be near lossless. MLX's 8-bit quantized_matmul at 16 rows moves only ~95 GB/s
+  (BP-2a), so it needs its own kernel.
+- **Kernel:** qmm16c's v3 code MMA with byte codes. B = bf16(code), exact; per output and 64-group y += s P + b X; rows
+  padded to 16, so row-invariant by construction.
+- **Prediction:** error vs fp32 <= MLX 8-bit's. 1 / 8 rows == the 16-row call's rows, bitwise. 150-230 GB/s at the
+  drafter's shapes (best ks per shape), i.e. ~1.6-2.4x faster than bf16 there.
+- **Line:** >= 1.4x faster than bf16 over the drafter's projection set -> wire an 8-bit drafter (NaxQL8) and run
+  BP-1's acceptance walk vs bf16. Below 1.2x -> KILL.
+- **Result (16:18, share lock beside BigMoE's 80 % GPU run; data/qmm16c8_check.txt): PASS.**
+  - Error vs fp32 2.32-2.35e-3, = MLX 8-bit's (2.32-2.33e-3), better on down (MLX 3.62e-3). ks 2 / 4 give the same
+    error. 1 / 8 rows == the 16-row call's rows, bitwise.
+  - Best us per call (bf16 in brackets; 20 repeats per eval, so the smaller weights sit warm in cache):
+    q 32.0 (49.5), k / v 18.6 (76.7), o 35.4 (48.9), gate / up 55.6 (140.7), down 52.0 (231.3), fc 89.1 (423.6).
+  - Over the drafter's set: ~1.6 vs ~5.0 ms, ~3x on paper. The real propose decides (BP-6).
+- **BP-4n (16:19, data/bp_d7b_naxn_check.txt): KILL.** D7b on DENSE-N's layout (qmm16n) is bitwise == D7b-NAX (every module
+  at 16 / 8 rows; 24 whole proposes), but slower: 8.27-8.32 vs 7.76-7.94 ms (BigMoE at 80 % GPU beside it).
+- **BP-6 pre-registered (16:2x; scripts/bp_d8_check.py, d7b_nax.apply8):** the exact default's drafter at 8 bits. The
+  layers' Linears + fc are 8-bit RTN g64 on qmm16c8 (fixed ks per shape). Prediction: propose 10.2 -> 6.5-7.5 ms; kept
+  x0.997-1.003 vs bf16 + forms on code and math. Line: kept >= x0.997 on both and propose <= 8 ms -> PASS, offer
+  BigMoE an exact-default drafter switch. Otherwise report.
+- **BP-6 result (16:20, share lock beside BigMoE's GPU run; data/bp_d8_check.txt; 73 s, peak 3.8 GB): PASS.**
+  - ms per propose (3 interleaved rounds): bf16 + forms 10.28 / 10.46 / 10.53; **D8-NAX 8.06 / 7.36 / 7.48**; D7b-NAX
+    7.69 / 7.13 / 7.18.
+  - Kept per check vs bf16 + forms:
+    - code: 9.248 -> 9.277, **x1.0031** (90 % CI x0.992-x1.014; lower in 3, higher in 1 of 24). D7b-NAX x0.9830.
+    - math: 6.671 -> 6.678, **x1.0009** (CI x0.996-x1.006; lower in 11, higher in 12 of 60). D7b-NAX x0.9797.
+  - 46 NaxQL8 modules (the 45 layer Linears + fc). The drafter's RAM halves (~1.0 -> ~0.5 GB).
+  - Verdict: the exact default's drafter -2.9 ms per check at unchanged acceptance. It also beats D7b-NAX for the FAST
+    preset: ~0.3 ms slower, without D7b's -1.7..-2 % kept.
+
+## BP-7: the draft head on qmm16c (Leap, Wed 2026-11-04 16:2x; with BP-6's D8-NAX drafter)
+Pre-registered before the run (scripts/bp_head_check.py, data/bp_head_check.txt).
+- **What:** head2s's compute_logits is the target's 4-bit lm_head at 16 rows, on MLX's kernel in the engine's propose
+  (REF2 is removed there): 2.5 ms in BP-0. Here it runs on qmm16c (same weights, own accumulation order), then the same
+  output multiplier / softcap and top-16.
+- **Prediction:** propose -0.5..-0.9 ms vs D8-NAX. Kept x0.997-1.003 (only accumulation order differs).
+- **Line:** kept within +-0.3 % with propose >= 0.4 ms faster -> PASS (goes with D8-NAX's switch). Otherwise KILL.
+- **Result (16:23, share lock beside BigMoE's 80 % GPU run; data/bp_head_check.txt): KILL as measured; one quiet
+  re-measure allowed.**
+  - Kept unchanged: code x1.0015 (CI x0.998-x1.006), math x0.9995 (CI x0.999-x1.000).
+  - Propose: D8-NAX 8.31 / 8.61 / 8.58 vs + head on qmm16c 9.70 / 8.25 / 8.19 ms. Median -0.33 ms, below the 0.4 line,
+    in noisy rounds. The bytes (0.36 GB at ~240 GB/s vs MLX's ~167) predict ~-0.6 ms.
+- **Quiet re-measure (16:3x, share lock, GPU otherwise free): PASS.** Propose D8-NAX 7.67 / 7.33 / 7.37 vs + head on
+  qmm16c 6.81 / 6.85 / 6.80 ms: **-0.56 ms** median. Kept unchanged (same as above). With D8-NAX, the exact drafter
+  goes 10.4 -> ~6.8 ms. Drop-in: d7b_nax.head_logits(draft, hid) replaces draft.compute_logits in head2s. It falls
+  back to compute_logits for a non-4-bit / converted head or > 16 rows.
+
+## BP-8: the drafter's attention core (Leap, Wed 2026-11-04 16:2x; BP-3: SDPA ~1.8 ms of hidden_states)
+- **BP-8a pre-registered (scripts/bp_sdpa_bench.py, data/bp_sdpa_bench.txt):** MLX's SDPA at the drafter's shape (16
+  queries, 32 / 8 heads x 128, ctx 1,000 / 2,047 + 16 keys): bool mask (today) vs additive bf16 mask vs none vs causal,
+  and plain matmuls + softmax. Prediction: the bool mask takes a slow path (~300+ us), mask None / causal ~40-80 us.
+  If so, the build is a mask the fast path accepts, or an in-kernel window (a 16-query sliding-window attention
+  kernel). Drafts must stay bitwise where the form allows, or keep acceptance.
+- **BP-8a result (16:24; data/bp_sdpa_bench.txt): no SDPA lever.** us per call at ctx 1,000 / 2,047:
+
+  | form | ctx 1,000 | ctx 2,047 |
+  |---|---|---|
+  | bool mask (today) | 76.4 | 140.2 |
+  | additive mask | 73.0 | 119.5 |
+  | none | 65.1 | 110.4 |
+  | causal | 61.2 | 109.5 |
+  | plain fp32 | 571 | 1,273 |
+
+  - The additive mask is bitwise == the bool mask and 3-15 % faster: ~-0.1 ms per propose at a full window.
+  - SDPA itself is ~0.4-0.7 ms per propose. BP-3's no-sdpa arm (-1.8 ms) also dropped work that became dead with it:
+    the K / V concats, the block rows' k / v projections, their norms and RoPE.
+  - What's left in attention is small: concat-free K / V (~0.2 ms), the additive mask (~0.1 ms).
+
+## MTP-STEP-2: the chat MTP step by piece, standalone (Leap, Wed 2026-11-04 16:3x; the orchestrator's next item after the block pass)
+Pre-registered before the run (scripts/mtp_step_profile.py, data/mtp_step_profile.txt).
+- **Harness:** the MTP head built as qwen4_exp attach_mtp builds it (Qwen4ExpMTP from mtp.safetensors, 1.67 GB),
+  the real 4-bit embed and the screened head; a 400-position QSA cache; no trunk.
+- **Prediction:** step ~1.3-1.5 ms (MTPSCREEN: 1.353). Pieces: MoE block ~0.4-0.5 ms, QSA attention ~0.2-0.3, each HC
+  read ~0.1-0.15, fc prep ~0.1, mixer ~0.1, screened head ~0.2. The pieces sum to more than the step (sync per eval).
+- **Use:** the drafter's step is exact-safe territory (verified drafts), so FAST kernels may go in where acceptance
+  holds. The largest piece gets the first build; the target is ~0.6 ms per step (MTP pick breaks even, chat -~3 ms
+  per check).
+- **Result (16:28-16:31, share lock, GPU ~free; data/mtp_step_profile.txt; standalone MTP head 1.67 GB, 13 quantized
+  modules: MoE 4-bit g32 / g64 and 8-bit g64 parts):**
+  - (1) The step as the chain runs it: **1.145 ms** median (p10 1.122, p90 1.312), vs MTPSCREEN's 1.353 in the engine
+    on a shared GPU.
+  - (2) Pieces alone (us, 20 per eval): fc prep 76; attn HC read 50; mlp HC read 56; MoE block 165; residual write 16;
+    mixer 48; screened head + argmax / p 191. QSA attention (one call per eval, with sync) 406.
+  - (3) Ablation inside the step (full 1.330 ms this run):
+
+    | removed | ms saved |
+    |---|---|
+    | attention | 0.43 (-32 %) |
+    | MoE | 0.35 (-26 %) |
+    | head + mixer | 0.33 (-25 %) |
+    | mixer alone | 0.09 (-7 %) |
+    | fc prep | 0.13 (-10 %) |
+
+    - The "no-hc" arm (-57 %) is VOID: with a constant write, attention and the MoE go unconsumed and MLX skips them.
+    - HC reads + write by difference ~0.1 ms (pieces alone 122 us).
+  - Reading [P]: ~0.6 ms per step needs most of these. Candidate cuts:
+    - attention: the QSA decode path at 1 row is ~0.43 ms over a 400-key cache; below ~2,051 keys the indexer keeps
+      every key, so a dense SDPA is the same selection;
+    - MoE: REF2's expert kernels scoped to the step, ~-0.2;
+    - fc + mixer: 8-bit, ~-0.1;
+    - a 16K screened base: ~-0.1, a trade.
+
+## MTP-STEP-3: mtplx's own fused decode paths for the MTP step (Leap, Wed 2026-11-04 16:3x)
+Pre-registered before the run (mtp_step_profile.py STEP_ONLY=1, one process per setting; data/mtp_step_profile.txt).
+- **Why:** mtplx gates fused decode kernels behind env flags that default OFF (MTPLX_FUSED_MOE_DECODE, MTPLX_FUSED_HC /
+  _V3, MTPLX_FUSED_QSA_INDEXER). BigMoE sets none of them, so the chat MTP step (MTP-STEP-2: 1.145 ms) runs the
+  unfused paths.
+- **Screen:** the step median and a hash of 8 chained steps' outputs per setting (default, each flag alone, all).
+- **Prediction:** MoE-decode and HC fusion -0.1..-0.3 ms together. Bits may differ from the default (fp32 order).
+  Drafts are verified, so acceptance is what counts.
+- **Line:** >= -0.2 ms together -> the engine sets them for the MTP chain only (if they're read per call) and
+  acceptance is checked. Else KILL.
+- **Result (16:31-16:34, share lock; seeded reruns): KILL.**
+  - Step ms: default 1.168 / 1.207. HC + HC_V3 2.602 (other bits). All four 2.622 (bits = HC's). QSA_INDEXER alone
+    1.433 / 1.159 (default's bits). MOE_DECODE alone 1.288 (first, unseeded screen).
+  - MOE_DECODE and QSA_INDEXER are bitwise == the unfused paths and no faster. The HC fusion is 2.2x slower at 1 row.
+- **MTP-STEP-4 (16:35): REF2's kernels during the step: KILL.** Step 2.007 / 2.212 ms vs 1.202 / 1.375 without. REF2
+  pads to 16 rows (qmm16c 416 calls, MLX's 16-row call 728, padded Linear 208, HC read 208); MLX's own 1-row paths
+  are faster at 1 row.
+- **Floor [P]:** the step reads ~170 MB: screened head 47, bf16 fc / HC / mixer ~65, attention ~30, MoE ~30. That's ~0.68 ms
+  at 250 GB/s vs 1.15 measured (1.7x). ~0.6 ms per step needs byte cuts (8-bit fc / HC / mixer -32 MB, a 16K head
+  -24 MB) and new 1-row kernels (fused MoE GEMV, 1-row HC read, QSA decode). Several builds for ~-3 ms per chat check
+  (~8 %). Parked unless the orchestrator wants the multi-kernel effort.
+
+## MTP-STEP-5: the chat MTP chain in chunks on the GPU (Leap, Wed 2026-11-04 16:3x)
+Pre-registered before the run (mtp_step_profile.py CHUNK_TEST=1).
+- **Idea:** R57_CHATSW's chain syncs to the host after every step (int(tk.item()) feeds the next step). On the GPU, the
+  token can stay an array (embedding of take(subset ids, argmax)), so 2 / 4 / 8 steps go per eval. Each step's ops are
+  unchanged, so the tokens are the same; only the host round trips go. The early-exit cut is applied after the chunk
+  (steps past the cut are wasted GPU work).
+- **Prediction:** chunk 4 saves 0.15-0.35 ms per step of the 1.15 (host sync + graph latency). Tokens identical.
+- **Line:** >= 0.15 ms per step at chunk 4 with identical tokens -> offer it (with the screened head) as the chat
+  chain's form. Else KILL.
+- **Result (16:3x, share lock): KILL on the economics.** ms per step: chunk 1 1.185, chunk 2 1.104, chunk 4 1.036, chunk
+  8 0.998; tokens identical. Chunk 4 saves 0.149 ms per step, at the line, but the chain's early exit wastes up to
+  chunk - 1 steps (~1 ms each) past the cut. That cancels the saving at typical lengths. The chain is mostly GPU-bound
+  (~1.0 ms per step).
+
+## D5: the MLP write as the next HC read's pending write (Leap, Wed 2026-11-04 16:4x; HC_READ.md D5; the orchestrator's go)
+Pre-registered before the run (scripts/ref2_d5_patch.py, d5_check.py; data/d5_check.txt).
+- **What (EXACT):** ref2's write (_hc_write = the patched Q._hyper_residual_write) stashes (output, hyper, block_out,
+  inject) in one carry slot. An injecting HC read whose input IS that output reads (hyper, pending) instead and folds
+  the write into its norm pass (leapk hc_read / HC8: the same bf16 ops). The write's own kernel runs only for other
+  consumers (r57's taps, the mid-loop async_eval). CFG hc_pend_mlp / REF2_HC_PEND=1, default off.
+- **Prediction:** bitwise == off on every read (mixed, written, inject) and through a 4-layer real stack; one fold per
+  layer boundary. Saving ~5-15 us per boundary (one launch + one re-read of the stream). About -0.3..-0.5 ms per check
+  across ~36 foldable boundaries (taps and mid-loop evals keep their writes).
+- **Line:** any differing bit = a bug (no FAST variant). PASS = bitwise + saves >= 4 us per boundary in the stack ->
+  BigMoE gets REF2_HC_PEND=1 for its exact arms.
+- **Result (16:40-16:43, share lock; data/d5_check.txt): exact, but KILL as a speed lever.**
+  - (a) 48 / 48 HC reads bitwise (layers 3 / 20 / 44, attention and MLP side, 4 scales, R-73's hc_write off and on),
+    fold counted. (b) The HC8 path is bitwise too.
+  - (c) Real 4-layer stack (layers 4-7: GDN x 3 + attention, stub MoE): bitwise, 3 / 3 folds. (d) self_test PASS.
+  - Speed: stack 2.583 vs 2.586 ms. Isolated write + next read per boundary: 85.4 -> 83.0 us with hc_write off (-2.4),
+    84.0 -> 84.3 with it on (+0.3). The read itself is ~82 us; REF2's compiled write is already one cheap kernel, so
+    there's little to fold away. HC_READ.md's -0.5 ms assumed a costlier write.
+  - ref2 keeps the switch (default off, inert, documented). Not offered to BigMoE.
+
+## SVH: the screened verifier head (Leap, Wed 2026-11-04 16:5x; FAST; the orchestrator's dense-diet item (a))
+Pre-registered before the run (scripts/ref2_sh_patch.py, sh_wire_check.py; data/sh_wire_check.txt).
+- **What:** ref2 CFG screened_head / REF2_SCREENED_HEAD=1 (default off). The registered trunk lm_head's <= 16-row calls
+  (REF2 on: the verify pass) run qmm16c over FR-Spec's top-98,304 ids + up to 4,096 session ids (the engine adds the
+  prompt and each check's committed ids). The logits are scattered into a full-vocabulary -inf array, so the engine's
+  interface is unchanged. Inside the subset they equal REF2's full head bitwise (qmm16c columns are N-independent);
+  a row whose true argmax is outside the subset changes (FAST). The drafter's propose and the MTP chain run with REF2
+  removed and see the plain head.
+- **Deviation estimate (stored token streams, 20.7K generated tokens; out-of-set = rows that can change):** 96K +
+  session: code 0.000 %, math 0.007 % (1 / 14,320). 96K alone: 0.078 % / 0.042 %. 64K + session: 0.094 % / 0.293 %.
+  32K + session: 0.235 % / 0.761 %.
+- **Prediction:** head at 16 rows ~1.6 -> ~0.6-0.7 ms (147 MB vs 360 MB), -0.9..-1.0 ms per check. Wiring bitwise
+  inside the subset.
+- **Line:** wiring PASS and >= 0.7 ms saved per head call -> offer to BigMoE's FAST arms + EvalSuite's next FAST batch
+  (the map's deviation and same-scores decide). Else KILL.
+- **Result (16:44, share lock, GPU ~free; data/sh_wire_check.txt): PASS.**
+  - (a) Base 98,304 rows: subset logits == REF2's full head bitwise; the rest -inf; argmax == full wherever the full
+    one is in the subset (12 / 16 random rows); counted.
+  - (b) 300 session ids: bitwise == full at those ids; reset drops them.
+  - (c) Switch off == REF2's head, uncounted; with REF2 removed, the plain head.
+  - (d) self_test PASS.
+  - (e) ms per 16-row head call: REF2 full **1.582 -> screened 0.795** (base + 2,045 session rows): **-0.79 ms per
+    check**.
+  - Offered to BigMoE's FAST arms (install + session-id feed) and EvalSuite's next FAST batch.
+
+## GDNB-2 + the orchestrator's option 3 (Leap, Wed 2026-11-04 17:0x): is there an exact lever left in GDN / attention?
+- **From the record, no profile needed:**
+  - GDN (Mon GDNB quiet timing): a layer is ~0.338 ms at 16 rows. The body (prework + recurrence + gated norm) is
+    ~0.08 ms (~2.9 ms per check), already fused (GDNX / R-61). The other ~0.26 ms is the in / out projections, since
+    moved to ~74 % of their floor by DENSE-N-RAM. There is no ~6 ms GDN body.
+  - Attention (R-72): ~0.6 ms per 16-row call with K-73's two fusions (81-87 kernels). Projections ~0.15 ms. The rest
+    is REF2's exact verify SDPA: MLX's own 16-query SDPA in each row's AR class (R-40 3m), an extra call when rows
+    straddle a class, bucket pads, cache updates, mask build, norms, gate. A bitwise replacement means replaying MLX's
+    NAX SDPA kernel's arithmetic: large and uncertain. att_single (-0.2 ms / call) is REF2c, not bitwise.
+- **GDNB-2 pre-registered (scripts/gdnb_wire_check.py, data/gdnb_wire_check.txt):** ref2's gdn_body (exact, built Mon,
+  never bundled) re-checked under today's config (R-83's fused in_proj, DENSE-N-RAM, verify scope).
+  - Prediction: bitwise at S 16 / 8 / 1 for NSG 8 and 16. -0.010..-0.017 ms per layer (Mon: -0.012 NSG 8, -0.017
+    NSG 16), i.e. -0.4..-0.6 ms per check.
+  - Line: bitwise and <= -0.008 ms per layer -> offer BigMoE REF2 gdn_body (+ GDNB_NSG=16) for the exact bundle. Else
+    KILL.
+- **GDNB-2 result (16:50, share lock, GPU ~free; data/gdnb_wire_check.txt): PASS.**
+  - Real layer 4 (GDN), R-83's fused in_proj, DENSE-N-RAM (3 weights, 32 MB, in place), verify scope.
+  - GDNB NSG 8 and 16 == off, bitwise (y, conv state, recurrent state) at S 16 / 8 / 1; taken every time. self_test
+    PASS.
+  - ms per GDN layer at S 16 (36 chained): off 0.3708, NSG 8 0.3605 (-0.0103), **NSG 16 0.3512 (-0.0196): -0.71 ms per
+    check**.
+  - Offered to BigMoE for the exact bundle: ref2.CFG["gdn_body"] = True + GDNB_NSG=16 (bitwise == REF2-T, so their
+    token check is the only gate).
+
+## DENSE-3: the dense projections at 3 bits (MSB-3), quality first (Leap, Wed 2026-11-04 16:5x; the orchestrator's dense diet (b), FAST)
+- **Tools (scripts/dense3.py, dense3_check.py; data/dense3_check.txt):** to3(w, s, b) gives MLX's own 3-bit arrays
+  (q3 = q4 >> 1, s3 = 2 s4, b3 = bf16(b4 + s4 / 2)), so MLX's bits=3 kernel serves prefill. sim(model) puts the same
+  values in today's 4-bit format (codes & 0xEEEEEEEE, biases bf16(b + s / 2)), so a quality screen needs no new kernel.
+- **Check (16:52, share lock): PASS on the tools.** MLX bits=3 dequant of to3 == s3 q3 + b3 bitwise; sim == to3
+  bitwise (GDN in_proj_qkv / out_proj of layer 4, attention q_proj of layer 7).
+- **Quality signal: poor.** 3-bit vs the 4-bit weights: relative rms 0.171-0.179 on the weights and 0.169-0.181 on the
+  outputs, for every projection. That's roughly double the 4-bit grid's own noise, on weights every token reads at
+  every layer.
+- **Prediction:** the map's deviation is far above the FAST line. The expert MSB-3 tiers work because experts are
+  router-weighted and averaged over 10; the dense projections aren't.
+- **Gate:** NewIdeas' map arm with dense3.sim (no kernel). The 3-bit 16-row kernel is built only if it passes. Bytes
+  per check -0.34 GB (GDN + attention), ~-1.2..-1.8 ms if it ever passes.
+
+## BP-10: what's left in the 5.8 ms exact-safe propose (Leap, Wed 2026-11-04 17:0x)
+Pre-registered before the run (scripts/bp_d8_ablate.py, data/bp_d8_ablate.txt): D8-NAX + the screened head on qmm16c,
+ablated per piece. The stubs consume their inputs, so nothing upstream goes dead (unlike BP-3's no-sdpa).
+- Prediction (ms saved of ~5.8): projections 1.5-2.0, SDPA alone 0.4-0.7, convs (with their projections) 0.6-0.9, norms
+  0.1, head 0.5-0.7, chain 0.2-0.3, skeleton ~1.
+- Use: the largest exact-safe piece gets the next build.
+- **Result (16:57 / 16:59, two runs, share lock, GPU ~free; data/bp_d8_ablate.txt):** propose 5.41 / 5.36 ms.
+
+  | removed | ms saved (run 1 / run 2) |
+  |---|---|
+  | projections (8-bit layers + fc + conv projections) | 2.10 / 1.90 |
+  | head (screened, qmm16c) | 0.85 / 0.78 |
+  | SDPA alone | 0.70 / 0.62 |
+  | convs (with their projections) | 0.46 / 0.35 |
+  | norms | 0.05 / -0.03 |
+  | chain | -0.04 / -0.12 |
+  | all of them (skeleton left) | 3.19 / 3.20 (skeleton 2.23 / 2.16) |
+
+  - BP-10b: the CPU graph build is only 0.38 ms; eval + read-back 5.01 ms. So the ~2.2 ms skeleton is GPU glue: a few
+    hundred small kernels (embed, concats, cache updates, RoPE, residuals, transposes, masks), sync included.
+  - Left on the drafter (exact-safe, each small): glue fusion ~-0.5..-1, SDPA (additive mask, concat-free K / V)
+    ~-0.3, convs ~-0.2. The projections are near the 8-bit byte floor (~0.49 GB, ~1.7-1.9 ms).
+
+## D3-0: is the exact HC read's mix-down byte-bound? (Leap, Wed 2026-11-04 17:1x; HC_READ.md D3, the lossless pack)
+Pre-registered before the run (scripts/hc_bw_probe.py, data/hc_bw_probe.txt).
+- **Why:** D3 puts MoonShots' lossless exponent-offset pack (~12.4 bits per weight, -22 % bytes, bit-identical decode)
+  into the 16-row HC read's loaders: exact. It pays only if the read is bound by its weight bytes. My D1-A0 note
+  called S4's walk latency-bound; the read moves only ~160 GB/s.
+- **Probe:** leapk's S4 (merged down + inject, N 324 x K 10,240 bf16, 6.6 MB) over 48 distinct weight copies vs the same
+  kernel with every tile's B rows pointed at tile 0's (~1/11 of the DRAM bytes).
+- **Prediction:** byte-bound share 20-40 % of S4's time. D3's ceiling (-22 % of that share) ~-0.2..-0.5 ms per check
+  for the down GEMM.
+- **Line:** D3 is built only if its ceiling over both GEMMs is >= 0.5 ms per check. Else KILL D3 without a build.
+- **Result (16:59, share lock, GPU ~free; data/hc_bw_probe.txt): BETWEEN.** S4 38.9 us per call (171 GB/s; 48 distinct
+  6.6 MB weights) vs 18.7 us with the B rows cached: the byte-bound share is 20.2 us (52 %).
+  - D3's ceiling on the down GEMM is -22 % of that: 4.4 us per read, 0.43 ms per check. With the up GEMM (hc_b's
+    kernel B, the same bytes) ~0.85 ms per check if the decode were free.
+  - The decode adds ALU work in loaders that are already ~half latency-bound, so realistic is ~-0.4 ms per check.
+  - It needs custom fragment loaders for MLX's NAXTile (S4) and kernel B. Parked behind larger levers; not built.

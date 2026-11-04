@@ -157,6 +157,8 @@ CHATTRUNC = float(os.environ.get("R57_CHATTRUNC", "0"))
 # rows present); EvalSuite's test checks all 16. The gate needs DFlash2's cf (no gate on MTP-drafted chat: rules only).
 # HC8 (arms B / C there) is not wired. 16-row blocks only.
 FAST = os.environ.get("R57_FAST", "")
+if os.environ.get("R57_GDNB") == "1":                    # GDNB (Leap 70cd998): its NSG must be set before gdnbody is imported
+    os.environ.setdefault("GDNB_NSG", "16")
 D17 = os.environ.get("R57_D17") == "1"                  # DRAFT17 (MTP Head ~/TrainLab/sticky/draft17.py 7cc44f8, read-only): the
 if D17:                                                  # drafter proposes a 16th draft for QOM's last-row gate; needs Leap's
     sys.path.insert(0, os.path.expanduser("~/TrainLab/sticky"))   # draft_fused FORM_ROWS 16..64 (05fafe7). Module level: the
@@ -662,6 +664,7 @@ def taps():
     f = [mx.concatenate(x) if len(x) > 1 else x[0] for x in TAP["x"]]
     return mx.stack(f, axis=1).reshape(f[0].shape[0], -1)
 
+D8NAX = os.environ.get("R57_D8NAX") == "1"
 def _load_drafter(q4):
     d_ = DF.load_draft("incoai/Qwen3.8-Flash-Next-DFlash2")
     d_.load_weights(os.path.expanduser("~/Leap/data/l120_ft.safetensors"), strict=False)
@@ -669,21 +672,32 @@ def _load_drafter(q4):
         sys.path.insert(0, os.path.expanduser("~/Leap/scripts"))
         import d7b_live
         d7b_live.apply(d_)
+    elif D8NAX:                                          # R57_D8NAX (Leap 2945bf7, BP-6): the drafter's layer Linears + fc at
+        sys.path.insert(0, os.path.expanduser("~/Leap/scripts"))   # 8-bit RTN g64 on qmm16c8 (needs no REF2): propose ~10.4 ->
+        import d7b_nax                                   # 7.5 ms, kept x1.003 code / x1.001 math; exact (drafts are verified)
+        d7b_nax.apply8(d_)
     d_.bind(model)
     mx.eval(d_.parameters())
     return d_
 draft = _load_drafter(D7B == "all")
 DRAFT16, DRAFT4 = draft, (_load_drafter(True) if D7B == "code" else None)   # D7B=code: the code prompts' drafter
+if os.environ.get("R57_D7BNAX") == "1" and D7B:        # Leap def104e: the D7b drafter's 4-bit layers run qmm16c at <= 16
+    sys.path.insert(0, os.path.expanduser("~/Leap/scripts"))   # rows whatever REF2's state (r57 removes REF2 around each
+    import d7b_nax                                       # propose, so MLX's slow 16-row qmm ran: 9.35 -> 7.3 ms, kept x0.996)
+    d7b_nax.install(DRAFT4 if DRAFT4 is not None else draft)
 MASK, SWIN = int(draft.config.mask_token_id), int(draft.config.sliding_window)
 K83 = os.environ.get("K83_EXACT") == "1"                # K-83 (Leap 11-02, runner 62 at C 160: every token == REF2-T, draft 11.4
 if K83:                                                  # -> 10.2 ms, steady +0.7 %): the second exact stack on K-73, verbatim from
     assert os.environ.get("K73_EXACT") == "1", "K83_EXACT stacks on K73_EXACT"   # ~/Leap/scripts/k73_live.py: R-78 the
     import draft_fused as _DFU                           # drafter's 16-row spellings (forms; R-76 is K-73's), R-77 the fused
     from chain_fused import chain_fused as _chain_fused  # selector walk, R-82 hc_gate, R-83 gdn_inproj_x
-    _DFU.install(forms=D7B != "all", draft=draft)       # R-78's forms are bf16 spellings: never on a D7b drafter
+    _DFU.install(forms=D7B != "all" and not D8NAX, draft=draft)   # R-78's forms are bf16 spellings: never on D7b / D8
     for _k in ("hc_gate", "gdn_inproj_x"):
         ref2.CFG[_k] = True
 # BUILD DAY (Wed 11-04) switches, each off unless set; the all-in FAST code preset sets all three (+ U3C + R57_D7B=code):
+if os.environ.get("R57_GDNB") == "1":                    # GDNB (Leap 70cd998, EXACT, bitwise == off): the one-dispatch GDN body
+    assert "gdn_body" in ref2.CFG, "Leap's ref2 has no gdn_body"   # at 1-16 rows (-0.71 ms per check); prefill falls back
+    ref2.CFG["gdn_body"] = True
 if os.environ.get("R57_HCB") == "1":                     # hc_b (Leap D1-B kernel B, EXACT): the HC read's partition sum + gate,
     assert "hc_b" in ref2.CFG, "Leap's ref2 has no hc_b"   # MLX's K-320 up GEMM and the tail as one kernel, bitwise == the S4
     ref2.CFG["hc_b"] = True                              # chain (-0.94..-1.13 ms per 96-read chain, quiet); over hc_gate
@@ -699,8 +713,12 @@ if os.environ.get("R57_HC8") == "1":                     # HC8-1P (Leap c805fd0,
     ref2.CFG["hc8_fast"] = True
     print(f"[r57] HC8: {_h8[0]} mixers 8-bit ({_h8[1]:.0f} -> {_h8[2]:.0f} MB), hc8_fast v{ref2.CFG.get('hc8_v')}", flush=True)
 
+HEADC = os.environ.get("R57_HEADC") == "1"              # Leap 1e0676d (BP-7, exact-safe): the drafter's head logits on qmm16c
+if HEADC:                                                # (-0.56 ms per propose; falls back for a non-4-bit / native head or
+    sys.path.insert(0, os.path.expanduser("~/Leap/scripts"))   # > 16 rows). Not yet smoked: next slot.
+    import d7b_nax as _D7N
 def head2s(hid):
-    lg = draft.compute_logits(hid)
+    lg = _D7N.head_logits(draft, hid) if HEADC else draft.compute_logits(hid)
     B, s = 128, lg.shape
     blk = lg.reshape(*s[:-1], s[-1] // B, B)
     tb = mx.argpartition(blk.max(axis=-1), -K, axis=-1)[..., -K:]

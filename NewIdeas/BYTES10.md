@@ -57,6 +57,10 @@ All [P] cells: research/TEN_X_LEDGER.md (Wed 03:4x). They replace Fable C's BYTE
 | JOINT, keepalive, zero-copy, pickup, lever 2 forecasts | BigMoE / Fable A | yes | 0 bytes: they move exposure (BROKEN line 1), not this line | Wed lever-1 arms | - |
 
 ## Log (newest first)
+- Wed 16:3x: W4PRICE (unchecked [P]; data/ledger/w4_price.txt): if tonight's s7_ref3 fails, QOM's kept ranks 2-9
+  run at 4 bits (LSB reads). Best 24 GB split Cl 160 / Cm 115: code / IFEval / multi 40.2 / 33.0 / 24.9 MB per kept
+  token (x2.06 / x2.30 / x2.36 vs width 3's 19.5 / 14.3 / 10.6), code quality [G] 1.25 % (PASS). On today's 171 / 0
+  split every kept LSB is re-read (164 / 274 / 273). 12 GB x1.54-1.74 (Cl 48 / Cm 48).
 - Wed 14:04: DRAFT17 ALIVE: a drafted bonus row (MTP Head: ~0 ms after Leap's one-line _rows16 fix, +8.6 ms
   without it) gates code's last rows that have no next draft today; they were a third of code's bytes. Code at 24 GB
   x0.665-0.706 (today's stack 35.7 -> 25.2; with 11-bit + POOLSPLIT 19.5), 12 GB x0.742; with a TRL-2 trellis store code

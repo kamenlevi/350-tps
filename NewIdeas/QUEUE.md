@@ -1826,3 +1826,53 @@ block 32 (net ~+2 % under this cost model unless the drafter nears the oracle); 
   - No new arm after 23:10, hard stop 23:30; expected end ~21:25.
   - The reading (amendment 2) is copied into Breakthrough's SCOREBOARD addendum (f70c03b). The slot prints map_kl.py
     for C, 6 and all of 7; qom_read.py is mine.
+- Wed 16:3x: W4PRICE: QOM's kept ranks 2-9 priced at 4 bits ahead of tonight's s7_ref3 (scripts/w4_price.py,
+  data/ledger/w4_price.txt; CPU replay [P], quality [G], UNCHECKED: MoonShots re-derives it if flag 4 is chosen).
+  - Ask (the orchestrator, lounge): BigMoE's engine flag for the kept ranks 2-9 is 3 = MSB-3 (today's byte prices) or
+    4 = LSB reads (C's measured map form). "s7_ref3 tonight decides; if 3-bit fails, re-price the bytes at 4."
+  - Frame: C + DRAFT17 (every row gated), 11-bit parts, equal RAM per layer. Width 4 reads the LSB part (720,896 B) of
+    every kept rank 2-9 expert of every row in the block. Those parts go through an LSB LRU of Cl slots, so the MSB
+    pool has Cm = (B - Cl x 720,896) // 2,064,384 slots. The 3-bit prefill warms the MSB pool only, so the LSB pool
+    starts cold in each window.
+  - Check: width 3 at 171 / 0 = 19.5 / 14.3 / 10.6 (= trellis_draft17.txt).
+  - 24 GB, MB per kept token (code / IFEval / multi):
+    - at today's 171 / 0 split, every kept LSB is re-read each block: 164 / 274 / 273 (x8.4 on code). Flag 4 must
+      not run on the 3-bit split.
+    - best split Cl 160 / Cm 115: 40.2 / 33.0 / 24.9 (x2.06 / x2.30 / x2.36).
+    - at C's measured slots (Cl 64 / Cm 148): 66.3 / 71.5 / 56.8.
+  - 12 GB: width 3 at 65 / 0 = 52.0 / 54.4 / 39.4; best width 4 (Cl 48 / Cm 48) = 80.2 / 92.8 / 68.7 (x1.54-1.74).
+  - Quality at the split [G] (SWEEP.md's KL model). Width 4 is the map's own C form, so only the pool term moves.
+    - Code keep 70.8 % at Cm 115 vs 76.7 % at 147 (g -0.36): code KL 0.0072, flips 1.25 % (PASS, line 1.34).
+    - The 12 GB rows extrapolate the pool term far below 147 (g < -1): code 1.41-1.56 % BETWEEN, a guess only.
+    - Chat is over its lines in C's form at any pool (the sweep's chat barrier), so code is the verdict.
+  - Upper end: the LSB part at Cl 160 is 8.3 of code's 40.2, so a warm LSB pool lowers the total by at most that.
+  - So the 3-bit tail is worth ~2x FAST bytes at 24 GB (x1.5-1.7 at 12 GB). If tonight's 3-bit read fails, flag 4
+    goes with the Cl 160 / Cm 115 split (code [G] PASS) at ~2x today's bytes.
+- Wed 16:5x: DENSE3 MAP ARM PRE-REGISTERED (Leap's DENSE-3 = the orchestrator's FAST dense diet (b); optional, at the
+  END of tonight's 20:00 batch if Breakthrough has it in by ~19:30):
+  - What: the trunk's dense 4-bit g64 projections (GDN in / out, attention q / k / v / o) at their MSB-3 values, written
+    in today's 4-bit format by Leap's sim (~/Leap/scripts/dense3.py: codes & 0xEEEEEEEE, biases bf16(b + s / 2);
+    bitwise the real 3-bit values per Leap's check). The router, shared expert, indexer, experts, embed and head are
+    untouched. The gain if it passes: -0.34 GB per check, ~-1.2..-1.8 ms once a 3-bit 16-row kernel exists (Leap).
+  - Arm: qom_0_live_ball_c147_t3+dense3 (screen 6's FAST code stack + DENSE-3, through ablation()'s "+" stack). Code
+    for dm_ablations.py: data/arms/dense3_arm.py (asserts >= 96 modules converted and no load-time fusion
+    (BIGMOE_PKD1 / BIGMOE_SCOUT_BUNDLE) that would hide the rewrite; restores in clear()). Twin: screen 6, same batch.
+  - INVALID (no verdict) if the arm's stored top-8 ids and log-probs equal screen 6's on every row: the rewrite never
+    reached the forward.
+  - Read: map_kl.py for the arm. The dense term = KL(arm) - KL(screen 6) per domain, with its paired SE. Code flips
+    come from the arm's own count and from the pre-registered fit of its KL.
+  - Verdict on code (the FAST code route; chat is over its lines in C's form at any pool, so chat is reported only):
+    PASS <= 1.34 %, BETWEEN <= 2.01 %, KILL above. If screen 6 itself is not PASS on code, DENSE-3 gets no
+    adoption verdict tonight; its term is recorded for later stacks.
+  - Priors:
+    - Leap: FAIL (3-bit vs 4-bit outputs differ by 17-18 % relative rms per projection, ~2x the 4-bit grid's noise,
+      on weights every token reads).
+    - Mine: BETWEEN-KILL. Code's headroom above C + DRAFT17's estimate (0.0063) is ~0.0019 KL to the 0.0082 line.
+      The routed experts' ranks 0-1 at MSB-3 alone cost 0.0020.
+- Wed 17:0x: DENSE3 ARM INSTALLED (Breakthrough 57813ba; my 8fefaa3 code verbatim). It runs LAST in tonight's 20:00
+  batch (after 1(c), or after s7_trl if the store is whole), ~10 min; batch end ~21:35.
+  - CPU wiring test on a mock model: 9/9 OK, including the exact rewrite, untouched decoys, the restore and the fusion
+    guard.
+  - GPU smoke (HumanEval_135, 144 rows, Breakthrough's run): 228 modules, 1,509 MB of 4-bit weights rewritten; MLX
+    peak 13.9 vs 12.6 GB; 0/144 rows identical to screen 6 (valid); 0 top-1 flips vs screen 6, mean |dlp1| 0.0069.
+    One window is not a read; the verdict waits for the full arm. dense3.py hash ec71be4478bc606f.

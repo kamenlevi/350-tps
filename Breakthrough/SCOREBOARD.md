@@ -2899,3 +2899,25 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
     - Estimates (min, with margin): 6 / 6 / 10 / 7 / 35 / 5 / 5 / 7. s7_ref3 ~8 from B''s 471 s on the same 3-bit
       all-ranks path (no MSB-2 unpacking), not ~31.
     - Expected end ~21:25 if the start is clear at 20:00 and the store is whole by ~21:15.
+- ADDENDUM Wed 17:0x, before any run (NewIdeas 16:5x; the orchestrator's OK if it is in dm_ablations by ~19:30): DENSE-3 on
+  the map, the batch's last optional arm.
+  - Arm qom_0_live_ball_c147_t3+dense3 = screen 6's FAST code stack + Leap's DENSE-3 through ablation()'s "+" stack; twin =
+    screen 6 (qom_0_live_ball_c147_t3), earlier in the same batch. DENSE-3 (~/Leap/scripts/dense3.py, 894b0ee, read-only,
+    sha256 ec71be4478bc606f) sets the trunk's 4-bit g64 dense projections (GDN in / out, attention q / k / v / o; not the
+    router, shared expert, indexer, experts, embed, head or MTP) to their MSB-3 values in the 4-bit format: codes & 0xEEEEEEEE,
+    biases bf16(b + s / 2). Arm code = NewIdeas' data/arms/dense3_arm.py at 8fefaa3, pinned as scripts/dm_s7/dense3_arm.py,
+    installed by scripts/dm_s7/install_dense3.sh (17:00). clear() restores the weights (TEARDOWN, as hc8w).
+  - Reading (NewIdeas' QUEUE 16:5x, copied): map_kl.py as for the others. INVALID if its stored top-8 ids and log-probs equal
+    screen 6's on every row (dense3_check.py). Verdict on code flips: PASS <= 1.34 %, BETWEEN <= 2.01 %, else FAIL. Priors:
+    Leap FAIL (17-18 % relative rms per projection, 894b0ee), NewIdeas BETWEEN-KILL.
+  - Bit-checks [K] (17:00):
+    - CPU wiring test (test_dense3_arm.py, mock model, bf16 scales / biases): the stack's PERT == screen 6's; 120/120
+      targets rewritten exactly; 51/51 decoys untouched (router, MTP, 8-bit, g32); clear() puts back the very same arrays
+      (171/171); with BIGMOE_PKD1=1 or BIGMOE_SCOUT_BUNDLE=1 the setup raises before touching a weight. 9/9 ok.
+    - GPU smoke (smoke_dense3.py, HumanEval_135, 144 rows, share lock MEM 16 GB, 38 s, swap +0): C re-run == stored JSON
+      bit for bit; "[dm] dense3: 228 modules at MSB-3 (1509 MB of 4-bit weights rewritten)"; MLX peak 13.9 GB vs screen 6's
+      12.6; 9.1 s per window (screen 6: 9.3); 0/144 rows identical to screen 6 (not INVALID); top-1 flips vs screen 6 0,
+      mean |dlp1| 0.0069; screen 6 re-run after the DENSE-3 run == before, bit for bit (the restore works on the real model).
+    - dense3_check.py: VALID on the smoke window; an arm vs itself = INVALID (negative control).
+  - Slot (re-armed 17:02, same clock): the arm goes last in ARMS, est 10 min; it runs after 1(c) when s7_trl's store is not
+    whole yet, else after s7_trl. Leap's dense3.py hash is logged at its go. Expected end ~21:35 with a clear start.

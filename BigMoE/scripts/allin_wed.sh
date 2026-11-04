@@ -26,18 +26,20 @@ K="$K,humaneval/HumanEval/101,humaneval/HumanEval/63"
 U="BIGMOE_EXT_BUILD=build_qom,R57_FAST=U3C,R57_U3C_LEN=1,R57_REFTOK="   # one binary for every arm (QOM + lever 2 inside)
 # Wed 15:5x (the orchestrator agreed): the all-in is QOM-based (by day at C 160: QOM all-in +26.3 % vs U3C, bytes x0.77):
 QA="BIGMOE_EXT_BUILD=build_qom,R57_REFTOK=,R57_FAST=QOM,R57_D17=1,R57_D7B=code,R57_HC8=1,REF2_HC8_FAST=1,R57_DNR=1,R57_HCB=1"
-QA="$QA,REF2_SMALL_NATIVE=1"                             # Leap's small-call native qmm (FAST, -1.15 ms); no REF2_OOO_1C (QOM's
+QA="$QA,REF2_SMALL_NATIVE=1,R57_D7BNAX=1"   # + Leap def104e: D7b on qmm16c (-2 ms per code check; smoke 16:18 OK)                             # Leap's small-call native qmm (FAST, -1.15 ms); no REF2_OOO_1C (QOM's
+Q8="BIGMOE_EXT_BUILD=build_qom,R57_REFTOK=,R57_FAST=QOM,R57_D17=1,R57_D8NAX=1,R57_HC8=1,REF2_HC8_FAST=1,R57_DNR=1"
+Q8="$Q8,R57_HCB=1,REF2_SMALL_NATIVE=1"                 # qall8 = qall with Leap's 8-bit NAX drafter (2945bf7) in place of D7b
 QF="$QA,BIGMOE_FC_F=4,BIGMOE_FC_FS=2,R57_ARMS=gate+t+pf,BIGMOE_PRED_LINES=4"   # -2 slots); qallf = + lever 2 (+pf posts the forecast)
 say "all-in FAST start (pid $$, C $CC, swap $C45_SWAP0 GB)"
 R57_KEYS=$K MG=${ALLIN_MG:-4} C45_ALARM=900 \
-  C45_ARMS="u3c_$CC:$CC:$U qall_$CC:$CC:$QA qallf_$CC:$CC:$QF qall2_$CC:$CC:$QA u3c2_$CC:$CC:$U" $RUN
+  C45_ARMS="u3c_$CC:$CC:$U qall_$CC:$CC:$QA qallf_$CC:$CC:$QF qall8_$CC:$CC:$Q8 u3c2_$CC:$CC:$U" $RUN
 say "arms rc=$?"
 # (no dump arm: QOM's quality is the map's screen 6 + EvalSuite at the end)
 .venv/bin/python -I - "$CC" >> "$LOG" 2>&1 <<'EOF'
 import json, math, statistics as S, sys
 C = sys.argv[1]
 g = lambda xs: math.exp(sum(map(math.log, xs)) / len(xs)) if xs else float("nan")
-T = ("u3c", "qall", "qallf", "qall2", "u3c2")
+T = ("u3c", "qall", "qallf", "qall8", "u3c2")
 runs, chk = {}, {}
 for t in T:
     try:
@@ -62,7 +64,7 @@ for t in T:
              "medians per check (ms): " + ", ".join(f"{f} {md[f]:.1f}" for f in F) +
              (f"; forecast reads {pf('fc_issued')}, used {pf('fc_hits')}" if pf("fc_issued") else "") +
              (f"; QOM optional uses {pf('qom_opt')}, not read {pf('qom_skip')}" if pf("qom_opt") else ""))
-for side, ta, tb in (("qall", ("u3c", "u3c2"), ("qall", "qall2")), ("qallf", ("u3c", "u3c2"), ("qallf",))):
+for side, ta, tb in (("qall", ("u3c", "u3c2"), ("qall",)), ("qallf", ("u3c", "u3c2"), ("qallf",)), ("qall8", ("u3c", "u3c2"), ("qall8",))):
     rat = []
     for k in runs["u3c"] or runs["u3c2"]:
         a = [runs[t][k]["tpsw"] for t in ta if ok(t, k)]; b = [runs[t][k]["tpsw"] for t in tb if ok(t, k)]

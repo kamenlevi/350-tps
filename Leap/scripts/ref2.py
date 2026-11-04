@@ -70,6 +70,16 @@ What changes (monkeypatches on MTPLX, read-only):
     same dup-id sidecar post and sidecar slot -2 (final, LP1 -> tier 3); the NAX path declines them. Native records
     (Friday's converted store) take the native forms (3c-N / NAX6-N, bf16 native or p11 pools); layers with N7-15's
     registered dirty flags keep the two phases.
+  - SVH (Wed 2026-11-04, FAST, off by default; CFG["screened_head"] or REF2_SCREENED_HEAD=1): the screened verifier head.
+    screened_head_install(lm_head) registers the trunk's 4-bit head; its <= 16-row calls (REF2 on) run qmm16c over
+    FR-Spec's top-N (CFG screened_head_n, 98,304) + up to 4,096 session ids (screened_head_add(ids) / _reset()), and
+    the logits are scattered into a full-vocabulary -inf array. Inside the subset == REF2's full head bitwise; rows
+    whose true argmax is outside change. COUNTS screened_head.
+  - D5 (Wed 2026-11-04, EXACT, off by default; CFG["hc_pend_mlp"] or REF2_HC_PEND=1): a layer's MLP-side residual write
+    goes to the next layer's attention-side HC read as pending (as the attention write goes to the MLP read). The
+    write (_hc_write) stashes (output, hyper, block_out, inject) in one carry slot; an HC read whose input IS that
+    output reads (hyper, pending) and folds the write into its norm pass, bitwise. The write's kernel then runs only
+    for other consumers (taps, mid-loop evals). COUNTS hc_pend.
   - SMALL-N (Wed 2026-11-04, FAST, off by default; CFG["small_native"] or REF2_SMALL_NATIVE=1): the small 4-bit g64 calls
     that take MLX's 16-row call (N < dense_min_n or N % 64 != 0: R-74's shared gate | up | gate, k / v, R-83's b | a)
     run on qmm16n with rows zero-padded to a multiple of 32, for marked resident weights (QuantizedLinear calls, R-83's
@@ -170,11 +180,14 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "dense_native_nt": int(os.environ.get("REF2_DENSE_NATIVE_NT", "1")),
        "hc8_fast": os.environ.get("REF2_HC8_FAST") == "1", "hc8_np": int(os.environ.get("REF2_HC8_NP", "20")),
        "hc8_v": int(os.environ.get("REF2_HC8_V", "4")),
-       "ooo_1c": os.environ.get("REF2_OOO_1C") == "1", "small_native": os.environ.get("REF2_SMALL_NATIVE") == "1"}
+       "ooo_1c": os.environ.get("REF2_OOO_1C") == "1", "small_native": os.environ.get("REF2_SMALL_NATIVE") == "1",
+       "hc_pend_mlp": os.environ.get("REF2_HC_PEND") == "1",
+       "screened_head": os.environ.get("REF2_SCREENED_HEAD") == "1",
+       "screened_head_n": int(os.environ.get("REF2_SCREENED_HEAD_N", "98304"))}
 _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
               kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
-              fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0)
+              fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0)
 _ROWS = [R]                                          # F1-R8: the real rows of the attention call being built (_att)
 _ORIG = {}
 _WCAT = {}
@@ -364,9 +377,77 @@ def _sn_get(w, scales, biases):
     e = _SN[id(w)] = (w,) + _dn_repack(pad(w), pad(scales), pad(biases)) + (Np,)
     return e
 
+_SH = {}                                             # SVH: id(lm_head weight) -> its subset state
+
+def screened_head_install(lm_head, base_n=None, cap=4096, rank_path=None):
+    """SVH: register the trunk's 4-bit g64 lm_head (bf16 scales) for the screened verifier head: the base subset
+    (FR-Spec's top base_n ids, sorted) gathered once, plus room for cap session ids. Returns the subset's base rows."""
+    w, sc, bi = lm_head["weight"], lm_head["scales"], lm_head["biases"]
+    assert lm_head.bits == 4 and lm_head.group_size == 64 and sc.dtype == mx.bfloat16 and w.ndim == 2, "4-bit g64 head"
+    base_n = base_n or CFG["screened_head_n"]
+    rank = np.load(rank_path or os.path.expanduser("~/Leap/data/frspec_rank.npy"))
+    ids = np.unique(np.asarray(rank[:base_n], np.int64)).astype(np.int32)
+    base = mx.array(ids)
+    e = dict(w=w, s=sc, b=bi, V=int(w.shape[0]), ids=base, set=set(ids.tolist()), extra=[], cap=int(cap),
+             wb=mx.contiguous(mx.take(w, base, axis=0)), sb=mx.contiguous(mx.take(sc, base, axis=0)),
+             bb=mx.contiguous(mx.take(bi, base, axis=0)),
+             xids=mx.zeros((cap,), mx.int32), xw=mx.zeros((cap, w.shape[1]), w.dtype), xs=mx.zeros((cap, sc.shape[1]), sc.dtype),
+             xb=mx.zeros((cap, bi.shape[1]), bi.dtype))
+    mx.eval(e["ids"], e["wb"], e["sb"], e["bb"], e["xids"], e["xw"], e["xs"], e["xb"])
+    _SH.clear()
+    _SH[id(w)] = e
+    return int(ids.size)
+
+def screened_head_add(token_ids):
+    """SVH: the session's ids (prompt, committed tokens) outside the base join the subset (once each, up to cap)"""
+    for e in _SH.values():
+        new = [t for t in dict.fromkeys(int(t) for t in np.asarray(token_ids).reshape(-1)) if t not in e["set"]]
+        new = new[:max(0, e["cap"] - len(e["extra"]))]
+        if not new:
+            continue
+        a, n = len(e["extra"]), len(new)
+        idx = mx.array(np.asarray(new, np.int32))
+        e["xids"][a:a + n] = idx
+        e["xw"][a:a + n] = mx.take(e["w"], idx, axis=0)
+        e["xs"][a:a + n] = mx.take(e["s"], idx, axis=0)
+        e["xb"][a:a + n] = mx.take(e["b"], idx, axis=0)
+        mx.eval(e["xids"], e["xw"], e["xs"], e["xb"])
+        e["extra"] += new
+        e["set"].update(new)
+    return sum(len(e["extra"]) for e in _SH.values())
+
+def screened_head_reset():
+    """SVH: drop the session ids (a new prompt)"""
+    for e in _SH.values():
+        e["set"] -= set(e["extra"])
+        e["extra"] = []
+
+def _screened(e, x, scales, biases):
+    lead, rows = _rows(x)
+    if rows > R or x.dtype != mx.bfloat16:
+        return None
+    x16 = _pad16(x.reshape(rows, x.shape[-1]))
+    y = qmm16c(x16, e["wb"], e["sb"], e["bb"])[:rows]
+    ids = e["ids"]
+    n = len(e["extra"])
+    if n:
+        yx = qmm16c(x16, e["xw"], e["xs"], e["xb"])[:rows, :n]
+        y = mx.concatenate([y, yx], axis=1)
+        ids = mx.concatenate([ids, e["xids"][:n]])
+    out = mx.put_along_axis(mx.full((rows, e["V"]), -float("inf"), y.dtype),
+                            mx.broadcast_to(ids[None].astype(mx.int32), y.shape), y, axis=1)
+    COUNTS["screened_head"] += 1
+    return out.reshape(*lead, e["V"])
+
 def _qlin(self, x):
     """DENSE-N / SMALL-N: nn.QuantizedLinear's call with its weight marked as resident for _qmm (inert unless one of
-    the switches is on)"""
+    the switches is on); SVH: the registered lm_head's screened call (CFG screened_head)"""
+    if _SH and _ON[0] and CFG["screened_head"]:
+        e = _SH.get(id(self["weight"]))
+        if e is not None and e["w"] is self["weight"]:
+            y = _screened(e, x, self["scales"], self["biases"])
+            if y is not None:
+                return y
     if not (_ON[0] and (CFG["dense_native"] or CFG["small_native"])):
         return _ORIG["qlin"](self, x)
     prev = _DN_SRC[0]
@@ -451,6 +532,11 @@ def _gr(self, hyper_input, pending=None):
     orig = _ORIG["gr"]
     if not _ON[0]:
         return orig(self, hyper_input, pending)
+    c = _CARRY[0]
+    if pending is None and c is not None and c[0] is hyper_input and CFG["hc_pend_mlp"] and "block_inject_weight" in self:
+        _CARRY[0] = None                                 # D5: read the last write's operands, the write folded in
+        hyper_input, pending = c[1], (c[2], c[3])
+        COUNTS["hc_pend"] += 1
     lead, rows = _rows(hyper_input)
     if rows > R:
         return orig(self, hyper_input, pending)
@@ -1199,14 +1285,21 @@ def _hc_write_c(hyper, block_out, inject):
     grouped = hyper.reshape(*hyper.shape[:-1], inject.shape[-1], block_out.shape[-1])
     return (grouped + block_out[..., None, :] * inject[..., :, None]).reshape(*hyper.shape)
 
+_CARRY = [None]                                      # D5: (output, hyper, block_out, inject) of the last write
+
 def _hc_write(hyper, block_out, inject):
     """R-73 (exact-safe, CFG hc_write): hyper + block_out x inject as ONE compiled kernel on <= 16-row bf16 calls
-    (bitwise == the stock Multiply + Add: R-73, layer 3's real weights, 6 scales)"""
+    (bitwise == the stock Multiply + Add: R-73, layer 3's real weights, 6 scales). D5 (CFG hc_pend_mlp): every write's
+    operands are stashed for the next HC read of its output"""
     lead, rows = _rows(hyper)
     if _ON[0] and CFG["hc_write"] and rows <= R and hyper.dtype == mx.bfloat16:
         COUNTS["hc_write"] += 1
-        return _hc_write_c(hyper, block_out, inject)
-    return _ORIG["hc_write"](hyper, block_out, inject)
+        y = _hc_write_c(hyper, block_out, inject)
+    else:
+        y = _ORIG["hc_write"](hyper, block_out, inject)
+    if _ON[0] and CFG["hc_pend_mlp"]:
+        _CARRY[0] = (y, hyper, block_out, inject)
+    return y
 
 def _commit(self, cache, snapshot_states, *, keep_tokens, verified_tokens):
     """R-40 STEP 3t: the commit's lone PLE-layer replay must run in the verify forward's phase. MTPLX's attention_gate
@@ -1284,6 +1377,7 @@ def remove():
     _DN.clear()                                      # DENSE-N: drop the native copies (and their weight references)
     _HC8.clear()                                     # HC8-1P: drop the cached parameter views
     _SN.clear()                                      # SMALL-N: drop the padded copies
+    _CARRY[0] = None                                 # D5: no carried write across apply / remove
 
 def enabled():
     return _ON[0]

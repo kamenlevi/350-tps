@@ -11,6 +11,8 @@
 #     Thu morning beside T0 (the orchestrator's night order).
 #   s7_trl goes only when Fit12's TRL store is whole (dm_t3.trl_gate); until then the next arm that fits goes, and s7_trl
 #   is re-checked each time (every 2 min once it is the only arm left that fits).
+#   Last, optional (NewIdeas 16:5x, the orchestrator's OK; Wed 17:0x): qom_0_live_ball_c147_t3+dense3 = screen 6 + Leap's
+#   DENSE-3 (install_dense3.sh; smoke 17:00), est 10 min; it runs after 1(c) if s7_trl's store is not whole yet.
 # Clear = no map process, no other session's quiet window held or waited for, no other session's shared run over 5 GB (by
 # day one > 5 GB job at a time), lid open, no PAUSE, NO-SWAP >= 25 GB: 3 clear
 # checks 10 s apart before the first arm and after any stop, 1 between arms. Share lock per arm, MEM 18 GB. Guards every
@@ -20,8 +22,9 @@
 # (+0.1 points vs the ungated twin, BYTES10.md:255-260) for 1(b) vs q1u_0.9_live and 1(c) vs qom_0.5_live.
 # Override the clock at arming: S67_START / S67_LASTGO / S67_DEADLINE = "YYYY-mm-dd HH:MM:SS".
 DM=~/FableGod/decision_map; PY=~/BigMoE/.venv/bin/python; LOG=~/Breakthrough/data/s67_slot.log; Q=$HOME/.local/share/quiet
-ARMS="qom_0_live_ball_c147_t3 s7_ref s7_ref3 s7_cal s7_cal_all q1u_0.9_live_bonus9g qom_0.5_live_bonus5g s7_trl"
-est() { case $1 in s7_cal_all) echo 35;; s7_ref3) echo 10;; s7_trl|s7_cal) echo 7;; q1u_0.9_live_bonus9g|qom_0.5_live_bonus5g) echo 5;; *) echo 6;; esac; }
+ARMS="qom_0_live_ball_c147_t3 s7_ref s7_ref3 s7_cal s7_cal_all q1u_0.9_live_bonus9g qom_0.5_live_bonus5g s7_trl qom_0_live_ball_c147_t3+dense3"
+D3=qom_0_live_ball_c147_t3+dense3; D3SHA=ec71be4478bc606f   # Leap's dense3.py as smoked (17:00)
+est() { case $1 in s7_cal_all) echo 35;; s7_ref3|$D3) echo 10;; s7_trl|s7_cal) echo 7;; q1u_0.9_live_bonus9g|qom_0.5_live_bonus5g) echo 5;; *) echo 6;; esac; }
 ts() { date -j -f "%Y-%m-%d %H:%M:%S" "$1" +%s; }
 START=$(ts "${S67_START:-2026-11-04 20:00:00}"); LASTGO=$(ts "${S67_LASTGO:-2026-11-04 23:10:00}")
 DEADLINE=$(ts "${S67_DEADLINE:-2026-11-04 23:30:00}")
@@ -49,10 +52,10 @@ pick_next() {   # the first arm in order that is not done, fits the clock, and (
     PICK=$a; return
   done
 }
-for n in s7_trl s7_ref3 q1u_0.9_live_bonus9g qom_0.5_live_bonus5g qom_0_live_ball_c147_t3; do
-  grep -qF "\"$n\"" $DM/dm_ablations.py || { say "$n is not in dm_ablations.py (scripts/dm_s7/install_s7.sh, install_late.sh); not run"; exit 1; }
+for n in s7_trl s7_ref3 q1u_0.9_live_bonus9g qom_0.5_live_bonus5g qom_0_live_ball_c147_t3 dense3; do
+  grep -qF "\"$n\"" $DM/dm_ablations.py || { say "$n is not in dm_ablations.py (scripts/dm_s7/install_s7.sh, install_late.sh, install_dense3.sh); not run"; exit 1; }
 done
-say "armed (the orchestrator 14:3x / 15:3x, NewIdeas 14:5x): $ARMS; start >= $(date -r $START '+%a %H:%M'), no new arm after $(date -r $LASTGO '+%a %H:%M'), hard stop $(date -r $DEADLINE '+%a %H:%M')"
+say "armed (the orchestrator 14:3x / 15:3x, NewIdeas 14:5x / 16:5x): $ARMS; start >= $(date -r $START '+%a %H:%M'), no new arm after $(date -r $LASTGO '+%a %H:%M'), hard stop $(date -r $DEADLINE '+%a %H:%M')"
 while [ $(date +%s) -lt $START ]; do sleep 30; done
 cd $DM || exit 1
 need=3; runs=0; last=
@@ -72,6 +75,7 @@ while :; do
   peer lock share $(( $(est $PICK) + 10 ))m --cpu 200 --gpu 100 "Breakthrough map screens 6 + 7 + 1(b)/(c) (the orchestrator 14:3x / 15:3x): MEM 18 GB (flips / KL, no timing): $PICK" >> $LOG 2>&1 \
     || { say "share lock not granted"; need=3; sleep 30; continue; }
   S0=$(swap_mb); say "go $PICK (est $(est $PICK) min; NO-SWAP $(noswap) GB, swap $S0 MB)"
+  [ "$PICK" = "$D3" ] && say "Leap's dense3.py sha256 $(shasum -a 256 ~/Leap/scripts/dense3.py | cut -c1-16) (smoked: $D3SHA)"
   $PY run_map.py $PICK --max 12 --skip-done >> $LOG 2>&1 & P=$!
   bad=0; pz=0; stopped=
   while kill -0 $P 2>/dev/null; do
@@ -90,7 +94,11 @@ while :; do
 done
 say "batch over; left: $(todo)"
 echo "[s67] map_kl.py (NewIdeas, read-only use): C, screen 6, screen 7" >> $LOG
-$PY ~/NewIdeas/scripts/map_kl.py qom_0_live_bq_c147_t3 qom_0_live_ball_c147_t3 s7_ref s7_ref3 s7_trl s7_cal s7_cal_all >> $LOG 2>&1
+KL=$($PY ~/NewIdeas/scripts/map_kl.py qom_0_live_bq_c147_t3 qom_0_live_ball_c147_t3 s7_ref s7_ref3 s7_trl s7_cal s7_cal_all $D3 2>&1); echo "$KL" >> $LOG
+if [ "$(nwin $D3)" = 36 ] && [ "$(nwin qom_0_live_ball_c147_t3)" = 36 ]; then   # NewIdeas QUEUE 16:5x: INVALID rule, then code flips
+  D3C=$($PY ~/Breakthrough/scripts/dm_s7/dense3_check.py $D3 qom_0_live_ball_c147_t3 2>&1); echo "$D3C" >> $LOG
+  say "read-out DENSE-3: $(echo "$D3C" | grep '^VERDICT' || echo 'INVALID check failed'); $(echo "$KL" | grep -F "| $D3 |" | awk -F'|' '{split($3, a, "/"); if (a[1] !~ /[0-9]/) {print "no map_kl number"; exit} f = a[1] + 0; print (f <= 1.34 ? "PASS" : f <= 2.01 ? "BETWEEN" : "FAIL") " on code flips " f " % (PASS <= 1.34, BETWEEN <= 2.01)"}')"
+fi
 rd() { [ "$(nwin $1)" = 36 ] || return; $PY $DM/dm_screen_read.py "$@" >> $LOG 2>&1; say "read-out: $(grep '^VERDICT' $DM/out/SCREEN_read_$1.txt 2>/dev/null || echo "$1 none")"; }
 rd qom_0_live_ball_c147_t3 qom_0_live_bq_c147_t3
 rd q1u_0.9_live_bonus9g q1u_0.9_live 0.1 --null

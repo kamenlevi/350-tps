@@ -112,6 +112,9 @@ pool): IFEval 0.0164 - 0.0093 = 0.0071; multi 0.0114 - 0.0101 = 0.0013.
 
 ## Next (cheapest first)
 
+- The 3-bit tail is worth ~2x bytes (W4PRICE 16:3x, data/ledger/w4_price.txt, unchecked). If s7_ref3 fails, row 0
+  goes 19.5 / 14.3 / 10.6 -> 40.2 / 33.0 / 24.9 at 24 GB (Cl 160 / Cm 115, code [G] 1.25 % PASS), and rows 1-4 need
+  a re-price with a 4-bit tail.
 - Tonight: screens 6 + 7 (DRAFT17's quality; the mix on 4 layers, KL read-out).
 - MoonShots: re-derive rows 1-4's bytes (the trellis / GPTQ-3 / TRL-3 store prices) before any of them goes to Kamen.
 - If screen 7's code estimate PASSes: Kamen's call on the full mix store (encoder + ~36 GB disk). TRL-3 / GPTQ-3 are

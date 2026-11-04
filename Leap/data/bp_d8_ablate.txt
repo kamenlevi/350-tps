@@ -1,0 +1,7 @@
+
+BP-10 Wed 16:57:51: MLX 0.32.2
+D8-NAX (46 NaxQL8) + screened head on qmm16c; ms per propose (median of 3 interleaved rounds): full 5.41 (+0.00), no-proj 3.31 (-2.10), no-sdpa 4.71 (-0.70), no-conv 4.96 (-0.46), no-norm 5.37 (-0.05), no-head 4.56 (-0.85), no-chain 5.46 (+0.04), skeleton 2.23 (-3.19)
+
+BP-10 Wed 16:58:16: MLX 0.32.2
+D8-NAX (46 NaxQL8) + screened head on qmm16c; ms per propose (median of 3 interleaved rounds): full 5.36 (+0.00), no-proj 3.46 (-1.90), no-sdpa 4.74 (-0.62), no-conv 5.01 (-0.35), no-norm 5.39 (+0.03), no-head 4.57 (-0.78), no-chain 5.48 (+0.12), skeleton 2.16 (-3.20)
+BP-10b full propose: CPU graph build 0.38 ms + eval / read-back 5.01 ms (GPU work runs only after the build: serial)
