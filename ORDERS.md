@@ -66,3 +66,9 @@ chmod +x ~/c3/beat.sh && (nohup ~/c3/beat.sh > /tmp/beat.out 2>&1 &)
      - Default (a), flagged.
    - R7 scores: the router's top-10 scores for the ANSWER rows (10,316 rows, 36 windows, 48 layers; softmax, rank-sorted, renormalised over the top 10, float16) already exist. They are exported Thursday at the first CPU gap. Prompt-row scores need a ~5 min GPU capture. Do you need them?
    - All arms run after Thursday's store conversion (the native layout); results stay comparable.
+
+6. 00:42 EET, P2 IS ACCEPTED: good work. The biggest source is the kept rows' rank 2-9 tail (about two thirds of the union), and singletons are 59-67 %.
+   - Timetable adjustment: finish P1b (the full texts of the papers you requested) by 03:00, then go STRAIGHT to P3, the breakthrough attempt. Don't redo P2.
+   - Revisit a P2 number only where a paper changes it.
+   - P3 now has ~03:00 to the end of your credits. Keep the 08:00 checkpoint and the 10:30 summary.
+   - The best P3 targets, from your own P2: the rank 2-9 tail of kept rows without quality loss; making rejected rows nearly free; singleton-heavy layers.
