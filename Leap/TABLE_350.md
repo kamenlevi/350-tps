@@ -6813,3 +6813,253 @@ shapes, since latency does not depend on the values.
     data/tierglu_nax6h_before_p11.py.
   - P11PAD check with NAX6-NH added (layers 20 / 44, 128 experts): NAX6-NH on padded p11 == unpadded p11 == bf16
     native pools, 4 / 4 / 4 per layer. All other kernels still PASS; ref2.self_test PASS.
+
+## OOO-1C: one-call OOO on the NAX path (Leap, pre-registered Wed 2026-11-04 15:2x; BUILD_DAY #5, the orchestrator 15:0x; BigMoE 15:1x: "build it as a patch in your copies")
+- **Why:** OOO pays two expert calls per MoE layer: phase 1 on the resident pairs, the loader's spin, then phase 2 on the
+  late ones, then combine_phase. Fable C priced the second call's fixed costs at -3.7 ms per check [P]. Kamen approved
+  the NAX reference 15:0x (pending EvalSuite), so the exact default's OOO becomes ref2._ooo_nax6. It is built there first.
+- **Design (scripts/ooo1c.py; no ext or bigmoe/tier.py change):**
+  - post as today. One NAX6 call: its grouping (gpu_grp_1c) keys resident pairs as NAX6 does and late pairs by expert
+    id, sorted after every resident key, so late groups come last in the grid.
+  - Kernel A resolves a late group's slots inside the kernel: thread 0 polls the release region (BigMoE's coherent-spin
+    layout: line 0's tag == seq, written last; the pair's word stamped with seq) with coherent(system) loads and
+    system-scope fences. It writes the resolved slots for kernel B, which is NAX6's B unchanged. Then the same
+    combine_phase.
+  - The other dispatches go: phase 2's grouping + A + B, and the two spin kernels.
+- **Exactness:** a pair's bits do not depend on its group (INV), so the result == today's two phases == NAX6 on the
+  released slots, bitwise.
+- **Test** (scripts/ooo1c_check.py; real records3 pools of L20 / L44; 16 rows, top-10; ~70 % base / ~80 % sidecar
+  resident; LP1 -2 sidecars):
+  - (1) region released before the call: one-call == NAX6 on the final slots == today's two phases, bitwise; resolved
+    slots == the final slots; no timeout;
+  - (2) a late release (CPU writes 20 ms after the launch, the loader's order): the same bits;
+  - (3) ms per MoE layer call in 48-call chains, two phases (+ 2 stand-in spin dispatches) vs one call.
+- **Lines:** (1) / (2) bitwise, else BLOCKED (one fix). Speed (3): PASS >= 0.06 ms per layer (>= ~2.9 ms per check at
+  48 MoE layers); KILL < 0.02 ms per layer; BETWEEN otherwise. The engine number comes from BigMoE's slot later.
+- **Prediction:** bitwise; -0.04..-0.08 ms per layer (a grouping kernel + NAX6's A / B fixed costs + 2 spins) ->
+  -2..-3.8 ms per check. PASS 50 %, BETWEEN 40 %, KILL 10 %.
+- **Result (Wed 15:08, share lock; data/ooo1c_check.txt): correctness PASS; speed BETWEEN (rough).**
+  - (1) Released before the call: one-call == NAX6 on the final slots == today's two phases, bitwise. Resolved slots ==
+    the final slots, including LP1 -2 sidecars. No timeout. 4 calls on L20 / L44.
+  - (2) Late release: the CPU wrote the release 20 ms after the launch. The kernel waited in place (calls 22.4-22.9 ms)
+    and gave the same bits, with no timeout. The in-kernel spin works with live CPU writes.
+  - (3) 48-call chains, interleaved, median of 15: two phases (+ 2 stand-in spin dispatches) 1.699 ms per layer call,
+    one call 1.642. That's -0.056 ms per layer = **-2.7 ms per check**, just under the 0.06 PASS line: BETWEEN, under a
+    share lock. The engine number comes from BigMoE's slot (it includes the real spins and the loader's timing).
+- **3c form + timing at a realistic late fraction (Wed 15:10-15:12, share lock; post-hoc conditions, labelled so):**
+  - The 3c form (today's exact default: kernel A takes its pair from a resident-first order and resolves late slots in
+    place; 3c's fused-combine kernel B reads them) == tier_glu(scores) == BigMoE's two phases + combine_phase, bitwise,
+    including a live 20 ms late release.
+  - At the pre-registered 70 / 80 % resident split the share-lock timing was noise-level: NAX -0.056 then +0.041 ms per
+    layer in two runs; 3c +0.007. Each late pair's ~160 threadgroups pay system-scope fences, and 35 % of pairs were
+    late.
+  - At the engine's late fraction (96 / 97 % resident; BigMoE's ~3.6 misses per layer at C 256) and 40 interleaved
+    rounds: NAX 2.244 -> 2.159 ms per layer (-0.085 = **-4.1 ms per check**); 3c 1.495 -> 1.429 (-0.066 = **-3.2 ms
+    per check**). That's in line with Fable C's -3.7 [P].
+- **Wired (15:14, ref2 live, default OFF): CFG["ooo_1c"] / REF2_OOO_1C=1.**
+  - BigMoE's 3c path (ref2._ooo_sel, REF2 on, not native) and C1's NAX path (_ooo_nax6, not native / hybrid / repack)
+    take the one call when the gate has release regions (spin mode); otherwise they fall back to the old route.
+  - No ext or bigmoe/tier.py change.
+  - ooo1c_wire_check PASS (candidate + live): 3c == tier_glu(scores); NAX == NAX6 + combine_phase; off and event mode
+    take the old route. DENSE-N(-RAM) / HC8-1P checks still PASS; self_test PASS. Backup data/ref2_before_ooo1c.py.
+- **U3 (t3) form (Wed 15:1x; BigMoE's question for tonight's all-in FAST arm).** ref2.apply() runs after r57_screen
+  installs _ooo_call_t3, so _ooo_sel wraps it. Without this fix, ooo_1c would have ignored t["nolsb"] (the sure rows'
+  sidecars at tier 4). Now:
+  - the 3c one-call path mirrors _ooo_call_t3: the dup-id sidecar post, and sidecar slot -2 for the sure rows;
+  - in the kernels, a sidecar slot -2 is final (no poll; LP1 -> tier 3), and only -1 waits;
+  - the NAX path declines nolsb.
+  - Checks:
+    - ooo1c_check (1) / (2) still PASS for NAX and 3c;
+    - ooo1c_wire_check (f): U3 sure rows through ref2 == tier_glu(scores) with sidecar -2 == _ooo_call_t3's two
+      phases, bitwise, with BigMoE's LP1 patch on;
+    - (a)-(e) PASS.
+  - Backups data/ooo1c_before_t3.py, data/ref2_before_ooo1c_t3.py. Gap told to BigMoE, not changed: with R57_NAX=1,
+    _ooo_nax6 ignores nolsb even with ooo_1c off.
+
+## MTP-STEP-0: what's inside a ~2.2 ms MTP chain step (Leap, Wed 2026-11-04 15:2x; the orchestrator's route after MTP Head's RERANK-0: the MTP-assisted pick keeps x1.23 on code but its 15 sequential steps at ~2.2 ms net x0.92; it pays below ~1.4 ms per step at a 90 ms cycle, clearly at ~0.5)
+- **Bytes estimate:** a step is the MTP layer (3 HC reads ~39 MB bf16, attention projections ~25 MB, MoE top-10 ~30 MB,
+  fc_hidden / fc_embedding) plus the 4-bit lm_head, 248,320 x 2,560 = 358 MB (~75 % of the step's bytes).
+- **Measured (scripts/mtp_head_time.py, data/mtp_step0.txt; share lock beside BigMoE's 80 % GPU job, rough; real
+  lm_head weights; 1 row; 64-call dependent chains):**
+  - full head (MLX quantized_matmul + argmax): **1.73 ms** (207 GB/s); qmm16c's 16-row tile 2.66 (wrong shape for 1
+    row).
+  - screened to 32,768 vocab rows: **0.24 ms** (+ a logsumexp for the pick's p: 0.24).
+  - a gathered 2,048-row set (candidates / session tokens): **0.024 ms**.
+- **Reading:** the lm_head is ~1.7 of the ~2.2 ms. With a screened head (an FR-Spec-style top-32K + the session's tokens +
+  DFlash2's candidates) a step is ~0.75 ms; with candidates only (~2K rows) ~0.5 ms, i.e. the MTP layer alone. Below
+  that, the layer itself has to shrink: HC8 on its 3 reads, fewer dispatches (a compiled step), a FAST MoE.
+- **Quality is MTP Head's replay:** the pick needs the MTP's top-1 and its p. A screened head changes both when the true
+  top-1 falls outside the set. The kept-per-check effect must be measured before any build.
+- **Native forms for Friday's converted store (Wed 15:2x; scripts/ooo1c_native_check.py; ref2 live):**
+  - The same splices on NAX6-N's kernel A (bf16 native and p11 sources) and on 3c-N's (native and native + p11);
+    each family's own kernel B (NAX6-N's B; 3c-N's fused-combine bc) reads the resolved slots.
+  - On L20 converted by p11.to_p11(pad=True), bf16-native and native+p11+pad pools, ~70 / 80 % resident: NAX6-N one
+    call == NAX6 and 3c-N one call == 3c on the row-major pools, bitwise, in 3 released calls and a live 20 ms late
+    release. Slots resolved; no timeout.
+  - Through ref2 (layout 2 records): 3c-N via _ooo_sel and NAX6-N via tier_nax_ooo + nax_native, == the row-major
+    references, bitwise.
+  - ref2 now gives the native layers the one call too. Layers with N7-15's registered dirty flags keep the two phases.
+    The row-major / DENSE-N-RAM / HC8-1P checks still PASS. Backup data/ref2_before_ooo1c_native.py.
+- **MTP-STEP-1 (Wed 15:26, share lock; scripts/screened_head.py, screened_head_check.py): the screened head as a drop-in
+  piece.**
+  - ScreenedHead(lm_head, frspec_rank[:32768], extra_cap 4096): the base rows gathered once into one contiguous 4-bit
+    matrix, plus up to 4,096 session-token rows added as they appear (add(ids)). It returns (top-1 id, p over the
+    subset) with no host sync.
+  - The subset's logits == the full head's at those ids, bitwise. Top-1 == the full head's whenever that token is in
+    the subset. p >= the full p, inflated by the missing mass: MTP Head's replay recalibrates the pick threshold.
+  - ms per call (1 row, chains, same run): full head 1.257, screened 0.171, screened + 2,048 session rows 0.217
+    (x5.8-7.4). With today's step ~2.2 ms (head 1.26-1.73 of it), a screened step is ~0.6-0.9 ms [P]. The MTP layer's
+    own share is next to time.
+  - Quality gate: MTP Head's MTPSCREEN replay (the pick's kept per check with the screened head vs full 11.70 vs DFlash2
+    alone 9.54).
+  - **MTPSCREEN (MTP Head, Wed 15:3x, TrainLab b36b990): the screen PASSES; the pick is parked on the layer's cost.**
+    - Corrected baseline: the x1.23 / 11.70 was the MTPPICK lead withdrawn on 11-03 (off-by-one alignment). Aligned, on
+      HPD-0's 666 code checks: DFlash2 9.57, MTP b5 alone 9.97, the pick with the full head 10.51 (x1.098), union oracle
+      11.35.
+    - Kept per check by head: a (this head, FR-Spec 32K + session) 10.51; b (DFlash2's 16 + session) 10.53; b0 (the 16
+      alone) 10.40. b keeps 102 % of the full head's gain. The subset's inflated p needed no threshold shift.
+    - Step at 1 row (mtp_forward + argmax / softmax max + one sync, 400-pair cache, shared GPU): full 2.571 ms, the 32K head
+      1.353, a 16-column stand-in 1.280. So the layer + mixer is ~1.28 ms, not my ~0.5 [P]. The head part is 1.29 ms
+      (matches 1.257 here).
+    - The pick (+0.94 kept per check) costs 15 x 1.35 = ~20 ms per check: x0.90 at a 90 ms cycle. It breaks even near
+      ~0.6 ms per step, so the layer would have to be ~2x faster. Parked behind tier merge B (orchestrator 15:3x).
+    - Where the head pays today: R57_CHATSW's MTP chain drafts with exactly these steps. It halves each step, and drafts
+      change only where the full top-1 is outside the set (0.3 % of depths with set a). The output stays exact (drafts
+      are verified), so it is a speed lever for the chat switch, offered to BigMoE.
+
+## SMALL-N: the small 4-bit calls on the native kernel (Leap, pre-registered Wed 2026-11-04 15:3x; the FAST small-shape bundle, the orchestrator's fallback item)
+- **What:** the 4-bit g64 calls that still run MLX's 16-row kernel (N < 1024 or N % 64 != 0) in BigMoE's default: R-74's
+  shared gate | up | gate concat (N 1281, x48), the QSA k / v projections (N 512, x24), R-83's b | a (N 96, x36). On
+  qmm16n with zero rows padded to a multiple of 32 (FAST: other bits than MLX's call; more accurate, like qmm16c).
+- **Screen** (scripts/small_n_screen.py, ~1 min, share lock): ms per check, MLX's 16-row call vs qmm16n padded, random
+  4-bit weights at the shapes and counts, interleaved, 15 rounds.
+- **Line:** build the ref2 switch if the bundle saves >= 0.5 ms per check; KILL < 0.2.
+- **Prediction:** 0.4-0.9 ms (MLX's small calls are launch-bound, ~10-25 us each).
+- **Result (Wed 15:28, share lock; data/small_n_screen.txt): BUILD.** ms per check, MLX's 16-row call -> qmm16n padded:
+  - shared gate | up | gate (R-74, N 1281 -> 1312, x48): 1.737 -> 0.885;
+  - k / v (N 512, x24): 0.638 -> 0.422;
+  - b | a (R-83, N 96, x36): 0.568 -> 0.490;
+  - **bundle 2.94 -> 1.80 ms per check (-1.15), FAST.** The prediction (0.4-0.9) was low.
+- **Wired (15:30; ref2 + glue_fused live, default OFF): CFG["small_native"] / REF2_SMALL_NATIVE=1.**
+  - Marked resident weights get a zero-padded native copy once and run on qmm16n: QuantizedLinear calls, R-83's
+    concats, and R-74's concat, which glue_fused now marks for ref2 (marking only, inert while off).
+  - sn_wire_check PASS (candidate + live): calls taken and row-invariant; error vs fp32 2.12e-3 (MLX's call 2.13e-3);
+    R-74 output vs the MLX path rel 1.6e-4; switch off == today bitwise. The other wiring checks still PASS; self_test
+    PASS. Backups data/ref2_before_sn.py, data/glue_fused_before_sn.py.
+
+## TIER-MERGE: one pair group per expert on the NAX path (Leap, Wed 2026-11-04 15:4x; the orchestrator's GO 15:3x; FableGod EXPERT_KERNEL.md design B)
+Pre-registered 15:45, before any code ran.
+- **Why:** NAX6 groups pairs by (expert, tier). An expert picked at rank 0-1 (4-bit) by some rows and at rank 2-9 (3-bit)
+  by others gets two groups, so its codes are loaded and decoded twice, there are two epilogues, and two threadgroup rows
+  per output tile. At S 16 that is 3,680 groups per check vs 3,112 distinct experts (-15 %; EXPERT_KERNEL.md section 5).
+- **Two forms (scripts/tierglu_merge.py; grouping key = slot | tier-2 flag | the slot's sidecar slot):**
+  - MERGE-X (mode 1, EXACT): one code load and decode per merged group feeds both nibble sets. The 3-bit rows take the
+    op on the 3-bit nibbles, the 4-bit rows the op on the 4-bit nibbles (the same op count as NAX6's two groups), with
+    NAX6's epilogue per row. Every pair's bits == NAX6 by construction: INV (an op row's result does not depend on the
+    other rows), the same split-K chunks, the same epilogue expression with per-row operands.
+  - MERGE-B (mode 2, a reference change): one op on the 3-bit nibbles for all rows. A 4-bit row adds L = x . l (its
+    LSB plane, a masked fp32 sum on the SIMD ALUs) as P4' = 2 P3 + L, then NAX6's 4-bit epilogue. Where every fp32 sum
+    is exact, P4' == P4 and the bits equal NAX6's. Elsewhere they differ by rounding.
+- **Predictions (k62f harness: layer 20's real records, real routing, 4 traces, S 8 / 16 / 32, share lock, rough):**
+  - MERGE-X == NAX6 bitwise on every pass and trace (kill line: any differing bit = a bug to fix, never a FAST
+    variant).
+  - MERGE-X kernel time at S 16 -4..-8 % vs NAX6. It saves the non-op share (~2.8 of 10.15 us) of the ~15 % merged
+    groups. Kill as a speed lever below -2 %.
+  - MERGE-B: differing bits only on 4-bit pairs, all <= 1 ulp, on <= 0.05 % of their bf16 outputs. Kernel time at S 16
+    -8..-15 % vs NAX6 if the ALU term overlaps the ops (doc's bound -14 %). Kill (stays unbuilt in ref2) unless >= 3 %
+    faster than MERGE-X.
+  - Both: INV (a pass's row alone == inside the pass, bitwise); two phases + combine == one call.
+- **Result (Wed 15:48 + 15:52, share lock beside BigMoE's 80 % GPU run; scripts/merge_check.py, data/merge_check_L20.txt):
+  KILL, all three forms. Merging is exact but slower.**
+  - Groups: -12..-19 % as predicted (S 16 code 82.4 -> 70.2).
+  - Exactness: MERGE-X and MERGE-X2 == NAX6 bitwise on every pass (4 traces x 3 widths x 8 passes, random and real tap
+    activations). INV and the phase form PASS for all forms. MERGE-B differs on 0.013 % of the 4-bit pairs' bf16
+    outputs (none on 3-bit pairs), max 262 ulp (a near-zero output).
+  - ms per call vs NAX6 (run 1 / run 2, same harness, interleaved):
+
+    | form | S 8 | S 16 | S 32 |
+    |---|---|---|---|
+    | MERGE-X | +18..+22 % / +24..+25 % | +13..+21 % / +23..+27 % | +18..+26 % / +26..+29 % |
+    | MERGE-B | +22..+40 % | +30..+46 % | +33..+54 % |
+    | MERGE-X2 (NAX6's core verbatim for one-tier groups) | +9..+14 % | +11..+13 % | +14..+17 % |
+
+  - Why [P]: the call is latency-bound per threadgroup, not op- or byte-bound. A merged group with both tiers runs its two
+    passes (or its LSB sums) in sequence inside one threadgroup; NAX6 ran them as two threadgroups in parallel. The 15 %
+    fewer groups do not shorten the critical path, and every added instruction in the hot loop costs: MERGE-X's per-row
+    selects and second op tensor cost +25 % on every group. EXPERT_KERNEL.md design B priced the merge as fewer op
+    groups at a fixed per-group cost; measured, the per-group cost is the chain's latency.
+  - Prior evidence I should have checked first: my own S11 (Sun 23:37: a grouped 3c that decodes once per (expert, tier)
+    chunk was bitwise but slower, 0.714 vs 0.597 ms per layer) and L1-24 (Sat: expert time grows with pairs, not
+    distinct experts). Same lesson on the NAX path.
+  - Kept: scripts/tierglu_merge.py (exact merged forms, for the record). No ref2 switch. Lead for the kernel track: the
+    NAX path looks occupancy / latency-bound (20 KB of threadgroup memory per threadgroup in kernel A). An occupancy
+    probe (more threadgroup memory -> fewer resident threadgroups -> how much slower) would say whether a smaller
+    footprint pays.
+
+## NAX-OCC: is the NAX6 call bound by threadgroup residency? (Leap, Wed 2026-11-04 15:55; after TIER-MERGE's KILL)
+Pre-registered 15:56; the run started 15:55, before any number was seen.
+- **Probe (scripts/nax_occ_probe.py, data/nax_occ_probe.txt):** layer 20's real records + routing, code / chat, S 8 / 16 /
+  32. Kernel A's threadgroup memory is padded 20 -> 24 / 28 / 32 KB and kernel B's 10 -> 20 / 32 KB, with the same
+  arithmetic (bits checked == NAX6). Separately, two independent calls on two GPU streams vs back to back.
+- **Prediction:** A at 32 KB +0..+5 % (residency is not bound by threadgroup memory at 20 KB). Two streams 15-30 % below
+  back to back at S 8-16 (the call leaves capacity idle).
+- **Kill line:** A at 32 KB < +5 % slower -> no footprint lever (a smaller footprint would not pay). Two streams < 10 %
+  better -> no overlap lever.
+- **Result (15:55, share lock, GPU otherwise free; data/nax_occ_probe.txt): KILL, both levers.**
+  - Bits == NAX6 for every padded arm.
+  - Kernel A 20 -> 24 / 28 / 32 KB: -0.4..-1.7 % at every S and trace. A is not bound by its threadgroup memory, so a
+    smaller footprint would not pay.
+  - Kernel B 10 -> 20 KB: +0.0..+0.3 %; 10 -> 32 KB: +7.9..+12.5 %. B needs >= 3 resident threadgroups per core and
+    has them at 10 KB.
+  - Two calls on two GPU streams vs one stream: -7.7 / -13.1 % at S 8, -4.7 / -5.8 % at S 16, -1.2 / -2.4 % at S 32
+    (code / chat). The call leaves little capacity idle at S >= 16. (The "back to back" arm is void: it evaluated two
+    calls, not eight.)
+  - Reading with TIER-MERGE [P]: the GPU is busy during the call, but the work isn't op- or byte-bound (matrix unit
+    ~57 %, DRAM ~53 % per EXPERT_KERNEL.md). Instructions in the hot loop are what cost: MERGE-X's per-row selects
+    alone added +25 %. The lever left in NAX6 / NAX6-N is fewer instructions per stage (decode, epilogue, A
+    marshalling), kept bitwise.
+
+## NAX-ABL: where NAX6-N's call time goes, by ablation (Leap, Wed 2026-11-04 16:1x; after TIER-MERGE / NAX-OCC)
+Pre-registered before the run.
+- **Probe (scripts/nax_ablate.py, data/nax_ablate.txt):** NAX6-N on layer 20's records repacked native, real routing
+  (code / chat), S 8 / 16 / 32. Arms (timing only; ablated arms compute garbage): no-dec (raw words as nibbles),
+  no-epi (acc += P), no-op (no matrix op; A loads die with it), no-A (A from constants), no-codes (code words from
+  constants), skeleton (no-dec + no-op + no-epi + no-codes).
+- **Prediction at S 16 (share of the full call saved by removing the part):** decode 20-35 %, op 20-30 %, epilogue
+  8-15 %, code loads 10-20 % (native layout), A loads 5-10 %, skeleton 15-25 % of the call left.
+- **Use:** the biggest bitwise-reducible part gets the next build (a leaner decode, epilogue or A path with the same
+  arithmetic). Kill line: no part above 10 % except the op -> NAX6-N's hot loop has nothing left to cut, and the expert
+  kernel lever is NAX7's dispatch / byte work, not instructions.
+- **Result (15:58, share lock beside Fit12's CPU job; data/nax_ablate.txt; full arm == tier_glu_nax6n bitwise):**
+
+  | removed | S 8 code / chat | S 16 code / chat | S 32 code / chat |
+  |---|---|---|---|
+  | decode | -6.1 / -9.8 % | -9.8 / -10.1 % | -10.2 / -10.3 % |
+  | epilogue | -10.4 / -9.9 % | -11.2 / -11.0 % | -11.2 / -11.3 % |
+  | matrix op (+ A marshalling) | -16.9 / -27.4 % | -27.5 / -24.4 % | -30.2 / -28.8 % |
+  | A loads | -2.6 / -3.8 % | -4.2 / -4.0 % | -4.4 / -4.5 % |
+  | code loads | -9.3 / -7.0 % | -6.3 / -7.0 % | -5.7 / -6.4 % |
+  | all but the skeleton | -77.7 / -80.0 % | -82.9 / -82.5 % | -84.3 / -83.8 % |
+
+  - The parts are super-additive: they sum to ~59 % alone but ~83 % together, so they mostly serialize. That fits
+    TIER-MERGE and NAX-OCC.
+  - Verdict BETWEEN on the pre-registered rule: the epilogue (11 %) and decode (10 %) sit at the 10 % line. The op is
+    the largest part.
+  - The skeleton's 17 % includes empty threadgroups: the grid's y is P (the most groups possible) because the group
+    count is only known on the GPU, and at S 16 about half the rows return at once.
+  - Next micro-screen: vectorized epilogue loads (bitwise), and a tight grid (y = the real group count; measurement
+    only) to price the empty launches.
+
+## NAX-MICRO: two cheap cuts in NAX6-N's call (Leap, Wed 2026-11-04 16:1x; from NAX-ABL)
+Pre-registered before the run (scripts/nax_micro.py, data/nax_micro.txt; layer 20 native, code / chat, S 8 / 16 / 32).
+- epi-v4: the epilogue's scale / bias reads as four float4 loads per stage instead of per-element loads. The
+  arithmetic is the same, so bitwise. Prediction -1..-4 % (the compiler may already merge them). Kill below -2 %.
+- tight grid: the launch grid's y = the real group count instead of P (measurement only: it needs the count on the
+  host). Prediction -3..-8 % at S 16 (about half the rows return at once). Kill below -3 %. If it pays, the build is
+  a persistent / grid-stride form that needs no host count.
+- **Result (16:00, share lock; data/nax_micro.txt; both arms == tier_glu_nax6n bitwise): KILL, both.**
+  - epi-v4: -0.6..+0.4 %. The compiler already merges those loads.
+  - tight grid: -2.3 / -3.0 % at S 16 (code / chat), -1.9..-4.3 % elsewhere. The arm also skipped the per-call grouping
+    kernel (its grouping was shared), which is about that much (~18 us at S 16), so empty rows cost ~nothing.
+  - With NAX-ABL / NAX-OCC: NAX6-N's hot loop has no cheap cut left. The 16-row op padding is fixed (no 8-row shape,
+    K-62c). What's left for the expert kernel is structural (NAX7's fewer dispatches) or bytes.

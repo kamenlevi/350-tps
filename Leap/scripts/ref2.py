@@ -61,6 +61,20 @@ What changes (monkeypatches on MTPLX, read-only):
     switch, 8-bit mixers take MTPLX's eager chain at 16 padded rows. COUNTS hc8_fast. hc8r is imported on first use.
     CFG hc8_v / REF2_HC8_V (default 4, Wed 14:5x): hc8r's kernel version; v4 is bitwise == v2 (96 / 96 reads) and
     4.97 vs 5.27 ms per 96-read chain (quiet); v2 is what EvalSuite's snap/leap-c805fd0 runs.
+  - OOO-1C (Wed 2026-11-04, exact, off by default; CFG["ooo_1c"] or REF2_OOO_1C=1): BigMoE's OOO in ONE expert call per
+    MoE layer (scripts/ooo1c.py): the late pairs go last in the grid and resolve their slots inside kernel A from the
+    loader's release region (coherent(system) polls of BigMoE's coherent-spin layout; no ext change). On BigMoE's 3c path
+    (== tier_glu with scores == its two phases + combine_phase, bitwise) and on C1's NAX path (== _ooo_nax6, bitwise);
+    needs the gate in spin mode; native records and nax_hybrid keep the two phases. Harness, ~4 % late pairs: -3.2 (3c)
+    / -4.1 (NAX) ms per check. COUNTS ooo_1c. U3's sure rows (t["nolsb"], BigMoE's _ooo_call_t3) on the 3c path: the
+    same dup-id sidecar post and sidecar slot -2 (final, LP1 -> tier 3); the NAX path declines them. Native records
+    (Friday's converted store) take the native forms (3c-N / NAX6-N, bf16 native or p11 pools); layers with N7-15's
+    registered dirty flags keep the two phases.
+  - SMALL-N (Wed 2026-11-04, FAST, off by default; CFG["small_native"] or REF2_SMALL_NATIVE=1): the small 4-bit g64 calls
+    that take MLX's 16-row call (N < dense_min_n or N % 64 != 0: R-74's shared gate | up | gate, k / v, R-83's b | a)
+    run on qmm16n with rows zero-padded to a multiple of 32, for marked resident weights (QuantizedLinear calls, R-83's
+    concats, R-74's concat). Bits differ from MLX's call; 2.94 -> 1.80 ms per check on the default's shapes. COUNTS
+    small_native. remove() drops the padded copies.
   - DENSE-N-RAM (Wed 2026-11-04, exact, inert until called): dense_native_convert(model, head=False) replaces every
     eligible 4-bit dense weight (QuantizedLinear, bits 4, group 64, N >= dense_min_n; R-83's qkv | z concat too) IN PLACE
     by its native copy, 4-D on purpose so that a direct reader fails loudly; one copy, no RAM cost. _qmm: a converted
@@ -155,11 +169,12 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "dense_native": os.environ.get("REF2_DENSE_NATIVE") == "1",
        "dense_native_nt": int(os.environ.get("REF2_DENSE_NATIVE_NT", "1")),
        "hc8_fast": os.environ.get("REF2_HC8_FAST") == "1", "hc8_np": int(os.environ.get("REF2_HC8_NP", "20")),
-       "hc8_v": int(os.environ.get("REF2_HC8_V", "4"))}
+       "hc8_v": int(os.environ.get("REF2_HC8_V", "4")),
+       "ooo_1c": os.environ.get("REF2_OOO_1C") == "1", "small_native": os.environ.get("REF2_SMALL_NATIVE") == "1"}
 _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
               kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
-              fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0)
+              fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0)
 _ROWS = [R]                                          # F1-R8: the real rows of the attention call being built (_att)
 _ORIG = {}
 _WCAT = {}
@@ -334,9 +349,25 @@ def _dn_get(w, scales, biases):
     COUNTS["dense_native_repack"] += 1
     return e
 
+_SN = {}                                             # SMALL-N: id(weight) -> (weight, wn, sn, bn, padded N)
+
+def _sn_get(w, scales, biases):
+    """SMALL-N: the padded native copy of a marked resident small weight (built at its first marked call), or None"""
+    e = _SN.get(id(w))
+    if e is not None and e[0] is w:
+        return e
+    if w is not _DN_SRC[0] or w.ndim != 2:
+        return None
+    N = int(w.shape[0])
+    Np = (N + 31) // 32 * 32
+    pad = lambda a: mx.concatenate([a, mx.zeros((Np - N,) + tuple(a.shape[1:]), a.dtype)]) if Np > N else a
+    e = _SN[id(w)] = (w,) + _dn_repack(pad(w), pad(scales), pad(biases)) + (Np,)
+    return e
+
 def _qlin(self, x):
-    """DENSE-N: nn.QuantizedLinear's call with its weight marked as resident for _qmm (inert unless dense_native)"""
-    if not (_ON[0] and CFG["dense_native"]):
+    """DENSE-N / SMALL-N: nn.QuantizedLinear's call with its weight marked as resident for _qmm (inert unless one of
+    the switches is on)"""
+    if not (_ON[0] and (CFG["dense_native"] or CFG["small_native"])):
         return _ORIG["qlin"](self, x)
     prev = _DN_SRC[0]
     _DN_SRC[0] = self.get("weight")
@@ -374,8 +405,14 @@ def _qmm(x, w, *args, **kw):
             y = qmm16c(x16, w, scales, biases)
             COUNTS["qmm16c"] += 1
     else:
-        y = orig(x16, w, scales, biases, transpose=True, group_size=group_size, bits=bits, mode=mode)
-        COUNTS["mlx16"] += 1
+        e = (_sn_get(w, scales, biases) if (CFG["small_native"] and bits == 4 and group_size == 64 and K_ % 64 == 0
+                                           and scales is not None and scales.dtype == mx.bfloat16) else None)
+        if e is not None:                                # SMALL-N (FAST): qmm16n on the padded native copy
+            y = _qmm16n()(x16, e[1], e[2], e[3], e[4], 1, 1)[:, :N]
+            COUNTS["small_native"] += 1
+        else:
+            y = orig(x16, w, scales, biases, transpose=True, group_size=group_size, bits=bits, mode=mode)
+            COUNTS["mlx16"] += 1
     return y[:rows].reshape(*lead, N)
 
 def _lin(self, x):
@@ -607,9 +644,83 @@ def _nax6_glu(x, msb, lsb, msb_slot, lsb_slot, plan="4433333333", scores=None, *
     TG = BT._tier_glu_mod()
     return TG.combine_phase(y.reshape(M * R, -1), y.reshape(M * R, -1), mx.ones((M, R), mx.int32), scores.reshape(M, R))
 
+def _ooo1c():
+    """OOO-1C: scripts/ooo1c.py, loaded on first use"""
+    import ooo1c
+    return ooo1c
+
+def _ooo1c_offs(bm, t, R4):
+    """OOO-1C: [base region offset, sidecar region offset, seq] of this pass for the gate's release regions (the ext's
+    ((seq * nl + L) % reg_n) * pairs * rs), or None when the gate has no regions (event mode)"""
+    import bigmoe.gated as BG
+    gate = bm["gate"]
+    if getattr(BG, "MODE", "spin") != "spin" or getattr(gate, "region", None) is None:
+        return None
+    rs = 32 * (2 + BG.XLINES)
+    off = lambda Lx: ((gate.seq * gate.nl + Lx) % gate.nreg) * BG.PAIRS * rs
+    return mx.array([off(bm["L"]), off(t["side"]) if R4 else 0, gate.seq], mx.int32)
+
+def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
+    """OOO-1C: the post as today, then ONE expert call (3c or NAX6) whose late pairs resolve their slots in kernel A;
+    None when not applicable (the caller then runs its two phases)"""
+    import bigmoe.tier as BT
+    PLAN = BT.PLAN
+    K = ids.shape[-1]
+    x2 = x.reshape(-1, x.shape[-1])
+    M = x2.shape[0]
+    lo4 = [s_ for s_ in t["segs"] if s_[2] == 4]
+    R4 = lo4[-1][1] if lo4 else 0
+    assert not lo4 or lo4[0][0] == 0, t["segs"]
+    offs = _ooo1c_offs(bm, t, R4)
+    nlz = t.get("nolsb")                             # U3's 3-bit sure rows (BigMoE r57_screen _ooo_call_t3)
+    if offs is None or (nlz is not None and nax):    # (NAX + t3: not here; the two phases ignore nolsb too: BigMoE told)
+        return None
+    if _NATIVE_FLAGS.get(id(t["base"])) is not None:  # N7-15's dirty-slot repack runs only on the two-phase path
+        return None
+    native = bool(CFG["nax_native"]) if nax else _native(t)   # Friday's converted store: NAX6-N / 3c-N one-call forms
+    gate, L = bm["gate"], bm["L"]
+    BT.OOO_STATS["calls"] += 1
+    COUNTS["ooo_1c"] += 1
+    dep_m, n_m = post(L, ids)
+    pre_m = dep_m[1:1 + n_m].reshape(M, K)
+    if R4:
+        if nlz is not None:                          # _ooo_call_t3 verbatim: sure rows post an unsure row's rank-0 expert
+            t.pop("nolsb")                           # (read anyway) and take sidecar slot -2 (final: LP1 -> tier 3)
+            nl, nl_np = nlz
+            nl2 = nl.reshape(M, 1)
+            un = np.where(~np.asarray(nl_np))[0]
+            dup = ids.reshape(M, K)[int(un[0]) if len(un) else 0, 0]
+            ids_s = mx.where(nl2, dup, ids.reshape(M, K)[:, :R4]).reshape(*ids.shape[:-1], R4)
+        else:
+            ids_s = ids[..., :R4]
+        dep_l, n_l = post(t["side"], ids_s, after=dep_m)
+        pre_l = dep_l[1:1 + n_l].reshape(M, R4)
+        if nlz is not None:
+            pre_l = mx.where(nl2, -2, pre_l).astype(mx.int32)
+    else:
+        if nlz is not None:
+            t.pop("nolsb")
+        pre_l = mx.zeros((M, 1), mx.int32)
+    xin = mx.depends(x2, [shared]) if shared is not None else x2   # the shared expert first, as today's spins wait after it
+    OC = _ooo1c()
+    if nax:
+        TG = BT._tier_glu_mod()
+        f1c = OC.tier_glu_nax6n_1c if native else OC.tier_glu_nax6_1c
+        y, _, _ = f1c(xin, t["base"], t["sideP"], pre_m, pre_l, ids.reshape(M, K), PLAN, gate.region, offs, gate.status)
+        COUNTS["nax6_ooo"] += 1
+        return TG.combine_phase(y.reshape(M * K, -1), y.reshape(M * K, -1), mx.ones((M, K), mx.int32),
+                                sc.reshape(-1, K)).reshape(*x.shape[:-1], -1)
+    f1c = OC.tier_glu_3cn_1c if native else OC.tier_glu_3c_1c
+    y, _, _ = f1c(xin, t["base"], t["sideP"], pre_m, pre_l, PLAN, gate.region, offs, gate.status, sc.reshape(-1, K))
+    return y.reshape(*x.shape[:-1], -1)
+
 def _ooo_nax6(x, ids, bm, t, post, sc, shared):
     """C1: bigmoe.tier._ooo_call (BigMoE's OOO at e3210bf) with NAX6 in both phases: the resident pairs during the loader
     spin, then the rest, then the same LY=8 combine_phase. == _nax6_glu with scores, bitwise (INV)."""
+    if CFG["ooo_1c"] and not (CFG["nax_hybrid"] or CFG["nax_repack_p1"]):
+        y1c = _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax=True)   # OOO-1C: one NAX6 call
+        if y1c is not None:
+            return y1c
     import bigmoe.tier as BT
     N6 = _nax6mod()
     TG = BT._tier_glu_mod()
@@ -714,7 +825,15 @@ def _ooo_sel(x, ids, bm, t, post, sc, shared):
         if CFG["tier_nax_ooo"]:
             return _ooo_nax6(x, ids, bm, t, post, sc, shared)
         if _native(t):
+            if CFG["ooo_1c"]:                            # OOO-1C on native records: 3c-N in one call
+                y1c = _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax=False)
+                if y1c is not None:
+                    return y1c
             return _ooo_3cn(x, ids, bm, t, post, sc, shared)
+        if CFG["ooo_1c"]:                                # OOO-1C: BigMoE's 3c in one call
+            y1c = _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax=False)
+            if y1c is not None:
+                return y1c
     elif _layout(t) in (1, 2):
         return _ooo_3cn(x, ids, bm, t, post, sc, shared)
     return _ORIG["ooo_call"](x, ids, bm, t, post, sc, shared)
@@ -861,7 +980,11 @@ class _InProjExact:
                 yqz = q(self.qz)
             finally:
                 _DN_SRC[0] = prev
-            yba = q(self.ba)
+            prev, _DN_SRC[0] = _DN_SRC[0], self.ba[0]   # SMALL-N: b | a is resident too (inert unless small_native)
+            try:
+                yba = q(self.ba)
+            finally:
+                _DN_SRC[0] = prev
             return yqz[..., :n0], yqz[..., n0:], yba[..., :n2], yba[..., n2:]
         sl = lambda w, a, e: tuple(t[a:e] for t in w)                    # off: the four stock calls on row slices
         qz = self._qz_mlx()                                              # DENSE-N-RAM: MLX's layout for the slices
@@ -1160,6 +1283,7 @@ def remove():
     _ON[0] = False
     _DN.clear()                                      # DENSE-N: drop the native copies (and their weight references)
     _HC8.clear()                                     # HC8-1P: drop the cached parameter views
+    _SN.clear()                                      # SMALL-N: drop the padded copies
 
 def enabled():
     return _ON[0]

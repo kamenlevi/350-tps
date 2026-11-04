@@ -273,7 +273,9 @@ def run(rt, v, thinking=False, sets=SETS, log=print, gate=None, limit=0, max_row
                     row["ssd"] = dict(SSD)
                     SSD.clear()
                 if REF2:
-                    off = [k for k, x in v.get("ref2_cfg", {}).items() if x is True and not REF2["calls"].get(k)]
+                    of = {"tier_nax_ooo": ("nax6", "nax6_ooo")}   # NAX6 (PREREG_nax6): its calls count under these
+                    off = [k for k, x in v.get("ref2_cfg", {}).items()
+                           if x is True and not any(REF2["calls"].get(c) for c in of.get(k, (k,)))]
                     assert len(toks) < 2 or not off, f"{it['key']}: REF2 switches {off} never ran ({REF2['calls']})"   # REF2c:
                     #                                      every token after the first is a 16-row AR step, so both count
                     row["ref2"] = dict(REF2)

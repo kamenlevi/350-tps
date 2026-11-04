@@ -157,12 +157,16 @@ CHATTRUNC = float(os.environ.get("R57_CHATTRUNC", "0"))
 # rows present); EvalSuite's test checks all 16. The gate needs DFlash2's cf (no gate on MTP-drafted chat: rules only).
 # HC8 (arms B / C there) is not wired. 16-row blocks only.
 FAST = os.environ.get("R57_FAST", "")
+D17 = os.environ.get("R57_D17") == "1"                  # DRAFT17 (MTP Head ~/TrainLab/sticky/draft17.py 7cc44f8, read-only): the
+if D17:                                                  # drafter proposes a 16th draft for QOM's last-row gate; needs Leap's
+    sys.path.insert(0, os.path.expanduser("~/TrainLab/sticky"))   # draft_fused FORM_ROWS 16..64 (05fafe7). Module level: the
+    import draft17 as D17M                               # drafting code reads D17 on every run (FAST or not)
 if FAST:
     import importlib.util as _ilu2
     _sp2 = _ilu2.spec_from_file_location("relax_core", os.path.expanduser("~/BigMoE/scripts/relax_core.py"))
     RXC = _ilu2.module_from_spec(_sp2); _sp2.loader.exec_module(RXC)
-    _S = lambda thr=None, copy=False, rules=(), loop=None, q1u=False, t3=False, cold=False: dict(thr=thr, copy=copy,
-                                                                    rules=tuple(rules), loop=loop, q1u=q1u, t3=t3, cold=cold)
+    _S = lambda thr=None, copy=False, rules=(), loop=None, q1u=False, t3=False, cold=False, qom=False: dict(thr=thr, copy=copy,
+                                                                    rules=tuple(rules), loop=loop, q1u=q1u, t3=t3, cold=cold, qom=qom)
     _G99 = dict(thr=0.99, copy=True)
     FASTARMS = {                                         # ~/EvalSuite/pending/relax.py ARMS (PLAN_relax sec 9), sets only
         "A": dict(humaneval=_S(**_G99), math=_S(**_G99), agent=_S(**_G99)),
@@ -186,6 +190,18 @@ if FAST:
     # alone when the prompt has >= 128 tokens); sure = ranks 0-1 (3 bits, as U3). Every row keeps its base set + any rank
     # whose expert is in the union of ALL rows' base sets. No domain switch: every prompt set. FAST (task results decide).
     FASTARMS["U3C"] = {s_: _S(thr=_U3T, q1u=True, t3=True, cold=True) for s_ in ("humaneval", "math", "ifeval", "multi", "agent")}
+    # QOM (Wed 11-04 build day; Breakthrough's keep-set rule ~/Breakthrough/keepset 6f1ca44, the map's C: qom_0_live_bq_c147_t3):
+    # U3 at thr 0 (every drafted row sure, the bonus row exact) + a sure row's rank 2-9 expert outside the check's loads is
+    # KEPT WHEN RESIDENT in the pool: posted with bit 21 (optional), which the loader never reads on a miss (ext/build_qom: slot
+    # -2), then dropped after the spin (weight 0, no renormalisation). Tail 3: every kept expert of a sure row at MSB-3 (t3);
+    # R57_QOM_TAIL=4 (LSB reads for kept ranks 2-9, the map's tested C) is not built. Not with REF2_OOO_1C (-2 base slots).
+    _QT = float(os.environ.get("R57_QOM_THR", "0.0"))
+    assert os.environ.get("R57_QOM_TAIL", "3") == "3", "R57_QOM_TAIL=4 (LSB reads for kept ranks 2-9) is not built yet"
+    FASTARMS["QOM"] = {s_: _S(thr=_QT, q1u=True, t3=True, qom=True) for s_ in ("humaneval", "ifeval", "multi")}
+    if FAST == "QOM":
+        assert os.environ.get("REF2_OOO_1C") != "1", "QOM's -2 base slots need the two-phase OOO (not REF2_OOO_1C yet)"
+        sys.path.insert(0, "/Users/kamen/Breakthrough/keepset")
+        import qom_keep as QK                            # read-only: Breakthrough's module
     FASTARMS["BE"] = dict(FASTARMS["B"], **FASTARMS["E"])   # the code mode + chat R1: one process for every domain
     FASTARMS["CE"] = dict(FASTARMS["C"], **FASTARMS["E"])
     assert FAST in FASTARMS and R == 16, (FAST, R)
@@ -402,7 +418,7 @@ if VTIER:                                                # NewIdeas' RANKED 33, 
     say(f"R57_VTIER: {_vb} / {_vs} slots per base / sidecar pool = {VT_BYTES / 1e9:.2f} GB volatile (purgeable: NOT in "
         f"phys_footprint; macOS reclaims it before compression or swap)")
 FG = dict(on=False, keep=None, sure=None, sure_np=None, t3=False,   # R57_FAST: this check's keep mask [rows, top-k] / U3's
-          cold=False, warm=None, cap=None, dump=None, chk=0)   # U3C: the request's warm table [48, 512], prefill capture, dump
+          cold=False, warm=None, cap=None, dump=None, chk=0, qom=False)   # qom: QOM's optional uses (bit 21)   # U3C: the request's warm table [48, 512], prefill capture, dump
 # R57_CBB=1 (the stale-slot check, the orchestrator 11-03 22:5x on Leap's S7B-PROBE 50de28c / fb999be: a slot the GPU read
 # earlier in the SAME command buffer can be re-read stale after the CPU rewrites it; across buffers it is fresh): every MoE
 # layer call starts a new command buffer (its input and routing evaluated first), so each earlier read of any slot sits in
@@ -446,6 +462,11 @@ if FAST:                                                 # EvalSuite's install_g
                 cand = uns[:, None] | top2                   # rank of the unsure rows, ranks 0-1 of the sure ones)
                 inU = ((ids2[:, :, None, None] == ids2[None, None, :, :]) & cand[None, None, :, :]).any(axis=(2, 3))
                 km = (uns[:, None] | top2 | inU).reshape(indices.shape)
+                if FG["qom"]:                                # QOM: U3's drops become OPTIONAL uses (bit 21): the loader
+                    opt = sr[:, None] & ~(top2 | inU)        # serves them only when resident (else -2, never read);
+                    self._bm["tier"]["qom"] = (opt, sr)      # _ooo_call_t3 flags ONLY its base post's copy (bit 21) and
+                    km = None                                # applies Breakthrough's rule after the spin; the graph's ids
+                                                             # stay clean (15:29: flagged ids in the graph -> a bad id at L5)
             if FG["t3"]:
                 self._bm["tier"]["nolsb"] = (sr, FG["sure_np"])   # _ooo_call_t3: those rows' ranks 0-1 at 3 bits
         if FG["on"] and km is not None and indices.ndim >= 2 and indices.shape[-2] == km.shape[-2]:
@@ -457,6 +478,7 @@ if FAST:                                                 # EvalSuite's install_g
             return _sw_call(self, x, indices, *a, **kw)
         finally:
             self._bm["tier"].pop("nolsb", None)
+            self._bm["tier"].pop("qom", None)
     _SWC.__call__ = _fast_call
     if any(v.get("t3") for v in FASTARMS[FAST].values()):   # U3's 3-bit sure rows: LP1's kernel test (a pair at a 4-bit
         import bigmoe.tier as _BT3                        # rank whose LSB slot is < 0 runs at tier 3; unchanged for slots
@@ -468,7 +490,9 @@ if FAST:                                                 # EvalSuite's install_g
         _ooo_call0 = _BT3._ooo_call
         def _ooo_call_t3(x, ids, bm, t, post, sc, shared):   # tier._ooo_call verbatim + the sure rows of t["nolsb"]
             nlz = t.pop("nolsb", None)
+            qm = t.pop("qom", None)                      # QOM: (optional uses [M, K], sure rows [M]) or None
             if nlz is None:
+                assert qm is None, "QOM needs U3's t3 path (nolsb)"
                 return _ooo_call0(x, ids, bm, t, post, sc, shared)
             nl, nl_np = nlz
             TG = _BT3._tier_glu_mod()
@@ -480,7 +504,9 @@ if FAST:                                                 # EvalSuite's install_g
             R4 = lo4[-1][1] if lo4 else 0
             assert not lo4 or lo4[0][0] == 0, t["segs"]
             gate, L = bm["gate"], bm["L"]
-            dep_m, n_m = post(L, ids)
+            ids_p = ids if qm is None else mx.where(qm[0].reshape(ids.shape), ids.astype(mx.int32) | (1 << 21),
+                                                    ids.astype(mx.int32))   # QOM: optional uses marked for the loader only
+            dep_m, n_m = post(L, ids_p)
             pre_m = dep_m[1:1 + n_m].reshape(M, K)
             ok = pre_m >= 0
             nl2 = nl.reshape(M, 1)
@@ -497,6 +523,12 @@ if FAST:                                                 # EvalSuite's install_g
             after = [y1] + ([shared] if shared is not None else [])
             sm = gate.spin(mx.depends(dep_m, after), L, n_m).reshape(M, K)
             sl = mx.where(nl2, -2, gate.spin(mx.depends(dep_l, after), t["side"], n_l).reshape(M, R4)) if R4 else None
+            if qm is not None:                           # QOM: Breakthrough's keep-set rule on the loader's answer (resident
+                ids_r = ids.reshape(M, K).astype(mx.int32) & 0xFFFFF   # = a slot; an optional miss came back -2, unread)
+                cf_ = mx.where(qm[1].reshape(M), 0.0, float("nan"))    # sure rows verify a draft; the bonus row is exact
+                kq, _, _ = QK.qom_keep_mx(ids_r, sc.reshape(M, K), cf_, sm >= 0)
+                sm = mx.where(kq, sm, sm[:, :1])         # a dropped use reads the row's rank-0 slot (always loaded), weight 0
+                sc = mx.where(kq, sc.reshape(M, K), mx.zeros_like(sc.reshape(M, K)))
             y2 = TG.tier_glu_phase(x2, t["base"], t["sideP"], sm, sl, phase, 2, plan=_BT3.PLAN)
             return TG.combine_phase(y1, y2, phase, sc.reshape(-1, K)).reshape(*x.shape[:-1], -1)
         _BT3._ooo_call = _ooo_call_t3
@@ -651,6 +683,21 @@ if K83:                                                  # -> 10.2 ms, steady +0
     _DFU.install(forms=D7B != "all", draft=draft)       # R-78's forms are bf16 spellings: never on a D7b drafter
     for _k in ("hc_gate", "gdn_inproj_x"):
         ref2.CFG[_k] = True
+# BUILD DAY (Wed 11-04) switches, each off unless set; the all-in FAST code preset sets all three (+ U3C + R57_D7B=code):
+if os.environ.get("R57_HCB") == "1":                     # hc_b (Leap D1-B kernel B, EXACT): the HC read's partition sum + gate,
+    assert "hc_b" in ref2.CFG, "Leap's ref2 has no hc_b"   # MLX's K-320 up GEMM and the tail as one kernel, bitwise == the S4
+    ref2.CFG["hc_b"] = True                              # chain (-0.94..-1.13 ms per 96-read chain, quiet); over hc_gate
+if os.environ.get("R57_DNR") == "1":                     # DENSE-N-RAM (Leap 2190e10, EXACT): every 4-bit dense weight with
+    assert hasattr(ref2, "dense_native_convert"), "Leap's ref2 has no dense_native_convert (needs 2190e10)"   # N >= 1024
+    _dn_n, _dn_mb = ref2.dense_native_convert(model)     # in place -> its native copy (one copy, no RAM): <= 16-row calls run
+    print(f"[r57] DENSE-N-RAM: {_dn_n} weights native ({_dn_mb:.0f} MB, in place)", flush=True)   # qmm16n == qmm16c bitwise
+if os.environ.get("R57_HC8") == "1":                     # HC8-1P (Leap c805fd0, v4 34206f9; FAST: tokens differ from REF2-T):
+    sys.path.insert(0, os.path.expanduser("~/Leap/scripts"))   # the trunk mixers -> 8-bit g64 (-0.6 GB) + the one-pass 8-bit
+    import hc8r                                          # HC read at <= 16 rows; the install and the switch go together
+    assert "hc8_fast" in ref2.CFG, "Leap's ref2 has no hc8_fast"
+    _h8 = hc8r.hc8_install(model)
+    ref2.CFG["hc8_fast"] = True
+    print(f"[r57] HC8: {_h8[0]} mixers 8-bit ({_h8[1]:.0f} -> {_h8[2]:.0f} MB), hc8_fast v{ref2.CFG.get('hc8_v')}", flush=True)
 
 def head2s(hid):
     lg = draft.compute_logits(hid)
@@ -891,9 +938,13 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                 head.append(*pend)
             dr, _ = head.draft_cut(min(MTP_K, maxd) if maxd else MTP_K, tcut)   # R57_CHATROWS: maxd = rows - 1
         else:
-            pth, cf = propose(mx.array([[tok] + [MASK] * (R_ - 1)]), ctx[None].astype(mx.bfloat16), dcache)
+            _d17 = D17 and R_ == 16                      # R57_D17: 17 positions, the 16th draft only gates the last row
+            pth, cf = propose(mx.array([[tok] + [MASK] * (R_ if _d17 else R_ - 1)]), ctx[None].astype(mx.bfloat16), dcache)
             dr = np.array(pth[0]).tolist()
             cfl = np.array(cf[0]).tolist()
+            x16 = c16 = None
+            if _d17:                                     # MTP Head's draft17.split17: today's 15-draft block + the extra
+                dr, cfl, x16, c16 = D17M.split17(dr, cfl, R_)
             cf_raw = list(cfl)
             if cg is not None:                           # R57_COPY: the gated copy over the whole block, before the cut
                 t_ = time.perf_counter()
@@ -920,7 +971,12 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                 fk_ = fk_[:len(dr) + 1].copy(); fk_[len(dr)] = True   # check's last row verifies no draft)
                 fst["gated"] += int((~fk_.all(axis=1)).sum())
             if sq_ is not None:
-                sq_ = sq_[:len(dr) + 1].copy(); sq_[len(dr)] = False
+                sq_ = sq_[:len(dr) + 1].copy()
+                if D17 and fz.get("qom"):                # R57_D17 + QOM (the map's screen 6): the last row is gated too:
+                    if len(dr) == R_ - 1:                # a full block by the 16th draft's cf; a cut block keeps the gate
+                        sq_[len(dr)] = c16 is not None and c16 >= fz["thr"]   # of the draft past the cut (gate_rows')
+                else:
+                    sq_[len(dr)] = False                 # today: the last row verifies no draft -> exact
                 fst["gated"] += int(sq_.sum())
                 if not sq_.any() and not U3FORCE:
                     sq_ = None
@@ -955,12 +1011,12 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                 s_, t_ = stats(), time.perf_counter()
                 FG.update(on=fk_ is not None or sq_ is not None, keep=mx.array(fk_[:w_]) if fk_ is not None else None,
                           sure=mx.array(sq_[:w_]) if sq_ is not None else None, sure_np=sq_[:w_] if sq_ is not None else None,
-                          t3=bool(fz and fz.get("t3")))          # R57_FAST's gate in
+                          t3=bool(fz and fz.get("t3")), qom=bool(fz and fz.get("qom")) and sq_ is not None)   # R57_FAST's gate in
                 try:                                     # the warm split too: a gated arm's warm per-row cost (Fable C's
                     with ref2.verify_scope(model):       # gated expert term, the orchestrator 23:2x)
                         lg_ = model(inp_[:, :w_], cache=cache)
                 finally:
-                    FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False)
+                    FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, qom=False)
                 mx.eval(mx.argmax(lg_[0], axis=-1))
                 d_ = stats() - s_
                 rec_ = [w_, round(1e3 * (time.perf_counter() - t_), 2), int(d_[0]), round(1e3 * d_[1], 2), round(1e3 * d_[2], 2)]
@@ -980,7 +1036,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             tap_reset(); TAP["on"] = True
         FG.update(on=fk_ is not None or sq_ is not None, keep=mx.array(fk_) if fk_ is not None else None,   # R57_FAST
                   sure=mx.array(sq_) if sq_ is not None else None, sure_np=sq_, t3=bool(fz and fz.get("t3")),   # (in the graph)
-                  cold=bool(fz and fz.get("cold")) and sq_ is not None)
+                  cold=bool(fz and fz.get("cold")) and sq_ is not None, qom=bool(fz and fz.get("qom")) and sq_ is not None)
         if PREROUTE and not mtp:                         # R57_PREROUTE: this check's capture; EvalSuite's block records
             PR.update(on=True, cur=None, y={}, blk={}, cap={}, dump=[] if PRDUMP else None)   # each layer's true top-10
             EM.STATE.capture = {}
@@ -988,7 +1044,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             with ref2.verify_scope(model):
                 lg = model(mx.array([[tok] + dr]), cache=cache)
         finally:
-            FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, cold=False, chk=FG["chk"] + 1)
+            FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, cold=False, qom=False, chk=FG["chk"] + 1)
             PR["on"] = False
         cb = time.perf_counter()                         # graph built: the sync-free gate waits on each layer's router ids
         TAP["on"] = False
@@ -1068,7 +1124,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                                                        "ka_reads", "bursts", "burst_gap025", "burst_gap1",
                                                        "vt_hits", "vt_ins", "vt_purged", "vt_drops",
                                                        "fc_issued", "fc_landed", "fc_hits", "fc_late", "fc_drops", "fc_skip",
-                                                       "fc_busy_bursts", "fc_busy_n", "fc_wait_s")}   # fc_*: lever 2 (build_l2)
+                                                       "fc_busy_bursts", "fc_busy_n", "fc_wait_s",   # fc_*: lever 2 (build_l2)
+                                                       "qom_skip", "qom_opt")}   # QOM (build_qom)
     pfx["vt_used_gb"] = px1.get("vt_used_bytes", 0) / 1e9   # the tier's filled part at the run's end
     if VTIER and "vt_hits_layer" in px1:                 # per ext layer (NewIdeas 15:46: its replay of the victim policy),
         pfx["vt_hits_layer"] = [a_ - b_ for a_, b_ in zip(px1["vt_hits_layer"], px0["vt_hits_layer"])]   # this run's
@@ -1224,7 +1281,9 @@ for n_p, (s, key) in enumerate(PICK):
             + (f"; forecast reads (lever 2): {r['pf']['fc_issued']} into the tier, {r['pf']['fc_hits']} used "
                f"({r['pf']['fc_late']} still landing, {r['pf']['fc_wait_s'] * 1e3:.1f} ms waited), {r['pf']['fc_drops']} "
                f"dropped unused, {r['pf']['fc_skip']} skipped (resident / tiered); {r['pf']['fc_busy_bursts']} demand bursts "
-               f"met forecasts in flight ({r['pf']['fc_busy_n']} reads)" if r["pf"]["fc_issued"] else ""))
+               f"met forecasts in flight ({r['pf']['fc_busy_n']} reads)" if r["pf"]["fc_issued"] else "")
+            + (f"; QOM: {r['pf']['qom_opt']} optional uses, {r['pf']['qom_skip']} optional-only misses not read (dropped)"
+               if r["pf"]["qom_opt"] else ""))
         mm = r["mem"]
         say(f"    mem: MLX peak prefill {mm[0]:.1f} / decode {mm[2]:.1f} GB; at the end active {mm[3]:.1f}, cache {mm[4]:.1f}, "
             f"footprint {mm[5]:.1f} GB; lifetime peak after prefill {mm[1]:.1f} -> after decode {mm[6]:.1f} GB")
@@ -1284,7 +1343,11 @@ if os.environ.get("K73_EXACT") == "1":
         f"hc_write {_c['hc_write']} (counted at graph build)"
         + (f"; K-83: hc_gate / hc_read {_c.get('hc_read')}, gdn_inproj_x {_c.get('gdn_inproj_x')}, drafter forms + chain_fused"
            if K83 else "") + (f"; SB from {SB_LO} row(s)" if SB_LO == 1 else ""))
-if WSALL:                                                # per sample: warm ms vs rows (1 / 4 / 8 / 16) -> slope + intercept;
+if any(os.environ.get(k_) == "1" for k_ in ("REF2_OOO_1C", "R57_HC8", "R57_DNR", "R57_HCB")):   # build day (Wed 11-04)
+    _c = ref2.counts()
+    say("  build-day engagement (ref2 counts at graph build): " + ", ".join(
+        f"{k_} {v_}" for k_, v_ in sorted(_c.items()) if any(s_ in k_ for s_ in ("ooo_1c", "hc8", "dense_native", "hc_b"))))
+if WSALL:                                               # per sample: warm ms vs rows (1 / 4 / 8 / 16) -> slope + intercept;
     sl_, ic_, ex_, cm_, wm_ = [], [], [], [], []         # cold 16 - warm 16 = the SSD's exposed share (+ cold-only effects)
     for d in WSALL:
         for s_ in d["samples"]:

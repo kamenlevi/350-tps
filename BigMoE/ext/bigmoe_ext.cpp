@@ -751,8 +751,17 @@ static void vt_copy(const Layer& ly, int s, int t, bool to_tier) {   // pool slo
 }
 
 // ids -> slots (in place into out). Loads misses (blocking). Caller holds g_mu.
-static void ensure(int L, const int32_t* ids, int n, int32_t* out) {
+static std::atomic<int64_t> g_qom_skip{0}, g_qom_opt{0};   // QOM: optional-only misses not read / optional uses seen
+static void ensure(int L, const int32_t* ids_in, int n, int32_t* out) {
   Layer& ly = g_layers.at(L);
+  // QOM (BigMoE Wed 11-04; Breakthrough's keep-set rule, ~/Breakthrough/keepset): bit 21 of an id marks an OPTIONAL use (a
+  // sure row's rank 2-9 expert outside the check's loads). An expert whose every use is optional is served from the pool
+  // when resident (or a prefetch), else not read at all: its slot comes back -2 and the GPU drops it (weight 0). No bit 21,
+  // no change. The id is the low 20 bits.
+  std::vector<int32_t> ids_m(ids_in, ids_in + n); bool anyopt = false;
+  for (int i = 0; i < n; i++) if ((ids_m[i] >> 21) & 1) { anyopt = true; ids_m[i] &= ~(1 << 21); }
+  const int32_t* ids = ids_m.data();
+  std::vector<uint8_t> req;                        // QOM: per needed expert, 1 = some use is not optional
   int cov_q = 0;                                    // BIGMOE_TRACE: needed experts whose queued prefetch was cancelled
   std::vector<int32_t> need; need.reserve(n);
   const bool rk = (ly.pom_r2 || ly.lp1) && ly.rank_k > 0;   // R-44 b: each needed expert's best gate rank in this call
@@ -761,7 +770,8 @@ static void ensure(int L, const int32_t* ids, int n, int32_t* out) {
     int e = ids[i];
     if (e < 0 || e >= ly.E) { fprintf(stderr, "bigmoe: bad expert id %d at layer %d\n", e, L); abort(); }
     auto it = std::find(need.begin(), need.end(), e);
-    if (it == need.end()) { need.push_back(e); if (rk) mr.push_back(127); it = need.end() - 1; }
+    if (it == need.end()) { need.push_back(e); if (rk) mr.push_back(127); if (anyopt) req.push_back(0); it = need.end() - 1; }
+    if (anyopt && !((ids_in[i] >> 21) & 1)) req[it - need.begin()] = 1;
     if (rk) { int8_t& m = mr[it - need.begin()]; m = (int8_t)std::min<int>(m, i % ly.rank_k); }
   }
   if ((int)need.size() > ly.C_main) { fprintf(stderr, "bigmoe: %zu experts > C=%d at layer %d\n", need.size(), ly.C_main, L); abort(); }
@@ -818,6 +828,7 @@ static void ensure(int L, const int32_t* ids, int n, int32_t* out) {
       continue;
     }
     if (ly.lp1 && rk && mr[j] >= 1 && !ly.pf.count(e)) continue;   // LP1: rank-1 uses only -> no read, no insert
+    if (anyopt && !req[j] && !ly.pf.count(e)) { g_qom_skip++; continue; }   // QOM: optional-only miss: not read (-2)
     n_miss++;
     auto pit = ly.pf.find(e);
     if (pit != ly.pf.end()) {                       // prefetched: wait for its bytes, then promote
@@ -868,6 +879,7 @@ static void ensure(int L, const int32_t* ids, int n, int32_t* out) {
     ly.lru.push_front(e); ly.where[e] = ly.lru.begin();
   }
   g_st.uses += need.size(); g_st.misses += n_miss; g_st.stalled += !jobs.empty();
+  if (anyopt) for (int i = 0; i < n; i++) g_qom_opt += (ids_in[i] >> 21) & 1;
   if (g_rtrace) { std::lock_guard<std::mutex> lk(g_rmu);
                   g_cov.push_back({L, g_cur_seq, (int)need.size(), c_hit, c_rdy, c_late, cov_q, c_pu, c_un, now_s()}); }
   if (!jobs.empty()) {
@@ -1067,7 +1079,7 @@ static MTL::ComputePipelineState* post_pso() {
         threadgroup_barrier(mem_flags::mem_threadgroup);
         int n = m.z;
         if (m.w && (int)t < n) {
-          int e = ids[t], li = e / 31;
+          int e = ids[t] & 0xFFFFF, li = e / 31;   // bit 21 = QOM's optional mark (the loader reads it)
           const volatile device int* tb = (const volatile device int*)tab;
           int tag = tb[li * 32], w = tb[li * 32 + 1 + (e - li * 31)];
           bool fresh = tag == m.y && (((uint)w) & 0xFFC00000u) == ((((uint)m.y) & 0x3FFu) << 22);   // stamped entry
@@ -2224,6 +2236,7 @@ NB_MODULE(bigmoe_ext, m) {
     d["fc_late"] = g_fc_late.load(); d["fc_wait_s"] = g_fc_wait_ns.load() * 1e-9; d["fc_drops"] = g_fc_drops.load();
     d["fc_skip"] = g_fc_skip.load(); d["fc_busy_bursts"] = g_fc_busy_bursts.load(); d["fc_busy_n"] = g_fc_busy_n.load();
     d["fc_f"] = g_fc_f; d["fc_fs"] = g_fc_fs;
+    d["qom_skip"] = g_qom_skip.load(); d["qom_opt"] = g_qom_opt.load();   // QOM: optional-only misses not read / optional uses
     { int64_t vb = 0, vr = 0; std::lock_guard<std::mutex> lk(g_mu);
       for (auto& ly : g_layers) if (ly.vt_n) { vb += (int64_t)ly.vt_n * ly.vt_slot; vr += (int64_t)(ly.vt_n - (int)ly.vt_free.size()) * ly.vt_slot; }
       d["vt_bytes"] = vb; d["vt_used_bytes"] = vr;        // the tier's size / its filled part (volatile: not in phys_footprint)

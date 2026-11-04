@@ -32,7 +32,7 @@ grep -q '"ref2tf0"' evalsuite/model.py || { say "variant ref2tf0 is not in evals
 [ -n "$REFS" ] || { say "no reference run given"; exit 2; }
 [ "$(store)" = "$WANT" ] || { say "records3 is $(store), this check wants $WANT: not running"; exit 2; }
 while [ -e "$HOME/.local/share/quiet/PAUSE" ] || [ -e "$HOME/.local/share/quiet/HOLD" ]; do sleep 30; done
-export EVALSUITE_BIGMOE_CODE="$SNAP"
+export EVALSUITE_BIGMOE_CODE="$(cd "$SNAP" && pwd)"   # absolute, as the runners pass it
 say "r3check $RUN: records3 $(store); snapshot $SNAP ($(head -c 140 "$SNAP/SOURCE")); refs $REFS; extra env: ${EXTRA:-none}"
 EVALSUITE_STAGE_ENV="$TIERENV${EXTRA:+,$EXTRA}" ./bin/evalsuite gpu decode "$RUN" --sets ifeval,ifevalx \
   --keys results/r3check_keys.txt --chunk-minutes 30 --C 192 --share >> "$LOG" 2>&1; rc=$?

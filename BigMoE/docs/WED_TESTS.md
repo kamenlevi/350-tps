@@ -134,6 +134,39 @@ started on Breakthrough's "map batch done" (log data/morning_1104.log):
   default if >= +1 % geo steady AND every token == REF2-T. HC8 = Leap's hc8r.hc8_install(model) + REF2_HC8_FAST=1
   (c805fd0: 8-bit trunk hyper-connection mixers read in one pass, -0.6 GB; FAST, tokens differ): KEEP for the FAST track
   if >= +2 % geo steady with no domain < -3 %, then EvalSuite same-scores decides; else KILL.
+- **Lever 2, stage 1 BUILT (Wed 14:5x-15:0x, e8b7b6d; BUILD_DAY #2): forecast reads into the volatile tier.** Today's
+  default posts L+1's forecast (PF_B 96, ranked list <= 61) but issued no reads (no spare or victim slots; R-57's victim
+  prefetch was KILLED: wrong guesses evicted needed experts). Now, right after L's release, the loader reads the first
+  F = 4 ids of that list that are neither resident nor tiered (FS = 2 for the sidecar) as whole records INTO THE PURGEABLE
+  VOLATILE TIER (one GCD block each, trace tag 3): the GPU never reads the tier, so a wrong guess evicts nothing; a demand
+  miss found there is copied back (waiting for a read in flight). CPU test scripts/test_fc_tier.py PASS on records3 and on
+  the converted layer, direct reads on and off (32 loads, every piece == plain demand loads; in-flight, pressure, skip and
+  purge cases); test_layout_engine.py PASS on ext/build_l2. Slot (scripts/l2_wed.sh, C 160 by day, ~25-30 min): smoke,
+  then l2c / l2f / l2f2 / l2c2 (14 prompts) + traced l2ct / l2ft (W1B's six). Line (pre-registered ~15:0x, before any run):
+  KEEP if every token == REF2-T AND stall per check <= -20 % AND >= +3 % geo steady; KILL if < +1 % or the next-demand
+  penalty > 0.05 ms per burst; else BETWEEN. Stage 2 = SAMELAYER-T's trained forecast (weights asked of MTP Head).
+> (a quote from the project owner, kept private)
+  r57_screen switches R57_HC8 (Leap's hc8r.hc8_install + ref2 hc8_fast, v4), R57_DNR (ref2.dense_native_convert) and
+  R57_HCB (ref2 hc_b), each off unless set. scripts/allin_wed.sh at C 224 on the 12 HumanEval, all arms on ext/build_l2:
+  u3c (U3C len) / allin (+ D7b code drafter + HC8 + DENSE-N-RAM + hc_b) / allinf (allin + lever 2) / allin2 / u3c2, then a
+  dump arm for one map screen. No pass line: the combined FAST number today's builds reach, and the cycle's parts per check
+  (check, draft, SSD I/O, gate service, build) for the list toward ~50 ms per check. QOM at 45 GB is not in (not cheap to
+  wire). Runs behind lever 2's slot when memory allows (Chrome holds 13 GB by day), else Thu ~13:10.
+- **QOM IN THE ENGINE (FAST, Wed 15:0x-15:5x; 5bb2743 + c387c97, ext/build_qom; R57_FAST=QOM):** Breakthrough's keep-set
+  rule (~/Breakthrough/keepset 6f1ca44, read-only) on U3 at thr 0: a sure row's rank 2-9 expert outside the check's loads
+  is posted with bit 21 (optional); the loader never reads it on a miss (slot -2), qom_keep_mx keeps the resident ones after
+  the spin, a dropped use reads the row's rank-0 slot at weight 0. CPU test scripts/test_qom_ext.py PASS. DRAFT17
+  (R57_D17=1, 723ee9b, MTP Head's draft17.py): a 17-position draft gates the last row too (smoke: 78 / 78 rows gated).
+- **By-day FAST numbers (shared GPU, apps open, single pass: a lead, not a verdict).** C 96 / C 128 runs were INVALID: a
+  16-row check (160 ids) takes the sync-free FAST path only when it fits the pool (C >= 160 per layer), so at C 128 every
+  check ran ref2's host-synced _tier_slots (no OOO, no 3-bit sure rows, no QOM). At C 160 uniform pools (R57_LAYSZ=0,
+  C_l 64; data/bdq/bdq_report.txt), 12 HumanEval: U3C 66.9 tok/s (33.8 SSD MB per kept, check 116.5 ms); QOM 67.3
+  (24.8 MB per kept = x0.734; 747K optional uses, 153K misses never read; its drafter ms rose 11.9 -> 15.7: GPU
+  contention); QOM ALL-IN (+ D7b code + HC8 v4 + DENSE-N-RAM + hc_b) 85.8 tok/s = +26.3 % vs U3C, check 100.2 ms.
+  Lever 2 read nothing in the earlier FAST arm: only arm gate+t+pf posts L+1's forecast (and needs BIGMOE_PRED_LINES=4).
+  Smoke 2 (data/smk): the exact default with lever 2 on, 2 prompts: every token == REF2-T (32 / 32 each), 2,538
+  forecast reads, 1,192 used; the QOM all-in + lever 2 runs. Tonight 23:00 (if the apps close): QOM-based all-in at C 224
+  (u3c / qall / qallf / qall2 / u3c2) then lever 2 at C 160.
 - **5b after the morning block, if it ends before 12:00:** scripts/u3c_wed.sh (U3C len on code vs U3, A-B-A-B, plus the
   u3n2 gate on today's ext/build and the mask-check dump; line in its header).
 - **Item 3 is DONE on CPU (06:22):** data/ab/ref_tokens.json = chat23's 30 + the night's u3c_160 (CAP 256, REF2-T) for the

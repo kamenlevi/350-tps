@@ -2889,3 +2889,148 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   measured.
 - Memory: peak footprint 3.38 GB (/usr/bin/time -l), mlx peak 2.48 GB, max RSS 2.46 GB. That is 0.4 GB over the declared
   MEM 3 GB (the cache limit was 256 MB).
+- UPDATE 14:1x (Leap's lounge notes): Leap's 05fafe7 makes the forms' default 16..64 rows (R-78b: both forms are bitwise at
+  every row count >= 16 and differ at 2-15), so the +8.6 / +9 ms fallback is gone from the code and 17 / 32-row drafts stay
+  bitwise. NewIdeas (14:08): with the bonus row gated, code's bytes go x0.665-0.706 at 24 GB (35.7 -> 25.2 MB per kept
+  token today) and x0.742 at 12 GB.
+
+## SAMELAYER-T FIT: the final router weights for lever 2 (BigMoE's ask 14:5x, build #2) -- written at launch (14:57), before results
+- Not a test: the deliverable. Ridge on all 18 pr2_160 prompts (no hold-out), lambda per layer from the 18-fold LOPO grid
+  (each of 0.1 / 0.3 / 1 / 3 / 10 x G's mean eigenvalue scored on every held-out prompt, pooled per-row recall@10; the best is
+  refit on all prompts). sticky/samelayer_t_fit.py -> data/samelayer_t_W.npz (bf16 bits, 47 x 512 x 2560, + the bias)
+  and data/samelayer_t_fit.txt.
+- Folded form, the router's own GEMV: logits_L = X W_L^T + b_L, W_L = R_L + dW_L^T, b_L = e0 - mu dW_L; top-10. The bias
+  is part of the forecast (a per-expert offset moves the top-10).
+- Input: X = layer L's MLP-side read of its pre-attention stream, r57_screen.py:582 (pre = self.mlp_hyper_connection(hidden)[0]),
+  after the PLE add at :578 ('full'). The dump has no p3 input, so p3 recall can't be scored from it.
+- Reported: LOPO recall at the chosen lambdas (slightly optimistic vs SAMELAYER-T's nested 0.823 / 0.851, since the pick
+  sees the outer folds); in-sample recall with the fp64 W, the saved bf16 W, and R exact + dW in bf16 (the rounding check).
+### SAMELAYER-T FIT RESULT (Wed 11-04 14:57-15:07, CPU, share lock; data/samelayer_t_fit.txt, .log; weights data/samelayer_t_W.npz, 118 MB, not in git)
+- LOPO recall at the chosen lambdas: code 0.706 -> 0.824, chat 0.821 -> 0.851 (the nested pick gave 0.823 / 0.851: the
+  outer-fold pick adds nothing). Lambda 1 x mean eigenvalue on 41 of 47 layers (0.3 x3, 3 x3).
+- In-sample (all 18 prompts, optimistic): code 0.880, chat 0.926. The saved bf16 W gives the same to 4 decimals (0.8802 /
+  0.9258), and so does R exact + dW in bf16: rounding costs nothing.
+- Footprint 3.57 GB (MEM 4 GB declared), 593 s. Sent to BigMoE with the input (r57_screen.py:582 after :578) and the bias.
+
+> (a quote from the project owner, kept private)
+- Data: the TOP16 walks (data/d02b_walk_kw_{code,ifeval,multi}.npz: L1-20 at HPD-0's anchors, block 16; per check the 16
+  candidates and the teacher-forced selector softmax at each of the 15 depths; the 125B's tokens).
+- Simulated at the same anchors (no anchor shift): kept per check = 1 + the leading run of right picks, for: the official pick
+  (top-1 by the selector; self-check against the walk's own kept) and oracle picks that are right whenever the 125B's token is
+  among the top-2 / top-3 / top-16 candidates. Also: per depth, the share of first misses where the right token was rank 2 / 3.
+- Read: the ceiling for any re-ranker over DFlash2's candidates. Prior on the same anchors: E1 COVERAGE's DFlash2 + MTP-chain
+  confidence pick, code 9.54 -> 11.70 (oracle 12.73), REPORT :2452.
+- LINE (does a live re-ranker deserve a build?): top-3 oracle >= +20 % kept on code -> yes (the MTP-assisted pick first);
+  < +10 % -> the pick is not the lever; between: only with a cheap re-ranker.
+- Prediction: top-3 oracle code +25-35 % (KWALL: 0.888 top-3 at mid rows vs ~0.75 top-1).
+### RERANK-0 RESULT: PASS by its line -- a perfect top-3 pick is worth x1.21 on code, the whole candidate set x1.29 (Wed 11-04 15:10; sticky/rerank0.py, data/rerank0.txt; CPU, seconds)
+- Code (24 windows, 666 checks): the official pick re-simulated 9.57 = the walk's 9.57 on every check (self-check OK).
+  Oracle kept per check: top-2 11.00 (x1.149), top-3 11.57 (x1.209), top-16 12.37 (x1.292). At the official first miss the
+  125B's token is rank 2 in 54.7 %, rank 3 in 14.9 %, 4-16 in 19.6 %, not a candidate in 10.9 %.
+- Chat: ifeval 2.45 -> top-3 3.31 (x1.351) / top-16 4.19; multi 2.06 -> 2.62 (x1.273) / 3.28. Chat's misses are often not
+  candidates at all (30 / 44 %): chat's wall is the candidates, code's is the pick.
+- LINE (top-3 >= +20 % code -> a realistic re-ranker deserves a test): x1.209 -> PASS, at the edge. Prediction was +25-35 %.
+- What it means for 300: even a perfect pick over all 16 candidates keeps 12.4 per 16-row check; 14 needs a better drafter
+  or longer checks. [CORRECTED 15:3x: the next sentences quoted the WITHDRAWN off-by-one MTPPICK numbers (11-03 ALIGNMENT
+  FIX), not E1 COVERAGE; aligned, the MTP-assisted pick keeps +7 % (MTPPICK aligned) / +9.8 % (MTPSCREEN, full head 10.51).]
+  The only realistic re-ranker measured so far is the target's MTP chain: E1 COVERAGE's DFlash2 + MTP
+  confidence pick, 9.54 -> 11.70 (x1.226, above the top-3 oracle because the chain proposes its own tokens). It costs 15
+  sequential MTP steps (2.2 ms each today, ~33 ms). At a 90 ms cycle it pays only below ~1.4 ms per step; at a 50 ms cycle
+  only below ~0.75 ms, or when the chain runs beside the block pass instead of after it. A learned picker over DFlash2's own
+  state gave +1.2 % before (L1-21 / SD-sel).
+
+## DA-0: the DRAFT-AHEAD replay -- how often a block pre-drafted during the check is the one needed (the orchestrator's item 2, BREAK_THE_WALL 4.2) -- pre-registration (written before any run, Wed 11-04 15:2x)
+- On the engine's cut chain (t 0.3) over the TOP16 walks (L1-20, HPD-0's anchors): the check ends at the segment end (all
+  checked drafts right) or at its first miss. Pre-drafted prefixes: the segment end + the two lowest-cf depths in the
+  segment. The next block's anchor is unknown before the check ends, so the pre-draft guesses it: the own draft past the cut
+  (segment end; none exists at a full block today) or the selector's 2nd-ranked candidate (at a miss). Hit = the check ends
+  at a pre-drafted prefix AND the guess is right; then the pre-drafted block is exactly the serial one.
+- Read: the hit rate on code. With D7b's 6.3 ms drafter, a hit saves 6.3 ms of serial draft; the 3 pre-drafts cost GPU time
+  inside the check, which pays only where the GPU waits (after layer 45, the last tap, or on the SSD).
+- LINE: code hit >= 50 % -> build the scheduler patch; < 30 % -> DRAFT-AHEAD can't pay at its design's 3 prefixes.
+- Prediction: ends at a prefix ~70 % (the design's [K]), anchor guesses ~75 % / ~55 % -> hit ~45-50 % on code.
+### DA-0 RESULT: BETWEEN -- the pre-drafted block is usable on 34 % of code checks (43 % with DRAFT17's extra draft) (Wed 11-04 15:14; sticky/da_replay.py, data/da_replay.txt; CPU)
+- Code (666 checks, cut chain kept 9.35): the check ends at a pre-drafted prefix on 89.8 % (segment end 49.1 %, a full
+  block 24.3 % of them; one of the two lowest-cf depths 40.7 %), but the anchor guess is often wrong: the own draft past the
+  cut is right 34.5 % (the cut sits where confidence drops), the 2nd-ranked candidate at a lowest-cf miss 63.1 %.
+  HIT 34.2 %; 42.6 % if DRAFT17's extra draft fixes full blocks at the same rate (likely higher there: unmeasured).
+- Chat: ifeval 25.6 %, multi 17.8 %.
+- LINE (>= 50 % build, < 30 % can't pay): BETWEEN. Prediction was ~45-50 %: the segment-end guess is the miss.
+- Worth: with D7b's 6.3 ms drafter, a 34-43 % hit saves 2.1-2.7 ms per check, and only if the pre-drafts run in GPU-idle
+  time. At 45 GB FAST, where the GPU is the bottleneck, they don't. Pre-drafting 2 anchors per prefix raises the hit rate
+  but costs more drafts. The orchestrator asked for the patch anyway (by day, offline same-drafts check).
+
+## DA-1: DRAFT-AHEAD's offline same-drafts check (the orchestrator's "minimal test", by day) -- pre-registration (written before any run, Wed 11-04 15:20)
+- sticky/draft_ahead.py (plan / launch on cloned drafter caches / resolve; PATCH notes for r57_screen.py) and sticky/da_check.py:
+  the engine's K83 drafter path (L1-20 bf16, forms + chain_fused, head2s K 16) replayed on the 24 code windows of
+  ~/Leap/data/dfl2d_code in the engine's order (propose -> cut t 0.3 -> check against the 125B's tokens -> commit -> next
+  propose on the taps of rows 0..k). Prefixes: end / low1 / low2 (DA-0's three), + end2 (the 2nd-ranked guess past the cut).
+- LINE: identical drafts on 100 % of hits (path, cf and the drafter cache, bit for bit) and the serial cache untouched on 100 %
+  of checks -> the patch is exact and goes to BigMoE; any difference -> fix before handing over. Hit rate reported beside
+  (DA-0's replay 34.2 %), with the serial propose's ms.
+### DA-1 RESULT: PASS -- the patch is exact; worth it only where the check leaves ~20-33 ms of GPU idle (Wed 11-04 15:20; sticky/draft_ahead.py, sticky/da_check.py, data/da_check.txt; drafter only, 38 s)
+- 689 checks over 24 code windows (cut-chain kept 9.25), 3.25 pre-drafts per check. HIT 35.4 % with the 3 prefixes (DA-0's
+  replay 34.2 %), 40.9 % adding the 2nd-ranked guess past the cut.
+- Same drafts: 281 of 281 hits identical (path, cf and the drafter cache, bit for bit); the serial cache untouched by the
+  pre-drafts on 689 of 689 checks. LINE (100 % / 100 %): PASS.
+- Time: serial propose 11.7 ms, each pre-draft 10.0 ms. If the pre-drafts cost nothing, the drafter's critical path falls
+  11.7 -> 7.6 ms (3 prefixes) / 6.9 (4). But they are ~33 ms of GPU per check (3.25 x 10; ~20 with D7b), so they pay only
+  where the check leaves that much GPU idle: the SSD-bound 24 / 12 GB lines, not 45 GB FAST, where the GPU is the bottleneck.
+  Batching the prefixes into one pass would cut the cost, but it changes the GEMM shapes: the drafts would no longer be
+  bitwise the serial ones.
+- Footprint 2.85 GB. PATCH notes for r57_screen.py are in draft_ahead.py (R57_DA=1; safe form after the eval, overlap form
+  on a second stream from layer 45's taps).
+
+## MTPSCREEN: does the MTP-assisted pick survive a screened MTP head? (Leap's question, 15:3x: the 4-bit lm_head is ~1.7 of the ~2.2 ms MTP step) -- pre-registration (written before any run, Wed 11-04 15:26)
+- Why: RERANK-0 / TOP3-USE: the MTP-assisted pick keeps 11.70 vs 9.54 on code (x1.23, E1 COVERAGE) but its 15 sequential
+  steps (~2.2 ms each) make it x0.92 net. Leap measured a screened head at 0.24 ms (32K rows) / 0.02 ms (~2K rows): a step of
+  ~0.75 / ~0.5 ms. Then the pick costs ~7.5-11 ms per check (15 steps; fewer with the cut) and could net ~+10-13 % at a 90 ms
+  cycle, if the screen keeps its quality.
+- sticky/mtpscreen.py: d24_mtptop3's teacher-forced b5 chain on the 24 held-out HumanEval+ windows, at the TOP16 walk's HPD-0
+  anchors (MTP anchor s = A - 1); per depth the MTP's top-1 and p under heads full / a (FR-Spec top-32K, ~/Leap/data/
+  frspec_rank.npy, + session tokens) / b (DFlash2's 16 candidates + session) / b0 (the 16 alone); E1's pick (the more confident
+  drafter per depth), plus a threshold sweep (optimistic) and the union.
+- Self-checks: DFlash2 alone ~9.54-9.57, MTP alone (full) ~10.13, pick (full) ~11.70, union ~12.73 (E1's numbers).
+- LINE: head b keeps >= 95 % of full's pick gain (kept_b - 9.54 >= 0.95 x (kept_full - 9.54)) -> PASS: the pick at ~0.5 ms per step
+  is worth building; head a >= 95 % -> PASS at ~0.75 ms; both < 80 % -> KILL the screened pick.
+- Prediction: b ~85-95 % (the MTP's wins at a DFlash2 miss are mostly the 125B's token, which is among the 16 candidates
+  89 % of the time at first misses, RERANK-0); a ~99 %.
+- Needs ~7-11 GB of GPU (the D-24 harness), ~15-20 min: by day only in the one > 5 GB slot, else tonight.
+
+### D17-1 (information for BigMoE's R57_D17 + QOM, Wed 11-04 15:30; sticky/d17_check.py, data/d17_check.txt; drafter only, 14 s, 2.6 GB)
+- The 17-position drafter pass vs today's 16 on the K83 path (forms 16..64, Leap 05fafe7), 689 code checks in the engine
+  order: drafts 1-15 identical tokens on 83.3 % of checks (96.48 % per draft), cf never bit-equal (the extra mask position
+  enters the bidirectional block attention); the t 0.3 cut lands at the same depth on 89.3 %. 9.67 vs 9.76 ms: no extra cost.
+- Full blocks (15 checked drafts, all right): 23.7 % of checks; the 16th draft is the 125B's token on 79.8 % of them (the
+  quality of QOM's last-row gate there, and DA-1's full-block anchor guess: DA's hit would rise ~34 -> ~43-44 %).
+- Patch steps for r57_screen.py: sticky/draft17.py (PATCH17, split17, last_row_draft). Not measured: kept under the
+  17-position drafts; the masked variant (drafts 1-15 as today).
+### MTPSCREEN RESULT: PASS by its line (a screened head keeps the pick: b 10.53, a 10.51 = full 10.51), but the pick is x1.10, not x1.23, and the step's layer alone is 1.28 ms (Wed 11-04 15:30-15:31; sticky/mtpscreen.py, data/mtpscreen.txt, mtpscreen_code.npz; 28 s, footprint 10.1 GB)
+- 666 code checks at HPD-0's anchors (MTP anchor s = A - 1, the 11-03 ALIGNMENT FIX's): DFlash2 alone 9.57 (= the walk);
+  MTP b5 alone 9.97; union oracle 11.35. The pick (the more confident drafter per depth): full head 10.51 (x1.098); head a
+  (FR-Spec 32K + session) 10.51; head b (DFlash2's 16 candidates + session) 10.53 (x1.101); b0 (the 16 alone) 10.40 (x1.087).
+  The best threshold shift is 0 for every head: the subset's inflated p does not hurt the pick here.
+- Self-check vs the pre-registration: it expected E1 COVERAGE's 11.70 / 10.13 / 12.73. Those were the WITHDRAWN off-by-one
+  MTPPICK numbers (11-03), misattributed to E1 in RERANK-0's text today (corrected above). The aligned MTPPICK said +7 %;
+  this run says +9.8 %.
+- LINE (b keeps >= 95 % of full's gain -> PASS): (10.53 - 9.57) / (10.51 - 9.57) = 102 % -> PASS; a 100 %.
+- The 1-row step (mtp_forward + argmax / softmax max + one sync, 400-pair cache, shared GPU): full head 2.571 ms, Leap's
+  screened 32K head 1.353 ms, a 16-column stand-in (the layer + mixer alone) 1.280 ms. The head is 1.29 ms of it (Leap: 1.257).
+- Worth: the pick adds +0.94 kept per check (x1.10) for 15 sequential steps. At 1.35 ms per screened step that is ~20 ms, so
+  x1.10 x 90 / 110 = x0.90 at a 90 ms cycle: a loss. It breaks even near 0.6 ms per step (the layer ~2x faster than today),
+  and pays only below that. The screened head does halve every MTP step: that helps the chat switch's MTP chain (R57_CHATSW,
+  2.2-2.6 ms per step today); the drafts change only where the full top-1 is outside the set (a: 0.3 % of depths).
+
+### D7B-1 (the orchestrator's D7b discrepancy, Wed 11-04 15:36-15:41; sticky/d7b_check.py, data/d7b_check.txt, d7b_check_g32.log; drafter only, 3.3 GB)
+- Question: BigMoE's live all-in arms (C 128, 12 HumanEval prompts) saw R57_D7B=code cut code kept 10.35 -> 9.91 (-4.3 %);
+  Leap's R-85b replay said +0.00 %. Which form does the engine apply, and does anything else differ?
+- The engine applies arm E (d7b_live.apply: the 5 layers' Linears 4-bit RTN g64; fc, selector and head bf16). The bf16
+  drafter gets R-78's forms, the 4-bit one doesn't (forms need nn.Linear); both get draft_fused's conv kernel, mask memo and
+  chain_fused. This replay wires it the same way.
+- Engine-order walk with the t 0.3 cut, paired per window: code (24 held-out HumanEval+) 9.25 -> 9.13 (x0.987, 90 % CI over
+  windows x0.965-x1.007); math (60 GSM8K) 6.67 -> 6.52 (x0.978, x0.967-x0.988). g32 instead of g64: code x0.986
+  (x0.974-x0.999), math x0.989 (halves math's loss, not code's).
+- Reading: the code cost is ~-1.3 % here (CI to -3.5 %); R-85b's +0.00 % was optimistic, and BigMoE's -4.3 % on 12 prompts
+  is likely the same effect plus sampling. Net at a 90 ms cycle: -4.1 ms (~4.5 %) vs -1.3 .. -4.3 % kept, i.e. ~+0 .. +3 %.
+  The trade improves as the cycle shrinks (at 50 ms, -4.1 ms is 8 %). A 4-bit-aware fine-tune (~1 h GPU, ~11 GB) is
+  what would remove the kept loss.

@@ -1335,7 +1335,12 @@ class LetterFrequencyChecker(Instruction):
     Returns:
       A string representing the instruction description.
     """
-    if (
+    # EvalSuite 2026-11-04: the reference code draws a random letter for any single character outside a-z, so the two
+    # items that ask for a punctuation count (ifevalx/1129 '!', ifevalx/1122 '#') scored at random, per evaluation and per
+    # arm. Such a character is now counted as given (as the prompts word it). No core item is affected.
+    if letter and len(letter) == 1 and not letter.isspace() and not letter.isalpha():
+      self._letter = letter
+    elif (
         not letter
         or len(letter) > 1
         or ord(letter.lower()) < 97

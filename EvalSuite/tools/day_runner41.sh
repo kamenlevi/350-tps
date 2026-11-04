@@ -9,8 +9,9 @@
 # t0 scripts, evalsuite/, MLX / mtplx; a change stops it (exit 7). Stop it by pid only, and its cli child too.
 # Tue 3 Nov 17:4x: T0_CK sets the chunk minutes (45 in the orchestrator's one-job window, Wed 15:30-Thu 00:15);
 # T0_AGENT_FIRST=1 runs the agent process first. Each chunk waits while another session's shared run has MEM > 5 GB in
-# its lock reason (the day rule). It stops (exit 8) once records3's index shows BigMoE's in-place conversion: the pinned
-# engine reads records3 row-major in every prefill (PLAN_records3_convert).
+# its lock reason (the day rule), and while runner 42 / 43 (q42.pid / q43.pid, Wed 11-04) live. It stops (exit 8)
+# once records3's index shows BigMoE's in-place conversion: the pinned engine reads records3 row-major in every
+# prefill (PLAN_records3_convert).
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 cd "$HOME/EvalSuite" || exit 1
 LOG=results/day41_runner.log
@@ -55,7 +56,11 @@ pin() {
 PIN0=$(pin)
 say "runner 41 start (pid $$); code pin $PIN0; from $START once $GO exists, until $END"
 grep -q b12llff4t0c evalsuite/model.py || { say "T0 not wired (pending/t0_wire.py): runner stops"; exit 2; }
-while [ "$(date +%s)" -lt "$EARLIEST" ] || [ ! -e "$GO" ]; do sleep 60; done
+busy4x() {      # runner 42 / 43 (this session's NAX6 / F1 queue) still alive: one lock per session, so T0 waits
+  local f; for f in results/q42.pid results/q43.pid; do [ -f "$f" ] && kill -0 "$(cat "$f")" 2>/dev/null && return 0; done
+  return 1
+}
+while [ "$(date +%s)" -lt "$EARLIEST" ] || [ ! -e "$GO" ] || busy4x; do sleep 60; done
 SWAPTRIPS=0; NOPROG=0
 next_job() {   # the next chunk: arms alternate on their core sets; the agent process last (first with T0_AGENT_FIRST=1)
   if [ "$AGENT_FIRST" = 1 ] && [ "$(nset $A agent)" -lt 29 ]; then echo "$A agent"
@@ -70,6 +75,7 @@ while :; do
   job=$(next_job $last); [ -n "$job" ] || break
   set -- $job; v=$1; sets=$2
   calm
+  while busy4x; do sleep 60; done
   w=0; while mem_busy; do [ $((w % 10)) = 0 ] && say "another session's MEM job holds a shared lock: waiting (day rule)"; w=$((w + 1)); sleep 60; calm; done
   converted && { say "records3 is converted (index.json): the pinned engine reads it row-major: runner stops at $(nall)/289 rows"; exit 8; }
   [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }

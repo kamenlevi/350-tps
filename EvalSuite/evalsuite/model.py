@@ -58,7 +58,30 @@ VARIANTS = {
                                       # (one fused SDPA per 16-row call; padded fused GDN in_proj; PREREG_ref2ct_2026-11-01)
     "ref2th8": dict(model="ref", sorted=True, plan=None, ref2=True, ref2_code="leap-faff8e5", tier="4433333333", hc8=True),
 }                                     # Q3 HC8 (ROUTE_350, day 9): REF2-T with the HC mixers + PLE key/value at 8 bits
-SCRATCH_RE = re.compile(r"(ref2th8|ref2ct|ref2t|ref2b|ref2|ref)(\.r\d+)")   # scratch runs of a VARIANTS entry (identity checks)
+
+
+def _w4(hc8r=False, **on):
+    """REF2-T on Leap 52cf2c9 (PREREG_nax6, PREREG_f1 rev. 3): every switch the two PREREGs name is set explicitly, off
+    unless `on` turns it on (no env leak can flip one); hc8r: the snapshot's hc8r.hc8_install before ref2.apply (HC8-1P)"""
+    cfg = dict(tier_nax_ooo=False, nax_native=False, nax_hybrid=False, fatt_verify=False, fatt_r8=False, hc8_fast=False,
+               hc8_v=4, dense_native=False)
+    cfg.update(on)
+    return dict(model="ref", sorted=True, plan=None, ref2=True, ref2_code="leap-52cf2c9", tier="4433333333",
+                ref2_cfg=cfg, **({"hc8r": True} if hc8r else {}))
+
+
+VARIANTS.update({
+    "ref2tf0": _w4(),                                                  # the control: REF2-T on the new code (step 0)
+    "ref2tnax": _w4(tier_nax_ooo=True),                                # NAX6, the EXACT reference candidate
+    "ref2tfh": _w4(True, fatt_verify=True, fatt_r8=True, hc8_fast=True),     # the FAST batch on REF2-T: F1 + r8 + HC8-1P
+    "ref2tf": _w4(fatt_verify=True, fatt_r8=True),                     # split: F1 + r8
+    "ref2th8p": _w4(True, hc8_fast=True),                              # split: HC8-1P
+    "ref2tnfh": _w4(True, tier_nax_ooo=True, fatt_verify=True, fatt_r8=True, hc8_fast=True),   # the batch on NAX6
+    "ref2tnf": _w4(tier_nax_ooo=True, fatt_verify=True, fatt_r8=True),
+    "ref2tnh8": _w4(True, tier_nax_ooo=True, hc8_fast=True),
+})
+SCRATCH_RE = re.compile(r"(ref2tnfh|ref2tnh8|ref2tnax|ref2tnf|ref2tfh|ref2tf0|ref2th8p|ref2th8|ref2tf|ref2ct|ref2t|ref2b|ref2|ref)"
+                        r"(\.r\d+)")   # scratch runs of a VARIANTS entry (identity checks)
 REF2_CODE = os.path.join(env.ROOT, "snap", "leap-86ca915")   # the REF2 the R-40 verdict judges: Leap 86ca915 (ref2 + its
                                                   # kernels, GREEN in our harness 16:52), frozen: Leap edits them daily
 FRUGAL = {"w2f_r10": 0.10, "w2f_r05": 0.05}        # resident fraction of each layer's experts
@@ -582,6 +605,13 @@ def load(v, C=128):
             assert ref2.CFG.get("key_buckets") is True and tier == want, (ref2.CFG, tier)
         if ref2.CFG.get("gdn_inproj"):            # Leap 91cd316: kept unset (if set, ref2 pads MTPLX's concatenation)
             assert "MTPLX_FUSED_GDN_INPROJ" not in os.environ, "MTPLX_FUSED_GDN_INPROJ is set"
+        if v.get("hc8r"):                         # HC8-1P (Leap c805fd0): the trunk mixers to 8-bit g64 before ref2.apply,
+            import hc8r                           # as Leap's hc8_wire_check does; the snapshot's copy (_SnapFinder)
+            snap = os.path.realpath(os.path.join(env.ROOT, "snap", v["ref2_code"]))
+            assert os.path.dirname(os.path.realpath(hc8r.__file__)) == snap, f"hc8r from {hc8r.__file__}"
+            n, mb0, mb1, _ = hc8r.hc8_install(model)
+            assert n > 0, "hc8r.hc8_install swapped nothing"
+            print(f"hc8r.hc8_install: {n} linears at 8 bits, {mb0:.0f} -> {mb1:.0f} MB", flush=True)
         ref2.apply()
         st_ = ref2.self_test()
         assert all(st_.values()), f"ref2.self_test failed: {st_}"

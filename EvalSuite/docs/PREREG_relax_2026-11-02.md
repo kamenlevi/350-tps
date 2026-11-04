@@ -235,3 +235,14 @@ For each arm and set:
   pattern.
 - **T3ALL's bytes and speed in this harness are not representative:** the sidecar pool stays allocated but unused, so
   the base pool is smaller (SSD 2.56 against 1.71 GB per check). T3ALL is a quality arm, as registered.
+
+## Amendment (Wed 2026-11-04 15:18): code changed after the smoke; RELAX's own modules did not; the night moves to Wed 23:30
+- **RELAX's own modules are unchanged:** relax.py, replay.py and relax_core.py.
+- **Three other evalsuite/ files changed after the smoke** (7d219cd, f66d69d):
+  - model.py: new variants on snap/leap-52cf2c9, and an hc8r hook that only runs for those variants;
+  - decode.py: the switch guard maps tier_nax_ooo to NAX6's counts;
+  - ifeval/instructions.py: a non-letter letter_frequency character is counted as given. That affects 2 IFX prompts and
+    none of the core 100 that RELAX's IFEval rows use.
+  - None of these touch RELAX's arms. Every RELAX process's step 0 (HumanEval/27 == its reference row) still guards it.
+- **The night:** runner 40 starts Wed 23:30 (the orchestrator), not Thu 00:30. No BigMoE run precedes it now, so
+  EvalSuite touches results/relax/GO at the orchestrator's order. BigMoE's Thu-morning ticket follows RELAX_DONE.

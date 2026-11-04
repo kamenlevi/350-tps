@@ -64,6 +64,16 @@ def shared_cat(blk, x):
         k = (cat, n)
         object.__setattr__(blk, "_k74", k)
     cat, n = k
-    y = mx.quantized_matmul(x, *cat, transpose=True, group_size=64, bits=4)
+    try:                                                 # SMALL-N: mark the resident concat for ref2 (inert unless
+        import ref2 as _r2                               # CFG small_native: ref2 then runs it on qmm16n, FAST)
+        prev = _r2._DN_SRC[0]
+        _r2._DN_SRC[0] = cat[0]
+    except Exception:
+        _r2 = None
+    try:
+        y = mx.quantized_matmul(x, *cat, transpose=True, group_size=64, bits=4)
+    finally:
+        if _r2 is not None:
+            _r2._DN_SRC[0] = prev
     a, b = n[0], n[0] + n[1]
     return y[..., b:b + n[2]], se.down_proj(swiglu(y[..., :a], y[..., a:b]))

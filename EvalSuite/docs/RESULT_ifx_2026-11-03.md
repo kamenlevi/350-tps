@@ -46,3 +46,16 @@ IFX row.
 - results/IFX_DONE.
 - results/day38_runner.log.
 - The arms' rows: results/ref2ct.r2/ and results/ref2t.r2/ (decode.jsonl).
+
+## Correction (Wed 2026-11-04 15:14): the stage-1 numbers, re-scored deterministically; the verdict is unchanged
+- **Re-scored:** 84.5 % vs 83.2 %, delta +1.36 [-0.9, +3.6] pt, McNemar p 0.51 (6/3): PASS. The stopping rule's predictive
+  probability is 0.9998, so the call is still STOP PASS. Tuesday's line above (84.1 %, +0.91, p 0.75, 6/4) came from one
+  random draw.
+- **Cause:** ifevalx/1129 asks for 6 or more exclamation marks: keywords:letter_frequency with letter "!". IFEval's
+  reference checker accepts only a-z there and counts a randomly drawn letter instead.
+  - So that item scored at random, per evaluation and per arm.
+  - Five fresh scorings of the stored rows gave REF2c-T 185 / 186 / 186 / 186 / 186 and REF2-T 182 / 183 / 183 / 183 / 183.
+- **Fix:** evalsuite/ifeval/instructions.py now counts a single non-letter character as given, as the prompt words it.
+  - Five scorings are then identical (186 / 183), and 1129 passes for both arms.
+- **Scope:** 2 of the 441 IFX prompts (1129 '!' in stage 1, 1122 '#' in stage 2) and none of the core 100, so no
+  decision-4 verdict on the core 210 changes. tools/d4x.py reproduces REF2c-T's core FAIL exactly (85.0 vs 90.0, 0/5).
