@@ -7644,3 +7644,20 @@ kernels), timing = the whole call + combine in dependent chains of 16, interleav
   the int8 form (NAX-CN) and the load probes 0b / 0c. The load side streams at the machine's rate (R 287-305 GB/s vs
   bw_probe 285). NAX6-N stays the exact kernel at 70-74 % of R (S16 77 % of bw_probe), and NAX6-NH (FAST) is at 76-81 %.
   Fable A's verdict: ~/FableGod/KERNEL90.md.
+- **Result (19:03, share lock, GPU ~3-6 % free beside Breakthrough's map batch; data/dkv_check.txt): exactness PASS,
+  timing INCONCLUSIVE.**
+  - (a) Stress on one real attention layer: 726 steps (6 prompts, 63 trims), outputs != reference in 0. Every path ran:
+    fast 622, slow (1-token) 104, adopt 93, compact 1, trim 56.
+    - Deviation from the pre-registration: r57's start offsets (0 for short prompts). The first run's random preset
+      offsets drove the REFERENCE into its own crash: a 1-token update cannot grow a non-full buffer past the window,
+      the a6w_160 case r57 avoids.
+  - (b) BP-9's walk: per-propose hashes bitwise == the reference for dkv AND dkv + additive mask (code 686 proposes,
+    kept 9.290; math 2,146, kept 6.671).
+  - (c) ms per propose, median of 3 rounds (single rounds swing 7-16 ms under the contention):
+
+    | context rows | ref | dkv | dkv + add | mins (ref / dkv / dkv + add) |
+    |---|---|---|---|---|
+    | 1,000 | 10.41 | 8.13 (-2.28) | 8.79 | 7.56 / 6.66 / 7.43 |
+    | 2,047 | 8.94 | 8.70 (-0.24) | 11.95 | 8.32 / 7.59 / 7.17 |
+
+    The line is -0.25 ms at 2,047 rows. Re-time on a free GPU before handing it to BigMoE.

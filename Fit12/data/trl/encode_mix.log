@@ -2910,3 +2910,421 @@
 [trl] L7: fit rows 32760, H_x + prep 0.5 s
 [trl] L7 e144: 13.4 s (H_h 0.3 s) | gatek2 1.294x (4.3 s, 8-bit +0.21 %) | upk2 1.351x (4.3 s, 8-bit +0.21 %) | downk3 0.594x (3.4 s, 8-bit +0.50 %)
 [trl] L7 e145: 13.6 s (H_h 0.4 s) | gatek2 1.227x (4.4 s, 8-bit +0.26 %) | upk2 1.276x (4.4 s, 8-bit +0.26 %) | downk3 0.458x (3.5 s, 8-bit +0.65 %)
+[trl] L7 e146: 114.7 s (H_h 0.3 s) | gatek2 1.271x (4.8 s, 8-bit +0.22 %) | upk2 1.279x (105.8 s, 8-bit +0.21 %) | downk3 0.650x (2.8 s, 8-bit +0.45 %)
+[trl] L7 e147: 11.6 s (H_h 0.3 s) | gatek2 1.316x (3.6 s, 8-bit +0.25 %) | upk2 1.297x (3.7 s, 8-bit +0.22 %) | downk3 0.605x (3.0 s, 8-bit +0.49 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.577x (min 0.458, max 0.650), 8-bit view +0.52 %, encode 3.21 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.277x (min 1.227, max 1.316), 8-bit view +0.24 %, encode 4.32 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.301x (min 1.276, max 1.351), 8-bit view +0.22 %, encode 4.36 s per matrix
+[trl] done 19:07:15 (154 s), disk 145.0 GB free, swap 8386 MB
+[trl] start 19:07:15: layers [7], experts 148-151, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 145.0 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.5 s
+[trl] L7 e148: 11.8 s (H_h 0.4 s) | gatek2 1.301x (3.7 s, 8-bit +0.22 %) | upk2 1.320x (3.7 s, 8-bit +0.24 %) | downk3 0.602x (3.0 s, 8-bit +0.48 %)
+[trl] L7 e149: 11.9 s (H_h 0.3 s) | gatek2 1.262x (3.8 s, 8-bit +0.20 %) | upk2 1.286x (3.9 s, 8-bit +0.23 %) | downk3 0.670x (3.1 s, 8-bit +0.42 %)
+[trl] L7 e150: 12.0 s (H_h 0.3 s) | gatek2 1.257x (3.9 s, 8-bit +0.23 %) | upk2 1.359x (3.9 s, 8-bit +0.24 %) | downk3 0.542x (3.1 s, 8-bit +0.54 %)
+[trl] L7 e151: 11.9 s (H_h 0.2 s) | gatek2 1.197x (3.9 s, 8-bit +0.27 %) | upk2 1.242x (3.8 s, 8-bit +0.24 %) | downk3 0.482x (3.2 s, 8-bit +0.63 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.574x (min 0.482, max 0.670), 8-bit view +0.52 %, encode 3.13 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.254x (min 1.197, max 1.301), 8-bit view +0.23 %, encode 3.83 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.302x (min 1.242, max 1.359), 8-bit view +0.24 %, encode 3.86 s per matrix
+[trl] done 19:08:03 (48 s), disk 145.0 GB free, swap 8386 MB
+[trl] start 19:08:04: layers [7], experts 152-155, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 145.0 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e152: 11.9 s (H_h 0.3 s) | gatek2 1.257x (3.8 s, 8-bit +0.23 %) | upk2 1.303x (3.9 s, 8-bit +0.24 %) | downk3 0.577x (3.1 s, 8-bit +0.50 %)
+[trl] L7 e153: 11.8 s (H_h 0.3 s) | gatek2 1.306x (3.9 s, 8-bit +0.24 %) | upk2 1.308x (3.9 s, 8-bit +0.26 %) | downk3 0.665x (3.1 s, 8-bit +0.44 %)
+[trl] L7 e154: 11.9 s (H_h 0.2 s) | gatek2 1.331x (3.9 s, 8-bit +0.21 %) | upk2 1.283x (3.9 s, 8-bit +0.21 %) | downk3 0.603x (3.1 s, 8-bit +0.47 %)
+[trl] L7 e155: 11.8 s (H_h 0.2 s) | gatek2 1.330x (3.9 s, 8-bit +0.23 %) | upk2 1.294x (3.9 s, 8-bit +0.23 %) | downk3 0.590x (3.1 s, 8-bit +0.49 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.609x (min 0.577, max 0.665), 8-bit view +0.47 %, encode 3.12 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.306x (min 1.257, max 1.331), 8-bit view +0.23 %, encode 3.87 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.297x (min 1.283, max 1.308), 8-bit view +0.24 %, encode 3.87 s per matrix
+[trl] done 19:08:52 (48 s), disk 145.0 GB free, swap 8386 MB
+[trl] start 19:08:52: layers [7], experts 156-159, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 145.0 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e156: 12.1 s (H_h 0.3 s) | gatek2 1.306x (3.9 s, 8-bit +0.23 %) | upk2 1.319x (3.9 s, 8-bit +0.24 %) | downk3 0.576x (3.1 s, 8-bit +0.52 %)
+[trl] L7 e157: 12.1 s (H_h 0.3 s) | gatek2 1.291x (3.9 s, 8-bit +0.24 %) | upk2 1.289x (3.9 s, 8-bit +0.24 %) | downk3 0.636x (3.1 s, 8-bit +0.45 %)
+[trl] L7 e158: 12.1 s (H_h 0.3 s) | gatek2 1.357x (4.0 s, 8-bit +0.20 %) | upk2 1.298x (3.9 s, 8-bit +0.24 %) | downk3 0.295x (3.1 s, 8-bit +0.93 %)
+[trl] L7 e159: 12.3 s (H_h 0.3 s) | gatek2 1.290x (3.9 s, 8-bit +0.21 %) | upk2 1.338x (3.9 s, 8-bit +0.25 %) | downk3 0.608x (3.2 s, 8-bit +0.49 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.529x (min 0.295, max 0.636), 8-bit view +0.60 %, encode 3.15 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.311x (min 1.290, max 1.357), 8-bit view +0.22 %, encode 3.93 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.311x (min 1.289, max 1.338), 8-bit view +0.24 %, encode 3.93 s per matrix
+[trl] done 19:09:41 (49 s), disk 144.9 GB free, swap 8386 MB
+[trl] start 19:09:42: layers [7], experts 160-163, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.9 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e160: 12.3 s (H_h 0.3 s) | gatek2 1.297x (4.2 s, 8-bit +0.24 %) | upk2 1.324x (3.9 s, 8-bit +0.22 %) | downk3 0.643x (3.2 s, 8-bit +0.45 %)
+[trl] L7 e161: 11.9 s (H_h 0.2 s) | gatek2 1.311x (3.9 s, 8-bit +0.19 %) | upk2 1.336x (3.9 s, 8-bit +0.22 %) | downk3 0.502x (3.1 s, 8-bit +0.56 %)
+[trl] L7 e162: 12.3 s (H_h 0.3 s) | gatek2 1.319x (4.0 s, 8-bit +0.24 %) | upk2 1.295x (4.0 s, 8-bit +0.21 %) | downk3 0.633x (3.2 s, 8-bit +0.47 %)
+[trl] L7 e163: 12.3 s (H_h 0.3 s) | gatek2 1.279x (4.0 s, 8-bit +0.23 %) | upk2 1.362x (4.1 s, 8-bit +0.21 %) | downk3 0.599x (3.1 s, 8-bit +0.48 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.594x (min 0.502, max 0.643), 8-bit view +0.49 %, encode 3.15 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.302x (min 1.279, max 1.319), 8-bit view +0.23 %, encode 4.03 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.329x (min 1.295, max 1.362), 8-bit view +0.22 %, encode 3.95 s per matrix
+[trl] done 19:10:31 (49 s), disk 144.9 GB free, swap 8386 MB
+[trl] start 19:10:32: layers [7], experts 164-167, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.9 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e164: 12.0 s (H_h 0.2 s) | gatek2 1.328x (3.9 s, 8-bit +0.23 %) | upk2 1.303x (3.9 s, 8-bit +0.22 %) | downk3 0.617x (3.2 s, 8-bit +0.46 %)
+[trl] L7 e165: 12.1 s (H_h 0.3 s) | gatek2 1.326x (3.9 s, 8-bit +0.22 %) | upk2 1.336x (3.9 s, 8-bit +0.23 %) | downk3 0.582x (3.2 s, 8-bit +0.49 %)
+[trl] L7 e166: 12.0 s (H_h 0.2 s) | gatek2 1.304x (3.9 s, 8-bit +0.21 %) | upk2 1.309x (4.0 s, 8-bit +0.24 %) | downk3 0.580x (3.1 s, 8-bit +0.49 %)
+[trl] L7 e167: 12.1 s (H_h 0.3 s) | gatek2 1.314x (3.9 s, 8-bit +0.21 %) | upk2 1.307x (3.9 s, 8-bit +0.22 %) | downk3 0.529x (3.2 s, 8-bit +0.56 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.577x (min 0.529, max 0.617), 8-bit view +0.50 %, encode 3.18 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.318x (min 1.304, max 1.328), 8-bit view +0.22 %, encode 3.91 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.314x (min 1.303, max 1.336), 8-bit view +0.23 %, encode 3.93 s per matrix
+[trl] done 19:11:20 (49 s), disk 144.9 GB free, swap 8386 MB
+[trl] start 19:11:21: layers [7], experts 168-171, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.9 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e168: 12.0 s (H_h 0.3 s) | gatek2 1.316x (3.9 s, 8-bit +0.22 %) | upk2 1.317x (3.9 s, 8-bit +0.19 %) | downk3 0.542x (3.1 s, 8-bit +0.52 %)
+[trl] L7 e169: 12.1 s (H_h 0.3 s) | gatek2 1.278x (3.9 s, 8-bit +0.22 %) | upk2 1.338x (3.9 s, 8-bit +0.22 %) | downk3 0.616x (3.2 s, 8-bit +0.47 %)
+[trl] L7 e170: 12.1 s (H_h 0.2 s) | gatek2 1.313x (4.0 s, 8-bit +0.24 %) | upk2 1.299x (3.9 s, 8-bit +0.21 %) | downk3 0.548x (3.2 s, 8-bit +0.52 %)
+[trl] L7 e171: 12.0 s (H_h 0.2 s) | gatek2 1.313x (3.9 s, 8-bit +0.22 %) | upk2 1.273x (3.9 s, 8-bit +0.25 %) | downk3 0.550x (3.2 s, 8-bit +0.54 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.564x (min 0.542, max 0.616), 8-bit view +0.51 %, encode 3.17 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.305x (min 1.278, max 1.316), 8-bit view +0.22 %, encode 3.94 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.307x (min 1.273, max 1.338), 8-bit view +0.22 %, encode 3.91 s per matrix
+[trl] done 19:12:09 (49 s), disk 144.9 GB free, swap 8386 MB
+[trl] start 19:12:10: layers [7], experts 172-175, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.9 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e172: 12.1 s (H_h 0.2 s) | gatek2 1.328x (3.9 s, 8-bit +0.22 %) | upk2 1.303x (3.9 s, 8-bit +0.22 %) | downk3 0.533x (3.2 s, 8-bit +0.54 %)
+[trl] L7 e173: 11.9 s (H_h 0.3 s) | gatek2 1.311x (3.9 s, 8-bit +0.21 %) | upk2 1.347x (3.9 s, 8-bit +0.23 %) | downk3 0.569x (3.2 s, 8-bit +0.51 %)
+[trl] L7 e174: 11.9 s (H_h 0.2 s) | gatek2 1.289x (3.9 s, 8-bit +0.23 %) | upk2 1.296x (3.9 s, 8-bit +0.24 %) | downk3 0.504x (3.2 s, 8-bit +0.61 %)
+[trl] L7 e175: 12.0 s (H_h 0.3 s) | gatek2 1.284x (3.9 s, 8-bit +0.23 %) | upk2 1.333x (3.9 s, 8-bit +0.22 %) | downk3 0.512x (3.1 s, 8-bit +0.56 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.529x (min 0.504, max 0.569), 8-bit view +0.56 %, encode 3.16 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.303x (min 1.284, max 1.328), 8-bit view +0.22 %, encode 3.91 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.320x (min 1.296, max 1.347), 8-bit view +0.23 %, encode 3.89 s per matrix
+[trl] done 19:12:58 (48 s), disk 144.8 GB free, swap 8386 MB
+[trl] start 19:12:58: layers [7], experts 176-179, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.8 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e176: 12.0 s (H_h 0.3 s) | gatek2 1.273x (3.9 s, 8-bit +0.21 %) | upk2 1.307x (3.9 s, 8-bit +0.23 %) | downk3 0.542x (3.2 s, 8-bit +0.54 %)
+[trl] L7 e177: 12.1 s (H_h 0.2 s) | gatek2 1.303x (3.9 s, 8-bit +0.21 %) | upk2 1.300x (4.0 s, 8-bit +0.21 %) | downk3 0.630x (3.2 s, 8-bit +0.45 %)
+[trl] L7 e178: 12.0 s (H_h 0.3 s) | gatek2 1.291x (3.9 s, 8-bit +0.24 %) | upk2 1.298x (3.9 s, 8-bit +0.21 %) | downk3 0.541x (3.2 s, 8-bit +0.53 %)
+[trl] L7 e179: 12.0 s (H_h 0.2 s) | gatek2 1.286x (3.9 s, 8-bit +0.24 %) | upk2 1.359x (3.9 s, 8-bit +0.22 %) | downk3 0.625x (3.1 s, 8-bit +0.47 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.584x (min 0.541, max 0.630), 8-bit view +0.50 %, encode 3.17 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.288x (min 1.273, max 1.303), 8-bit view +0.23 %, encode 3.92 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.316x (min 1.298, max 1.359), 8-bit view +0.22 %, encode 3.93 s per matrix
+[trl] done 19:13:47 (48 s), disk 144.8 GB free, swap 8386 MB
+[trl] start 19:13:47: layers [7], experts 180-183, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.8 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e180: 11.9 s (H_h 0.2 s) | gatek2 1.349x (3.9 s, 8-bit +0.21 %) | upk2 1.312x (3.9 s, 8-bit +0.20 %) | downk3 0.574x (3.2 s, 8-bit +0.50 %)
+[trl] L7 e181: 12.0 s (H_h 0.3 s) | gatek2 1.286x (3.9 s, 8-bit +0.21 %) | upk2 1.334x (3.9 s, 8-bit +0.20 %) | downk3 0.539x (3.2 s, 8-bit +0.53 %)
+[trl] L7 e182: 11.9 s (H_h 0.2 s) | gatek2 1.334x (3.9 s, 8-bit +0.22 %) | upk2 1.304x (3.9 s, 8-bit +0.24 %) | downk3 0.526x (3.2 s, 8-bit +0.52 %)
+[trl] L7 e183: 12.0 s (H_h 0.3 s) | gatek2 1.313x (3.9 s, 8-bit +0.19 %) | upk2 1.319x (3.9 s, 8-bit +0.21 %) | downk3 0.649x (3.1 s, 8-bit +0.42 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.572x (min 0.526, max 0.649), 8-bit view +0.49 %, encode 3.16 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.321x (min 1.286, max 1.349), 8-bit view +0.21 %, encode 3.90 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.317x (min 1.304, max 1.334), 8-bit view +0.21 %, encode 3.89 s per matrix
+[trl] done 19:14:36 (48 s), disk 144.8 GB free, swap 8386 MB
+[trl] start 19:14:36: layers [7], experts 184-187, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.8 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e184: 11.8 s (H_h 0.3 s) | gatek2 1.317x (3.9 s, 8-bit +0.23 %) | upk2 1.334x (3.8 s, 8-bit +0.22 %) | downk3 0.598x (3.1 s, 8-bit +0.47 %)
+[trl] L7 e185: 12.0 s (H_h 0.3 s) | gatek2 1.334x (3.9 s, 8-bit +0.19 %) | upk2 1.281x (3.9 s, 8-bit +0.23 %) | downk3 0.592x (3.2 s, 8-bit +0.49 %)
+[trl] L7 e186: 11.9 s (H_h 0.2 s) | gatek2 1.333x (3.9 s, 8-bit +0.22 %) | upk2 1.349x (3.9 s, 8-bit +0.21 %) | downk3 0.510x (3.2 s, 8-bit +0.58 %)
+[trl] L7 e187: 11.9 s (H_h 0.3 s) | gatek2 1.305x (3.9 s, 8-bit +0.24 %) | upk2 1.298x (3.9 s, 8-bit +0.23 %) | downk3 0.608x (3.2 s, 8-bit +0.48 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.577x (min 0.510, max 0.608), 8-bit view +0.50 %, encode 3.16 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.322x (min 1.305, max 1.334), 8-bit view +0.22 %, encode 3.88 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.315x (min 1.281, max 1.349), 8-bit view +0.22 %, encode 3.89 s per matrix
+[trl] done 19:15:24 (48 s), disk 144.8 GB free, swap 8386 MB
+[trl] start 19:15:25: layers [7], experts 188-191, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.8 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e188: 11.9 s (H_h 0.3 s) | gatek2 1.328x (3.9 s, 8-bit +0.21 %) | upk2 1.301x (3.9 s, 8-bit +0.22 %) | downk3 0.640x (3.1 s, 8-bit +0.44 %)
+[trl] L7 e189: 11.9 s (H_h 0.2 s) | gatek2 1.283x (3.9 s, 8-bit +0.21 %) | upk2 1.326x (3.9 s, 8-bit +0.24 %) | downk3 0.602x (3.2 s, 8-bit +0.45 %)
+[trl] L7 e190: 11.9 s (H_h 0.2 s) | gatek2 1.254x (4.0 s, 8-bit +0.25 %) | upk2 1.282x (3.9 s, 8-bit +0.20 %) | downk3 0.526x (3.1 s, 8-bit +0.54 %)
+[trl] L7 e191: 12.0 s (H_h 0.2 s) | gatek2 1.295x (3.9 s, 8-bit +0.22 %) | upk2 1.321x (3.9 s, 8-bit +0.20 %) | downk3 0.601x (3.2 s, 8-bit +0.46 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.592x (min 0.526, max 0.640), 8-bit view +0.47 %, encode 3.15 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.290x (min 1.254, max 1.328), 8-bit view +0.22 %, encode 3.90 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.308x (min 1.282, max 1.326), 8-bit view +0.21 %, encode 3.88 s per matrix
+[trl] done 19:16:13 (48 s), disk 144.8 GB free, swap 8386 MB
+[trl] start 19:16:13: layers [7], experts 192-195, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.8 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e192: 12.0 s (H_h 0.3 s) | gatek2 1.290x (3.9 s, 8-bit +0.20 %) | upk2 1.336x (3.9 s, 8-bit +0.21 %) | downk3 0.526x (3.2 s, 8-bit +0.57 %)
+[trl] L7 e193: 12.0 s (H_h 0.2 s) | gatek2 1.236x (3.9 s, 8-bit +0.23 %) | upk2 1.275x (3.9 s, 8-bit +0.22 %) | downk3 0.481x (3.2 s, 8-bit +0.62 %)
+[trl] L7 e194: 12.0 s (H_h 0.2 s) | gatek2 1.283x (3.9 s, 8-bit +0.21 %) | upk2 1.325x (4.0 s, 8-bit +0.19 %) | downk3 0.602x (3.2 s, 8-bit +0.49 %)
+[trl] L7 e195: 12.0 s (H_h 0.2 s) | gatek2 1.296x (3.9 s, 8-bit +0.25 %) | upk2 1.351x (3.9 s, 8-bit +0.21 %) | downk3 0.623x (3.2 s, 8-bit +0.44 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.558x (min 0.481, max 0.623), 8-bit view +0.53 %, encode 3.17 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.276x (min 1.236, max 1.296), 8-bit view +0.22 %, encode 3.94 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.322x (min 1.275, max 1.351), 8-bit view +0.21 %, encode 3.93 s per matrix
+[trl] done 19:17:02 (48 s), disk 144.7 GB free, swap 8386 MB
+[trl] start 19:17:02: layers [7], experts 196-199, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.7 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e196: 12.1 s (H_h 0.3 s) | gatek2 1.312x (3.9 s, 8-bit +0.20 %) | upk2 1.311x (3.9 s, 8-bit +0.23 %) | downk3 0.651x (3.2 s, 8-bit +0.46 %)
+[trl] L7 e197: 12.1 s (H_h 0.2 s) | gatek2 1.323x (3.9 s, 8-bit +0.22 %) | upk2 1.328x (3.9 s, 8-bit +0.21 %) | downk3 0.647x (3.2 s, 8-bit +0.44 %)
+[trl] L7 e198: 12.1 s (H_h 0.3 s) | gatek2 1.257x (3.9 s, 8-bit +0.21 %) | upk2 1.291x (4.0 s, 8-bit +0.21 %) | downk3 0.646x (3.2 s, 8-bit +0.45 %)
+[trl] L7 e199: 12.3 s (H_h 0.3 s) | gatek2 1.334x (4.0 s, 8-bit +0.23 %) | upk2 1.320x (4.0 s, 8-bit +0.21 %) | downk3 0.607x (3.2 s, 8-bit +0.47 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.638x (min 0.607, max 0.651), 8-bit view +0.46 %, encode 3.20 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.307x (min 1.257, max 1.334), 8-bit view +0.22 %, encode 3.93 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.312x (min 1.291, max 1.328), 8-bit view +0.21 %, encode 3.95 s per matrix
+[trl] done 19:17:51 (49 s), disk 144.7 GB free, swap 8386 MB
+[trl] start 19:17:52: layers [7], experts 200-203, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.7 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e200: 12.2 s (H_h 0.3 s) | gatek2 1.310x (4.0 s, 8-bit +0.22 %) | upk2 1.301x (4.0 s, 8-bit +0.22 %) | downk3 0.649x (3.2 s, 8-bit +0.42 %)
+[trl] L7 e201: 12.2 s (H_h 0.2 s) | gatek2 1.284x (4.0 s, 8-bit +0.20 %) | upk2 1.291x (4.0 s, 8-bit +0.20 %) | downk3 0.657x (3.2 s, 8-bit +0.46 %)
+[trl] L7 e202: 12.2 s (H_h 0.3 s) | gatek2 1.328x (4.0 s, 8-bit +0.25 %) | upk2 1.350x (4.0 s, 8-bit +0.20 %) | downk3 0.558x (3.2 s, 8-bit +0.51 %)
+[trl] L7 e203: 12.3 s (H_h 0.2 s) | gatek2 1.285x (4.0 s, 8-bit +0.22 %) | upk2 1.323x (4.0 s, 8-bit +0.20 %) | downk3 0.675x (3.3 s, 8-bit +0.42 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.635x (min 0.558, max 0.675), 8-bit view +0.45 %, encode 3.23 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.302x (min 1.284, max 1.328), 8-bit view +0.22 %, encode 3.99 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.316x (min 1.291, max 1.350), 8-bit view +0.21 %, encode 3.98 s per matrix
+[trl] done 19:18:41 (49 s), disk 144.7 GB free, swap 8386 MB
+[trl] start 19:18:42: layers [7], experts 204-207, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.7 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e204: 12.2 s (H_h 0.3 s) | gatek2 1.278x (4.0 s, 8-bit +0.23 %) | upk2 1.340x (3.9 s, 8-bit +0.22 %) | downk3 0.548x (3.2 s, 8-bit +0.55 %)
+[trl] L7 e205: 12.2 s (H_h 0.3 s) | gatek2 1.295x (3.9 s, 8-bit +0.21 %) | upk2 1.323x (4.0 s, 8-bit +0.23 %) | downk3 0.680x (3.2 s, 8-bit +0.41 %)
+[trl] L7 e206: 12.3 s (H_h 0.3 s) | gatek2 1.320x (4.0 s, 8-bit +0.23 %) | upk2 1.349x (4.0 s, 8-bit +0.24 %) | downk3 0.640x (3.2 s, 8-bit +0.43 %)
+[trl] L7 e207: 12.4 s (H_h 0.3 s) | gatek2 1.291x (4.0 s, 8-bit +0.21 %) | upk2 1.291x (4.1 s, 8-bit +0.20 %) | downk3 0.663x (3.3 s, 8-bit +0.43 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.633x (min 0.548, max 0.680), 8-bit view +0.46 %, encode 3.24 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.296x (min 1.278, max 1.320), 8-bit view +0.22 %, encode 3.99 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.326x (min 1.291, max 1.349), 8-bit view +0.22 %, encode 3.99 s per matrix
+[trl] done 19:19:31 (49 s), disk 144.7 GB free, swap 8386 MB
+[trl] start 19:19:32: layers [7], experts 208-211, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.7 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e208: 12.1 s (H_h 0.2 s) | gatek2 1.304x (4.0 s, 8-bit +0.19 %) | upk2 1.316x (4.0 s, 8-bit +0.21 %) | downk3 0.640x (3.2 s, 8-bit +0.42 %)
+[trl] L7 e209: 71.6 s (H_h 0.3 s) | gatek2 1.275x (64.4 s, 8-bit +0.19 %) | upk2 1.294x (3.4 s, 8-bit +0.25 %) | downk3 0.652x (2.8 s, 8-bit +0.44 %)
+[trl] L7 e210: 10.8 s (H_h 0.2 s) | gatek2 1.295x (3.5 s, 8-bit +0.22 %) | upk2 1.309x (3.5 s, 8-bit +0.22 %) | downk3 0.654x (2.9 s, 8-bit +0.44 %)
+[trl] L7 e211: 11.3 s (H_h 0.3 s) | gatek2 1.242x (3.7 s, 8-bit +0.22 %) | upk2 1.268x (3.6 s, 8-bit +0.21 %) | downk3 0.641x (2.9 s, 8-bit +0.43 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.647x (min 0.640, max 0.654), 8-bit view +0.43 %, encode 2.90 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.279x (min 1.242, max 1.304), 8-bit view +0.21 %, encode 3.81 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.297x (min 1.268, max 1.316), 8-bit view +0.22 %, encode 3.57 s per matrix
+[trl] done 19:21:18 (106 s), disk 144.7 GB free, swap 8386 MB
+[trl] start 19:21:18: layers [7], experts 212-215, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.7 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e212: 11.4 s (H_h 0.3 s) | gatek2 1.280x (3.7 s, 8-bit +0.26 %) | upk2 1.309x (3.7 s, 8-bit +0.24 %) | downk3 0.527x (3.0 s, 8-bit +0.54 %)
+[trl] L7 e213: 11.3 s (H_h 0.2 s) | gatek2 1.355x (3.7 s, 8-bit +0.21 %) | upk2 1.323x (3.7 s, 8-bit +0.24 %) | downk3 0.672x (3.0 s, 8-bit +0.44 %)
+[trl] L7 e214: 11.5 s (H_h 0.2 s) | gatek2 1.310x (3.7 s, 8-bit +0.24 %) | upk2 1.329x (3.8 s, 8-bit +0.21 %) | downk3 0.658x (3.0 s, 8-bit +0.42 %)
+[trl] L7 e215: 11.7 s (H_h 0.2 s) | gatek2 1.286x (3.8 s, 8-bit +0.23 %) | upk2 1.304x (3.8 s, 8-bit +0.25 %) | downk3 0.506x (3.1 s, 8-bit +0.58 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.591x (min 0.506, max 0.672), 8-bit view +0.50 %, encode 3.01 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.308x (min 1.280, max 1.355), 8-bit view +0.23 %, encode 3.72 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.316x (min 1.304, max 1.329), 8-bit view +0.24 %, encode 3.73 s per matrix
+[trl] done 19:22:05 (46 s), disk 144.7 GB free, swap 8386 MB
+[trl] start 19:22:05: layers [7], experts 216-219, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.7 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e216: 11.7 s (H_h 0.3 s) | gatek2 1.296x (3.8 s, 8-bit +0.23 %) | upk2 1.355x (3.8 s, 8-bit +0.24 %) | downk3 0.672x (3.1 s, 8-bit +0.42 %)
+[trl] L7 e217: 11.7 s (H_h 0.3 s) | gatek2 1.352x (3.8 s, 8-bit +0.26 %) | upk2 1.284x (3.8 s, 8-bit +0.23 %) | downk3 0.659x (3.1 s, 8-bit +0.43 %)
+[trl] L7 e218: 11.7 s (H_h 0.2 s) | gatek2 1.305x (3.9 s, 8-bit +0.22 %) | upk2 1.268x (3.8 s, 8-bit +0.22 %) | downk3 0.542x (3.1 s, 8-bit +0.55 %)
+[trl] L7 e219: 11.7 s (H_h 0.3 s) | gatek2 1.309x (3.8 s, 8-bit +0.22 %) | upk2 1.320x (3.8 s, 8-bit +0.23 %) | downk3 0.674x (3.1 s, 8-bit +0.43 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.637x (min 0.542, max 0.674), 8-bit view +0.46 %, encode 3.07 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.315x (min 1.296, max 1.352), 8-bit view +0.23 %, encode 3.84 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.307x (min 1.268, max 1.355), 8-bit view +0.23 %, encode 3.83 s per matrix
+[trl] done 19:22:52 (47 s), disk 144.7 GB free, swap 8386 MB
+[trl] start 19:22:53: layers [7], experts 220-223, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.7 GB free, swap 8386 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e220: 11.7 s (H_h 0.3 s) | gatek2 1.346x (3.8 s, 8-bit +0.19 %) | upk2 1.296x (3.8 s, 8-bit +0.21 %) | downk3 0.674x (3.1 s, 8-bit +0.42 %)
+[trl] L7 e221: 11.8 s (H_h 0.3 s) | gatek2 1.334x (3.8 s, 8-bit +0.22 %) | upk2 1.356x (3.8 s, 8-bit +0.20 %) | downk3 0.568x (3.1 s, 8-bit +0.53 %)
+[trl] L7 e222: 11.8 s (H_h 0.2 s) | gatek2 1.297x (3.8 s, 8-bit +0.23 %) | upk2 1.276x (3.8 s, 8-bit +0.22 %) | downk3 0.666x (3.2 s, 8-bit +0.42 %)
+[trl] L7 e223: 11.7 s (H_h 0.2 s) | gatek2 1.286x (3.8 s, 8-bit +0.23 %) | upk2 1.318x (3.8 s, 8-bit +0.24 %) | downk3 0.580x (3.1 s, 8-bit +0.52 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.622x (min 0.568, max 0.674), 8-bit view +0.47 %, encode 3.12 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.316x (min 1.286, max 1.346), 8-bit view +0.22 %, encode 3.83 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.312x (min 1.276, max 1.356), 8-bit view +0.22 %, encode 3.83 s per matrix
+[trl] done 19:23:40 (48 s), disk 144.6 GB free, swap 8378 MB
+[trl] start 19:23:41: layers [7], experts 224-227, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.6 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e224: 11.8 s (H_h 0.3 s) | gatek2 1.321x (3.9 s, 8-bit +0.21 %) | upk2 1.345x (3.8 s, 8-bit +0.21 %) | downk3 0.625x (3.1 s, 8-bit +0.46 %)
+[trl] L7 e225: 11.8 s (H_h 0.3 s) | gatek2 1.323x (3.8 s, 8-bit +0.22 %) | upk2 1.308x (3.9 s, 8-bit +0.18 %) | downk3 0.631x (3.1 s, 8-bit +0.45 %)
+[trl] L7 e226: 11.8 s (H_h 0.3 s) | gatek2 1.269x (3.8 s, 8-bit +0.21 %) | upk2 1.288x (3.8 s, 8-bit +0.24 %) | downk3 0.652x (3.1 s, 8-bit +0.44 %)
+[trl] L7 e227: 11.9 s (H_h 0.2 s) | gatek2 1.267x (3.9 s, 8-bit +0.25 %) | upk2 1.319x (3.9 s, 8-bit +0.23 %) | downk3 0.568x (3.1 s, 8-bit +0.48 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.619x (min 0.568, max 0.652), 8-bit view +0.46 %, encode 3.11 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.295x (min 1.267, max 1.323), 8-bit view +0.22 %, encode 3.86 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.315x (min 1.288, max 1.345), 8-bit view +0.21 %, encode 3.86 s per matrix
+[trl] done 19:24:29 (48 s), disk 144.6 GB free, swap 8378 MB
+[trl] start 19:24:29: layers [7], experts 228-231, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.6 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e228: 11.9 s (H_h 0.3 s) | gatek2 1.308x (3.9 s, 8-bit +0.23 %) | upk2 1.319x (3.8 s, 8-bit +0.20 %) | downk3 0.556x (3.1 s, 8-bit +0.49 %)
+[trl] L7 e229: 11.9 s (H_h 0.2 s) | gatek2 1.328x (3.9 s, 8-bit +0.22 %) | upk2 1.323x (3.9 s, 8-bit +0.22 %) | downk3 0.579x (3.1 s, 8-bit +0.51 %)
+[trl] L7 e230: 11.8 s (H_h 0.3 s) | gatek2 1.343x (3.9 s, 8-bit +0.22 %) | upk2 1.355x (3.8 s, 8-bit +0.23 %) | downk3 0.599x (3.1 s, 8-bit +0.48 %)
+[trl] L7 e231: 11.8 s (H_h 0.2 s) | gatek2 1.313x (3.8 s, 8-bit +0.20 %) | upk2 1.311x (3.8 s, 8-bit +0.20 %) | downk3 0.551x (3.1 s, 8-bit +0.52 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.571x (min 0.551, max 0.599), 8-bit view +0.50 %, encode 3.11 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.323x (min 1.308, max 1.343), 8-bit view +0.22 %, encode 3.86 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.327x (min 1.311, max 1.355), 8-bit view +0.21 %, encode 3.85 s per matrix
+[trl] done 19:25:17 (48 s), disk 144.6 GB free, swap 8378 MB
+[trl] start 19:25:17: layers [7], experts 232-235, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.6 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e232: 11.9 s (H_h 0.3 s) | gatek2 1.346x (3.9 s, 8-bit +0.20 %) | upk2 1.336x (3.9 s, 8-bit +0.22 %) | downk3 0.503x (3.1 s, 8-bit +0.62 %)
+[trl] L7 e233: 11.8 s (H_h 0.2 s) | gatek2 1.315x (3.9 s, 8-bit +0.23 %) | upk2 1.303x (3.8 s, 8-bit +0.19 %) | downk3 0.638x (3.1 s, 8-bit +0.46 %)
+[trl] L7 e234: 11.8 s (H_h 0.2 s) | gatek2 1.278x (3.9 s, 8-bit +0.21 %) | upk2 1.309x (3.9 s, 8-bit +0.23 %) | downk3 0.512x (3.1 s, 8-bit +0.57 %)
+[trl] L7 e235: 11.9 s (H_h 0.3 s) | gatek2 1.303x (3.9 s, 8-bit +0.27 %) | upk2 1.343x (3.9 s, 8-bit +0.24 %) | downk3 0.622x (3.1 s, 8-bit +0.46 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.569x (min 0.503, max 0.638), 8-bit view +0.53 %, encode 3.12 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.310x (min 1.278, max 1.346), 8-bit view +0.23 %, encode 3.86 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.323x (min 1.303, max 1.343), 8-bit view +0.22 %, encode 3.87 s per matrix
+[trl] done 19:26:05 (48 s), disk 144.6 GB free, swap 8378 MB
+[trl] start 19:26:06: layers [7], experts 236-239, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.6 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e236: 12.0 s (H_h 0.3 s) | gatek2 1.318x (3.9 s, 8-bit +0.22 %) | upk2 1.299x (3.9 s, 8-bit +0.22 %) | downk3 0.667x (3.2 s, 8-bit +0.43 %)
+[trl] L7 e237: 11.8 s (H_h 0.2 s) | gatek2 1.281x (3.8 s, 8-bit +0.23 %) | upk2 1.307x (3.9 s, 8-bit +0.19 %) | downk3 0.550x (3.1 s, 8-bit +0.52 %)
+[trl] L7 e238: 11.9 s (H_h 0.3 s) | gatek2 1.291x (3.9 s, 8-bit +0.21 %) | upk2 1.302x (3.9 s, 8-bit +0.23 %) | downk3 0.607x (3.1 s, 8-bit +0.48 %)
+[trl] L7 e239: 11.9 s (H_h 0.3 s) | gatek2 1.328x (3.9 s, 8-bit +0.21 %) | upk2 1.347x (3.9 s, 8-bit +0.23 %) | downk3 0.627x (3.2 s, 8-bit +0.45 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.613x (min 0.550, max 0.667), 8-bit view +0.47 %, encode 3.15 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.304x (min 1.281, max 1.328), 8-bit view +0.22 %, encode 3.86 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.314x (min 1.299, max 1.347), 8-bit view +0.22 %, encode 3.88 s per matrix
+[trl] done 19:26:53 (48 s), disk 144.5 GB free, swap 8378 MB
+[trl] start 19:26:54: layers [7], experts 240-243, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.5 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e240: 11.8 s (H_h 0.3 s) | gatek2 1.294x (3.8 s, 8-bit +0.21 %) | upk2 1.295x (3.9 s, 8-bit +0.22 %) | downk3 0.601x (3.1 s, 8-bit +0.48 %)
+[trl] L7 e241: 11.9 s (H_h 0.3 s) | gatek2 1.263x (3.9 s, 8-bit +0.23 %) | upk2 1.310x (3.9 s, 8-bit +0.20 %) | downk3 0.485x (3.2 s, 8-bit +0.61 %)
+[trl] L7 e242: 11.8 s (H_h 0.2 s) | gatek2 1.273x (3.9 s, 8-bit +0.21 %) | upk2 1.332x (3.9 s, 8-bit +0.23 %) | downk3 0.542x (3.1 s, 8-bit +0.54 %)
+[trl] L7 e243: 11.9 s (H_h 0.2 s) | gatek2 1.207x (3.9 s, 8-bit +0.24 %) | upk2 1.244x (3.9 s, 8-bit +0.23 %) | downk3 0.629x (3.1 s, 8-bit +0.46 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.564x (min 0.485, max 0.629), 8-bit view +0.52 %, encode 3.12 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.259x (min 1.207, max 1.294), 8-bit view +0.23 %, encode 3.88 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.295x (min 1.244, max 1.332), 8-bit view +0.22 %, encode 3.86 s per matrix
+[trl] done 19:27:42 (48 s), disk 144.5 GB free, swap 8378 MB
+[trl] start 19:27:42: layers [7], experts 244-247, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.5 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e244: 11.9 s (H_h 0.3 s) | gatek2 1.293x (3.8 s, 8-bit +0.24 %) | upk2 1.302x (3.9 s, 8-bit +0.23 %) | downk3 0.654x (3.1 s, 8-bit +0.44 %)
+[trl] L7 e245: 11.9 s (H_h 0.2 s) | gatek2 1.303x (3.9 s, 8-bit +0.22 %) | upk2 1.326x (3.9 s, 8-bit +0.22 %) | downk3 0.625x (3.2 s, 8-bit +0.47 %)
+[trl] L7 e246: 11.1 s (H_h 0.3 s) | gatek2 1.309x (3.9 s, 8-bit +0.23 %) | upk2 1.325x (3.5 s, 8-bit +0.23 %) | downk3 0.627x (2.9 s, 8-bit +0.46 %)
+[trl] L7 e247: 12.0 s (H_h 0.2 s) | gatek2 1.279x (3.7 s, 8-bit +0.20 %) | upk2 1.300x (4.1 s, 8-bit +0.19 %) | downk3 0.633x (3.3 s, 8-bit +0.46 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.635x (min 0.625, max 0.654), 8-bit view +0.46 %, encode 3.14 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.296x (min 1.279, max 1.309), 8-bit view +0.22 %, encode 3.86 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.313x (min 1.300, max 1.326), 8-bit view +0.21 %, encode 3.92 s per matrix
+[trl] done 19:28:30 (47 s), disk 144.5 GB free, swap 8378 MB
+[trl] start 19:28:30: layers [7], experts 248-251, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.5 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e248: 12.6 s (H_h 0.2 s) | gatek2 1.250x (4.1 s, 8-bit +0.21 %) | upk2 1.292x (4.2 s, 8-bit +0.19 %) | downk3 0.543x (3.4 s, 8-bit +0.53 %)
+[trl] L7 e249: 12.6 s (H_h 0.2 s) | gatek2 1.298x (4.1 s, 8-bit +0.22 %) | upk2 1.326x (4.2 s, 8-bit +0.24 %) | downk3 0.600x (3.4 s, 8-bit +0.48 %)
+[trl] L7 e250: 12.7 s (H_h 0.2 s) | gatek2 1.296x (4.2 s, 8-bit +0.22 %) | upk2 1.310x (4.2 s, 8-bit +0.19 %) | downk3 0.606x (3.4 s, 8-bit +0.48 %)
+[trl] L7 e251: 12.6 s (H_h 0.2 s) | gatek2 1.328x (4.1 s, 8-bit +0.26 %) | upk2 1.318x (4.2 s, 8-bit +0.24 %) | downk3 0.643x (3.4 s, 8-bit +0.44 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.598x (min 0.543, max 0.643), 8-bit view +0.48 %, encode 3.39 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.293x (min 1.250, max 1.328), 8-bit view +0.23 %, encode 4.11 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.311x (min 1.292, max 1.326), 8-bit view +0.21 %, encode 4.19 s per matrix
+[trl] done 19:29:21 (51 s), disk 144.5 GB free, swap 8378 MB
+[trl] start 19:29:21: layers [7], experts 252-255, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.5 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e252: 12.7 s (H_h 0.3 s) | gatek2 1.259x (4.2 s, 8-bit +0.22 %) | upk2 1.318x (4.3 s, 8-bit +0.25 %) | downk3 0.492x (3.3 s, 8-bit +0.59 %)
+[trl] L7 e253: 13.0 s (H_h 0.2 s) | gatek2 1.307x (4.2 s, 8-bit +0.23 %) | upk2 1.297x (4.3 s, 8-bit +0.21 %) | downk3 0.654x (3.5 s, 8-bit +0.44 %)
+[trl] L7 e254: 12.9 s (H_h 0.2 s) | gatek2 1.325x (4.2 s, 8-bit +0.20 %) | upk2 1.326x (4.3 s, 8-bit +0.21 %) | downk3 0.569x (3.4 s, 8-bit +0.48 %)
+[trl] L7 e255: 12.9 s (H_h 0.2 s) | gatek2 1.318x (4.3 s, 8-bit +0.20 %) | upk2 1.317x (4.3 s, 8-bit +0.25 %) | downk3 0.641x (3.5 s, 8-bit +0.45 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.589x (min 0.492, max 0.654), 8-bit view +0.49 %, encode 3.45 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.302x (min 1.259, max 1.325), 8-bit view +0.21 %, encode 4.23 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.314x (min 1.297, max 1.326), 8-bit view +0.23 %, encode 4.26 s per matrix
+[trl] done 19:30:13 (52 s), disk 144.5 GB free, swap 8378 MB
+[trl] start 19:30:14: layers [7], experts 256-259, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.5 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e256: 12.9 s (H_h 0.2 s) | gatek2 1.267x (4.2 s, 8-bit +0.23 %) | upk2 1.285x (4.3 s, 8-bit +0.21 %) | downk3 0.638x (3.4 s, 8-bit +0.44 %)
+[trl] L7 e257: 12.8 s (H_h 0.2 s) | gatek2 1.289x (4.2 s, 8-bit +0.22 %) | upk2 1.335x (4.2 s, 8-bit +0.25 %) | downk3 0.604x (3.4 s, 8-bit +0.46 %)
+[trl] L7 e258: 12.8 s (H_h 0.2 s) | gatek2 1.336x (4.2 s, 8-bit +0.21 %) | upk2 1.299x (4.2 s, 8-bit +0.23 %) | downk3 0.602x (3.4 s, 8-bit +0.47 %)
+[trl] L7 e259: 12.8 s (H_h 0.2 s) | gatek2 1.307x (4.2 s, 8-bit +0.24 %) | upk2 1.297x (4.3 s, 8-bit +0.21 %) | downk3 0.613x (3.4 s, 8-bit +0.46 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.614x (min 0.602, max 0.638), 8-bit view +0.46 %, encode 3.43 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.300x (min 1.267, max 1.336), 8-bit view +0.23 %, encode 4.19 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.304x (min 1.285, max 1.335), 8-bit view +0.22 %, encode 4.25 s per matrix
+[trl] done 19:31:05 (52 s), disk 144.5 GB free, swap 8378 MB
+[trl] start 19:31:06: layers [7], experts 260-263, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.5 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e260: 12.8 s (H_h 0.2 s) | gatek2 1.218x (4.2 s, 8-bit +0.25 %) | upk2 1.249x (4.2 s, 8-bit +0.23 %) | downk3 0.564x (3.4 s, 8-bit +0.52 %)
+[trl] L7 e261: 12.9 s (H_h 0.3 s) | gatek2 1.342x (4.2 s, 8-bit +0.22 %) | upk2 1.328x (4.2 s, 8-bit +0.21 %) | downk3 0.628x (3.4 s, 8-bit +0.45 %)
+[trl] L7 e262: 12.0 s (H_h 0.2 s) | gatek2 1.288x (4.3 s, 8-bit +0.23 %) | upk2 1.339x (3.8 s, 8-bit +0.20 %) | downk3 0.623x (3.0 s, 8-bit +0.48 %)
+[trl] L7 e263: 11.0 s (H_h 0.2 s) | gatek2 1.320x (3.7 s, 8-bit +0.19 %) | upk2 1.314x (3.6 s, 8-bit +0.22 %) | downk3 0.566x (3.0 s, 8-bit +0.51 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.595x (min 0.564, max 0.628), 8-bit view +0.49 %, encode 3.22 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.292x (min 1.218, max 1.342), 8-bit view +0.22 %, encode 4.23 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.307x (min 1.249, max 1.339), 8-bit view +0.22 %, encode 4.02 s per matrix
+[trl] done 19:31:55 (49 s), disk 144.4 GB free, swap 8378 MB
+[trl] start 19:31:55: layers [7], experts 264-267, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.4 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.2 s
+[trl] L7 e264: 10.8 s (H_h 0.2 s) | gatek2 1.276x (3.6 s, 8-bit +0.22 %) | upk2 1.328x (3.6 s, 8-bit +0.22 %) | downk3 0.656x (2.9 s, 8-bit +0.45 %)
+[trl] L7 e265: 71.6 s (H_h 0.2 s) | gatek2 1.258x (3.5 s, 8-bit +0.23 %) | upk2 1.290x (64.3 s, 8-bit +0.21 %) | downk3 0.623x (3.0 s, 8-bit +0.45 %)
+[trl] L7 e266: 11.2 s (H_h 0.2 s) | gatek2 1.271x (3.7 s, 8-bit +0.23 %) | upk2 1.271x (3.7 s, 8-bit +0.24 %) | downk3 0.665x (3.0 s, 8-bit +0.43 %)
+[trl] L7 e267: 11.6 s (H_h 0.2 s) | gatek2 1.315x (3.8 s, 8-bit +0.19 %) | upk2 1.300x (3.8 s, 8-bit +0.23 %) | downk3 0.613x (3.1 s, 8-bit +0.47 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.639x (min 0.613, max 0.665), 8-bit view +0.45 %, encode 3.01 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.280x (min 1.258, max 1.315), 8-bit view +0.22 %, encode 3.61 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.297x (min 1.271, max 1.328), 8-bit view +0.22 %, encode 3.76 s per matrix
+[trl] done 19:33:41 (105 s), disk 144.4 GB free, swap 8378 MB
+[trl] start 19:33:41: layers [7], experts 268-271, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.4 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e268: 11.9 s (H_h 0.3 s) | gatek2 1.313x (3.9 s, 8-bit +0.22 %) | upk2 1.344x (3.9 s, 8-bit +0.22 %) | downk3 0.413x (3.2 s, 8-bit +0.72 %)
+[trl] L7 e269: 11.3 s (H_h 0.2 s) | gatek2 1.316x (4.0 s, 8-bit +0.21 %) | upk2 1.320x (3.7 s, 8-bit +0.21 %) | downk3 0.625x (2.7 s, 8-bit +0.44 %)
+[trl] L7 e270: 11.1 s (H_h 0.2 s) | gatek2 1.305x (3.3 s, 8-bit +0.23 %) | upk2 1.329x (3.7 s, 8-bit +0.22 %) | downk3 0.605x (3.3 s, 8-bit +0.47 %)
+[trl] L7 e271: 12.2 s (H_h 0.2 s) | gatek2 1.315x (4.0 s, 8-bit +0.21 %) | upk2 1.308x (4.0 s, 8-bit +0.24 %) | downk3 0.659x (3.2 s, 8-bit +0.44 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.576x (min 0.413, max 0.659), 8-bit view +0.52 %, encode 3.18 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.312x (min 1.305, max 1.316), 8-bit view +0.22 %, encode 3.92 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.325x (min 1.308, max 1.344), 8-bit view +0.22 %, encode 3.84 s per matrix
+[trl] done 19:34:28 (47 s), disk 144.4 GB free, swap 8378 MB
+[trl] start 19:34:29: layers [7], experts 272-275, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.4 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e272: 12.3 s (H_h 0.2 s) | gatek2 1.327x (4.0 s, 8-bit +0.22 %) | upk2 1.312x (4.0 s, 8-bit +0.20 %) | downk3 0.571x (3.3 s, 8-bit +0.49 %)
+[trl] L7 e273: 12.3 s (H_h 0.2 s) | gatek2 1.318x (4.0 s, 8-bit +0.22 %) | upk2 1.312x (4.1 s, 8-bit +0.22 %) | downk3 0.503x (3.3 s, 8-bit +0.60 %)
+[trl] L7 e274: 12.6 s (H_h 0.2 s) | gatek2 1.340x (4.2 s, 8-bit +0.20 %) | upk2 1.321x (4.1 s, 8-bit +0.20 %) | downk3 0.590x (3.4 s, 8-bit +0.49 %)
+[trl] L7 e275: 12.6 s (H_h 0.2 s) | gatek2 1.327x (4.2 s, 8-bit +0.21 %) | upk2 1.353x (4.1 s, 8-bit +0.22 %) | downk3 0.647x (3.4 s, 8-bit +0.43 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.578x (min 0.503, max 0.647), 8-bit view +0.50 %, encode 3.35 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.328x (min 1.318, max 1.340), 8-bit view +0.21 %, encode 4.10 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.325x (min 1.312, max 1.353), 8-bit view +0.21 %, encode 4.09 s per matrix
+[trl] done 19:35:19 (50 s), disk 144.4 GB free, swap 8378 MB
+[trl] start 19:35:19: layers [7], experts 276-279, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.4 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e276: 12.6 s (H_h 0.2 s) | gatek2 1.315x (4.1 s, 8-bit +0.22 %) | upk2 1.286x (4.1 s, 8-bit +0.22 %) | downk3 0.472x (3.4 s, 8-bit +0.65 %)
+[trl] L7 e277: 12.3 s (H_h 0.2 s) | gatek2 1.346x (4.1 s, 8-bit +0.24 %) | upk2 1.371x (4.0 s, 8-bit +0.21 %) | downk3 0.612x (3.4 s, 8-bit +0.48 %)
+[trl] L7 e278: 12.6 s (H_h 0.2 s) | gatek2 1.346x (4.1 s, 8-bit +0.23 %) | upk2 1.300x (4.2 s, 8-bit +0.19 %) | downk3 0.584x (3.4 s, 8-bit +0.50 %)
+[trl] L7 e279: 12.7 s (H_h 0.2 s) | gatek2 1.312x (4.2 s, 8-bit +0.21 %) | upk2 1.346x (4.3 s, 8-bit +0.23 %) | downk3 0.647x (3.4 s, 8-bit +0.43 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.579x (min 0.472, max 0.647), 8-bit view +0.52 %, encode 3.39 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.330x (min 1.312, max 1.346), 8-bit view +0.23 %, encode 4.14 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.326x (min 1.286, max 1.371), 8-bit view +0.21 %, encode 4.15 s per matrix
+[trl] done 19:36:10 (51 s), disk 144.4 GB free, swap 8378 MB
+[trl] start 19:36:10: layers [7], experts 280-283, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.4 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e280: 12.7 s (H_h 0.2 s) | gatek2 1.278x (4.2 s, 8-bit +0.23 %) | upk2 1.287x (4.2 s, 8-bit +0.25 %) | downk3 0.519x (3.4 s, 8-bit +0.57 %)
+[trl] L7 e281: 12.8 s (H_h 0.2 s) | gatek2 1.300x (4.2 s, 8-bit +0.22 %) | upk2 1.255x (4.2 s, 8-bit +0.23 %) | downk3 0.641x (3.4 s, 8-bit +0.45 %)
+[trl] L7 e282: 12.6 s (H_h 0.2 s) | gatek2 1.276x (4.2 s, 8-bit +0.21 %) | upk2 1.363x (4.1 s, 8-bit +0.20 %) | downk3 0.632x (3.4 s, 8-bit +0.46 %)
+[trl] L7 e283: 12.6 s (H_h 0.2 s) | gatek2 1.280x (4.2 s, 8-bit +0.23 %) | upk2 1.278x (4.1 s, 8-bit +0.23 %) | downk3 0.608x (3.4 s, 8-bit +0.48 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.600x (min 0.519, max 0.641), 8-bit view +0.49 %, encode 3.37 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.283x (min 1.276, max 1.300), 8-bit view +0.22 %, encode 4.20 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.296x (min 1.255, max 1.363), 8-bit view +0.23 %, encode 4.15 s per matrix
+[trl] done 19:37:01 (51 s), disk 144.3 GB free, swap 8378 MB
+[trl] start 19:37:02: layers [7], experts 284-287, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.3 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e284: 12.6 s (H_h 0.2 s) | gatek2 1.298x (4.2 s, 8-bit +0.20 %) | upk2 1.314x (4.1 s, 8-bit +0.22 %) | downk3 0.668x (3.3 s, 8-bit +0.42 %)
+[trl] L7 e285: 12.8 s (H_h 0.2 s) | gatek2 1.306x (4.2 s, 8-bit +0.21 %) | upk2 1.299x (4.2 s, 8-bit +0.22 %) | downk3 0.638x (3.5 s, 8-bit +0.46 %)
+[trl] L7 e286: 12.6 s (H_h 0.2 s) | gatek2 1.290x (4.1 s, 8-bit +0.21 %) | upk2 1.315x (4.1 s, 8-bit +0.23 %) | downk3 0.582x (3.4 s, 8-bit +0.50 %)
+[trl] L7 e287: 12.8 s (H_h 0.2 s) | gatek2 1.284x (4.2 s, 8-bit +0.22 %) | upk2 1.312x (4.2 s, 8-bit +0.24 %) | downk3 0.508x (3.4 s, 8-bit +0.58 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.599x (min 0.508, max 0.668), 8-bit view +0.49 %, encode 3.42 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.295x (min 1.284, max 1.306), 8-bit view +0.21 %, encode 4.17 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.310x (min 1.299, max 1.315), 8-bit view +0.23 %, encode 4.17 s per matrix
+[trl] done 19:37:53 (51 s), disk 144.3 GB free, swap 8378 MB
+[trl] start 19:37:53: layers [7], experts 288-291, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.3 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.3 s
+[trl] L7 e288: 12.6 s (H_h 0.2 s) | gatek2 1.307x (4.1 s, 8-bit +0.21 %) | upk2 1.335x (4.1 s, 8-bit +0.21 %) | downk3 0.600x (3.4 s, 8-bit +0.49 %)
+[trl] L7 e289: 12.3 s (H_h 0.2 s) | gatek2 1.271x (4.2 s, 8-bit +0.21 %) | upk2 1.302x (4.2 s, 8-bit +0.23 %) | downk3 0.670x (3.1 s, 8-bit +0.43 %)
+[trl] L7 e290: 10.3 s (H_h 0.2 s) | gatek2 1.274x (3.4 s, 8-bit +0.23 %) | upk2 1.327x (3.4 s, 8-bit +0.23 %) | downk3 0.584x (2.8 s, 8-bit +0.48 %)
+[trl] L7 e291: 10.1 s (H_h 0.2 s) | gatek2 1.312x (3.4 s, 8-bit +0.25 %) | upk2 1.305x (3.3 s, 8-bit +0.23 %) | downk3 0.578x (2.7 s, 8-bit +0.48 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.608x (min 0.578, max 0.670), 8-bit view +0.47 %, encode 2.96 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.291x (min 1.271, max 1.312), 8-bit view +0.23 %, encode 3.76 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.317x (min 1.302, max 1.335), 8-bit view +0.22 %, encode 3.75 s per matrix
+[trl] done 19:38:39 (46 s), disk 144.3 GB free, swap 8378 MB
+[trl] start 19:38:39: layers [7], experts 292-295, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.3 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.2 s
+[trl] L7 e292: 9.9 s (H_h 0.2 s) | gatek2 1.297x (3.3 s, 8-bit +0.19 %) | upk2 1.316x (3.2 s, 8-bit +0.23 %) | downk3 0.657x (2.7 s, 8-bit +0.44 %)
+[trl] L7 e293: 10.0 s (H_h 0.2 s) | gatek2 1.287x (3.3 s, 8-bit +0.21 %) | upk2 1.316x (3.3 s, 8-bit +0.22 %) | downk3 0.672x (2.7 s, 8-bit +0.43 %)
+[trl] L7 e294: 9.8 s (H_h 0.2 s) | gatek2 1.259x (3.2 s, 8-bit +0.24 %) | upk2 1.253x (3.2 s, 8-bit +0.22 %) | downk3 0.547x (2.7 s, 8-bit +0.53 %)
+[trl] L7 e295: 9.8 s (H_h 0.2 s) | gatek2 1.299x (3.2 s, 8-bit +0.23 %) | upk2 1.308x (3.3 s, 8-bit +0.24 %) | downk3 0.466x (2.6 s, 8-bit +0.62 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.586x (min 0.466, max 0.672), 8-bit view +0.51 %, encode 2.69 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.285x (min 1.259, max 1.299), 8-bit view +0.22 %, encode 3.25 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.298x (min 1.253, max 1.316), 8-bit view +0.23 %, encode 3.26 s per matrix
+[trl] done 19:39:19 (40 s), disk 144.3 GB free, swap 8378 MB
+[trl] start 19:39:19: layers [7], experts 296-299, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.3 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.2 s
+[trl] L7 e296: 10.3 s (H_h 0.2 s) | gatek2 1.236x (3.5 s, 8-bit +0.25 %) | upk2 1.299x (3.5 s, 8-bit +0.25 %) | downk3 0.536x (2.7 s, 8-bit +0.56 %)
+[trl] L7 e297: 10.3 s (H_h 0.2 s) | gatek2 1.284x (3.5 s, 8-bit +0.23 %) | upk2 1.252x (3.5 s, 8-bit +0.21 %) | downk3 0.599x (2.6 s, 8-bit +0.48 %)
+[trl] L7 e298: 10.2 s (H_h 0.2 s) | gatek2 1.318x (3.5 s, 8-bit +0.23 %) | upk2 1.326x (3.5 s, 8-bit +0.23 %) | downk3 0.589x (2.6 s, 8-bit +0.48 %)
+[trl] L7 e299: 10.2 s (H_h 0.2 s) | gatek2 1.301x (3.5 s, 8-bit +0.22 %) | upk2 1.338x (3.5 s, 8-bit +0.22 %) | downk3 0.649x (2.6 s, 8-bit +0.46 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.593x (min 0.536, max 0.649), 8-bit view +0.49 %, encode 2.63 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.285x (min 1.236, max 1.318), 8-bit view +0.23 %, encode 3.46 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.304x (min 1.252, max 1.338), 8-bit view +0.23 %, encode 3.46 s per matrix
+[trl] done 19:40:00 (41 s), disk 144.3 GB free, swap 8378 MB
+[trl] start 19:40:01: layers [7], experts 300-303, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.3 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.2 s
+[trl] L7 e300: 9.8 s (H_h 0.2 s) | gatek2 1.261x (3.2 s, 8-bit +0.23 %) | upk2 1.253x (3.2 s, 8-bit +0.23 %) | downk3 0.593x (2.6 s, 8-bit +0.50 %)
+[trl] L7 e301: 9.8 s (H_h 0.2 s) | gatek2 1.303x (3.2 s, 8-bit +0.22 %) | upk2 1.295x (3.3 s, 8-bit +0.25 %) | downk3 0.597x (2.6 s, 8-bit +0.48 %)
+[trl] L7 e302: 9.8 s (H_h 0.2 s) | gatek2 1.272x (3.2 s, 8-bit +0.22 %) | upk2 1.294x (3.2 s, 8-bit +0.25 %) | downk3 0.385x (2.6 s, 8-bit +0.75 %)
+[trl] L7 e303: 9.8 s (H_h 0.2 s) | gatek2 1.338x (3.2 s, 8-bit +0.22 %) | upk2 1.359x (3.2 s, 8-bit +0.21 %) | downk3 0.597x (2.6 s, 8-bit +0.47 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.543x (min 0.385, max 0.597), 8-bit view +0.55 %, encode 2.62 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.294x (min 1.261, max 1.338), 8-bit view +0.23 %, encode 3.24 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.300x (min 1.253, max 1.359), 8-bit view +0.23 %, encode 3.24 s per matrix
+[trl] done 19:40:40 (39 s), disk 144.2 GB free, swap 8378 MB
+[trl] start 19:40:41: layers [7], experts 304-307, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 144.2 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.2 s
+[trl] L7 e304: 9.9 s (H_h 0.2 s) | gatek2 1.260x (3.3 s, 8-bit +0.24 %) | upk2 1.314x (3.2 s, 8-bit +0.24 %) | downk3 0.505x (2.7 s, 8-bit +0.56 %)
+[trl] L7 e305: 10.2 s (H_h 0.2 s) | gatek2 1.282x (3.2 s, 8-bit +0.24 %) | upk2 1.285x (3.3 s, 8-bit +0.23 %) | downk3 0.638x (2.8 s, 8-bit +0.45 %)
+[trl] L7 e306: 10.9 s (H_h 0.2 s) | gatek2 1.247x (3.4 s, 8-bit +0.23 %) | upk2 1.272x (3.5 s, 8-bit +0.19 %) | downk3 0.619x (2.9 s, 8-bit +0.48 %)
+[trl] L7 e307: 11.9 s (H_h 0.3 s) | gatek2 1.286x (3.6 s, 8-bit +0.23 %) | upk2 1.286x (3.8 s, 8-bit +0.24 %) | downk3 0.630x (3.3 s, 8-bit +0.47 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.598x (min 0.505, max 0.638), 8-bit view +0.49 %, encode 2.88 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.269x (min 1.247, max 1.286), 8-bit view +0.23 %, encode 3.33 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.289x (min 1.272, max 1.314), 8-bit view +0.22 %, encode 3.40 s per matrix
+[trl] done 19:41:24 (43 s), disk 143.4 GB free, swap 8378 MB
+[trl] start 19:41:24: layers [7], experts 308-311, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 143.3 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s
+[trl] L7 e308: 12.5 s (H_h 0.3 s) | gatek2 1.311x (4.0 s, 8-bit +0.23 %) | upk2 1.320x (4.1 s, 8-bit +0.22 %) | downk3 0.623x (3.3 s, 8-bit +0.44 %)
+[trl] L7 e309: 13.0 s (H_h 0.3 s) | gatek2 1.283x (4.2 s, 8-bit +0.21 %) | upk2 1.301x (4.2 s, 8-bit +0.21 %) | downk3 0.624x (3.4 s, 8-bit +0.46 %)
+[trl] L7 e310: 13.4 s (H_h 0.4 s) | gatek2 1.300x (4.3 s, 8-bit +0.23 %) | upk2 1.263x (4.3 s, 8-bit +0.21 %) | downk3 0.658x (3.5 s, 8-bit +0.42 %)
+[trl] L7 e311: 13.4 s (H_h 0.2 s) | gatek2 1.343x (4.4 s, 8-bit +0.23 %) | upk2 1.279x (4.4 s, 8-bit +0.22 %) | downk3 0.560x (3.6 s, 8-bit +0.54 %)
+[trl] L7 summary down k3: 4 experts, in-sample err vs MSB-3 mean 0.616x (min 0.560, max 0.658), 8-bit view +0.47 %, encode 3.47 s per matrix
+[trl] L7 summary gate k2: 4 experts, in-sample err vs MSB-3 mean 1.309x (min 1.283, max 1.343), 8-bit view +0.22 %, encode 4.24 s per matrix
+[trl] L7 summary up k2: 4 experts, in-sample err vs MSB-3 mean 1.291x (min 1.263, max 1.320), 8-bit view +0.22 %, encode 4.27 s per matrix
+[trl] done 19:42:17 (53 s), disk 143.2 GB free, swap 8378 MB
+[trl] start 19:42:18: layers [7], experts 312-315, form mix {'gate': (2,), 'up': (2,), 'down': (3,)}, damping {'gate': 0.3, 'up': 0.3, 'down': 0.1}, B3_THREADS 4, disk 143.2 GB free, swap 8378 MB, cap /Users/kamen/Fit12/data/b10rcap
+[trl] L7: fit rows 32760, H_x + prep 0.4 s

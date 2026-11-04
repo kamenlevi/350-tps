@@ -2943,3 +2943,38 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
   P-CAP's launcher waits for 3 clear minutes with no MEM >= 5 GB lock (MTP Head 18:4x), so it never starts between two
   of my arms. Slot: pick_next skips DENSE-3 while s7_trl is not done (dry test: six cases right); swapped in by an
   atomic rename and re-armed at the end of s7_cal (the old slot held by the placeholder, as at 18:21).
+- RESULTS, interim (Wed 19:38, the slot's first wait for Fit12's TRL store) [K]. All arms 36 windows, 0 row-count
+  warnings. Flips = all-row top-1 flips vs the baseline argmax, live checks; KL from map_kl.py. Data:
+  data/dm_s7/results_wed/ (out JSONs gzipped, SCREEN_read files, the read-out, the slot's events).
+  - Read-out table (code / IFEval / multi):
+
+    | arm | code flips % / KL | IFEval | multi |
+    |---|---|---|---|
+    | C (qom_0_live_bq_c147_t3) | 1.07 / 0.0057 | 8.07 / 0.0386 | 5.99 / 0.0313 |
+    | screen 6 (qom_0_live_ball_c147_t3) | 1.07 / 0.0061 | 7.83 / 0.0386 | 5.99 / 0.0313 |
+    | s7_ref (screen 6's form, 239 slots) | 0.74 / 0.0040 | 6.48 / 0.0232 | 5.35 / 0.0236 |
+    | s7_ref3 (every kept expert MSB-3, 48 layers) | 1.04 / 0.0051 | 7.62 / 0.0297 | 6.36 / 0.0324 |
+    | s7_cal (MSB-2 at S) | 1.01 / 0.0052 | 7.12 / 0.0299 | 5.97 / 0.0308 |
+    | s7_cal_all (MSB-2 at all 48) | 2.23 / 0.0180 | 13.92 / 0.1094 | 13.59 / 0.1465 |
+
+  - SCREEN 6 (DRAFT17 at the 24 GB pool): PASS on code, the domain that matters.
+    - code 1.07 % (36/3366) <= 1.34, the same rate as C (36/3366; McNemar 12 / 12, z 0).
+    - IFEval 7.83 % BETWEEN (C 8.07; McNemar 13 / 21, z -1.37); multi 5.99 % KILL, identical to C (0 / 0: C had no
+      ungated last rows in multi).
+    - NewIdeas' prediction was code ~1.15-1.3 %, chat as C's. DRAFT17's gated last rows cost nothing measurable on code.
+  - SCREEN 7: PENDING. s7_trl waits for Fit12's store; est_KL needs KL_trl.
+    - Ready for it, the scale (KL_cal_all - KL_ref) / (KL_cal - KL_ref) = 11.7 / 12.9 / 17.1 (4 -> 48 layers; linear
+      would be 12).
+    - Information [K]: s7_ref3 - s7_ref = +0.30 / +1.14 / +1.01 points (KL +0.0011 / +0.0065 / +0.0088). That is the cost of
+      serving the kept ranks 2-9 at MSB-3 instead of 4 bits at 239 slots (BigMoE's all-3-bit FAST pool question; code
+      stays under 1.34 % at 239 slots).
+  - 1(b) q1u_0.9_live_bonus9g, null check: PASS on all three domains.
+    - code 1.25 % (= q1u_0.9_live; McNemar 0 / 0); IFEval 6.42 % (twin 6.45; 5 / 6); multi 3.86 % (twin 3.77, +0.09 <=
+      +0.1; 6 / 3, z +1.00).
+  - 1(c) qom_0.5_live_bonus5g, null check: COST on all three domains (each above the twin + 0.1 points).
+    - code 0.48 % vs 0.36 % (+0.12; McNemar 5 / 1, z +1.63); IFEval 2.88 % vs 2.68 % (+0.20; 48 / 41, z +0.74); multi
+      1.91 % vs 1.63 % (+0.28; 33 / 23, z +1.34).
+    - Pooled 86 / 65, z +1.71 (two-sided p ~0.09): consistent in sign but not significant alone.
+    - Per the pre-registration, a cost above +0.1 means the gate file's cf and the walk's disagree on the 165 bonus rows
+      gated at 0.5 (BYTES10.md:255-260).
+  - Left: s7_trl (when the store is whole; P-CAP may take the GPU first), then DENSE-3 (before 23:10 only).

@@ -3164,6 +3164,14 @@ so R-01 should find about the same slots, not ~1 GB more.
     layer 7, first 146: gate 1.300x (1.150-1.355), up 1.310x (1.157-1.375), down 0.583x (0.192-0.687); view +0.22 / +0.22
                        / +0.50 %. So far layer 7 < 18 < 30 on every projection.
   ETA ~22:10-22:25 if the heat eases after the batch's GPU arms.
+- Progress 19:35: layer 7 at 275 of 512, layer 41 at 0 (1,299 of 2,048); 259 per hour since 19:04 (the map process takes
+  ~2.3 cores beside the encoder; 3 heat freezes since 19:00); 256 per hour over the whole run since 14:32. Expected: layer 7
+  whole ~20:25, layer 41 ~55 % at 21:30, all four ~22:15-22:30 (at the 22:41 cut: 100 % at >= 245 per hour, ~87 % at 220).
+  No stall, no error, disk 144 GB free, swap below the start.
+- The orchestrator 19:3x, if layer 41 is not whole at the 22:41 cut: no diluted run (no MSB-3 fallback for the missing
+  experts). Layer 41 is finished Thu from 06:00 on CPU (/Users/kamen/Fit12/scripts/trl_thu.sh: only if the store is not
+  whole and records3 is not yet converted; last chunk start 08:30). s7_trl then runs in a ~10-min gap after BigMoE's
+  Thu ticket (~08:55), all before the ~10:55 records3 conversion.
 - Reader guard (Leap's records3 reader triage, 18:5x): Thursday's in-place records3 conversion (native+p11+pad, a per-layer
   "layout" key in index.json) would make fit_q.read decode permuted codes and 11-bit-packed scales silently. read() now
   raises unless the layer's layout is row-major (19:03:59; scratch-copy test: 180 arrays identical on today's store, a

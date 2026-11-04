@@ -63,6 +63,20 @@ Plan: ~/BigMoE/docs/PLAN_records3_convert.md. Leap prepares and verifies.
 - Engine smoke: the residency check + a short REF2-T decode, token for token vs the pre-conversion reference.
 - Tell every session (peer say + the orchestrator).
 
+## STATUS 19:2x
+- B1: FIXED by BigMoE 8e8bdc4, verified against EvalSuite's day_runner42.sh.
+  - T0_DONE is gone. The script needs NAX6_DONE == "D4X: PASS" (d4x.py prints exactly that; runner 42 writes it),
+    CHECK1_DONE starting "check 1 rc 0 " (runner 42 writes "check 1 rc $c1 (HH:MM)"), and RELAX_DONE.
+  - The script quarantines model_mix's index (.rowmajor-stale) and lists foreign overlays as "OVERLAYS TO FIX".
+- OPEN DECISION (the orchestrator, asked 19:2x): on "D4X: DIFFERS (HIGHER)" the script refuses, but EvalSuite's
+  runners 43 / 44 treat DIFFERS as go. They would wait for a converted store until 14:00 / ~16:15. Align (a) or (b).
+## STATUS 19:1x (superseded)
+- B2 (dm_t3): FIXED by Breakthrough e4d2c82, tested 25/25 on BigMoE's padded copy. It installs after tonight's map batch.
+- r3_overlay: moved aside at the same time (renamed .STALE-before-records3-conversion).
+- Readers now guarded: Fit12 fit_q.read (refuses a non-row-major layout; covers fit_trl_store / fit_b3 / fit_q2 / fit_q3);
+  MoonShots ca49546 (5 readers + 7 launchers); Leap 68d2346 (18).
+- Open: model_mix (BigMoE) to delete or re-index after the conversion.
+
 ## 0. BLOCKERS (verified 18:5x against the files)
 - **B1. The script would refuse Thu ~10:55.** convert_records3.sh:34 requires ~/EvalSuite/results/T0_DONE.
   - EvalSuite's order (its HANDOVER, Wed 18:05) now runs T0 AFTER the conversion: after runner 44, ~15:50 -> Fri 00:15.

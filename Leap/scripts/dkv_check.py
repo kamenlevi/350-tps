@@ -1,7 +1,7 @@
 """DKV check (Leap, Wed 2026-11-04 18:0x; TABLE_350 'DKV'): scripts/dkv.py (copy-free drafter window cache) vs the
 reference (mlx_lm RotatingKVCache + draft_fused's memoized-mask attention), on the real D8-NAX drafter.
  (a) stress, one real attention layer (layer 0; NaxQL8 projections): 6 prompts x 121 steps; each prompt a fresh cache pair
-     with a random preset offset, a first update of 2,100 / 2,047 / 1,000 / 300 / 40 / 2 rows, then S = 1 (15 %) or
+     with r57's start offset (0 for short prompts; a random prompt end for full windows), a first update of 2,100 / 2,047 / 1,000 / 300 / 40 / 2 rows, then S = 1 (15 %) or
      2..16; ~8 % of steps a DF._trim_recent_cache of 1-5 rows; odd prompts a small buffer (cap = window + 200: many
      compactions). Every step's output == the reference's, bitwise, and the offsets equal; all paths counted;
  (b) BP-9's walk (dfl2d_code / math, D8-NAX + the screened head): every propose's path and confidences bitwise ==
@@ -68,8 +68,12 @@ steps = bad = trims = 0
 for pr, S0 in enumerate((2100, 2047, 1000, 300, 40, 2)):
     ref = RotatingKVCache(SW - 1, 0)
     new = DKV.LinRotCache(SW - 1, 0, cap=(SW - 1 + 200) if pr % 2 else None)
-    ref.offset = new.offset = int(rng.integers(0, 3000))
+    P0 = S0 + (int(rng.integers(0, 3000)) if S0 >= SW - 1 else 0)    # r57's start: max(0, P - 2047) (deviation 19:0x:
+    ref.offset = new.offset = P0 - S0                                 # random preset offsets hit the reference's own crash)
     for S in [S0] + [1 if rng.random() < 0.15 else int(rng.integers(2, 17)) for _ in range(120)]:
+        if S == 1 and ref.keys is not None and ref.keys.shape[2] < ref.max_size and ref.offset >= ref.keys.shape[2] \
+                and ref.offset > ref.max_size:
+            S = 2                                                     # a state where the reference's 1-token update cannot grow
         x, xc = rnd((1, R, 2560)), rnd((1, S, 2560))
         o_r, o_n = layer(x, xc, rope, ref), layer(x, xc, rope, new)
         mx.eval(o_r, o_n)
