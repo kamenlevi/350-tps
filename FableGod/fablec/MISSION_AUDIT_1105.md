@@ -43,3 +43,4 @@ Thinking and writing only: no GPU, no downloads, write only in ~/FableGod/fablec
     - No paper found that relaxes acceptance only in code comments.
     - Lossy verification can inflate output length: arXiv 2610.23818 ("acceptance is not speed"; reported 1.34x accepted tokens per round but 1.54x longer completions at the most relaxed settings) and 2607.26627.
     - Check whether FULL's tok/s math survives longer comments. Require tokens per task and seconds per task in its engine test, not only tok/s.
+- Added 22:1x: FAR's section 7 (~/FableGod/far/FAR.md, far_wait.txt) measured the SSD wait law on 106 logged runs: a ~12 ms floor + ~0.155 ms per miss (~14 GB/s, R2 >= 0.95). Check GOAL.md's "the SSD wait is a latency problem, not a bandwidth problem" against it, and re-price GOAL's lever 1 with both terms.

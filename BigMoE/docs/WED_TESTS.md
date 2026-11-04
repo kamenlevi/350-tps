@@ -243,3 +243,8 @@ theta per domain comes from the map verdict (scripts/qom_read.py -> data/QOM_rea
   ticket (night_thu.sh: C 256 headline -> C 224 trio -> agent LOO cut at 09:00 so runner 42 starts by ~09:10).
 - Thu (the orchestrator 21:5x): no new agent-LOO arm after 08:35, so the ticket touches q42/GO by ~08:45 (runner 42's
   original start); night_thu.sh also caps steps 1-2 at 08:10 / 08:30 for a late grant.
+- Thu (the orchestrator 22:1x): Leap's DKV is installed in scripts/r57_screen.py behind R57_DKV=1 (+ R57_DKV_ADD=1), default
+  off, loading a pinned copy (scripts/dkv.py = Leap 23919fb) by path; CPU smoke: hooks in, uninstall restores. Its token
+  check (scripts/dkv_thu.sh: 14 ref14 prompts at C 224 vs REF2-T, plus the copy-free path count) is step 3 of the morning
+  ticket, before the agent LOO (cut 08:35). Line (pre-registered): PASS = every token == REF2-T AND fast > 0 -> R57_PRESET=45
+  after a same-run speed A/B; FAIL -> bisect DKV vs + ADD; VOID -> re-run.

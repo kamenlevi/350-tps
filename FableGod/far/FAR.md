@@ -204,6 +204,8 @@ replay (K 266, C 160; the live default is C 256, so these are relative):
 | M-38's PASS point (r 0.7) | -26.5 % | n/a | -15.4 ms -> 110.6 ms = 95 tok/s (+14 %) | ~-3 ms (+2.5 %) [G] |
 | perfect H 8 | -33.7 % | -5.4 % | -19.5 ms -> 106.5 ms = 99 tok/s (+18 %) | -3.1 ms (+2.5 %) |
 | Belady (all future) | -55.3 % | -19.3 % | -32 ms -> 94 ms = 112 tok/s (+34 %) | -11 ms (+9.5 %) |
+[22:2x, section 7b: the per-check logs say bandwidth-bound at the margin (0.15-0.17 ms per miss = 12.7-14.4 GB/s, R2 >=
+0.95) above a ~10-16 ms per-check latency floor, so the left column is the expectation and the right one the floor.]
 Minus the far draft if it is NOT hidden: 12 steps x 2.2 ms = 26 ms per check on the critical path = -17 % tok/s, which
 erases every row above. So the 45 GB case stands or falls on two facts the GPU test logs: the wait is bandwidth-bound, and
 the chain fits in idle GPU time. Blended guess for FAR-SET at 45 GB, if both hold and the map trains to 0.8 / 0.7 [G]: +8-12 %
@@ -223,6 +225,50 @@ tok/s (83 -> 90-93). Not a 350 lever; a BYTES lever.
 | Belady-informed eviction from the draft look-ahead (one window) | TRIED: Rnd17#2 BETWEEN -2 % (MoonShots 10-19); R-57b KILL (BigMoE 10-31) | ~/TRIED/TRIED.md:104, :226 |
 | the memo of exact routes for repeated tokens as a forecast feature | engineering, untested live (recall 0.38-0.49 alone here) | this file, 1b |
 | NEW measurements: (i) the rejected draft rows hold a third of the cache reuse (the true-path ceiling is recall 0.68); (ii) misses vs stalled layers under foresight (34 % vs 5 %); (iii) equal recall / precision buys 2-4x fewer misses with correlated errors than with M-38's independent noise | new (for NOVELTY if the orchestrator wants them) | this file, 1b / 1d |
+
+## 7. Follow-ups for FAR-G1 (orchestrator 22:1x, from BigMoE; CPU, 22:10-22:2x)
+
+**7a. Origin spacing for the capture: `far_origin.py` -> `far_origin.txt`** [K]
+PERFECT-KEPT forecast (the kept-row ceiling) with far-draft origins only every S-th check and F far tokens per origin (a
+decision between origins uses the last origin; staleness modelled optimistically = horizon coverage only), M-38's frame:
+| K 266 | F 64 | F 96 | F 128 | K 147 | F 64 | F 96 | F 128 |
+|---|---|---|---|---|---|---|---|
+| S 1 (176 origins) | -19.9 % (recall 0.67) | | -20.3 % (0.68) = all | S 1 | -26.1 % (0.76) | | -26.3 % |
+| S 2 (89) | -19.6 % (0.66) | -20.3 % (0.68) | -20.3 % | S 2 | -25.9 % | -26.3 % | -26.3 % |
+| **S 4 (46)** | **-18.9 % (0.64)** | **-20.3 % (0.68)** | -20.3 % | S 4 | -25.3 % (0.73) | -26.3 % (0.76) | -26.3 % |
+| S 8 (24) | -17.1 % (0.56) | -20.0 % (0.67) | -20.3 % (0.68) | S 8 | -23.1 % (0.67) | -26.2 % | -26.3 % |
+-> **44-46 origins (every 4th check) are enough for the K 266 line if each origin carries F >= 96 far tokens** (then every
+decision up to 3 checks after its origin still sees 8 checks ahead; the line is identical to origins at every check). At F 64
+the stale decisions lose their 8-check view on code (10-16 kept per check): -18.9 % and recall 0.64, 1.4 points under the
+line. With F 128 even 24 origins (every 8th check) reproduce the every-check line. Recommendation: every 4th check, F 96
+(or every 8th, F 128: half the far prefills). The lines in section 3 stay as written; the read-out replays the LRU on the
+CPU, so the capture's pool pollution does not touch them.
+
+**7b. Is the SSD wait latency- or bandwidth-bound? `far_wait.py` -> `far_wait.txt`** [K BigMoE r57 per-check logs, read-only]
+Data: 106 `<tag>_checks.json` files (per check: miss, io = demand SSD busy ms, svc = gate service ms of calls with misses =
+the GPU's spin bound, ck, rows, ws), checks >= 3, not warm-split, not paused; the stalled-layer count ('slow') is a per-run
+median in r57's stdout only, not logged per check or per run in the json, so the latency part is read from the intercept.
+Fit per tag, io ~ a + b * miss (and svc ~ the same):
+- EXACT C 160 (cap45-like: c45t/ka/vt, 483 misses/check, io 91 ms): b 0.15-0.18 ms per miss, a 5-19 ms, R2 0.86-1.00;
+  cmb*/mix/pr/dfa (150-200 misses, io 36-44 ms): b 0.15-0.17, a 10-14 ms, R2 0.93-0.99; chA/chB (chat, ~100-116 misses, io
+  28-31 ms): b 0.17-0.18, a 9-10 ms, R2 0.96-0.98; u3c (854 misses, io 150 ms): b 0.152, a 19 ms, R2 0.96.
+- EXACT C 224 (w1t*, 223 misses, io 46-53 ms): b 0.13-0.15, a 12-20 ms, R2 0.86-0.99; d256a (104 misses, io 29 ms): b 0.15,
+  a 10 ms, R2 0.98.
+- FAST C 160 (fastBE*, 140-170 misses): b 0.14-0.18, a 7-11 ms, R2 0.94-0.97; u3 (319 misses): b 0.172, a 13, R2 0.99.
+  FAST with QOM (u3cq / qomq / qalq, 15:3x): b 0.22-0.29, a -2..12, R2 0.31-0.57 (optional misses break the line); C 128
+  FAST (allin*/u3cb): svc 27-34 ms << io 64-79 ms (the GPU does not wait for all of the SSD time there), R2 0.5-0.6.
+- svc = io + 0.3-2 ms on every EXACT tag: the GPU's spin on misses equals the SSD's busy time, so the demand reads are on the
+  critical path in full (OOO overlaps ~nothing in these logs).
+- io / miss falls from ~0.30 ms (low-miss tercile) to ~0.18 ms (high tercile) on every EXACT tag: a fixed part plus a
+  per-miss part, as the fit says.
+**Verdict: bandwidth-bound at the margin, with a ~10-16 ms latency floor per check.** 2.163 MB per miss / 0.15-0.17 ms =
+**12.7-14.4 GB/s = the SSD's streaming rate**, so every miss removed saves its bytes' time: at cap45's 483 misses (io 91 ms,
+check 138 ms) a -26.5 % cut = -128 misses = **-20 ms = -14.5 % of the check**; at the live C 256-like 100-200 misses (io 30-45
+ms, check 70-85 ms) = -4 to -8 ms = -6 to -9 %. The fixed 10-16 ms (= ~48 layers x 0.2-0.3 ms, the first-read latency of
+each layer's burst) is the latency-bound part GOAL.md saw at 69 misses (12 + 0.16 x 69 = 23 ms, its 24): it does not shrink
+with fewer misses, only with fewer stalled layers (the replay: perfect foresight -5 %, Belady -19 %). Section 4's "latency-
+bound" column is therefore the floor, not the expectation: the miss cut maps ~1:1 onto io above the ~12 ms floor. FAST and
+EXACT agree where both exist at C 160 (b 0.15-0.18 both); QOM's optional misses are the exception (no linear law).
 
 ## 6. TRIED lines (for the orchestrator to record)
 - FAR-CEIL: the true future tokens as a perfect far draft through token -> expert maps (memo / leave-one-prompt-out table /

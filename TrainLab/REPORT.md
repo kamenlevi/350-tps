@@ -3245,7 +3245,8 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
 - Good enough for Kaggle to score checkpoints against each other. The Mac's bf16 walk stays the reference for absolute
   numbers.
 - Footprint: the math run peaked at 5.97 GB, over my own 4 GB rule (nothing big beside it; Fit12 2 GB). Cause: the
-  head's 512-row transients (~1.8 GB). Fixed: one bf16 output buffer, 256 rows.
+  head's 512-row transients (~1.8 GB). Fix in the code (one bf16 output buffer, 256 rows; head parity still PASS,
+  2.55 GB). The walk's footprint is NOT re-measured yet: rerun the math walk (batch 30) when the Mac is quiet.
 
 ### P-CAP RESULT (Wed 11-04 21:33): BETWEEN. Code 9.57 -> 9.75 kept (+0.18), math 7.00 -> 6.92 (-0.08). Capacity alone, at today's data, is a small lever.
 | | checks | kept per check | per-token rate | P(first 15) |
@@ -3284,3 +3285,15 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
 - **PASS = every step's loss within 2e-3 relative** of L1-20's logged loss (5.343977, 4.695799, 4.796175, 4.645471,
   3.723465). Step 1 already agrees to 1e-4; later steps add GPU-vs-CPU accumulation drift through Adam. FAIL otherwise.
   Tool: port/compare_l120.py.
+
+### P-OFF diagnostic RESULT (Wed 11-04 22:10): ALIVE. The 125B's greedy token equals the corpus answer on 0.86 of answer tokens
+- On-path rate (assistant tokens): **0.860** by the extractor's line over windows 4-260 (the decision line), **0.8622**
+  over all 260 (sticky/poff_data.py). The pre-registered alive line was >= 0.75, so it passes.
+- Per window it ran ~0.84-0.96; the 3 smoke windows (the longest) gave 0.960.
+- What it means for training: the loss weights depth j only while the text stays on the 125B's path. At 0.86, depth 8
+  keeps ~0.86^7 = 35 % of its anchors and depth 15 ~12 %. Prefill-only code data trains the near depths fully and the far
+  depths partly. It is worth the 60K training run (amendment 1's lines: PASS >= +0.18 code, KILL <= +0.05).
+- Extraction, measured: 260 windows / 136,845 tokens in 36.7 min (21:33:44-22:10:25). That is 62 tok/s, ~8.5 s per
+  window (Leap's log: 56 tok/s). Footprint 17.7 GB (smoke 16.8, MEM 28 declared). Swap flat.
+- The training folder is built: ext/poff/train60 = L1-20's 109 windows + the 260 off-policy windows (60,162 assistant
+  tokens). The training (turns/poff_t.sh, ~55 min + walk, MEM 34 GB) needs a Thursday slot from the orchestrator.

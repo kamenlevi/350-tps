@@ -693,6 +693,13 @@ if K83:                                                  # -> 10.2 ms, steady +0
     _DFU.install(forms=D7B != "all" and not D8NAX, draft=draft)   # R-78's forms are bf16 spellings: never on D7b / D8
     for _k in ("hc_gate", "gdn_inproj_x"):
         ref2.CFG[_k] = True
+if os.environ.get("R57_DKV") == "1":                    # DKV (Leap 2f726fb / d080232, drop-in 43d3ecf; the orchestrator Wed 22:1x):
+    import importlib.util as _ilu                        # the drafter's copy-free window cache, bitwise (stress 726 steps 0 diffs,
+    _sp = _ilu.spec_from_file_location("dkv", os.path.expanduser("~/BigMoE/scripts/dkv.py"))   # BP-9 walk hashes ==). The
+    _DKV = _ilu.module_from_spec(_sp); _sp.loader.exec_module(_DKV)   # pinned copy of Leap's dkv.py at 23919fb, loaded by path
+    _DKV.install(addmask=os.environ.get("R57_DKV_ADD") == "1")   # (~/Leap/scripts is first on sys.path); wraps whatever drafter
+    import atexit                                        # attention is installed by now (draft_fused's). R57_DKV_ADD=1: + the
+    atexit.register(lambda: print(f"DKV COUNTS {_DKV.COUNTS}", flush=True))   # additive mask (bitwise == bool); counts at exit
 # BUILD DAY (Wed 11-04) switches, each off unless set; the all-in FAST code preset sets all three (+ U3C + R57_D7B=code):
 if FAST == "QOM" and os.environ.get("REF2_OOO_1C") == "1":   # one-call OOO knows QOM's -2 base slots since Leap 00961fc
     assert "ooo_1c_qom" in ref2.COUNTS, "REF2_OOO_1C with QOM needs Leap's ref2 00961fc (else QOM's drops are misread)"

@@ -10,3 +10,6 @@
 [21:33:11] walk rc=0:   code (HumanEval+): 24 samples, 654 checks; kept per check 9.75; per-token rate 0.9281; P(first 15 right) 0.301 (of 625 full checks)   math (GSM8K CoT): 60 samples, 2069 checks; kept per check 6.92; per-token rate 0.8703; P(first 15 right) 0.093 (of 1991 full checks) 
 lock released
 [21:33:11] 3. BigMoE runs at 23:00 and it is <= 21:45: P-OFF's extraction (ends by ~22:20)
+[22:10:25] extraction runner rc=0: lock released [22:10:25] DONE 
+[22:10:25] P-OFF on-path rate (assistant): 0.860 (alive line 0.75; training is Thursday's either way)
+[22:10:25] DONE

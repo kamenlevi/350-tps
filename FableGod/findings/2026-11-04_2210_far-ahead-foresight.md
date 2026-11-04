@@ -28,3 +28,12 @@
   - PASS: >= 20 % fewer misses than LRU at K 266 with set recall >= 0.80. Then build.
   - BETWEEN: 10-20 %. Keep it as a 24 / 12 GB bytes lever only.
   - KILL: < 10 %, or no better than the learned key.
+- Update 22:12 (FAR section 7, far_wait.txt):
+  - The SSD wait per check follows misses: wait ~ 10-16 ms floor + 0.15-0.17 ms per miss (R2 0.86-1.00) on BigMoE's 106
+    per-check logs, EXACT and FAST alike. The per-miss term is 2.16 MB / 0.155 ms ~ 14 GB/s, the SSD's streaming rate.
+    The floor is ~48 layers x ~0.25 ms of first-read latency. Exceptions: FAST + QOM tags (optional misses break the line).
+  - So above the floor the wait is bandwidth-bound, not round-trip-bound. Every removed miss saves its bytes' time:
+    - at EXACT C 160 (483 misses per check), -26.5 % misses = -20 ms of a ~138 ms check (+14.5 %);
+    - at today's live 100-200 misses per check, -4 to -8 ms (+6-9 %).
+  - EXACT's demand reads sit on the critical path in full (service time = io + 0.3-2 ms).
+  - FAR-G1 origins: every 4th check with >= 96 far tokens reproduces the every-check ceiling.
