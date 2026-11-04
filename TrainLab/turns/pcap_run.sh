@@ -1,7 +1,7 @@
 #!/bin/bash
 # MTP Head, Wed 11-04 18:0x: P-CAP (REPORT 'P-CAP'; the orchestrator's 19:05 GPU slot, after Breakthrough's map batch).
-# Waits until 19:05 and >= 40 GB available (free + inactive + speculative + purgeable; the map batch's 18 GB released)
-# with no other session declaring MEM >= 5 GB (gives up 20:30), takes a share lock (MEM 32 GB), trains the 10-layer
+# Waits until 19:05 and >= 34 GB available (free + inactive + speculative + purgeable; 18:2x baseline ~37 GB with the map batch idle)
+# with no other session declaring MEM >= 5 GB for 3 polls in a row (Breakthrough 18:4x: not a gap between its arms; gives up 21:50, the orchestrator 18:4x re-slot), takes a share lock (MEM 32 GB), trains the 10-layer
 # drafter (sticky/pcap_train.py; swap guard: SIGTERM at +2 GB -> the trainer checkpoints and exits 3), walks it
 # (sticky/d02b_walk.py, TL_EXPAND=1), unlocks. Logs: data/pcap_run.log, data/pcap_train.log, data/pcap_walk.log.
 cd ~/TrainLab || exit 1
@@ -11,19 +11,21 @@ avail_gb() { vm_stat | awk '/page size of/ {ps=$8} /Pages free/ {f=$3} /Pages in
 PY=~/BigMoE/.venv/bin/python3
 OUT=~/TrainLab/ext/pcap/pcap10.safetensors
 mkdir -p ~/TrainLab/ext/pcap
+clear=0
 while :; do
   now=$(date +%H%M)
   if [ "$now" -ge 1905 ]; then
     big=$(peer ls 2>/dev/null | grep -v "MTP Head" | grep -E "shared run|quiet lock" | sed "s/.*·//" | grep -oE "MEM [0-9]+ GB" | awk '$2 >= 5' | wc -l | tr -d " ")
     av=$(avail_gb)
-    [ "$big" -eq 0 ] && [ "$av" -ge 40 ] && { log "slot free: ${av} GB available"; break; }
-    [ "$now" -ge 2030 ] && { log "GIVE UP at 20:30: big=$big, ${av} GB available"; exit 3; }
+    if [ "$big" -eq 0 ] && [ "$av" -ge 34 ]; then clear=$((clear + 1)); else clear=0; fi
+    [ "$clear" -ge 3 ] && { log "slot free for 3 polls: ${av} GB available"; break; }   # not a gap between another job's arms
+    [ "$now" -ge 2150 ] && { log "GIVE UP at 21:50: big=$big, ${av} GB available"; exit 3; }
   fi
   sleep 60
 done
 ok=0
 for t in 1 2 3; do
-  out=$(peer lock share 100m --cpu 300 --gpu 90 "MEM 32 GB: MTP Head P-CAP (10-layer drafter: train ~60 min + walk ~10 min; the orchestrator's 19:05 slot)" 2>&1)
+  out=$(peer lock share 150m --cpu 300 --gpu 90 "MEM 32 GB: MTP Head P-CAP (10-layer drafter: train ~60 min + walk ~10 min; the orchestrator 18:4x: after Breakthrough's map arms)" 2>&1)
   log "lock try $t: $(printf '%s' "$out" | head -1)"
   printf '%s' "$out" | grep -q "reserved" && { ok=1; break; }
   sleep 60

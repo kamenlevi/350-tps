@@ -12,9 +12,16 @@
 #   s7_trl goes only when Fit12's TRL store is whole (dm_t3.trl_gate); until then the next arm that fits goes, and s7_trl
 #   is re-checked each time (every 2 min once it is the only arm left that fits).
 #   Last, optional (NewIdeas 16:5x, the orchestrator's OK; Wed 17:0x): qom_0_live_ball_c147_t3+dense3 = screen 6 + Leap's
-#   DENSE-3 (install_dense3.sh; smoke 17:00), est 10 min; it runs after 1(c) if s7_trl's store is not whole yet.
+#   DENSE-3 (install_dense3.sh; smoke 17:00), est 10 min. The orchestrator 18:4x: DENSE-3 goes LAST, only once s7_trl is
+#   done and only if it can start before 23:10 (predicted FAIL, the lowest value tonight); after 1(c) the GPU goes to
+#   MTP Head's P-CAP (~32 GB) or s7_trl, whichever is ready first (P-CAP waits for 3 clear minutes with no MEM >= 5 GB
+#   lock; this slot waits while another session's shared run declares MEM > 5 GB).
 #   The orchestrator 17:3x: start NOW (the GPU is idle by day; armed with S67_START = the arming time); s7_trl joins when the
 #   store is whole (~21:10). The first time only s7_trl is left, an interim read-out runs (the same read-outs as the end).
+#   Wed 18:1x, by-day heat (fanwatch: a heat pause every ~5 min, 3-6 min each; s7_ref was stopped at 18:05 for "PAUSE over
+#   5 min" after ~7 min of work): each run's working folder is ~/Breakthrough, so fanwatch freezes and thaws it with the
+#   other research jobs; fanwatch's own PAUSE (PAUSE.fanwatch) no longer counts toward the 5-min stop (any other PAUSE
+#   still does); share locks last 3 x est + 10 min (screen 6 took 20.5 min, est 6, so its lock lapsed before the end).
 # Clear = no map process, no other session's quiet window held or waited for, no other session's shared run over 5 GB (by
 # day one > 5 GB job at a time), lid open, no PAUSE, NO-SWAP >= 25 GB: 3 clear
 # checks 10 s apart before the first arm and after any stop, 1 between arms. Share lock per arm, MEM 18 GB. Guards every
@@ -37,6 +44,7 @@ quiet_others() { peer ls 2>/dev/null | grep -v "^You:" | grep -qE "quiet lock un
 big_others() { peer ls 2>/dev/null | grep -v "^You:" | grep "shared run" | grep -oE "MEM [0-9]+ GB" | awk '$2 > 5 {f = 1} END {exit !f}'; }
 lid_closed() { ioreg -r -k AppleClamshellState -d 1 | grep -q '"AppleClamshellState" = Yes'; }
 kill_tree() { local p=$1 c; for c in $(pgrep -P $p); do kill_tree $c; done; kill -TERM $p 2>/dev/null; }
+stop_run() { kill_tree $1; sleep 5; ps -o stat= -p $1 2>/dev/null | grep -q T && kill -KILL $1 2>/dev/null; }   # a frozen run holds SIGTERM until thawed; never SIGCONT
 why_not() {
   if pgrep -f "run_ma[p].py" > /dev/null; then echo "a map process is running"
   elif quiet_others; then echo "a quiet window (others)"; elif big_others; then echo "another session's shared run > 5 GB"
@@ -46,11 +54,12 @@ why_not() {
 trl_whole() { (cd $DM && DM_TRL_FALLBACK= $PY -c "import dm_t3; dm_t3.trl_gate([7, 18, 30, 41], 'mix')" > /dev/null 2>&1); }
 nwin() { [ -f $DM/out/$1.json ] && $PY -c "import json; d = json.load(open('$DM/out/$1.json')); print(sum(1 for v in d.values() if isinstance(v, dict) and 'tk' in v))" 2>/dev/null || echo 0; }
 todo() { local a; for a in $ARMS; do [ "$(nwin $a)" = 36 ] || echo -n "$a "; done; }
-pick_next() {   # the first arm in order that is not done, fits the clock, and (s7_trl) whose store is whole; sets PICK, TRLWAIT
-  local a now=$(date +%s); PICK=; TRLWAIT=0
-  for a in $(todo); do
+pick_next() {   # the first arm in order that is not done, fits the clock, and (s7_trl) whose store is whole; DENSE-3 only
+  local a t now=$(date +%s); PICK=; TRLWAIT=0; t=" $(todo)"   # once s7_trl is done (the orchestrator 18:4x); sets PICK, TRLWAIT
+  for a in $t; do
     [ $((now + $(est $a) * 60)) -le $DEADLINE ] || continue
     if [ $a = s7_trl ] && ! trl_whole; then TRLWAIT=1; continue; fi
+    if [ $a = $D3 ]; then case "$t" in *" s7_trl "*) continue;; esac; fi
     PICK=$a; return
   done
 }
@@ -59,7 +68,7 @@ for n in s7_trl s7_ref3 q1u_0.9_live_bonus9g qom_0.5_live_bonus5g qom_0_live_bal
 done
 say "armed (the orchestrator 14:3x / 15:3x, NewIdeas 14:5x / 16:5x): $ARMS; start >= $(date -r $START '+%a %H:%M'), no new arm after $(date -r $LASTGO '+%a %H:%M'), hard stop $(date -r $DEADLINE '+%a %H:%M')"
 rd() { [ "$(nwin $1)" = 36 ] || return; $PY $DM/dm_screen_read.py "$@" >> $LOG 2>&1; say "read-out: $(grep '^VERDICT' $DM/out/SCREEN_read_$1.txt 2>/dev/null || echo "$1 none")"; }
-readouts() {   # $1 = interim (the first time only s7_trl is left; the orchestrator 17:3x) or final; CPU, the out/ JSONs only
+readouts() {   # $1 = interim (the first wait for the TRL store; the orchestrator 17:3x) or final; CPU, the out/ JSONs only
   echo "[s67] read-outs ($1): map_kl.py (NewIdeas, read-only use): C, screen 6, screen 7, DENSE-3 $(date '+%a %H:%M:%S')" >> $LOG
   KL=$($PY ~/NewIdeas/scripts/map_kl.py qom_0_live_bq_c147_t3 qom_0_live_ball_c147_t3 s7_ref s7_ref3 s7_trl s7_cal s7_cal_all $D3 2>&1); echo "$KL" >> $LOG
   if [ "$(nwin $D3)" = 36 ] && [ "$(nwin qom_0_live_ball_c147_t3)" = 36 ]; then   # NewIdeas QUEUE 16:5x: INVALID rule, then code flips
@@ -81,7 +90,7 @@ while :; do
   if [ -z "$PICK" ]; then
     [ $TRLWAIT = 1 ] || { say "nothing left fits by the hard stop; left: $(todo)"; break; }
     if [ "$last" != trl ]; then
-      say "waiting: s7_trl is the only arm that fits, and Fit12's TRL store is not whole yet"
+      say "waiting for Fit12's TRL store (s7_trl, then DENSE-3); no lock held, so MTP Head's P-CAP may take the GPU meanwhile"
       [ $interim = 0 ] && { interim=1; readouts interim; }
     fi
     last=trl; sleep 120; continue
@@ -90,20 +99,23 @@ while :; do
   if [ -n "$w" ]; then need=3; [ "$w" != "$last" ] && say "waiting: $w"; last=$w; sleep 10; continue; fi
   need=$((need - 1)); [ $need -gt 0 ] && { sleep 10; continue; }
   last=; runs=$((runs + 1)); [ $runs -gt 14 ] && { say "14 runs used; left: $(todo)"; break; }
-  peer lock share $(( $(est $PICK) + 10 ))m --cpu 200 --gpu 100 "Breakthrough map screens 6 + 7 + 1(b)/(c) (the orchestrator 14:3x / 15:3x): MEM 18 GB (flips / KL, no timing): $PICK" >> $LOG 2>&1 \
+  peer lock share $(( 3 * $(est $PICK) + 10 ))m --cpu 200 --gpu 100 "Breakthrough map screens 6 + 7 + 1(b)/(c) (the orchestrator 14:3x / 15:3x): MEM 18 GB (flips / KL, no timing): $PICK" >> $LOG 2>&1 \
     || { say "share lock not granted"; need=3; sleep 30; continue; }
   S0=$(swap_mb); say "go $PICK (est $(est $PICK) min; NO-SWAP $(noswap) GB, swap $S0 MB)"
   [ "$PICK" = "$D3" ] && say "Leap's dense3.py sha256 $(shasum -a 256 ~/Leap/scripts/dense3.py | cut -c1-16) (smoked: $D3SHA)"
-  $PY run_map.py $PICK --max 12 --skip-done >> $LOG 2>&1 & P=$!
+  # cwd = the session folder (Wed 18:1x): fanwatch and quiet_window.sh freeze research jobs by working folder, and
+  # ~/FableGod is not one, so a heat pause froze everyone's jobs but this map run (100 % CPU under PAUSE at 18:10)
+  (cd ~/Breakthrough && exec $PY $DM/run_map.py "$PICK" --max 12 --skip-done) >> $LOG 2>&1 & P=$!
   bad=0; pz=0; stopped=
   while kill -0 $P 2>/dev/null; do
     sleep 15; w=
-    [ $(date +%s) -ge $DEADLINE ] && { stopped="the 23:30 hard stop"; kill_tree $P; break; }
-    [ $(( $(swap_mb) - S0 )) -gt 2048 ] && { stopped="swap grew > 2 GB"; kill_tree $P; break; }
-    if [ -e "$Q/PAUSE" ]; then pz=$((pz + 1)); else pz=0; fi
+    [ $(date +%s) -ge $DEADLINE ] && { stopped="the 23:30 hard stop"; stop_run $P; break; }
+    [ $(( $(swap_mb) - S0 )) -gt 2048 ] && { stopped="swap grew > 2 GB"; stop_run $P; break; }
+    # fanwatch's heat pause (its PAUSE.fanwatch mark) freezes the run and thaws it when cool: not a reason to stop it
+    if [ -e "$Q/PAUSE" ] && [ ! -e "$Q/PAUSE.fanwatch" ]; then pz=$((pz + 1)); else pz=0; fi
     if quiet_others; then w="a quiet window (others)"; elif lid_closed; then w="lid closed"; elif [ $pz -ge 20 ]; then w="PAUSE over 5 min"; fi
     if [ -n "$w" ]; then bad=$((bad + 1)); else bad=0; fi
-    [ $bad -ge 3 ] && { stopped="$w"; kill_tree $P; break; }
+    [ $bad -ge 3 ] && { stopped="$w"; stop_run $P; break; }
   done
   wait $P 2>/dev/null; rc=$?; peer unlock >> $LOG 2>&1
   if [ -n "$stopped" ]; then need=3; say "stopped $PICK for: $stopped"; else need=1; fi

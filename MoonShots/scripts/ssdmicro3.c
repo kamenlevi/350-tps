@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+#include "records3_guard.h"                   /* refuses a converted (non row-major) records3 */
 
 #define PART 2162688
 #define PG 16384
@@ -156,6 +157,7 @@ static void run_point(int round, int pi, int gap_us) {
 
 int main(int argc, char **argv) {
   int R = argc > 1 ? atoi(argv[1]) : 150;
+  records3_guard();
   setvbuf(stdout, NULL, _IOFBF, 16 << 20);
   pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
   GQ = dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0);

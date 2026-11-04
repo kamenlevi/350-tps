@@ -18,6 +18,10 @@ import numpy as np
 
 D = os.path.expanduser("~/BigMoE/models/bare/records3/")
 IX = json.load(open(D + "index.json"))["layers"]
+_CONV = sorted(int(L) for L, r in IX.items() if str(r.get("layout", "row-major")) not in ("row-major", "rowmajor", "row_major", "0"))
+if _CONV:                                                         # Leap 11-04: Thursday's in-place conversion
+    raise SystemExit(f"records3 is converted (layers {_CONV[:6]}...): lossless45 decodes row-major pieces; "
+                     "route it through BigMoE's load_index (layout_ok) first")
 REC, MSB_SZ, LSB_SZ, PAGE = 2932736, 2162688, 770048, 16384
 NPROJ, ROWS, K = 3, 640, 2560
 W = ROWS * K                                                     # weights per projection

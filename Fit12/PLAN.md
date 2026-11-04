@@ -3156,3 +3156,15 @@ so R-01 should find about the same slots, not ~1 GB more.
   every 2 min up to its 23:10 last start. The orchestrator 17:1x: if the store is not whole at 21:30, the same runner goes
   on to a 22:45 end (/Users/kamen/Fit12/scripts/trl_relay.sh re-starts it with its clock check at 22:41, so the last chunk
   ends by 22:45, before BigMoE's 23:00 ticket and RELAX at 23:30).
+- Progress 19:04: layer 30 whole at 18:32:34; layer 7 at 141 of 512; 1,165 of 2,048 experts. 221 per hour since 17:08
+  (the map batch started early and its heat brought 13 fanwatch freezes, 28 min, plus slower experts; undisturbed experts
+  still 10.16 s). In-sample error vs MSB-3, mean (min-max):
+    layer 30, all 512: gate 1.436x (1.277-1.513), up 1.439x (1.270-1.511), down 0.630x (0.384-0.723); view +0.19 / +0.19
+                       / +0.46 %.
+    layer 7, first 146: gate 1.300x (1.150-1.355), up 1.310x (1.157-1.375), down 0.583x (0.192-0.687); view +0.22 / +0.22
+                       / +0.50 %. So far layer 7 < 18 < 30 on every projection.
+  ETA ~22:10-22:25 if the heat eases after the batch's GPU arms.
+- Reader guard (Leap's records3 reader triage, 18:5x): Thursday's in-place records3 conversion (native+p11+pad, a per-layer
+  "layout" key in index.json) would make fit_q.read decode permuted codes and 11-bit-packed scales silently. read() now
+  raises unless the layer's layout is row-major (19:03:59; scratch-copy test: 180 arrays identical on today's store, a
+  converted entry refused, also under python -O).

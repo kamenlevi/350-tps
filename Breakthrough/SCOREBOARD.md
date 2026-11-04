@@ -2927,3 +2927,19 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
   hard stop 23:30). s7_trl joins when Fit12's store is whole (~21:10). New: an interim read-out (the same read-outs as
   the end) the first time only s7_trl is left. Expected: the other eight arms end ~19:05 with clear checks; s7_trl ~21:20.
   Nothing in the pre-registration changes.
+- ADDENDUM Wed 18:1x (by-day heat; nothing in the pre-registration changes): fanwatch set a heat pause every ~5 min today,
+  3-6 min each (182-344 s), and froze every research job by working folder. The map runs ran from ~/FableGod/decision_map,
+  outside the research folders, so they kept running under PAUSE (100 % CPU at 18:10) while the others were frozen, and
+  the slot's "PAUSE over 5 min" guard stopped s7_ref at 18:05 after ~7 min of work. Screen 6 took 20.5 min (est 6), so its
+  share lock lapsed ~4 min before the end. Fix (s67_slot.sh): each run starts from ~/Breakthrough (absolute paths only, checked),
+  so fanwatch freezes and thaws it with the others; fanwatch's own PAUSE (PAUSE.fanwatch) no longer counts toward the 5-min
+  stop; share locks last 3 x est + 10 min; stops of a frozen run use SIGKILL after 5 s (never SIGCONT). Swapped in by an
+  atomic rename; the old slot is held after s7_ref by a placeholder process and then re-armed. Screen 6 (done, 36
+  windows) stands: its run was not stopped, and heat pauses change no output.
+- ADDENDUM Wed 18:4x (the orchestrator 18:4x, the order by the one-big-job rule; nothing in the pre-registration
+  changes): finish s7_ref3 (done 18:43), s7_cal, s7_cal_all, 1(b), 1(c); then MTP Head's P-CAP (~32 GB, ~70 min) or
+  s7_trl, whichever is ready first (Fit12's store ~21:10+, later with heat); DENSE-3 LAST, only once s7_trl is done and
+  only if it can start before 23:10 (if the store is not whole tonight, DENSE-3 goes to Thu's leftovers with s7_trl).
+  P-CAP's launcher waits for 3 clear minutes with no MEM >= 5 GB lock (MTP Head 18:4x), so it never starts between two
+  of my arms. Slot: pick_next skips DENSE-3 while s7_trl is not done (dry test: six cases right); swapped in by an
+  atomic rename and re-armed at the end of s7_cal (the old slot held by the placeholder, as at 18:21).

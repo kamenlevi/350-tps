@@ -43,6 +43,7 @@
 #include <sys/uio.h>
 #include <time.h>
 #include <unistd.h>
+#include "records3_guard.h"                   /* refuses a converted (non row-major) records3 */
 
 #define PG 16384
 #define NS 48                             /* slots per pool: ~100 MB per base pool set, cold destinations */
@@ -283,6 +284,7 @@ static void run_point(int round, int pi) {
 int main(int argc, char **argv) {
   @autoreleasepool {
     int R = argc > 1 ? atoi(argv[1]) : 150;
+    records3_guard();
     setvbuf(stdout, NULL, _IOFBF, 16 << 20);
     pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
     GQ = dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0);

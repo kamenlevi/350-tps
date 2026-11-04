@@ -15,7 +15,9 @@ import json, os, statistics as S, sys
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 ARMS = {"ref2b": ("r56b", "ref2b", "REF2b"), "ref2b_gate16": ("r56b", "ref2b", "REF2b"),   # (results dir, reference
         "ref2t_gate16": ("r56c", "ref2t", "REF2-T"), "ref2to_gate16": ("r56d", "ref2t", "REF2-T"),   # rows, its name)
-        "ref2cto_gate16": ("r56e", "ref2ct", "REF2c-T")}
+        "ref2cto_gate16": ("r56e", "ref2ct", "REF2c-T"),
+        "ref2tnaxno_gate16": ("r56n", "ref2tnax", "NAX6-N")}   # PREREG_nax6 Part 2 (converted store; rows: Part 1)
+NAXSW = ("nax6", "nax6_ooo", "nax_native")        # NAX6-N's calls (Part 2): nax6 or nax6_ooo, and nax_native
 SW = ("att_single", "gdn_inproj")                 # REF2c's switches (R-56e)
 keys = open(os.path.join(ROOT, "results", "r56", "keys.txt")).read().split()
 
@@ -39,7 +41,11 @@ for arm in sys.argv[1:] or ["ref2b", "ref2b_gate16"]:
     valid = {k: r for k, r in rows.items() if k not in void}
     bad = {k: r for k, r in valid.items() if not r["bits_equal"]}
     missing = [k for k in keys if k not in rows]
-    ooo, r56d, r56e = arm in ("ref2to_gate16", "ref2cto_gate16"), arm == "ref2to_gate16", arm == "ref2cto_gate16"
+    r56n = arm == "ref2tnaxno_gate16"
+    ooo, r56d, r56e = arm in ("ref2to_gate16", "ref2cto_gate16") or r56n, arm == "ref2to_gate16", arm == "ref2cto_gate16"
+    nax_ok = lambda c: bool(c) and (c.get("nax6", 0) + c.get("nax6_ooo", 0)) > 0 and c.get("nax_native", 0) > 0
+    nx = {k: (r.get("ar_ref2c"), {s: (r["per_check"] or {}).get(s) for s in NAXSW}) for k, r in rows.items()
+          if not (nax_ok(r.get("ar_ref2c")) and nax_ok(r["per_check"]))} if r56n else {}   # Part 2: NAX6-N ran
     arc = {k: ar_vs_r56c(D_, k) for k in valid} if r56d else {}   # R-56d: the AR vs R-56c's AR
     ar_bad = {k: c for k, c in arc.items() if not (c[0] == c[1] and c[2])}
     idle = {k: r["calls"] for k, r in valid.items()           # R-56d / e: OOO on every tier call
@@ -47,8 +53,11 @@ for arm in sys.argv[1:] or ["ref2b", "ref2b_gate16"]:
     sw = {k: (r.get("ar_ref2c"), {s: (r["per_check"] or {}).get(s) for s in SW}) for k, r in valid.items()
           if not all((r.get("ar_ref2c") or {}).get(s, 0) > 0 and (r["per_check"] or {}).get(s, 0) > 0 for s in SW)
           } if r56e else {}                       # R-56e: both REF2c switches ran in the AR and in the loop
-    v = ("FAIL" if bad or ar_bad else f"VOID (the AR left results/{ref_v})" if void else "NOT ENGAGED" if idle or sw
-         else "INCOMPLETE" if missing else "PASS")
+    if r56n:                                      # Part 2's line 2: the AR leaving NAX6's Part 1 rows is a FAIL
+        v = ("FAIL" if bad or void else "NOT ENGAGED" if idle or nx else "INCOMPLETE" if missing else "PASS")
+    else:
+        v = ("FAIL" if bad or ar_bad else f"VOID (the AR left results/{ref_v})" if void else "NOT ENGAGED" if idle or sw
+             else "INCOMPLETE" if missing else "PASS")
     toks = sum(r["n"] for r in valid.values() if r["bits_equal"])
     cmp_, eq = sum(r["rows_cmp"] for r in valid.values()), sum(r["rows_eq"] for r in valid.values())
     print(f"{arm}: {v}: {len(valid) - len(bad)}/{len(keys)} prompts exact (every token and every kept row bitwise vs "
@@ -62,6 +71,11 @@ for arm in sys.argv[1:] or ["ref2b", "ref2b_gate16"]:
               + ", ".join(f"{s} {sum((r.get('ar_ref2c') or {}).get(s, 0) for r in valid.values())}" for s in SW)
               + "; loop per check " + ", ".join(f"{s} {S.mean((r['per_check'] or {}).get(s, 0) for r in valid.values()):.2f}"
                                                 for s in SW) if valid else "  REF2c switches engaged: no rows")
+    if r56n:
+        print(f"  the AR vs results/{ref_v} (NAX6's row-major Part 1 rows; NAX6-N == NAX6): {len(rows) - len(void)}/{len(rows)} "
+              f"prompts equal")
+        print(f"  NAX6-N engaged: {len(rows) - len(nx)}/{len(rows)} prompts (nax6 / nax6_ooo and nax_native in the AR and "
+              f"the loop)")
     if ooo:
         tc = [sum(r["calls"][ph][i] for r in valid.values() if r["calls"][ph]) for ph in ("ar", "loop") for i in (0, 1)]
         print(f"  OOO engaged: {len(valid) - len(idle)}/{len(valid)} prompts on every tier call; tier calls / OOO calls: "
@@ -79,6 +93,8 @@ for arm in sys.argv[1:] or ["ref2b", "ref2b_gate16"]:
         print(f"  AR DIFF {k}: rows bitwise {c[1]}/{c[0]} vs R-56c's AR, tokens equal {c[2]}")
     for k, c in idle.items():
         print(f"  NOT ENGAGED {k}: [tier calls, OOO calls] {c}")
+    for k, c in nx.items():
+        print(f"  NOT ENGAGED {k}: NAX6-N calls (AR, loop per check) {c}")
     for k, c in sw.items():
         print(f"  NOT ENGAGED {k}: REF2c switch calls (AR, loop per check) {c}")
     for k, r in void.items():

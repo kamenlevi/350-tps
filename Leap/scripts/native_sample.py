@@ -11,6 +11,8 @@ from tierglu import PROJ
 import tierglu_nax6n as NN
 
 RD = os.path.expanduser("~/BigMoE/models/bare/records3")
+assert all(v.get("layout", "row-major") == "row-major" for v in json.load(open(f"{RD}/index.json"))["layers"].values()), \
+    "records3 is converted (native+p11+pad, Thu 11-05): this script reads row-major bytes only"   # Leap 18:5x guard
 OUTD = os.path.expanduser("~/Leap/data/native_sample")
 os.makedirs(OUTD, exist_ok=True)
 SH = {"gate_proj": (640, 2560), "up_proj": (640, 2560), "down_proj": (2560, 640)}

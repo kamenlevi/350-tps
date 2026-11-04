@@ -25,6 +25,8 @@ L = {}                                                  # msb / lsb (records3), 
 def load(layer=LAYER, native=True, records3=False):
     RD = os.path.expanduser("~/BigMoE/models/bare/records3")
     idx = json.load(open(f"{RD}/index.json"))["layers"][str(layer)]
+    assert idx.get("layout", "row-major") == "row-major", (                 # a raw row-major reader: refuse a converted
+        f"records3 L{layer} is {idx.get('layout')}: k90 reads row-major bytes only (use the engine's read path)")
     E, REC = idx["E"], idx["recsz"]
     raw = np.fromfile(f"{RD}/{idx['file']}", dtype=np.uint8).reshape(E, REC)
     msb, lsb = {}, {}

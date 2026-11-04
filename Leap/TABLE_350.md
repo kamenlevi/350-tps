@@ -7561,3 +7561,86 @@ Pre-registered before the run (scripts/dkv.py, scripts/dkv_check.py, data/dkv_ch
   propose at 1,000 context rows; -0.5..-0.7 ms at 2,047 rows; +0.03..0.14 with the additive mask.
 - **Line:** any differing bit = a bug. Hand to BigMoE as an exact lever if dkv <= ref - 0.25 ms at 2,047 rows; else
   KILL.
+
+## MISSION 33 (K90): the expert kernel to ~90 % of streaming (Leap builds, Fable A thinks; Wed 2026-11-04 18:0x-23:00)
+Kamen approved ~17:4x; brief ~/FableGod/MISSION_33_KERNEL90.md; spec ~/FableGod/KERNEL90.md section 1 (arms 0-8, lines
+pre-registered by Fable A). Harness: scripts/k90.py (layer 20's real records3 + the native repack, real routing traces
+code / chat / math / bulgarian, B = record bytes counted from the routing + x / h / y), scripts/k90k.py (the arms'
+kernels), timing = the whole call + combine in dependent chains of 16, interleaved, medians of 15.
+- **Arms 0-3 (18:11, share lock, GPU contended by Breakthrough's map batch: relative numbers; clean repeat after 19:05;
+  scripts/k90_arms.py, data/k90_arm012.txt):**
+  - Bits: NAX6-N == NAX6 96 / 96. NAX-CN == NAX-C (row-major) 96 / 96: NAX-CN = NAX-C's core with NAX6-N's 9 address
+    swaps, an exact port. NAX-CN INV 96 / 96.
+  - Arm 0 STREAM = NAX6-N's kernels A and B with only their loads (codes, LSB words, scales, biases; the same prologue,
+    grid and load instructions; xor-folded). R = 215-230 GB/s, contended.
+  - Shares of R: NAX6-N 73-77 %, NAX6 58-60 %, NAX6-NH 73-80 %, NAX-CN 70-76 %. At S16, NAX6-N runs 11.7-12.1 us per
+    group vs STREAM ~9.0.
+  - **Arm 3 NAX-CN (int8 x int4 on native): KILL** (line PASS >= +8 %, KILL < +3 % time saved at S 16). Time saved vs
+    NAX6-N: S16 -0.2 / -3.3 % (code / chat; mean -1.7 %), S8 -4.6 / -4.2 %, S32 -2.1 / -2.1 %. The int8 op rate does not
+    bind on native either, so arm 5 (NAX-CH) is dropped.
+- **Arm 4 NAX8-P1, persistent kernels A + B (18:16, share lock, contended; scripts/k90_p1.py, data/k90_p1.txt): KILL.**
+  - Bits: 96 / 96 == NAX6 at RES 3 / 4; every other RES pair 6 / 6.
+  - Every config is SLOWER than NAX6-N, monotonic in residency. Time saved at S16 (code / chat): RES_A / RES_B 2/3
+    -44 / -56 %; 3/4 -21 / -24 %; 4/6 -0.6 / -9.9 % (best; mean -5.2 %, line KILL > -2 %). S8 and S32 the same shape.
+  - Read: the normal grid's launch hides each threadgroup's serialized item fetch + prologue chain (4-5 dependent
+    loads) behind other resident threadgroups. A few looping threadgroups per core cannot.
+  - Fix on the way: MLX binds inputs of < 8 elements in the constant address space (no atomics there), so the counters
+    are a 32-element array.
+- **Probes 0b / 0c (Fable A 18:1x; 18:20, share lock, contended; scripts/k90_probe0.py, data/k90_probe0.txt):**
+  - 0b: STREAM with U = 2 / 4 quant groups of loads in flight per simdgroup vs U = 1. At S16: u2 -1.6 / +3.2 % (code /
+    chat; mean +0.8 %, line arm 9 if >= +8 %); u4 -4.6 / +0.4 %. S8 / S32: -2..-10 %. Not concurrency-bound: **no arm 9.**
+  - 0c: persistent STREAM (P1's loop around the loads-only body) at RES 3/4, 4/6, 8/12 vs the plain grid: best -9.5..+4.0
+    %. No structural headroom on the load side.
+  - Extension (not pre-registered): P1 at RES 6/8 and 8/12 is still slower than NAX6-N (-1.5..-11.5 %).
+  - STREAM's own R (grouping inside the call here): 204-240 GB/s, contended. Arms 6 (P2, needs arm 4 <= -4 %) and 9 are
+    off.
+- **Arm 7 NAX8-GU (gate + up per simdgroup; kernel A, 4 simdgroups = the K chunks, the A operand marshalled once per op
+  pair; 18:25, share lock, contended; scripts/k90_arm.py gu, data/k90_arm_gu.txt): KILL.**
+  - Bits 96 / 96 == NAX6.
+  - -23..-31 % slower at every width (S16: -23.1 / -29.6 %, mean -26.3 %; line PASS >= 4 % saved, KILL < 1 %).
+  - Halving the simdgroups doubles each one's serial decode and op chain. The marshalling saving is small beside it,
+    consistent with the call being latency-bound per simdgroup.
+- **Arm 8b (kernel A's left operand as a tensor<device T> view of the check's 16 x rows, an x row -> pair map for the
+  stores; S <= 16; scripts/k90_arm.py 8b, data/k90_arm_8b.txt): KILL.**
+  - Bits 64 / 64 == NAX6 (S 8 / 16): the MPP API takes a device-tensor left operand, and INV holds.
+  - -1.0..-15.1 % (S16 -1.3 / -1.0 %, mean -1.1 %). The tensor-operand load path is no cheaper than the register fill.
+- **Probe MUL-first (both kernels: the first op of each quant group in mode::multiply, no cg zero-writes; 18:26, share
+  lock, contended; scripts/k90_arm.py mf, data/k90_arm_mf.txt): KILL.**
+  - Bits 96 / 96 == NAX6: the unit's multiply mode equals accumulating onto 0, bitwise.
+  - -4.0..-11.7 % slower (S16 -5.7 / -4.0 %, mean -4.9 %).
+- **Arm 8a skipped (reasoned):** a threadgroup A tile shared by the gate and up simdgroups of a K chunk needs a
+  threadgroup barrier per quant group (writer -> readers; Metal has no pairwise simdgroup barrier). That is N7-5's
+  lockstep, a KILL, and 8b showed that a tensor-operand A path is no faster than the register fill.
+- **QUIET set (18:29:54-18:30:59, a queued quiet lock in a gap between map arms, arranged by the orchestrator; data/
+  bw_probe_k90.txt, data/k90_arm012.txt "QUIET", data/k90_quiet.log):**
+  - bw_probe: the 4 GB read kernel 285-286 GB/s (best 292); 1-2 GB 270-277.
+  - **R (STREAM, NAX6-N's own loads) 287-305 GB/s.** S16: 296 (code) / 295 (chat). This is >= bw_probe's machine rate:
+    NAX6-N's gathered native access pattern streams at the full rate. Its B / t can exceed DRAM slightly, because B counts
+    each record once while 4-bit and 3-bit groups re-read shared pieces from cache.
+  - Shares of R, quiet:
+
+    | arm | S8 | S16 | S32 | note |
+    |---|---|---|---|---|
+    | NAX6-N (exact) | 72 % | 74 % (218-219 GB/s) | 70-72 % | S16 = 77 % of bw_probe's 285 |
+    | NAX6-NH (FAST) | 76-77 % | 79 / 81 % (234-238 GB/s) | 76-79 % | |
+    | NAX6 (row-major) | 56-57 % | 58-59 % | 55-57 % | |
+    | NAX-CN | 69-70 % | 72 % | 68-71 % | KILL confirmed quiet, -2.4 % |
+
+  - S16 per group: NAX6-N 9.1-9.2 us, STREAM ~6.8 us.
+  - Read: the load side runs at the machine's rate; the whole gap to 90 % is exposed compute on top of the loads.
+- **Decode LUT (bitwise by construction: spread3's two 12-bit halves are independent, so spread3(x) = T[x & 0xFFF] |
+  T[x >> 12] << 16; QUIET; scripts/k90_arm.py lut / lutd): KILL, both.**
+  - Bits 96 / 96 each.
+  - lutd (the table as a device input, via L1): -1.3 / -0.8 % at S16.
+  - lut (per-threadgroup 8 KB table, filled at start): -14.5 / -15.6 % (the fill + bank conflicts).
+- **Reusable fact (MUL-first):** matmul2d mode::multiply == mode::multiply_accumulate onto a zeroed destination,
+  bitwise (96 / 96).
+- **Probe PF-6 (the next quant group's six code words into registers before the current decode, distance 1, nothing
+  else moved; 18:32, share lock, contended; scripts/k90_arm.py pf6, data/k90_arm_pf6.txt): KILL.** Bits 96 / 96.
+  S16 +0.6 / -0.5 % (mean +0.0 %; line PASS >= 5 %, KILL < 1 %); S8 -4.2 / -3.8 %, S32 -2.7 / -4.1 %. The compiler's
+  schedule already overlaps the code loads.
+- **Mission 33 builder summary (18:33):** 10 bitwise variants of NAX6-N's loop and structure, all slower or equal:
+  persistent (P1), gate + up per simdgroup (GU), a device-tensor A (8b), MUL-first, two decode LUTs, prefetch (PF-6), plus
+  the int8 form (NAX-CN) and the load probes 0b / 0c. The load side streams at the machine's rate (R 287-305 GB/s vs
+  bw_probe 285). NAX6-N stays the exact kernel at 70-74 % of R (S16 77 % of bw_probe), and NAX6-NH (FAST) is at 76-81 %.
+  Fable A's verdict: ~/FableGod/KERNEL90.md.

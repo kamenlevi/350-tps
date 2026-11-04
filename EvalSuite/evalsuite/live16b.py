@@ -243,7 +243,7 @@ def main(rt, st, a, log):
         rec = dict(key=key, toks=toks, hash=hs, top3=t3, s=round(time.time() - t0, 1), ref2_sha=ref2_sha, C=C,
                    calls=[x - y for x, y in zip(calls(), c0)], pid=os.getpid(), t=time.strftime("%H:%M:%S"))
         if on:                                    # REF2c: each switch's calls in this AR
-            rec["ref2c"] = {k: ref2.counts().get(k, 0) - e0.get(k, 0) for k in on}
+            rec["ref2c"] = {c: ref2.counts().get(c, 0) - e0.get(c, 0) for k in on for c in COUNT_OF.get(k, (k,))}
         tmp = p + ".tmp"
         json.dump(rec, open(tmp, "w")); os.replace(tmp, p)
         return rec

@@ -25,6 +25,8 @@ def say(s):
     open(OUT, "a").write(s + "\n")
 say(f"NATIVE-3C screen {time.strftime('%a %H:%M')} ({os.environ.get('N3_COND', 'shared GPU, rough')})")
 RD = os.path.expanduser("~/BigMoE/models/bare/records3")
+assert all(v.get("layout", "row-major") == "row-major" for v in json.load(open(f"{RD}/index.json"))["layers"].values()), \
+    "records3 is converted (native+p11+pad, Thu 11-05): this script reads row-major bytes only"   # Leap 18:5x guard
 ND = os.path.expanduser("~/Leap/data/native_sample")
 SH = {"gate_proj": (640, 2560), "up_proj": (640, 2560), "down_proj": (2560, 640)}
 PLAN = "4433333333"

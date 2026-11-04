@@ -1887,3 +1887,21 @@ block 32 (net ~+2 % under this cost model unless the drafter nears the oracle); 
   - Use: DRAFT17 joins code's 24 GB FAST stack. Code bytes are 35.7 -> 25.2 MB per kept token on today's stack, and 19.5
     with 11-bit + POOLSPLIT [P] (MoonShots re-derived x0.723). BigMoE built it (R57_D17, 723ee9b).
   - UNCHECKED until Breakthrough's interim read-out (~19:05, s67_slot.log) re-derives screen 6's verdict vs C.
+- Wed 18:4x: S7_REF3 READ = the 3-bit tail PASSES on code, so BigMoE's flag stays 3 (s7_ref 18:21, s7_ref3 18:42;
+  map_kl.py + paired flips; UNCHECKED until Breakthrough's interim read-out, ~21:00).
+  - s7_ref (C + DRAFT17 at 239 slots, kept ranks 2-9 at 4 bits = the map's C form): 0.74 / 6.48 / 5.35 % flips; KL
+    0.0040 / 0.0232 / 0.0236.
+  - s7_ref3 (every kept expert at MSB-3 at all 48 layers = the engine's FAST frame): 1.04 / 7.62 / 6.36 %; KL 0.0051 /
+    0.0297 / 0.0324.
+  - Paired (only-ref / only-ref3): code 7 / 17 (z +2.04), IFEval 60 / 99 (z +3.09), multi 57 / 93 (z +2.94).
+  - E29, the ranks 2-9 MSB-3 term at 239 slots (first measurement): +0.0011 / +0.0065 / +0.0088. The sweep's [G] guess
+    was 0.0017 / 0.0071 / 0.0078.
+  - Verdict for the flag: 3 STANDS on code.
+    - Direct: s7_ref3's code 1.04 % at 239 slots, under the 1.34 % line.
+    - At the 24 GB MSB-3 pool [G]: today's stack in the map frame (sweep row 0, code KL 0.0058) + E29 = 0.0069 -> 1.23 %
+      (PASS; the margin is ~4 flips).
+    - Flag 4 (x2.06 bytes, W4PRICE 16:3x) is not needed for code.
+  - Chat in the engine frame [G]: IFEval 7.67 -> 8.32 % (BETWEEN -> KILL, line 8.13); multi 6.01 -> 6.88 % (KILL
+    either way). Flag 4 would keep IFEval BETWEEN but not multi, so neither width opens a chat route.
+  - Next: the sweep's model takes E29 in place of its guess (engine frame: each row adds r x E29). It moves once, with
+    screen 7's final read-out (~21:20).

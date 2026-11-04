@@ -57,6 +57,9 @@ All [P] cells: research/TEN_X_LEDGER.md (Wed 03:4x). They replace Fable C's BYTE
 | JOINT, keepalive, zero-copy, pickup, lever 2 forecasts | BigMoE / Fable A | yes | 0 bytes: they move exposure (BROKEN line 1), not this line | Wed lever-1 arms | - |
 
 ## Log (newest first)
+- Wed 18:4x: S7_REF3 (unchecked until ~21:00): the 3-bit tail passes on code. Code is 1.04 % flips at 239 slots, and
+  [G] 1.23 % on today's 24 GB stack. So BigMoE's flag stays 3 and today's prices hold (19.5 / 14.3 / 10.6 at 24 GB);
+  flag 4's x2.06 is not needed. E29 = +0.0011 / +0.0065 / +0.0088 KL.
 - Wed 18:0x: SCREEN 6 PASS (unchecked until Breakthrough's ~19:05 read-out): DRAFT17's quality at the 24 GB pool =
   C's on code (1.07 % flips, paired 12 / 12; KL +0.0004). Code's 24 GB FAST stack with DRAFT17 stands at 19.5 MB per
   kept token [P] (11-bit + POOLSPLIT), quality PASS measured at 147 slots.

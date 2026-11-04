@@ -234,6 +234,8 @@ def from_p11(new, q, r):
 def self_test(L=20, chunk=64):
     import json, time
     RD = os.path.expanduser("~/BigMoE/models/bare/records3")
+    assert all(v.get("layout", "row-major") == "row-major" for v in json.load(open(f"{RD}/index.json"))["layers"].values()), \
+        "records3 is converted (native+p11+pad, Thu 11-05): this script reads row-major bytes only"   # Leap 18:5x guard
     ND = os.path.expanduser("~/Leap/data/native_sample")
     r = json.load(open(f"{RD}/index.json"))["layers"][str(L)]
     raw = np.memmap(f"{RD}/{r['file']}", dtype=np.uint8, mode="r", shape=(r["E"], r["recsz"]))

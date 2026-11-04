@@ -46,6 +46,8 @@ EP = int(os.environ.get("P11PAD_EXPERTS", "128"))
 BT.PLAN = PLAN
 R = len(PLAN)
 RD = os.path.expanduser("~/BigMoE/models/bare/records3")
+assert all(v.get("layout", "row-major") == "row-major" for v in json.load(open(f"{RD}/index.json"))["layers"].values()), \
+    "records3 is converted (native+p11+pad, Thu 11-05): this script reads row-major bytes only"   # Leap 18:5x guard
 SH = {"gate_proj": (640, 2560), "up_proj": (640, 2560), "down_proj": (2560, 640)}
 idx = json.load(open(f"{RD}/index.json"))["layers"]
 eqb = lambda a, b: bool(a.shape == b.shape and mx.all(a.view(mx.uint16) == b.view(mx.uint16)).item())

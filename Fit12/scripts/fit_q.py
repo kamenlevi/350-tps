@@ -32,6 +32,13 @@ def rbf16(x):                                   # fp32 -> nearest-even bf16, bac
 
 def read(L, e):
     li = IDX["layers"][str(L)]
+    # (Wed 4 Nov 17:3x; Leap's records3 reader triage) a raw row-major reader: refuse a converted layer. Thu's conversion
+    # (native+p11+pad, in place) adds a per-layer "layout" key; the same offsets would then hold permuted codes and
+    # 11-bit-packed scales, decoded silently as garbage. Read a converted store through BigMoE's ext record_rowmajor.
+    # An explicit raise, not an assert, so python -O cannot skip it.
+    if li.get("layout", "row-major") != "row-major":
+        raise RuntimeError(f"records3 L{L} is {li.get('layout')}: fit_q.read decodes row-major bytes only "
+                           "(use BigMoE's ext record_rowmajor)")
     fd = os.open(os.path.join(R, li["file"]), os.O_RDONLY)
     buf = os.pread(fd, li["recsz"], e * li["recsz"])
     os.close(fd)

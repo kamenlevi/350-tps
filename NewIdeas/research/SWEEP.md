@@ -38,6 +38,8 @@ M-35, d05b2ac):**
     here, but t4_all is the t-path's numerics floor, not this term. The map runs D-02a's 4-bit model, so in C's form the
     kept ranks 2-9 sit at 4 bits as a stand-in for the engine's MSB-3. The guess is 0.8 x (t3_all - t4_all - the ranks
     0-1 term), and screen 7's s7_ref3 - s7_ref measures it tonight.
+    MEASURED Wed 18:4x (s7_ref3 - s7_ref, 239 slots): +0.0011 / +0.0065 / +0.0088. The rows below still carry
+    the guess, in the map's frame; they move to the engine's frame (each row + r x E29) with screen 7's final read.
   - the pool: (1 - g) x 0.0024 / 0.0180 / 0.0084, where g = the replay's keep gap closed toward the 45 GB pool. The
     147-slot cost is measured (C at 147 minus bq_t3).
   - DRAFT17 on code: +0.0004 MEASURED (screen 6, Wed 18:0x: C 0.0057 -> 0.0061; v1's [G] was +0.0006). Code flips

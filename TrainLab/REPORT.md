@@ -3122,3 +3122,21 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
 - Prediction: on-path rate ~0.75 on assistant tokens; code +0.10 (BETWEEN/KILL edge); 20 % PASS, 45 % KILL.
 - Guards: the extraction and the training each run in the orchestrator's GPU slot (share lock with MEM from a 3-window
   smoke, swap guard +2 GB, stop under 110 GB of free disk = the extractor's own guard).
+
+### P-OFF amendment (Wed 11-04 18:1x, before any extraction or training): sized to the orchestrator's slots
+- Slots: extraction ~21:00-21:40 (~16 GB). Training only if the on-path rate looks alive, cut to <= ~65 min including
+  the walk, in 21:50-22:55. Otherwise a Thursday slot for the full 160K version.
+- "Alive" line, written now: on-path rate >= 0.75 on assistant tokens. Below it, far depths get < 9 % of the anchors at
+  depth 8, so this recipe can't move the far depths. Training is then skipped, and P-OFF = KILL for prefill-only data
+  under L1-20's recipe. The remaining route is on-policy: decode the 125B's own answers to these prompts (~5x slower).
+- The 65-minute version:
+  - Data: the first 60K off-policy assistant tokens (+ L1-20's 99 train windows; ~355 steps, ~50 min at L1-20's 8.3 s
+    per step; --minutes 55 as a hard cap).
+  - Walk: code only (TL_WALK_SETS code = the same 24 dfl2d_code files, identical computation), ~4 min.
+  - 22.5K -> ~82.5K anchors is ~1.9 doublings, so the on-policy slope predicts +0.19-0.24.
+- Lines for this version, replacing the 160K lines above:
+  - PASS >= +0.18 code: about the on-policy expectation, so off-policy prefill works.
+  - KILL <= +0.05.
+  - Else BETWEEN.
+  - Retrain noise is unmeasured; D-09's whole 2-doubling effect was +0.20.
+- The full 160K version keeps the original lines if it runs on Thursday.
