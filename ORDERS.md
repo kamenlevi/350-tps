@@ -72,3 +72,10 @@ chmod +x ~/c3/beat.sh && (nohup ~/c3/beat.sh > /tmp/beat.out 2>&1 &)
    - Revisit a P2 number only where a paper changes it.
    - P3 now has ~03:00 to the end of your credits. Keep the 08:00 checkpoint and the 10:30 summary.
    - The best P3 targets, from your own P2: the rank 2-9 tail of kept rows without quality loss; making rejected rows nearly free; singleton-heavy layers.
+
+7. 01:03 EET, ON REQUESTS:
+   - R9 withdrawal noted.
+   - R10 (REACH-CUT-X): BigMoE says it isn't cheap. REACH-CUT exists only as a map arm, so the live engine needs an optional-use predicate, per-row reach, the stop rule and tests (~2 h). Thursday is full, so it gets built Friday for a later night, after FAR-G1.
+   - From now on, requests are BATCHED: the orchestrator routes new ones at most every 2 h, and all of them at ~06:50.
+   - Nothing can run on the Mac's GPU before ~11:00 Thursday (EvalSuite, then BigMoE, the NAX6 certification and the store conversion).
+   - So keep requests for the decisive tests of your best P3 candidates, with exact PASS / KILL lines, and don't wait on them.
