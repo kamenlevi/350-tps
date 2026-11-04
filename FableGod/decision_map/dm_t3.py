@@ -19,7 +19,7 @@ import mlx.core as mx
 MD = os.path.expanduser("~/BigMoE/models/bare")
 R3 = os.path.expanduser(os.environ.get("DM_R3", os.path.join(MD, "records3")))   # DM_R3: another store (tests)
 RM_IX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "records3_index_rowmajor.json")   # today's offsets
-LAYOUT = {"row-major": 0, "rowmajor": 0, "row_major": 0, "native": 1, "native+p11": 2}
+LAYOUT = {"row-major": 0, "rowmajor": 0, "row_major": 0, "native": 1, "native+p11": 2, "native+p11+pad": 2}
 _IX, _FD, _RM = {}, {}, {}
 STATS = {"calls": 0, "rows": 0, "experts": 0, "bytes": 0}
 # MSB pieces (tier._MSB order): gate w3 s3 b3, up w3 s3 b3, down w3 s3 b3; LSB (tier._LSB): gate l1 b, up l1 b, down l1 b

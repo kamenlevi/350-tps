@@ -3057,3 +3057,28 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
     data/s67_extra.txt and runs a second s67 runner instance (same guards, hard stop 23:00).
     - A first inline chain was stopped at once: its own command line held the runner's name, so the pgrep gates of the
       Rule C runner and the dm_t3 install would have waited on it.
+- RESULTS, final (Wed 22:21) [K]. All arms 36 windows, 0 row-count warnings, 0 failures; data in data/dm_s7/results_wed/
+  (final_readout_2221.txt, out JSONs gzipped).
+  - s7_trl (Fit12's 2.40 b trellis store at S = {7, 18, 30, 41}; every expert read from TRL, fallback 0):
+    flips / KL 1.04 / 0.0046 | 6.89 / 0.0261 | 5.69 / 0.0278 (code | IFEval | multi).
+  - SCREEN 7, my cross-check of amendment 2 (unrounded KL, the pre-registered fit; NewIdeas' s7_read.py, with its SE gate,
+    is the verdict):
+
+    | domain | scale | est_abs flips | in-frame flips | line | verdict |
+    |---|---|---|---|---|---|
+    | code | 11.12 | 1.54 % | 1.45 % | 1.34 | BETWEEN |
+    | IFEval | 12.82 | 10.07 % | 9.54 % | 5.42 | KILL |
+    | multi | 17.05 | 10.98 % | 10.44 % | 3.69 | KILL |
+
+    NewIdeas' prediction was ~1.0 % PASS / ~7.3 % BETWEEN / ~6.0 % KILL; the TRL store extrapolated to 48 layers costs
+    more.
+  - CHAT ROUTE qom_0.5_live_c147_bonus5g (the 24 GB split, 147 slots): PASS on every domain.
+    - Flips: code 0.71 % (24/3366), IFEval 4.30 % (146/3397), multi 2.73 % (97/3553), against the lines 1.34 / 5.42 /
+      3.69. NewIdeas' prediction was ~0.7 / ~4.6 / ~3.0.
+    - KL 0.0025 / 0.0115 / 0.0075.
+    - Paired McNemar vs 1(c) (qom_0.5_live_bonus5g, the larger pool): 16 / 8, z +1.63; 79 / 31, z +4.58; 58 / 29,
+      z +3.11. The smaller pool costs, but stays under every line.
+    - Vs qom_0.5_live_c164 (information): 11 / 7, z +0.94; 73 / 45, z +2.58; 37 / 34, z +0.36.
+  - Screen 6, 1(b) and 1(c): the same as the interim read-out (screen 6 PASS on code; 1(b) PASS; 1(c) COST).
+  - After the batch: dm_t3 got the padded layout name (22:21:23) and r3_overlay was moved aside.
+  - Then the Rule C passes started (22:21:30), and the cf 0.3 arm is chained after them (start by 22:50).

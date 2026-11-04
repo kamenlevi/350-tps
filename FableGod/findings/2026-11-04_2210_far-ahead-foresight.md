@@ -48,3 +48,8 @@
   - Prior art: hybrid / tournament branch predictors (McFarling 1993) and multi-predictor cache replacement in CPUs.
     MoE-SpeQ's hierarchical cache is the nearest MoE work.
   - CPU test queued in FAR's frame (FAR.md section 8).
+- Idea added 22:21: a fully dynamic horizon, scored from the same capture.
+  - Hard per-token stop: stop at the first far step with p_top1 < tau (SPICE-style, published).
+  - Soft per-token weighting: each far token's experts weighted by the chain's cumulative confidence, with no cutoff
+    (possibly new).
+  - An acceptance-rate horizon (F ~ 8 checks' worth of kept tokens: code ~90-130, math ~50-70) and per-layer horizons.
