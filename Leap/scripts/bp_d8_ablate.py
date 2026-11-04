@@ -147,3 +147,19 @@ for c in range(30):
         DF._trim_recent_cache(dc, trim)
 say(f"BP-10b full propose: CPU graph build {1e3 * np.median(tb[4:]):.2f} ms + eval / read-back {1e3 * np.median(te[4:]):.2f} ms "
     f"(GPU work runs only after the build: serial)")
+
+# BP-11b A/B: qmm16c8's in-kernel row bound vs the old padding pass (forced back in), interleaved in this process
+import qmm16c8 as Q8
+_q8 = Q8.qmm16c8
+def q8_padded(x, w, s, b, ks=1, nt=1):
+    M, K = x.shape
+    if M < 16:
+        return _q8(mx.concatenate([x, mx.zeros((16 - M, K), x.dtype)], 0), w, s, b, ks=ks, nt=nt)[:M]
+    return _q8(x, w, s, b, ks=ks, nt=nt)
+ab = {"row bound (new)": [], "padded (old)": []}
+for rnd in range(6):
+    for arm in (list(ab) if rnd % 2 == 0 else list(ab)[::-1]):
+        Q8.qmm16c8 = _q8 if arm.startswith("row") else q8_padded
+        ab[arm].append(run("full", seed=40 + rnd))
+Q8.qmm16c8 = _q8
+say("BP-11b A/B (ms per propose, median of 6 interleaved rounds): " + ", ".join(f"{k} {1e3 * np.median(v):.2f}" for k, v in ab.items()))

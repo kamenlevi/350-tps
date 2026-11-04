@@ -13,6 +13,8 @@
 #   is re-checked each time (every 2 min once it is the only arm left that fits).
 #   Last, optional (NewIdeas 16:5x, the orchestrator's OK; Wed 17:0x): qom_0_live_ball_c147_t3+dense3 = screen 6 + Leap's
 #   DENSE-3 (install_dense3.sh; smoke 17:00), est 10 min; it runs after 1(c) if s7_trl's store is not whole yet.
+#   The orchestrator 17:3x: start NOW (the GPU is idle by day; armed with S67_START = the arming time); s7_trl joins when the
+#   store is whole (~21:10). The first time only s7_trl is left, an interim read-out runs (the same read-outs as the end).
 # Clear = no map process, no other session's quiet window held or waited for, no other session's shared run over 5 GB (by
 # day one > 5 GB job at a time), lid open, no PAUSE, NO-SWAP >= 25 GB: 3 clear
 # checks 10 s apart before the first arm and after any stop, 1 between arms. Share lock per arm, MEM 18 GB. Guards every
@@ -56,16 +58,32 @@ for n in s7_trl s7_ref3 q1u_0.9_live_bonus9g qom_0.5_live_bonus5g qom_0_live_bal
   grep -qF "\"$n\"" $DM/dm_ablations.py || { say "$n is not in dm_ablations.py (scripts/dm_s7/install_s7.sh, install_late.sh, install_dense3.sh); not run"; exit 1; }
 done
 say "armed (the orchestrator 14:3x / 15:3x, NewIdeas 14:5x / 16:5x): $ARMS; start >= $(date -r $START '+%a %H:%M'), no new arm after $(date -r $LASTGO '+%a %H:%M'), hard stop $(date -r $DEADLINE '+%a %H:%M')"
+rd() { [ "$(nwin $1)" = 36 ] || return; $PY $DM/dm_screen_read.py "$@" >> $LOG 2>&1; say "read-out: $(grep '^VERDICT' $DM/out/SCREEN_read_$1.txt 2>/dev/null || echo "$1 none")"; }
+readouts() {   # $1 = interim (the first time only s7_trl is left; the orchestrator 17:3x) or final; CPU, the out/ JSONs only
+  echo "[s67] read-outs ($1): map_kl.py (NewIdeas, read-only use): C, screen 6, screen 7, DENSE-3 $(date '+%a %H:%M:%S')" >> $LOG
+  KL=$($PY ~/NewIdeas/scripts/map_kl.py qom_0_live_bq_c147_t3 qom_0_live_ball_c147_t3 s7_ref s7_ref3 s7_trl s7_cal s7_cal_all $D3 2>&1); echo "$KL" >> $LOG
+  if [ "$(nwin $D3)" = 36 ] && [ "$(nwin qom_0_live_ball_c147_t3)" = 36 ]; then   # NewIdeas QUEUE 16:5x: INVALID rule, then code flips
+    D3C=$($PY ~/Breakthrough/scripts/dm_s7/dense3_check.py $D3 qom_0_live_ball_c147_t3 2>&1); echo "$D3C" >> $LOG
+    say "read-out DENSE-3: $(echo "$D3C" | grep '^VERDICT' || echo 'INVALID check failed'); $(echo "$KL" | grep -F "| $D3 |" | awk -F'|' '{split($3, a, "/"); if (a[1] !~ /[0-9]/) {print "no map_kl number"; exit} f = a[1] + 0; print (f <= 1.34 ? "PASS" : f <= 2.01 ? "BETWEEN" : "FAIL") " on code flips " f " % (PASS <= 1.34, BETWEEN <= 2.01)"}')"
+  fi
+  rd qom_0_live_ball_c147_t3 qom_0_live_bq_c147_t3
+  rd q1u_0.9_live_bonus9g q1u_0.9_live 0.1 --null
+  rd qom_0.5_live_bonus5g qom_0.5_live 0.1 --null
+  say "read-outs ($1) done"
+}
 while [ $(date +%s) -lt $START ]; do sleep 30; done
 cd $DM || exit 1
-need=3; runs=0; last=
+need=3; runs=0; last=; interim=0
 while :; do
   [ -z "$(todo)" ] && break
   [ $(date +%s) -ge $LASTGO ] && { say "23:10 (LASTGO): no new arm; left: $(todo)"; break; }
   pick_next
   if [ -z "$PICK" ]; then
     [ $TRLWAIT = 1 ] || { say "nothing left fits by the hard stop; left: $(todo)"; break; }
-    [ "$last" = trl ] || say "waiting: s7_trl is the only arm that fits, and Fit12's TRL store is not whole yet"
+    if [ "$last" != trl ]; then
+      say "waiting: s7_trl is the only arm that fits, and Fit12's TRL store is not whole yet"
+      [ $interim = 0 ] && { interim=1; readouts interim; }
+    fi
     last=trl; sleep 120; continue
   fi
   w=$(why_not)
@@ -93,14 +111,5 @@ while :; do
   [ $(date +%s) -ge $DEADLINE ] && break
 done
 say "batch over; left: $(todo)"
-echo "[s67] map_kl.py (NewIdeas, read-only use): C, screen 6, screen 7" >> $LOG
-KL=$($PY ~/NewIdeas/scripts/map_kl.py qom_0_live_bq_c147_t3 qom_0_live_ball_c147_t3 s7_ref s7_ref3 s7_trl s7_cal s7_cal_all $D3 2>&1); echo "$KL" >> $LOG
-if [ "$(nwin $D3)" = 36 ] && [ "$(nwin qom_0_live_ball_c147_t3)" = 36 ]; then   # NewIdeas QUEUE 16:5x: INVALID rule, then code flips
-  D3C=$($PY ~/Breakthrough/scripts/dm_s7/dense3_check.py $D3 qom_0_live_ball_c147_t3 2>&1); echo "$D3C" >> $LOG
-  say "read-out DENSE-3: $(echo "$D3C" | grep '^VERDICT' || echo 'INVALID check failed'); $(echo "$KL" | grep -F "| $D3 |" | awk -F'|' '{split($3, a, "/"); if (a[1] !~ /[0-9]/) {print "no map_kl number"; exit} f = a[1] + 0; print (f <= 1.34 ? "PASS" : f <= 2.01 ? "BETWEEN" : "FAIL") " on code flips " f " % (PASS <= 1.34, BETWEEN <= 2.01)"}')"
-fi
-rd() { [ "$(nwin $1)" = 36 ] || return; $PY $DM/dm_screen_read.py "$@" >> $LOG 2>&1; say "read-out: $(grep '^VERDICT' $DM/out/SCREEN_read_$1.txt 2>/dev/null || echo "$1 none")"; }
-rd qom_0_live_ball_c147_t3 qom_0_live_bq_c147_t3
-rd q1u_0.9_live_bonus9g q1u_0.9_live 0.1 --null
-rd qom_0.5_live_bonus5g qom_0.5_live 0.1 --null
+readouts final
 say "done"

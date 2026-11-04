@@ -201,7 +201,6 @@ if FAST:
     assert os.environ.get("R57_QOM_TAIL", "3") == "3", "R57_QOM_TAIL=4 (LSB reads for kept ranks 2-9) is not built yet"
     FASTARMS["QOM"] = {s_: _S(thr=_QT, q1u=True, t3=True, qom=True) for s_ in ("humaneval", "ifeval", "multi")}
     if FAST == "QOM":
-        assert os.environ.get("REF2_OOO_1C") != "1", "QOM's -2 base slots need the two-phase OOO (not REF2_OOO_1C yet)"
         sys.path.insert(0, "/Users/kamen/Breakthrough/keepset")
         import qom_keep as QK                            # read-only: Breakthrough's module
     FASTARMS["BE"] = dict(FASTARMS["B"], **FASTARMS["E"])   # the code mode + chat R1: one process for every domain
@@ -695,6 +694,8 @@ if K83:                                                  # -> 10.2 ms, steady +0
     for _k in ("hc_gate", "gdn_inproj_x"):
         ref2.CFG[_k] = True
 # BUILD DAY (Wed 11-04) switches, each off unless set; the all-in FAST code preset sets all three (+ U3C + R57_D7B=code):
+if FAST == "QOM" and os.environ.get("REF2_OOO_1C") == "1":   # one-call OOO knows QOM's -2 base slots since Leap 00961fc
+    assert "ooo_1c_qom" in ref2.COUNTS, "REF2_OOO_1C with QOM needs Leap's ref2 00961fc (else QOM's drops are misread)"
 if os.environ.get("R57_GDNB") == "1":                    # GDNB (Leap 70cd998, EXACT, bitwise == off): the one-dispatch GDN body
     assert "gdn_body" in ref2.CFG, "Leap's ref2 has no gdn_body"   # at 1-16 rows (-0.71 ms per check); prefill falls back
     ref2.CFG["gdn_body"] = True

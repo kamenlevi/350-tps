@@ -60,6 +60,10 @@ class HnPlus(nn.Module):                             # hidden_norm(fc(taps)) + h
 
 def load(bits):
     d = DF.load_draft("incoai/Qwen3.8-Flash-Next-DFlash2")
+    if os.environ.get("TL_EXPAND"):                  # P-CAP: the 10-layer drafter (sticky/pcap_expand.py) before its weights
+        sys.path.insert(0, os.path.expanduser("~/TrainLab/sticky"))
+        import pcap_expand
+        pcap_expand.expand_interleave(d)
     if HC:
         d.hc_extra = HCExtra()
     d.load_weights(os.environ.get("TL_DRAFT", os.path.join(D, "l120_ft.safetensors")), strict=False)   # D-09: TL_DRAFT

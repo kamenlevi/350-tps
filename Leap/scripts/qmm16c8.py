@@ -39,8 +39,8 @@ _SRC8 = r"""
     for (short r = 0; r < 4; r++) wr[r] = w + (size_t)(n0 + (r >> 1) * 16 + fm + (r & 1) * 8) * KW + 4 * fq;
     const device T* sc_ = scales + (size_t)(n0 + 4 * fq) * KG;
     const device T* bi_ = biases + (size_t)(n0 + 4 * fq) * KG;
-    const device T* xr0 = x + (size_t)fm * K_C + 16 * fq;
-    const device T* xr1 = x + (size_t)(fm + 8) * K_C + 16 * fq;
+    const device T* xr0 = x + (size_t)(fm < M_C ? fm : 0) * K_C + 16 * fq;
+    const device T* xr1 = x + (size_t)(fm + 8 < M_C ? fm + 8 : 0) * K_C + 16 * fq;
 
     for (int k0 = kg * kper; k0 < (int)(kg + 1) * kper; k0 += G) {
         const int g = k0 / G;
@@ -52,7 +52,8 @@ _SRC8 = r"""
         const device T* x1 = xr1 + k0;
         for (short s = 0; s < 4; s++) {
             for (short j = 0; j < 4; j++) {
-                const T a0 = x0[4 * s + j], a1 = x1[4 * s + j];
+                const T a0 = fm < M_C ? x0[4 * s + j] : static_cast<T>(0.0f);   // rows >= M_C read as zero (no padding pass)
+                const T a1 = fm + 8 < M_C ? x1[4 * s + j] : static_cast<T>(0.0f);
                 ct_a[j] = a0; ct_a[4 + j] = a1;
                 xs0 += static_cast<float>(a0); xs1 += static_cast<float>(a1);
             }
@@ -88,7 +89,7 @@ _SRC8 = r"""
     for (short i = 0; i < 16; i++) {
         const int m = fm + 8 * ((i & 7) >> 2);
         const int n = n0 + (i >> 3) * 16 + 4 * fq + (i & 3);
-        y[(size_t)m * N_C + n] = static_cast<T>(acc[i]);
+        if (m < M_C) y[(size_t)m * N_C + n] = static_cast<T>(acc[i]);
     }
 """
 
@@ -99,13 +100,22 @@ def _k8():
                                 source=_SRC8, header=_HDR)
 
 
-def qmm16c8(x, w, scales, biases, ks=1, nt=1):
-    """8-bit g64 code MMA at <= 16 rows (padded): y [M, N]"""
+def qmm16c8(x, w, scales, biases, ks=1, nt=1, row_bound=False):
+    """8-bit g64 code MMA at <= 16 rows: y [M, N]. Default: rows padded to 16 (one kernel variant per shape, as the
+    engine's D8-NAX ran it on Wed). row_bound=True (BP-11b, opt-in): rows >= M read as zero inside the kernel (no padding
+    pass, one variant per M); a row's bits are the same either way (the op's rows are independent)"""
     M, K = x.shape
     N = w.shape[0]
     assert M <= 16 and N % (32 * nt) == 0 and K % (64 * ks) == 0 and w.shape[1] * 4 == K, (x.shape, w.shape)
-    xp = x if M == 16 else mx.concatenate([x, mx.zeros((16 - M, K), x.dtype)], 0)
-    (y,) = _k8()(inputs=[xp, w, scales, biases], template=[("T", x.dtype), ("K_C", K), ("N_C", N), ("KS", ks), ("NT", nt)],
-                 grid=(N // 32 * 32 * ks, 1, 1), threadgroup=(32 * ks * nt, 1, 1), output_shapes=[(16, N)],
+    if not row_bound:
+        xp = x if M == 16 else mx.concatenate([x, mx.zeros((16 - M, K), x.dtype)], 0)
+        (y,) = _k8()(inputs=[xp, w, scales, biases], template=[("T", x.dtype), ("K_C", K), ("N_C", N), ("KS", ks),
+                                                               ("NT", nt), ("M_C", 16)],
+                     grid=(N // 32 * 32 * ks, 1, 1), threadgroup=(32 * ks * nt, 1, 1), output_shapes=[(16, N)],
+                     output_dtypes=[x.dtype])
+        return y[:M]
+    (y,) = _k8()(inputs=[x, w, scales, biases], template=[("T", x.dtype), ("K_C", K), ("N_C", N), ("KS", ks), ("NT", nt),
+                                                         ("M_C", M)],
+                 grid=(N // 32 * 32 * ks, 1, 1), threadgroup=(32 * ks * nt, 1, 1), output_shapes=[(M, N)],
                  output_dtypes=[x.dtype])
-    return y[:M]
+    return y

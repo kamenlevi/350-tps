@@ -1961,3 +1961,4 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 14:32:20 SCR trl encode (background QoS, task b9yamynty) stopped by the session: the orchestrator 14:3x OK'd normal priority, 4 cores; re-armed layer by layer
 14:32:26 SCR trl encode start: layers 18,30,7,41 experts 0-511 form mix chunk 4 stop 2130 prio normal (pid 84909, swap 9660 MB)
 16:26:10 SCR trl encode: layer 18 complete (1536 files)
+17:12:01 SCR trl relay armed: waits for runner 84909; re-starts it with stop 2241 only if it ends on its stop time with the store not whole (the orchestrator 17:1x) (pid 11163)

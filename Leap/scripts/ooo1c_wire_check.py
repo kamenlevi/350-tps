@@ -148,4 +148,51 @@ mx.eval(y, y_ref, y_2p)
 f_ok = eqb(y, y_ref) and eqb(y, y_2p) and "nolsb" not in t3
 ok &= f_ok
 say(f"(f) U3 sure rows (nolsb) via ref2: one call == tier_glu(scores) with sidecar -2 == _ooo_call_t3's two phases: {f_ok}")
+# (g) QOM-OOO (Wed 17:1x): t["qom"] = (optional uses, sure rows) with U3's nolsb, as BigMoE's QOM arms run it
+sys.path.insert(0, os.path.expanduser("~/Breakthrough/keepset"))
+import qom_keep as QK
+mand = np.zeros((M, K), bool); mand[:, :2] = True; mand[~sure] = True
+union = set(ids[mand].tolist())
+opt = sure[:, None] & ~mand & ~np.isin(ids, list(union))
+sm_q = np.where(opt & (pre_m < 0), -2, ids).astype(np.int32)         # the loader: an unread optional miss -> -2
+seen = {}
+def post_q(Lx, ids_, after=None):
+    seen[Lx] = np.array(ids_)
+    return post(Lx, ids_, after)
+gate3 = Gate(); gate3.seq = 13
+gate3.release(L, sm_q.reshape(-1).tolist()); gate3.release(NL // 2 + L, sl.reshape(-1).tolist())
+tq = dict(t); tq["nolsb"] = (nl, sure); tq["qom"] = (mx.array(opt), nl)
+ref2.CFG["ooo_1c"] = True
+cq = ref2.COUNTS["ooo_1c_qom"]
+try:
+    y = ref2._ooo_sel(x, mx.array(ids), {"gate": gate3, "L": L}, tq, post_q, sc, None)
+finally:
+    ref2.CFG["ooo_1c"] = False
+nl2 = nl.reshape(M, 1)
+smx = mx.array(sm_q)
+cf_ = mx.where(nl, 0.0, float("nan"))
+kq, _, _ = QK.qom_keep_mx(mx.array(ids) & 0xFFFFF, sc.reshape(M, K), cf_, smx >= 0)
+y1 = TG.tier_glu_phase(x, msb, lsb, mx.array(pre_m), l1, ph, 1, plan=PLAN)
+y2 = TG.tier_glu_phase(x, msb, lsb, mx.where(kq, smx, smx[:, :1]), mx.array(sl_t3), ph, 2, plan=PLAN)
+y_q = TG.combine_phase(y1, y2, ph, mx.where(kq, sc.reshape(M, K), mx.zeros_like(sc.reshape(M, K))))
+mx.eval(y, y_q, kq)
+flags_ok = np.array_equal((seen[L].reshape(M, K) >> 21) & 1, opt.astype(seen[L].dtype)) and \
+    np.array_equal(seen[L].reshape(M, K) & 0xFFFFF, ids)
+g_ok = eqb(y, y_q) and "qom" not in tq and ref2.COUNTS["ooo_1c_qom"] == cq + 1 and flags_ok
+ok &= g_ok
+say(f"(g) QOM via ref2 ({int(opt.sum())} optional uses, {int((~np.array(kq)).sum())} dropped): one call == the QOM two "
+    f"phases {eqb(y, y_q)}; posted with bit 21 on exactly the optional uses {flags_ok}; t['qom'] consumed {'qom' not in tq} -> "
+    f"{'OK' if g_ok else 'FAIL'}")
+# (h) QOM on the NAX path is refused loudly (its two phases would ignore t["qom"])
+th = dict(t); th["nolsb"] = (nl, sure); th["qom"] = (mx.array(opt), nl)
+ref2.CFG["tier_nax_ooo"] = True
+try:
+    ref2._ooo_sel(x, mx.array(ids), {"gate": gate3, "L": L}, th, post_q, sc, None)
+    h_ok = False
+except RuntimeError as e:
+    h_ok = "QOM on the NAX path" in str(e)
+finally:
+    ref2.CFG["tier_nax_ooo"] = False
+ok &= h_ok
+say(f"(h) QOM + NAX refused loudly: {h_ok}")
 say(f"OOO-1C wiring: {'PASS' if ok else 'FAIL'}")

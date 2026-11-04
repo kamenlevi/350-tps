@@ -70,6 +70,9 @@ What changes (monkeypatches on MTPLX, read-only):
     same dup-id sidecar post and sidecar slot -2 (final, LP1 -> tier 3); the NAX path declines them. Native records
     (Friday's converted store) take the native forms (3c-N / NAX6-N, bf16 native or p11 pools); layers with N7-15's
     registered dirty flags keep the two phases.
+  - QOM-OOO (Wed 2026-11-04 17:1x): with CFG ooo_1c, a call carrying BigMoE's QOM (t["qom"], U3's t3 path, row-major 3c)
+    runs one-call too: optional uses posted with bit 21; a late base slot resolving to -2 (not read) is dropped (its
+    row's rank-0 slot, weight 0 in kernel B) == the QOM two phases. NAX / native / no-t3 QOM calls keep the two phases.
   - SVH (Wed 2026-11-04, FAST, off by default; CFG["screened_head"] or REF2_SCREENED_HEAD=1): the screened verifier head.
     screened_head_install(lm_head) registers the trunk's 4-bit head; its <= 16-row calls (REF2 on) run qmm16c over
     FR-Spec's top-N (CFG screened_head_n, 98,304) + up to 4,096 session ids (screened_head_add(ids) / _reset()), and
@@ -187,7 +190,7 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
 _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
               kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
-              fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0)
+              fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0, ooo_1c_qom=0)
 _ROWS = [R]                                          # F1-R8: the real rows of the attention call being built (_att)
 _ORIG = {}
 _WCAT = {}
@@ -764,11 +767,19 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
     if _NATIVE_FLAGS.get(id(t["base"])) is not None:  # N7-15's dirty-slot repack runs only on the two-phase path
         return None
     native = bool(CFG["nax_native"]) if nax else _native(t)   # Friday's converted store: NAX6-N / 3c-N one-call forms
+    qm = t.get("qom")                                # QOM-OOO (Wed 17:1x): QOM's optional uses (BigMoE _ooo_call_t3);
+    if qm is not None and (nax or nlz is None):      # QOM: the 3c / 3c-N one-call (QOM rides on U3's t3)
+        return None
     gate, L = bm["gate"], bm["L"]
     BT.OOO_STATS["calls"] += 1
     COUNTS["ooo_1c"] += 1
-    dep_m, n_m = post(L, ids)
+    ids_p = ids if qm is None else mx.where(qm[0].reshape(ids.shape), ids.astype(mx.int32) | (1 << 21),
+                                            ids.astype(mx.int32))   # QOM: optional uses marked for the loader only
+    dep_m, n_m = post(L, ids_p)
     pre_m = dep_m[1:1 + n_m].reshape(M, K)
+    if qm is not None:
+        t.pop("qom")
+        COUNTS["ooo_1c_qom"] += 1
     if R4:
         if nlz is not None:                          # _ooo_call_t3 verbatim: sure rows post an unsure row's rank-0 expert
             t.pop("nolsb")                           # (read anyway) and take sidecar slot -2 (final: LP1 -> tier 3)
@@ -797,6 +808,11 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
         return TG.combine_phase(y.reshape(M * K, -1), y.reshape(M * K, -1), mx.ones((M, K), mx.int32),
                                 sc.reshape(-1, K)).reshape(*x.shape[:-1], -1)
     f1c = OC.tier_glu_3cn_1c if native else OC.tier_glu_3c_1c
+    if qm is not None:                               # QOM-OOO: dropped optional uses (-2) read rank 0's slot at weight 0
+        f1q = OC.tier_glu_3cn_1c if native else OC.tier_glu_3c_1c
+        y, _, _ = f1q(xin, t["base"], t["sideP"], pre_m, pre_l, PLAN, gate.region, offs, gate.status,
+                      sc.reshape(-1, K), qom=True)
+        return y.reshape(*x.shape[:-1], -1)
     y, _, _ = f1c(xin, t["base"], t["sideP"], pre_m, pre_l, PLAN, gate.region, offs, gate.status, sc.reshape(-1, K))
     return y.reshape(*x.shape[:-1], -1)
 
@@ -906,6 +922,9 @@ def _ooo_3cn(x, ids, bm, t, post, sc, shared):
 def _ooo_sel(x, ids, bm, t, post, sc, shared):
     """bigmoe.tier._ooo_call with REF2's C1 switch (off: BigMoE's 3c phases). A converted layer (layout 1 / 2) takes 3c-N,
     the native twin of BigMoE's 3c, even with REF2 removed (BigMoE 17:4x: r57_screen toggles REF2 around drafts)"""
+    if t.get("qom") is not None and ((_ON[0] and CFG["tier_nax_ooo"]) or (_layout(t) in (1, 2) and not (_ON[0] and CFG["ooo_1c"]))):
+        raise RuntimeError("REF2: QOM on the NAX path, or on native records without ooo_1c, is not built (those two phases "
+                           "would ignore t['qom']); QOM runs on 3c (BigMoE's two phases or ref2's one-call) and 3c-N (one-call)")
     if _ON[0]:
         _native_guard(t)
         if CFG["tier_nax_ooo"]:
@@ -915,6 +934,8 @@ def _ooo_sel(x, ids, bm, t, post, sc, shared):
                 y1c = _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax=False)
                 if y1c is not None:
                     return y1c
+            if t.get("qom") is not None:                 # the one-call declined: 3c-N's two phases would ignore QOM
+                raise RuntimeError("REF2: QOM on native records needs the one-call path (ooo_1c, a gate with regions, t3)")
             return _ooo_3cn(x, ids, bm, t, post, sc, shared)
         if CFG["ooo_1c"]:                                # OOO-1C: BigMoE's 3c in one call
             y1c = _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax=False)

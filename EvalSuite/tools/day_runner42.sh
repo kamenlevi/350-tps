@@ -7,7 +7,8 @@
 # them, else VOID (exit 5). Part 1: ref2tnax (+ tier_nax_ooo) on the 210 core rows; the decode stage's switch guard
 # checks every row ran NAX6. Verdict: tools/d4x.py ref2tnax ref2t ref2t.r2 -> results/nax6_d4.txt; on STAGE2
 # (IFEval alone fails) ref2tnax decodes IFX's 220 and d4x runs again. Then results/NAX6_DONE (its line = the verdict),
-# which runner 43 (F1 + HC8-1P) reads for its base.
+# which runner 43 (F1 + HC8-1P) reads for its base; just before it, the records3 check 1 on the row-major store
+# (tools/r3check.sh, ~10 min; the orchestrator 18:0x: BigMoE converts right after a NAX6 PASS).
 # AR at C 192 under share locks ("MEM 36 GB": the day's one memory-heavy job; it waits while another session's
 # shared run has MEM > 5 GB). Code pin at launch (exit 7 on a change); it stops (exit 8) if records3's layout changes;
 # no chunk starts after Thu 14:00 (exit 6). Stop it by pid only, and its cli child too.
@@ -49,7 +50,8 @@ mem_busy() {    # another session's shared run with MEM > 5 GB (our own reasons 
   peer ls 2>/dev/null | grep "shared run" | grep -v "evalsuite: MEM" | grep -oE "MEM [0-9]+ GB" | awk '$2 > 5 {f = 1} END {exit !f}'
 }
 pin() {
-  { shasum snap/leap-52cf2c9/*.py snap/leap-52cf2c9/ms_gdn/* tools/d4x.py "$K0" results/ifx/stage1_keys.txt \
+  { shasum snap/leap-52cf2c9/*.py snap/leap-52cf2c9/ms_gdn/* tools/d4x.py tools/r3check.sh "$K0" results/ifx/stage1_keys.txt \
+      results/r3check_keys.txt \
       data/items/dec_math.jsonl data/items/dec_ifeval.jsonl data/items/dec_humaneval.jsonl data/items/dec_ifevalx.jsonl
     (cd "$EVALSUITE_BIGMOE_CODE" && find bigmoe ext -type f ! -path '*__pycache__*' | sort | xargs shasum)
     (cd "$HOME/MoonShots/patches/planes_engine" && ls *.py | sort | xargs shasum)
@@ -126,5 +128,10 @@ say "NAX6 Part 1 verdict: ${V:-no verdict line (d4x rc $d)}"
 ./bin/evalsuite report --variant ref2tnax --decode --ref ref2t > results/report_ref2tnax_vs_ref2t.txt 2>&1
 ./bin/evalsuite report --variant ref2tnax --decode --ref ref2b > results/report_ref2tnax_vs_ref2b.txt 2>&1
 say "information: the standard table vs ref2t: $(tail -1 results/report_ref2tnax_vs_ref2t.txt)"
+calm                                              # records3 check 1 (row-major), before BigMoE's in-place conversion
+say "records3 check 1: tools/r3check.sh snap/bigmoe-da8e7a6 ref2tf0.r1 rowmajor ref2t.r2"
+tools/r3check.sh snap/bigmoe-da8e7a6 ref2tf0.r1 rowmajor ref2t.r2 >> "$LOG" 2>&1; c1=$?
+echo "check 1 rc $c1 ($(date +%H:%M))" > results/CHECK1_DONE
+say "check 1 rc $c1 (0 = token-identical to ref2t.r2; results/r3check.log)"
 echo "${V:-D4X: none (rc $d)}" > results/NAX6_DONE
 say "runner 42 end"

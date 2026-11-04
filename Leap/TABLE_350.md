@@ -7444,3 +7444,120 @@ Pre-registered before the run (scripts/hc_bw_probe.py, data/hc_bw_probe.txt).
     kernel B, the same bytes) ~0.85 ms per check if the decode were free.
   - The decode adds ALU work in loaders that are already ~half latency-bound, so realistic is ~-0.4 ms per check.
   - It needs custom fragment loaders for MLX's NAXTile (S4) and kernel B. Parked behind larger levers; not built.
+
+## QOM-OOO: one-call OOO aware of QOM's -2 base slots (Leap, Wed 2026-11-04 17:1x; the orchestrator's item 1 for 23:00)
+Pre-registered before the run (scripts/ooo1c.py qom forms, ref2 _ooo_1c_call; ooo1c_qom_check.py; data/ooo1c_qom_check.txt).
+- **Why:** BigMoE left REF2_OOO_1C out of tonight's all-in arms. Its one-call path ignored QOM's optional uses (posted with
+  bit 21, not read on a miss: slot -2), so ~-3.2 ms per FAST check was missing.
+- **What:** with t["qom"] on the row-major 3c path, ref2 posts the optional uses with bit 21. Kernel A (QOM form)
+  treats a late base slot resolving to -2 as a dropped use: it reads its row's rank-0 slot (polled if late), as the two
+  phases' where(kq, sm, sm[:, :1]). It writes keep = 0, and kernel B (bc_qom) takes score 0 for it. Breakthrough's
+  rule keeps rank < k0, union members and residents; a -2 can only be an unread optional use, so the drops are the
+  same pairs. NAX / native / no-t3 QOM calls keep the two phases.
+- **Prediction:** bitwise == the QOM two phases (released before and late), and the non-QOM one-call unchanged.
+- **Line:** any differing bit = a bug. PASS -> BigMoE gets REF2_OOO_1C back in the QOM arms (their smoke decides).
+- **Result (17:07-17:08, share lock; data/ooo1c_qom_check.txt, ooo1c_wire_check.txt): PASS.**
+  - Kernel level (real records3 layers 20 / 44): one-call (qom) == the QOM two phases bitwise in 6 released-before
+    calls (5-10 sure rows, 34-68 optional uses, 11-25 dropped; 138 dropped in all) and 2 late releases (~21 ms, no
+    timeouts). The non-QOM one-call is unchanged.
+  - ref2 wiring (g): QOM through ref2._ooo_sel == the QOM two phases bitwise (49 optional uses, 4 dropped). The post
+    carries bit 21 on exactly the optional uses; t["qom"] is consumed. (a)-(f) and self_test still PASS.
+  - BigMoE put REF2_OOO_1C=1 into QA / Q8 / QF (their assert became an ooo_1c_qom guard). Their 17:11 smoke of
+    tonight's configs: qallf rc 0, ooo_1c_qom 192; the exact lever-2 arm 48 / 48 == REF2-T.
+- **Native form (17:15, share lock; data/ooo1c_qom_check.txt): PASS.** The QOM form on 3c-N (tier_glu_3cn_1c(qom=True):
+  the same kernel-A splice on 3c-N's source + bc_qom on 3c-N's bc). On layer 20 converted to bf16-native and
+  native+p11+pad pools it is == the row-major QOM two phases, bitwise, in 6 scenarios (94 drops). ref2 routes
+  QOM + native to it. QOM is refused loudly where only a two-phase path would serve it (NAX; native with ooo_1c off
+  or declined). Wiring (a)-(h) PASS.
+
+## BP-11: drafter glue (Leap, Wed 2026-11-04 17:0x-17:1x; the orchestrator's item 3)
+- **BP-11a census (data/bp_census.txt):** the exact-safe propose (D8-NAX + screened head) launches 234 kernels (205 in
+  hidden_states): CustomKernel 79, Concatenate 36, RMSNorm 27, Gather 26, RoPE 15, Full 13, Add 11, Multiply 5, SDPA 5,
+  the compiled SiLU-mul 5, others 12. 22 of them (11 Full + 11 Concatenate) are qmm16c8's padding of the 8-row
+  context calls (k / v x 10, fc).
+- **BP-11b (qmm16c8 row bound M_C, no padding pass):** rows < M bitwise == the padded call (6 shapes x M 8 / 1 / 16 x ks
+  1 / 2; data/qmm16c8_check.txt).
+  - Propose A/B, interleaved: row bound 5.99 vs padded 5.83 ms. INCONCLUSIVE: BigMoE's 17:11 smoke had the GPU ~70 %
+    busy beside it, and the gap is within that noise. Kept (bitwise, 22 fewer kernels); re-time when the GPU is free.
+- Left: q / k norm + RoPE fusion (~15 kernels), concat-free K / V (~10 concats + ~42 MB of copies), the remaining
+  concats / gathers. ~0.3-0.6 ms in all; timing needs a free GPU.
+
+## SESSION-VOCAB: the r57 hook harness for SVH + BP-9 (Leap, Wed 2026-11-04 17:2x; the orchestrator's route (b))
+- **What:** one object (scripts/session_vocab.py, SessionVocab) feeds the session's token ids to both screened heads:
+  SVH (ref2 CFG screened_head, the verifier's head; FAST) and BP-9 (d7b_nax.DraftSubset, the drafter's head;
+  exact-safe). The proposed r57 diff (data/r57_session_vocab.diff, made on a copy of BigMoE's current r57_screen.py;
+  their repo untouched) has 4 hooks: SV built after the HEADC block (R57_SVH / R57_DSUB / R57_SV_CHECK, all off by
+  default); head2s delegates to SV when R57_DSUB=1 (supersedes R57_HEADC); SV.new_prompt(ids) before prefill;
+  SV.committed([tok]) after the first token and SV.committed(new) after `out += new`. head2s is the only drafter-head
+  call site in r57 (draft17 has none).
+- **Line:** (a)-(c) and (e) true; B0 == A in every window; B / A within x0.995-x1.005 (pre-registered).
+- **Result (17:24-17:25, share lock, 62 s, mlx peak 2.35 GB; data/session_vocab_check.txt): PASS.**
+  - (a) both subsets hold the same extras, in the same order, after a prompt, a commit, an empty commit, the 4,096 cap,
+    past the cap, and a new prompt (which drops the last one's).
+  - (b) SV.head2s == screened_head2s bitwise. The drafter's head sees P = 15 rows per 16-position block (positions
+    1..15), so R57_D17 gives 16 rows, not 17 (corrected d7b_nax's comment). 16 rows: row 15 == row 3's bits; 18 rows
+    (the generic > 16 chunk path) == 16 + 2-row calls. Every candidate is inside the subset and finite.
+  - (c) REF2 on: the trunk head at 16 rows is screened (finite on exactly the 98,308 subset ids, counted once);
+    17 rows take the full head; REF2 removed: the plain head, uncounted.
+  - (d) BP-9's walk: kept per check code 9.290 / math 6.671 for A (BP-9's own feeding), B0 (SessionVocab, A's
+    feeding: == A in all 84 windows) and B (r57's hook order incl. the first token: x1.0000 both). Check mode: the
+    full head's top-1 fell outside the subset in 2 of 42,480 draft rows. committed() costs 0.014 ms per check (1 of
+    2,832 checks gathered new rows: almost every token is in the 98,304 base).
+  - (e) ref2.self_test PASS with SVH on; the switch restored off.
+- **Hand-off:** BigMoE applies the diff, then smokes one prompt with R57_DSUB=1 R57_SVH=1 R57_SV_CHECK=1 and prints
+  SV.report(): expect svh_calls ~ checks + 1, head2s == proposes, chk_out ~0, dsub_extra == svh_extra.
+
+## DSDPA: split-K attention for the drafter's block (Leap, Wed 2026-11-04 17:3x; drafter glue)
+- **Prior art:** Flash-Decoding (split the keys over threadgroups, merge with log-sum-exp; Dao et al. 2023), published.
+  Here it targets the drafter's 16-row GQA block: q 32 heads x 16 rows, K / V 8 heads x (ctx_len + 16), head_dim 128.
+  The mask is the cache rows inside the 2,048 window | the whole block. Overlap ideas (PEARL / CPUMTP) are KILLs
+  owned elsewhere.
+- **DSDPA-0 probe (17:30, share lock; data/dsdpa_probe.txt):** MLX's SDPA, 5 layers: 0.46 ms at ctx_len 1,008 and
+  0.83 ms at 2,054 (~64 GB/s for 8.5 MB of K / V per layer: latency-bound).
+  - An additive mask is **bitwise == the bool mask** and 4 % / 16 % faster.
+  - Two 8-row calls: 3x slower. GQA-packed matmuls: 1.1-1.2x slower.
+- **DSDPA-1 v1 (scripts/dsdpa.py):**
+  - Kernel A: one threadgroup per (kv head, key chunk), 4 simdgroups = the group's 4 q heads. S = QK^T and O += PV on
+    MPP matmul2d 16x32x16 with qmm16c's fragment maps. P's row-sum reduction is xor 1 / 8, and P's C fragment *is* the
+    next A fragment (the K permutation is free), so there is no shuffle.
+  - fp32 online softmax; P in bf16, summed from the rounded values. K / V rows come from the cache and block buffers,
+    so there is no concat. In-kernel mask.
+  - Kernel B merges the chunks and writes o_proj's [1, 16, 4,096] directly.
+- **Line (pre-registered):** <= 4 ulps everywhere; best nc <= 1/2 of the MLX path (concat + bool SDPA + transpose) at
+  ctx 2,054 -> walk.
+- **Result v1 (17:36, share lock; data/dsdpa_check.txt):**
+  - Accuracy PASS: <= 1.00 ulp at ctx_len 1 .. 2,062 (s 1 / 3). Adversarial window rows: 1.00 ulp (a leaking mask:
+    464 ulps).
+  - Timing MISSED the line:
+
+    | arm (ms per 5 layers) | ctx 1,008 | ctx 2,054 |
+    |---|---|---|
+    | MLX path (bool mask) | 0.648 | 1.175 |
+    | MLX path (additive mask) | 0.618 | 1.031 |
+    | dsdpa nc 4 (best) | 0.444 (x0.69) | 0.655 (x0.56) |
+    | dsdpa nc 8 | 0.469 | 0.709 |
+    | dsdpa nc 16 | 0.575 | 0.783 |
+
+  - Read: ~4.7 us per 32-key step, and more chunks make it slower. Each step waits ~16 times on scattered device loads
+    (latency), with low occupancy (~190 registers per thread). Next: v2 stages each K / V tile in threadgroup memory
+    with coalesced 16-byte loads by all 128 threads.
+
+## DKV: a copy-free drafter window cache (Leap, Wed 2026-11-04 17:4x; drafter glue, exact)
+Pre-registered before the run (scripts/dkv.py, scripts/dkv_check.py, data/dkv_check.txt).
+- **Why:** each propose copies every layer's whole K / V window twice: mlx_lm's RotatingKVCache._update_concat
+  (temporal order + trim + append = a concat), then the attention's concatenate([keys, block keys]). DSDPA-0 / -1:
+  the second copy alone costs ~0.19 / 0.35 ms per propose at ctx 1,008 / 2,054.
+- **What:** LinRotCache (a RotatingKVCache subclass) keeps the window in temporal order in a preallocated linear
+  buffer.
+  - Multi-token updates: trim the front exactly as _update_concat does, then write [context rows, block rows] in one
+    in-place slice update. Old views are dropped first, so MLX donates the buffer. SDPA reads the view [a, b + L):
+    the same rows in the same order as the reference's concat.
+  - 1-token updates (A6 dwin's first propose; k = 0 checks) run the base class's own code. The next multi-token update
+    adopts its temporal order (one copy, as the reference's).
+  - Buffer end: compaction, one copy per ~(cap - window) / S proposes.
+  - DF._trim_recent_cache trims the window in place.
+  - Optional: the additive mask (bitwise == bool, DSDPA-0).
+- **Prediction:** bitwise == the reference everywhere (it presents the same values in the same order). -0.3 ms per
+  propose at 1,000 context rows; -0.5..-0.7 ms at 2,047 rows; +0.03..0.14 with the additive mask.
+- **Line:** any differing bit = a bug. Hand to BigMoE as an exact lever if dkv <= ref - 0.25 ms at 2,047 rows; else
+  KILL.

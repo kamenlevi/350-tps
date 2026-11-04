@@ -57,6 +57,9 @@ All [P] cells: research/TEN_X_LEDGER.md (Wed 03:4x). They replace Fable C's BYTE
 | JOINT, keepalive, zero-copy, pickup, lever 2 forecasts | BigMoE / Fable A | yes | 0 bytes: they move exposure (BROKEN line 1), not this line | Wed lever-1 arms | - |
 
 ## Log (newest first)
+- Wed 18:0x: SCREEN 6 PASS (unchecked until Breakthrough's ~19:05 read-out): DRAFT17's quality at the 24 GB pool =
+  C's on code (1.07 % flips, paired 12 / 12; KL +0.0004). Code's 24 GB FAST stack with DRAFT17 stands at 19.5 MB per
+  kept token [P] (11-bit + POOLSPLIT), quality PASS measured at 147 slots.
 - Wed 16:3x: W4PRICE (unchecked [P]; data/ledger/w4_price.txt): if tonight's s7_ref3 fails, QOM's kept ranks 2-9
   run at 4 bits (LSB reads). Best 24 GB split Cl 160 / Cm 115: code / IFEval / multi 40.2 / 33.0 / 24.9 MB per kept
   token (x2.06 / x2.30 / x2.36 vs width 3's 19.5 / 14.3 / 10.6), code quality [G] 1.25 % (PASS). On today's 171 / 0

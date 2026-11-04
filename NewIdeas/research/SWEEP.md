@@ -40,7 +40,8 @@ M-35, d05b2ac):**
     0-1 term), and screen 7's s7_ref3 - s7_ref measures it tonight.
   - the pool: (1 - g) x 0.0024 / 0.0180 / 0.0084, where g = the replay's keep gap closed toward the 45 GB pool. The
     147-slot cost is measured (C at 147 minus bq_t3).
-  - DRAFT17 on code: +0.0006 (between bq's +0.0004 at 68 % coverage and the union-only all-bonus gate's +0.0023).
+  - DRAFT17 on code: +0.0004 MEASURED (screen 6, Wed 18:0x: C 0.0057 -> 0.0061; v1's [G] was +0.0006). Code flips
+    unchanged (1.07 %, paired 12 / 12).
   - Check: the model gives C at 147 = 0.0057 / 0.0386 / 0.0313, as measured (by construction).
 
 ## Ranked (24 GB first; the BYTES10 line is <= 10 MB per kept token in decode)

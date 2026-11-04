@@ -3140,3 +3140,19 @@ so R-01 should find about the same slots, not ~1 GB more.
   build, checked against layer 18; Hessians for all 48 layers from a ~5 min GPU capture (~8 GB, deleted after); codes on
   disk: mix 36.2 GB, TRL-2 31.4 GB, TRL-3 46.7 GB (an 8-bit view would be 128 GB); a decode path in the map (Leap's B10(b)
   TA / TB trellis-decode kernels exist for k 2 as a benchmark; k 3 and the map wiring are new).
+- Progress (Wed 4 Nov 17:05 check; encoder log /Users/kamen/Fit12/data/trl/encode_mix.log): layer 18 whole at 16:26:10
+  (1,536 files of 1,741,125-1,741,130 B; 2.6 GB with the 105 MB H_x cache; experts 0-1 from the 14:22 smoke, the rest in
+  the runners' logs); layer 30 at 231 of 512 at 17:08; then 7, 41. In-sample error vs MSB-3, mean (min-max):
+    layer 18, all 512: gate TRL-2 1.346x (0.950-1.426), up TRL-2 1.356x (1.020-1.424), down TRL-3 0.603x (0.358-0.702);
+                       the 8-bit view adds +0.21 / +0.21 / +0.48 % of TRL's own error.
+    layer 30, first 232: gate 1.435x (1.277-1.496), up 1.436x (1.270-1.507), down 0.627x (0.384-0.723); view +0.20 / +0.19
+                       / +0.47 %. Layer 30's TRL-2 sits ~7 % above layer 18's.
+  Rate: 10.16 s per undisturbed expert (~350 per hour with chunk overhead); 283 per hour over 14:32-17:05 (13 fanwatch heat
+  freezes, each matching a 'freezing the research jobs' line in /Users/kamen/Library/Logs/fanwatch.log, cost 1,061 s; CPU
+  contention from other sessions' shared runs 454 s; one wait on another session's quiet ticket 269 s); 326 per hour on
+  layer 30. No stall, no encoder error, disk 148 GB free, swap +0.2 GB. ETA ~21:10 at 326 per hour; heat pauses under the
+  20:00 map batch could push it to the 21:30 stop. Breakthrough's batch (/Users/kamen/Breakthrough/scripts/dm_s7/s67_slot.sh,
+  from 20:00, share locks) runs s7_trl only once dm_t3.trl_gate sees all 512 experts whole at the four layers, re-checked
+  every 2 min up to its 23:10 last start. The orchestrator 17:1x: if the store is not whole at 21:30, the same runner goes
+  on to a 22:45 end (/Users/kamen/Fit12/scripts/trl_relay.sh re-starts it with its clock check at 22:41, so the last chunk
+  ends by 22:45, before BigMoE's 23:00 ticket and RELAX at 23:30).

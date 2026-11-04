@@ -79,9 +79,15 @@ VARIANTS.update({
     "ref2tnfh": _w4(True, tier_nax_ooo=True, fatt_verify=True, fatt_r8=True, hc8_fast=True),   # the batch on NAX6
     "ref2tnf": _w4(tier_nax_ooo=True, fatt_verify=True, fatt_r8=True),
     "ref2tnh8": _w4(True, tier_nax_ooo=True, hc8_fast=True),
+    # the NAX6 base on the CONVERTED store (Leap 18:1x): + nax_native, NAX6-N (bitwise == NAX6; tierglu_nax6n), only
+    # when all 48 layers are converted; non-NAX tier calls route to 3c-N by themselves (BigMoE's layout router)
+    "ref2tnaxn": _w4(tier_nax_ooo=True, nax_native=True),
+    "ref2tnfhn": _w4(True, tier_nax_ooo=True, nax_native=True, fatt_verify=True, fatt_r8=True, hc8_fast=True),
+    "ref2tnfn": _w4(tier_nax_ooo=True, nax_native=True, fatt_verify=True, fatt_r8=True),
+    "ref2tnh8n": _w4(True, tier_nax_ooo=True, nax_native=True, hc8_fast=True),
 })
-SCRATCH_RE = re.compile(r"(ref2tnfh|ref2tnh8|ref2tnax|ref2tnf|ref2tfh|ref2tf0|ref2th8p|ref2th8|ref2tf|ref2ct|ref2t|ref2b|ref2|ref)"
-                        r"(\.r\d+)")   # scratch runs of a VARIANTS entry (identity checks)
+SCRATCH_RE = re.compile(r"(ref2tnfhn|ref2tnh8n|ref2tnaxn|ref2tnfn|ref2tnfh|ref2tnh8|ref2tnax|ref2tnf|ref2tfh|ref2tf0|ref2th8p|"
+                        r"ref2th8|ref2tf|ref2ct|ref2t|ref2b|ref2|ref)(\.r\d+)")   # scratch runs of a VARIANTS entry
 REF2_CODE = os.path.join(env.ROOT, "snap", "leap-86ca915")   # the REF2 the R-40 verdict judges: Leap 86ca915 (ref2 + its
                                                   # kernels, GREEN in our harness 16:52), frozen: Leap edits them daily
 FRUGAL = {"w2f_r10": 0.10, "w2f_r05": 0.05}        # resident fraction of each layer's experts

@@ -3034,3 +3034,91 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   is likely the same effect plus sampling. Net at a 90 ms cycle: -4.1 ms (~4.5 %) vs -1.3 .. -4.3 % kept, i.e. ~+0 .. +3 %.
   The trade improves as the cycle shrinks (at 50 ms, -4.1 ms is 8 %). A 4-bit-aware fine-tune (~1 h GPU, ~11 GB) is
   what would remove the kept loss.
+
+> (a quote from the project owner, kept private)
+- Why: the plan's probes decide whether a cloud drafter build can pass ~12 kept per 16-row check (Kamen's 95-96 % per
+  token). Data at DFlash2's size adds +0.13 kept per doubling (D-09 + E2/D2). Capacity is the untested input.
+- Method (published: block expansion, LLaMA Pro, Wu et al. 2024): incoai's DFlash2 grows from 5 to 10 layers. After each
+  layer comes a copy whose o_proj and mlp.down_proj are zero, so the start computes exactly incoai's function.
+  - sticky/pcap_expand.py self-test: max |logit diff| 0.000, PASS.
+  - sticky/pcap_train.py = sticky/d09_train.py (= Leap's dfl2c_train.py, the L1-20 recipe) + the expansion + a second
+    AdamW for the new layers (MultiOptimizer).
+  - --check: the training forward matches the official 10-layer path (argmax agreement 0.996, PASS, L1-20's own check).
+- Run: L1-20's args (data ~/Leap/data/l120, 2 epochs, lr 2e-5, pmask 0.5, block 32, warm-up + cosine to 10 %, the
+  script's seeds), with three changes:
+  1. The new layers' peak lr is 2e-4 (10x), since their zeroed outputs must grow within ~200 steps.
+  2. Groups of 32 anchors, 8 per step (L1-20: 64 x 4). Same ~256 anchors per step, same per-anchor loss, ~201 steps;
+     the activation memory halves.
+  3. --minutes 75: 10 layers take ~2x per step, and L1-20's 50-minute budget would cut the 201 steps.
+- Score: the D-02b walk (sticky/d02b_walk.py, TL_EXPAND=1, TL_DRAFT = the new weights), block 16, the official 1-step
+  loop. Kept per check on the 24 held-out HumanEval+ samples (code) and the 60 GSM8K answers (math). Control = L1-20
+  (9.57 / 7.00): the same data and recipe at 5 layers.
+- Lines:
+  - PASS = code kept >= +0.30 over L1-20 (>= 9.87). Capacity is a lever at today's data; the cloud build is worth it.
+  - KILL = code < +0.10 (< 9.67) AND math < +0.10 (< 7.10). Extra layers don't pay at this data; the cloud build's
+    case then rests on P-OFF (more data) alone.
+  - Else BETWEEN.
+- Caveats:
+  - One seed: retrain noise is unmeasured (D-09's whole data effect was 0.20).
+  - The 32 x 8 regrouping has no separate control.
+  - The new layers learn from ~22.5K anchors only. A KILL doesn't rule out capacity WITH much more data; that is the
+    joint question for P-OFF.
+- Also measured: the 10-layer drafter's propose time per 16-row check vs L1-20's, to price the extra layers.
+- Prediction: code +0.2 (BETWEEN); 30 % PASS, 30 % KILL.
+- Guards: start after Breakthrough's map batch (the orchestrator's 19:05 slot) with >= 36 GB free (free + inactive +
+  purgeable). Share lock MEM 32 GB until the first step's memory line says otherwise. Swap guard: stop at +2 GB (the
+  trainer checkpoints; --resume continues). The walk runs under the same lock.
+
+## MTP-BLOCK: the native MTP layer as a one-pass block drafter (probe 3 of notes/DRAFTER_PLAN_1104.md) -- KILL by analysis, no run (Wed 11-04 18:04)
+- The plan's idea: draft all 15 depths of a check in ONE pass of the 125B's MTP layer (DFlash-style mask rows), instead
+  of the 15 sequential chain steps (1.35 ms each, MTPSCREEN), keeping the target-class weights.
+- Why it can't work as designed: in a one-pass block, rows 2..15 have no known token and no chain state. Their inputs
+  are a learned mask token, plus at most the anchor's widened stream. These inputs are identical within a block except
+  for the RoPE position. With ONE layer, the mask rows can attend only to the context (the true pairs u <= s) and to each
+  other's inputs. Those inputs carry no anchor-specific information beyond what each row already has, so the rows can't
+  coordinate on the intermediate tokens. Each row becomes an independent per-offset predictor from the context.
+  - That is Medusa's design (arXiv 2401.10774: per-offset heads from the last hidden state; their top-1 accuracy falls
+    fast with the offset).
+  - DFlash gets its far depths from several layers of mask rows attending to each other's updated states (DFlash2: 5
+    layers, 0.86-0.98 per depth on code). The MTP chain gets them from its own drafted tokens.
+- Expected kept at 16 rows: well below DFlash2's 9.57, since depths >= 3 would fall to per-offset-head levels. It can't
+  reach Kamen's 95-96 % per token. Its only possible win would be a cheaper drafter at lower kept: at a 50 ms cycle,
+  ~8.5 kept at ~3 ms vs 9.57 at ~10 ms is about break-even.
+- Untested variant, kept as an idea (TRIED): MTP-LOOP. Apply the MTP layer 2-3 times over the block with tied weights,
+  so the mask rows can exchange information (DFlash with tied layers). Cost ~2-3 MTP-layer passes at 16 rows per check;
+  it needs the D-22 trainer extended to a block loss (~1 h build).
+- The GPU slot goes to P-OFF (below), which tests the data lever with the corpus Kamen approved at 17:5x.
+
+> (a quote from the project owner, kept private)
+- Why: data at DFlash2's size adds +0.10-0.13 kept per doubling ON-policy (D-09 + E2/D2). On-policy tokens cost the
+  125B's decode (~50-110 tok/s). Off-policy prefill costs ~300-690 tok/s, so it is the only cheap route to 20-100M
+  tokens for a cloud build.
+- Data:
+  - Source: Magicoder-OSS-Instruct-75K (ise-uiuc, MIT), data-oss_instruct-decontaminated.jsonl, 203,201,169 bytes,
+    sha256 f988f14d3516a9f9...; downloaded 17:55-17:56 into ~/TrainLab/ext/magicoder_oss75k (untrusted data; parsed
+    as JSON only, python -I).
+  - sticky/poff_prep.py: Python items only (38,284), shuffled with seed 0, in the 125B's chat template exactly as L1-20's
+    windows (enable_thinking False; asst = the solution + <|im_end|>; gen = its first token). Result: 1,698 windows,
+    892,137 tokens to prefill, 400,124 assistant tokens (17.8x L1-20's 22,504 anchors). ext/poff/poff_windows.jsonl.
+- Extraction (GPU, ~40 min at ~370 tok/s): Leap's dfl2c_extract.py (DFL2C_IN / DFL2C_OUT, C 51) gives h, the top-32
+  labels and the on-path rate.
+  - Diagnostic (written now): L1-20's recipe trains depth j of an anchor only while the TEXT equals the 125B's greedy
+    path for j-1 tokens.
+  - On off-policy text, far-depth signal therefore scales like (on-path rate)^(j-1). At a rate of 0.7, depth 8 keeps
+    ~8 %; at 0.9, ~48 %.
+  - A low on-path rate predicts that P-OFF can't move the far depths, which is where the D98 gap is (D-09).
+- Training (sticky/poff_train.py = sticky/pcap_train.py without --expand, plus --init):
+  - Start from L1-20, continuing L1-20's recipe (lr 2e-5 warm-up + cosine to 10 %, pmask 0.5, block 32, A 64 x S 4,
+    micro 1) for 1 epoch over L1-20's 99 train windows plus the first 160K assistant tokens of the off-policy windows
+    (~180K anchors, ~700 steps, ~1.7 h). Val = L1-20's 10 val windows.
+  - Compared at the on-policy slope, 22.5K -> ~183K anchors is ~3.0 doublings, which predicts +0.3-0.4 code if
+    off-policy tokens were as good as on-policy ones.
+- Score: the D-02b walk (code 24 HumanEval+ / math 60 GSM8K) vs L1-20 (9.57 / 7.00).
+- Lines:
+  - PASS = code >= +0.30 (off-policy prefill works at about the on-policy slope; the cloud build's data plan is
+    prefill-first).
+  - KILL = code < +0.10 (the cheap route doesn't move kept; data must be on-policy decode, ~5x slower to collect).
+  - Else BETWEEN. Math is reported but not judged: the new data is code only.
+- Prediction: on-path rate ~0.75 on assistant tokens; code +0.10 (BETWEEN/KILL edge); 20 % PASS, 45 % KILL.
+- Guards: the extraction and the training each run in the orchestrator's GPU slot (share lock with MEM from a 3-window
+  smoke, swap guard +2 GB, stop under 110 GB of free disk = the extractor's own guard).

@@ -234,6 +234,66 @@ def gpu_order(pre_m, pre_l, plan):
     return pord
 
 
+_QOM_OLD = """    threadgroup int rs_s[2];
+    if (e_r < 0 || (t4_r && el_r == -1)) {                       // a late pair: its slots from the loader's release
+                                                                  // (a sidecar slot -2 is final: LP1 / U3's sure rows)
+        if (thread_index_in_threadgroup == 0) {
+            device atomic_int* st_ = (device atomic_int*)status;
+            int a = e_r, b = el_r;
+            if (a < 0) a = oc_poll((coherent(system) device int*)(region + offs[0]), (int)p, offs[2], st_);
+            if (t4_r && b == -1) b = oc_poll((coherent(system) device int*)(region + offs[1]), (int)(m * R4_C + i4_r), offs[2], st_);
+            rs_s[0] = a; rs_s[1] = b;
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        e_r = rs_s[0]; el_r = rs_s[1];
+    }
+    if (threadgroup_position_in_grid.x == 0 && thread_index_in_threadgroup == 0) {
+        rs_m[p] = e_r;
+        if (t4_r) rs_l[m * R4_C + i4_r] = el_r;
+    }"""
+_QOM_NEW = """    threadgroup int rs_s[3];
+    int kp_r = 1;
+    if (e_r < 0 || (t4_r && el_r == -1)) {                       // a late pair: its slots from the loader's release
+                                                                  // (a sidecar slot -2 is final: LP1 / U3's sure rows)
+        if (thread_index_in_threadgroup == 0) {
+            device atomic_int* st_ = (device atomic_int*)status;
+            int a = e_r, b = el_r, k_ = 1;
+            if (a == -1) a = oc_poll((coherent(system) device int*)(region + offs[0]), (int)p, offs[2], st_);
+            if (a < 0) {                                          // QOM: an optional use whose expert the loader did not
+                k_ = 0;                                           // read (-2) is dropped (weight 0); it reads its row's
+                int a0 = msb_slot[m * NR];                        // rank-0 slot, as the two phases' where(kq, sm, sm[:, :1])
+                if (a0 < 0) a0 = oc_poll((coherent(system) device int*)(region + offs[0]), (int)(m * NR), offs[2], st_);
+                a = a0;
+            }
+            if (t4_r && b == -1) b = oc_poll((coherent(system) device int*)(region + offs[1]), (int)(m * R4_C + i4_r), offs[2], st_);
+            rs_s[0] = a; rs_s[1] = b; rs_s[2] = k_;
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        e_r = rs_s[0]; el_r = rs_s[1]; kp_r = rs_s[2];
+    }
+    if (threadgroup_position_in_grid.x == 0 && thread_index_in_threadgroup == 0) {
+        rs_m[p] = e_r;
+        if (t4_r) rs_l[m * R4_C + i4_r] = el_r;
+        kp[p] = kp_r;
+    }"""
+
+
+def a3c_one_call_qom(src):
+    """QOM-OOO (Wed 17:1x): a3c_one_call's form for QOM (BigMoE r57 _ooo_call_t3 with t["qom"]): a late base slot that
+    resolves to -2 (an optional use the loader did not read) is dropped: the pair reads its row's rank-0 slot and its
+    keep flag kp[p] = 0 zeroes its combine weight in kernel B (bc_qom), == the two phases' QOM rule, bitwise"""
+    s1 = a3c_one_call(src)
+    assert s1.count(_QOM_OLD) == 1, "a3c_one_call's resolution block changed"
+    return s1.replace(_QOM_OLD, _QOM_NEW)
+
+
+def bc_qom(src):
+    """3c's fused-combine kernel B (tierglu._BC) with the pairs' keep flags: a dropped pair's score reads 0"""
+    old = "scores[m * NR + rr]"
+    assert src.count(old) == 1, "3c kernel bc's score read changed"
+    return src.replace(old, "(kp[m * NR + rr] != 0 ? scores[m * NR + rr] : static_cast<T>(0))")
+
+
 def a3c_one_call(src):
     """3c kernel A (tierglu._A, LP1-patched or not) -> its one-call form"""
     p_old = "    const uint p = threadgroup_position_in_grid.y;              // pair = m * NR + r"
@@ -288,16 +348,40 @@ def _ka3c_1c():
     return _K3C[key], TG
 
 
-def tier_glu_3c_1c(x, msb, lsb, pre_m, pre_l, plan, region, offs, status, scores, ra=4, rbc=4, ly=8, ld=0):
+_K3Q = {}
+def _ka3c_1c_qom():
+    """QOM-OOO: kernel A (QOM form) + kernel B (bc_qom), keyed by BigMoE's current (LP1-patched or not) sources"""
+    import bigmoe.tier as BT
+    TG = BT._tier_glu_mod()
+    key = (TG._A, TG._BC)
+    if key not in _K3Q:
+        _K3Q.clear()
+        ka = mx.fast.metal_kernel(
+            name="ooo1c_3c_aq", input_names=["x", "w3g", "w3u", "s3g", "s3u", "b3g", "b3u", "b2g", "b2u", "l1g", "l1u", "bg",
+                                             "bu", "msb_slot", "lsb_slot", "pord", "region", "offs", "status"],
+            output_names=["h", "rs_m", "rs_l", "kp"], source=a3c_one_call_qom(TG._A), header=TG._HDR + SYS)
+        kb = mx.fast.metal_kernel(
+            name="ooo1c_3c_bcq", input_names=["h", "w3d", "s3d", "b3d", "b2d", "l1d", "bd", "msb_slot", "lsb_slot", "scores",
+                                              "kp"],
+            output_names=["y"], source=bc_qom(TG._BC), header=TG._HDR)
+        _K3Q[key] = (ka, kb)
+    return _K3Q[key], TG
+
+
+def tier_glu_3c_1c(x, msb, lsb, pre_m, pre_l, plan, region, offs, status, scores, ra=4, rbc=4, ly=8, ld=0, qom=False):
     """tier_glu(..., scores) with the late pairs' slots resolved in kernel A (BigMoE's 3c, REF2-T's kernel):
-    -> (y [M, D] combined, rs_m, rs_l)"""
+    -> (y [M, D] combined, rs_m, rs_l). qom=True (QOM-OOO): a late base slot resolving to -2 is a dropped optional use
+    (its row's rank-0 slot, weight 0), as BigMoE's QOM two phases"""
     M, K = x.shape
     R = len(plan)
     m4, m2, r4 = plan_masks(plan)
     assert m2 == 0
     N = msb["gate_proj"]["s3"].shape[1]
     D = msb["down_proj"]["s3"].shape[1]
-    ka, TG = _ka3c_1c()
+    if qom:
+        (ka, kbq), TG = _ka3c_1c_qom()
+    else:
+        ka, TG = _ka3c_1c()
     bb = {p: msb[p]["b3"] for p in PROJ}
     L = lsb if r4 else {p: {"l1": msb[p]["w3"], "b": msb[p]["b3"]} for p in PROJ}
     ms = pre_m.astype(mx.int32).reshape(-1)
@@ -305,12 +389,23 @@ def tier_glu_3c_1c(x, msb, lsb, pre_m, pre_l, plan, region, offs, status, scores
     pord = gpu_order(pre_m, pre_l, plan)
     g, u, d = (msb[p] for p in PROJ)
     tmpl = [("T", x.dtype), ("NR_C", R), ("MASK4_C", m4), ("MASK2_C", m2), ("R4_C", max(r4, 1))]
-    h, rs_m, rs_l = ka(inputs=[x, g["w3"], u["w3"], g["s3"], u["s3"], g["b3"], u["b3"], bb["gate_proj"], bb["up_proj"],
-                               L["gate_proj"]["l1"], L["up_proj"]["l1"], L["gate_proj"]["b"], L["up_proj"]["b"], ms, ls, pord,
-                               region, offs, status],
+    ins_a = [x, g["w3"], u["w3"], g["s3"], u["s3"], g["b3"], u["b3"], bb["gate_proj"], bb["up_proj"],
+             L["gate_proj"]["l1"], L["up_proj"]["l1"], L["gate_proj"]["b"], L["up_proj"]["b"], ms, ls, pord, region, offs, status]
+    shp_a = [(M * R, N), (M * R,), (max(M * r4, 1),)]
+    if qom:
+        h, rs_m, rs_l, kp = ka(inputs=ins_a, template=tmpl + [("K_C", K), ("N_C", N), ("RA_C", ra), ("LD_C", ld)],
+                               grid=(N // ra * 64, M * R, 1), threadgroup=(64, 1, 1),
+                               output_shapes=shp_a + [(M * R,)], output_dtypes=[x.dtype, mx.int32, mx.int32, mx.int32])
+        (y,) = kbq(inputs=[h, d["w3"], d["s3"], d["b3"], bb["down_proj"], L["down_proj"]["l1"], L["down_proj"]["b"],
+                           rs_m, rs_l, scores.astype(x.dtype).reshape(-1), kp],
+                   template=tmpl + [("N_C", N), ("D_C", D), ("RB_C", rbc), ("LY_C", ly)],
+                   grid=(D // rbc * 32 * R, M, 1), threadgroup=(32 * R, 1, 1),
+                   output_shapes=[(M, D)], output_dtypes=[x.dtype])
+        return y, rs_m, rs_l
+    h, rs_m, rs_l = ka(inputs=ins_a,
                        template=tmpl + [("K_C", K), ("N_C", N), ("RA_C", ra), ("LD_C", ld)],
                        grid=(N // ra * 64, M * R, 1), threadgroup=(64, 1, 1),
-                       output_shapes=[(M * R, N), (M * R,), (max(M * r4, 1),)], output_dtypes=[x.dtype, mx.int32, mx.int32])
+                       output_shapes=shp_a, output_dtypes=[x.dtype, mx.int32, mx.int32])
     (y,) = TG._kbc()(inputs=[h, d["w3"], d["s3"], d["b3"], bb["down_proj"], L["down_proj"]["l1"], L["down_proj"]["b"],
                              rs_m, rs_l, scores.astype(x.dtype).reshape(-1)],
                      template=tmpl + [("N_C", N), ("D_C", D), ("RB_C", rbc), ("LY_C", ly)],
@@ -400,8 +495,30 @@ def _ka3cn_1c(p11):
     return _KN[key]
 
 
-def tier_glu_3cn_1c(x, msb_n, lsb_n, pre_m, pre_l, plan, region, offs, status, scores, ra=4, rbc=4, ly=8, ld=0):
-    """3c-N's tier_glu_n(..., scores) with the late pairs resolved in kernel A: (y [M, D] combined, rs_m, rs_l)"""
+def _ka3cn_1c_qom(p11):
+    """QOM-OOO on 3c-N (Friday's converted store): kernel A in the QOM form + 3c-N's bc with the keep flags"""
+    import hashlib
+    import tierglu_3cn as C3
+    import p11 as P11
+    C3._sync()
+    src_a = a3c_one_call_qom(C3._SRC["a"][2 if p11 else 1])
+    src_b = bc_qom(C3._SRC["bc"][2 if p11 else 1])
+    hdr_b = C3.TG._HDR + (P11.P11_METAL if p11 else "")
+    hdr_a = hdr_b + SYS
+    key = hashlib.sha1((hdr_a + src_a + src_b).encode()).hexdigest()[:10]
+    if key not in _KN:
+        _KN[key] = (mx.fast.metal_kernel(name=f"ooo1c_3cn{'p' if p11 else ''}_aq_{key}",
+                                         input_names=C3._IN_A + ["pord", "region", "offs", "status"],
+                                         output_names=["h", "rs_m", "rs_l", "kp"], source=src_a, header=hdr_a),
+                    mx.fast.metal_kernel(name=f"ooo1c_3cn{'p' if p11 else ''}_bcq_{key}",
+                                         input_names=C3._IN_B + ["scores", "kp"], output_names=["y"], source=src_b,
+                                         header=hdr_b))
+    return _KN[key]
+
+
+def tier_glu_3cn_1c(x, msb_n, lsb_n, pre_m, pre_l, plan, region, offs, status, scores, ra=4, rbc=4, ly=8, ld=0, qom=False):
+    """3c-N's tier_glu_n(..., scores) with the late pairs resolved in kernel A: (y [M, D] combined, rs_m, rs_l).
+    qom=True: QOM-OOO's drops (a late base slot resolving to -2: the row's rank-0 slot, weight 0)"""
     import tierglu_3cn as C3
     M, K = x.shape
     m4, m2, r4 = plan_masks(plan)
@@ -409,6 +526,18 @@ def tier_glu_3cn_1c(x, msb_n, lsb_n, pre_m, pre_l, plan, region, offs, status, s
     N, D, p11 = C3._dims(msb_n)
     R, ina, inb, tmpl = C3._common(x, msb_n, lsb_n, pre_m, pre_l if r4 else None, plan, None)
     pord = gpu_order(pre_m, pre_l, plan)
+    if qom:
+        ka, kb = _ka3cn_1c_qom(p11)
+        h, rs_m, rs_l, kp = ka(inputs=ina + [pord, region, offs, status],
+                               template=tmpl + [("K_C", K), ("N_C", N), ("RA_C", ra), ("LD_C", ld)],
+                               grid=(N // ra * 64, M * R, 1), threadgroup=(64, 1, 1),
+                               output_shapes=[(M * R, N), (M * R,), (max(M * r4, 1),), (M * R,)],
+                               output_dtypes=[x.dtype, mx.int32, mx.int32, mx.int32])
+        (y,) = kb(inputs=[h] + inb[:-2] + [rs_m, rs_l if r4 else inb[-1], scores.astype(x.dtype).reshape(-1), kp],
+                  template=tmpl + [("N_C", N), ("D_C", D), ("RB_C", rbc), ("LY_C", ly)],
+                  grid=(D // rbc * 32 * R, M, 1), threadgroup=(32 * R, 1, 1),
+                  output_shapes=[(M, D)], output_dtypes=[x.dtype])
+        return y, rs_m, rs_l
     h, rs_m, rs_l = _ka3cn_1c(p11)(inputs=ina + [pord, region, offs, status],
                                    template=tmpl + [("K_C", K), ("N_C", N), ("RA_C", ra), ("LD_C", ld)],
                                    grid=(N // ra * 64, M * R, 1), threadgroup=(64, 1, 1),

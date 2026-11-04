@@ -16,3 +16,4 @@ main24min/ext/
 main24min2/ext/
 data/*.safetensors
 data/dlog/
+ext/

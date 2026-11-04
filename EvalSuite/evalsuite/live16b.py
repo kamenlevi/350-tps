@@ -29,7 +29,10 @@ ARMS = {"ref2b": ("r56b", "ref2b", False, False),                 # (results dir
         "ref2b_gate16": ("r56b", "ref2b", True, False),
         "ref2t_gate16": ("r56c", "ref2t", True, True),            # R-56c: REF2-T on the gate, its own AR
         "ref2to_gate16": ("r56d", "ref2t", True, "ooo"),          # R-56d: + OOO and the fused combine, its own AR
-        "ref2cto_gate16": ("r56e", "ref2ct", True, "ooo")}        # R-56e: REF2c-T (Leap 91cd316) + OOO / combine, own AR
+        "ref2cto_gate16": ("r56e", "ref2ct", True, "ooo"),        # R-56e: REF2c-T (Leap 91cd316) + OOO / combine, own AR
+        "ref2tnaxno_gate16": ("r56n", "ref2tnaxn", True, "ooo", "ref2tnax")}   # PREREG_nax6 Part 2: NAX6-N (converted
+#   store) + OOO / combine, own AR; the stored rows it is compared with are NAX6's Part 1 rows (row-major, ref2tnax)
+COUNT_OF = {"tier_nax_ooo": ("nax6", "nax6_ooo")}   # REF2 switches whose calls ref2 counts under other names (NAX6)
 TIER_ENV = {"BIGMOE_TIER": "4433333333", "BIGMOE_TIER_GLU": "3c", "BIGMOE_TIER_CL": "112", "BIGMOE_TIER_COMBINE": None,
             "BIGMOE_OOO": None}
 OOO_ENV = dict(TIER_ENV, BIGMOE_TIER_COMBINE="1", BIGMOE_OOO="1")
@@ -79,10 +82,14 @@ def main(rt, st, a, log):
     for k in ("MTPLX_FUSED_GATE_UP", "BIGMOE_VERIFY_MIDLOOP"):
         assert k not in os.environ, f"{k} is set"
     global OUT
-    out_dir, ref_v, gate, tier = ARMS[arm]
+    out_dir, ref_v, gate, tier = ARMS[arm][:4]
+    rows_v = ARMS[arm][4] if len(ARMS[arm]) > 4 else ref_v   # the stored rows (Part 2: NAX6's row-major Part 1 rows)
     OUT = os.path.join(env.ROOT, "results", out_dir)
-    assert (os.environ.get("BIGMOE_MAXK") == "160" and os.environ.get("BIGMOE_EXT_BUILD") == "build_next") == gate, \
-        "the gate16 arms need BIGMOE_MAXK=160 and BIGMOE_EXT_BUILD=build_next; the ref2b arm neither"
+    ext_ok = (os.environ.get("BIGMOE_EXT_BUILD") == "build_next"     # BigMoE's Oct 30 gate build; since its Nov 4 build
+              or (os.path.basename(env.BIGMOE_CODE.rstrip("/")) != "bigmoe-6c64148"   # ext/build serves MAXK 160 too
+                  and os.environ.get("BIGMOE_EXT_BUILD") in (None, "build")))           # (MAXK is runtime; BigMoE 11-04 07:55)
+    assert (os.environ.get("BIGMOE_MAXK") == "160" and ext_ok) == gate, \
+        "the gate16 arms need BIGMOE_MAXK=160 and the gate's ext (build_next; or ext/build on a snapshot after Nov 4)"
     got_tier = {k: os.environ.get(k) for k in TIER_ENV}
     want = OOO_ENV if tier == "ooo" else TIER_ENV if tier else dict.fromkeys(TIER_ENV)
     assert got_tier == want, f"tier env {got_tier} for arm {arm}"
@@ -96,7 +103,7 @@ def main(rt, st, a, log):
     on = [k for k, x in (rv.get("ref2_cfg") or {}).items() if x is True]   # REF2c switches: each must run (Leap 91cd316)
 
     def engaged(where, c0):
-        off = [k for k in on if not ref2.counts().get(k, 0) - c0.get(k, 0)]
+        off = [k for k in on if not any(ref2.counts().get(c, 0) - c0.get(c, 0) for c in COUNT_OF.get(k, (k,)))]
         assert not off, f"{where}: REF2 switches {off} never ran ({ref2.counts()})"
     import bigmoe.stream as BS
     assert BS._SCRATCH_KEEP, "BIGMOE_SCRATCH_KEEP is off"
@@ -110,7 +117,7 @@ def main(rt, st, a, log):
     import dflash_model_mlx as DF
     from mtplx import cache_state as CS
     Q, model = ref2.Q, rt.model
-    REF = {d["key"]: d for d in map(json.loads, open(os.path.join(env.ROOT, "results", ref_v, "decode.jsonl")))}
+    REF = {d["key"]: d for d in map(json.loads, open(os.path.join(env.ROOT, "results", rows_v, "decode.jsonl")))}
     items = {it["key"]: it for s in ("math", "ifeval", "humaneval") for it in D.load("dec_" + s)}
     keys = open(a.keys).read().split()
     os.makedirs(os.path.join(OUT, "ar"), exist_ok=True)
@@ -376,7 +383,7 @@ def main(rt, st, a, log):
             log(f"R-56b {arm} {key}: P {len(ids)}, {n}/{len(ar['toks'])} tokens, equal {row['equal']}, rows bitwise "
                 f"{r['n_eq']}/{r['n_cmp']} (AR rows {len(ar['hash'])})"
                 + (f", first bit difference {r['bdiff']}" if r["bdiff"] else "") + (f", first token difference {r['tdiff']}" if r["tdiff"] else "")
-                + f", AR vs results/{ref_v}: first difference {row['ar_vs_ref2b']}, {row['tok_s']} tok/s (quiet mode), kept {r['kept']:.2f}, "
+                + f", AR vs results/{rows_v}: first difference {row['ar_vs_ref2b']}, {row['tok_s']} tok/s (quiet mode), kept {r['kept']:.2f}, "
                 f"mem {row['mem']}" + (f", [tier, OOO] calls {row['calls']}" if BT else ""))
     rec = dict(arm=arm, pid=os.getpid(), start=time.strftime("%H:%M:%S", time.localtime(t_start)), end=time.strftime("%H:%M:%S"),
                C=C, ref2_sha=ref2_sha, ref2_code=rv.get("ref2_code"), ref2_cfg=rv.get("ref2_cfg"), selftest=selftest,

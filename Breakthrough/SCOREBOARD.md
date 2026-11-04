@@ -2921,3 +2921,9 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
     - dense3_check.py: VALID on the smoke window; an arm vs itself = INVALID (negative control).
   - Slot (re-armed 17:02, same clock): the arm goes last in ARMS, est 10 min; it runs after 1(c) when s7_trl's store is not
     whole yet, else after s7_trl. Leap's dense3.py hash is logged at its go. Expected end ~21:35 with a clear start.
+- ADDENDUM Wed 17:3x (the orchestrator 17:3x: "START THE MAP BATCH NOW instead of 20:00"; the GPU idle by day, BigMoE's
+  lever 2 waits for apps closing, NO-SWAP 32 GB at 17:37, the only other jobs Fit12's 2 GB CPU encoder and a 0.5 GB Leap
+  check): re-armed 17:38 with S67_START = the arming time; same arms, order, guards and clock (no new arm after 23:10,
+  hard stop 23:30). s7_trl joins when Fit12's store is whole (~21:10). New: an interim read-out (the same read-outs as
+  the end) the first time only s7_trl is left. Expected: the other eight arms end ~19:05 with clear checks; s7_trl ~21:20.
+  Nothing in the pre-registration changes.

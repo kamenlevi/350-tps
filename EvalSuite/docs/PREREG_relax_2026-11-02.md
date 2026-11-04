@@ -246,3 +246,6 @@ For each arm and set:
   - None of these touch RELAX's arms. Every RELAX process's step 0 (HumanEval/27 == its reference row) still guards it.
 - **The night:** runner 40 starts Wed 23:30 (the orchestrator), not Thu 00:30. No BigMoE run precedes it now, so
   EvalSuite touches results/relax/GO at the orchestrator's order. BigMoE's Thu-morning ticket follows RELAX_DONE.
+- **18:05:** evalsuite/live16b.py gained Part 2's arm, a rows run per arm, the gate-ext rule for snapshots after Nov 4,
+  and NAX6's count names. RELAX does not import live16b (relax.py, relax_core.py and replay.py have their own copy
+  of the loop), so none of it is on RELAX's path. relax.py's build_next assert is unchanged.

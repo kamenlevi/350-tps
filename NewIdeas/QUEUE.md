@@ -1876,3 +1876,14 @@ block 32 (net ~+2 % under this cost model unless the drafter nears the oracle); 
   - GPU smoke (HumanEval_135, 144 rows, Breakthrough's run): 228 modules, 1,509 MB of 4-bit weights rewritten; MLX
     peak 13.9 vs 12.6 GB; 0/144 rows identical to screen 6 (valid); 0 top-1 flips vs screen 6, mean |dlp1| 0.0069.
     One window is not a read; the verdict waits for the full arm. dense3.py hash ec71be4478bc606f.
+- Wed 18:0x: SCREEN 6 RESULT = PASS on code (DRAFT17's quality at the 24 GB pool; arm qom_0_live_ball_c147_t3, landed
+  17:58 in the batch that started 17:38; read by the pre-registration, QUEUE 14:0x).
+  - Flips (qom_read.py): code 1.07 % (36), IFEval 7.83 % (266), multi 5.99 % (213): PASS / BETWEEN / KILL, C's verdicts.
+  - Paired vs C (qom_0_live_bq_c147_t3): code 12 / 12 (z 0.00), IFEval 13 / 21 (z -1.37), multi 0 / 0. Gating code's
+    last 83 ungated bonus rows moved no code flip net.
+  - KL (map_kl.py), C -> screen 6: code 0.0057 -> 0.0061 (+0.0004; the sweep's [G] term was +0.0006); IFEval 0.0386 and
+    multi 0.0313 unchanged.
+  - Prediction was code ~1.15-1.3 % (PASS): it came in at C's 1.07 %.
+  - Use: DRAFT17 joins code's 24 GB FAST stack. Code bytes are 35.7 -> 25.2 MB per kept token on today's stack, and 19.5
+    with 11-bit + POOLSPLIT [P] (MoonShots re-derived x0.723). BigMoE built it (R57_D17, 723ee9b).
+  - UNCHECKED until Breakthrough's interim read-out (~19:05, s67_slot.log) re-derives screen 6's verdict vs C.

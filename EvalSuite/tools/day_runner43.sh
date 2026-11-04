@@ -1,14 +1,20 @@
 #!/bin/bash
 # EvalSuite runner 43, Thu 2026-11-05 (attached to a live evalsuite session): the FAST batch F1 + r8 + HC8-1P on the
-# base NAX6's verdict sets (docs/PREREG_f1_2026-11-03.md revision 3), then the records3 check 1 (tools/r3check.sh).
+# base NAX6's verdict sets (docs/PREREG_f1_2026-11-03.md revision 3).
 # It waits for runner 42 to finish. results/NAX6_DONE's line picks the base:
 # - D4X PASS or DIFFERS: the NAX6 base (control ref2tnax, batch ref2tnfh, core reference ref2tnax);
 # - FAIL: REF2-T's (control ref2tf0, batch ref2tfh, core reference ref2t, stage-2 reference ref2t.r2);
 # - VOID or no file once runner 42 is gone: it stops.
+# The store (the orchestrator 18:0x): on a NAX6 PASS BigMoE converts records3 in place right after runner 42 (which
+# ends with the records3 check 1). Q43_STORE (converted | rowmajor, set at launch) says where the NAX6-base batch runs.
+# converted = wait until all 48 layers carry "layout" and the index has not moved for 2 min, then the records3 check 2
+# (ref2tf0 on the converted store == check 1) and the NAX6-N bridge ($NAXC.r1 on the 3 step-0 keys == ref2tnax's
+# Part 1 rows); either failing stops it (exit 5). rowmajor = run now; BigMoE converts after this runner. On REF2-T's
+# base (NAX6 FAIL) there is no conversion: row-major. Every chunk checks the store is still as expected (exit 8).
 # Order: the control decodes RULER 24 + agent 29; the batch decodes RULER + agent, then the core 210; tools/d4x.py
 # gives the batch's core lines (results/f1_d4x.txt). A stage 2 runs here only if it fits before 14:00 and the base's
-# IFX rows exist. Then check 1 if 30 min remain. The verdict (RULER line, agent flags, copy breaks, gates) is
-# tools/f1_report.py's, run by the session. AR at C 192, share locks ("MEM 36 GB"), the day rule's MEM wait, the code
+# IFX rows exist. The verdict (RULER line, agent flags, copy breaks, gates) is tools/f1_report.py's, run by the
+# session. AR at C 192, share locks ("MEM 36 GB"), the day rule's MEM wait, the code
 # pin (exit 7), the store's layout (exit 8), no chunk after Thu 14:00 (exit 6). Stop it by pid only, and its cli child too.
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 cd "$HOME/EvalSuite" || exit 1
@@ -23,6 +29,9 @@ TIERENV="BIGMOE_TIER=4433333333,BIGMOE_TIER_GLU=3c,BIGMOE_TIER_CL=112"
 PY=.venv/bin/python
 C=192; NEED=$(( (131 * C + 10200 + 999) / 1000 ))
 R3IDX=$HOME/BigMoE/models/bare/records3/index.json
+STORE=${Q43_STORE:-rowmajor}                     # where the NAX6-base batch runs (see above)
+NAXC=${Q43_NAXC:-ref2tnax}; NAXB=${Q43_NAXB:-ref2tnfh}   # the NAX6-base control / batch on that store
+MODE=rowmajor
 say() { echo "$(date +%H:%M:%S) $*" >> "$LOG"; }
 left() { echo $(( EVALSUITE_DEADLINE - $(date +%s) )); }
 count() { [ -f "$1" ] && wc -l < "$1" | tr -d ' ' || echo 0; }
@@ -42,12 +51,19 @@ calm() {
 converted() {   # any layer with a "layout" entry, or a record size other than row-major records3's 2,932,736 B
   grep -q '"layout"' "$R3IDX" || [ "$(grep -o '"recsz": [0-9]*' "$R3IDX" | sort -u)" != '"recsz": 2932736' ]
 }
+full_converted() {   # every one of the 48 layers carries "layout", and index.json has not changed for 2 min
+  [ $(( $(date +%s) - $(stat -f %m "$R3IDX") )) -ge 120 ] || return 1
+  python3 -c 'import json, sys
+L = json.load(open(sys.argv[1]))["layers"]
+sys.exit(0 if len(L) == 48 and all("layout" in v for v in L.values()) else 1)' "$R3IDX"
+}
+store_ok() { if [ "$MODE" = converted ]; then full_converted; else ! converted; fi; }
 mem_busy() {    # another session's shared run with MEM > 5 GB (our own reasons start "evalsuite: MEM")
   peer ls 2>/dev/null | grep "shared run" | grep -v "evalsuite: MEM" | grep -oE "MEM [0-9]+ GB" | awk '$2 > 5 {f = 1} END {exit !f}'
 }
 pin() {
   { shasum snap/leap-52cf2c9/*.py snap/leap-52cf2c9/ms_gdn/* tools/d4x.py tools/r3check.sh results/ifx/stage1_keys.txt \
-      results/r3check_keys.txt data/items/dec_math.jsonl data/items/dec_ifeval.jsonl data/items/dec_humaneval.jsonl \
+      results/r3check_keys.txt results/q42/step0_keys.txt data/items/dec_math.jsonl data/items/dec_ifeval.jsonl data/items/dec_humaneval.jsonl \
       data/items/dec_ifevalx.jsonl data/items/dec_ruler.jsonl data/items/dec_agent.jsonl
     (cd "$EVALSUITE_BIGMOE_CODE" && find bigmoe ext -type f ! -path '*__pycache__*' | sort | xargs shasum)
     (cd "$HOME/MoonShots/patches/planes_engine" && ls *.py | sort | xargs shasum)
@@ -86,7 +102,7 @@ run_rows() {   # run, rows wanted, stage args...: chunks under a share lock unti
       w=$((w + 1)); sleep 60; calm
     done
     [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }
-    converted && { say "records3 is not row-major any more (index.json): runner stops at $run $b/$want rows"; exit 8; }
+    store_ok || { say "records3 is not $MODE as this run needs (index.json): runner stops at $run $b/$want rows"; exit 8; }
     [ "$(left)" -gt 3600 ] || { say "deadline near (no chunk starts after 14:00): runner stops at $run $b/$want rows"; exit 6; }
     EVALSUITE_STAGE_ENV="$TIERENV" ./bin/evalsuite gpu decode $run "$@" --chunk-minutes 45 --share --C "$C" \
       --need "$NEED" --minutes 60 >> "$LOG" 2>&1; rc=$?
@@ -106,11 +122,35 @@ done
 while alive42; do sleep 30; done                  # runner 42 still writes its reports
 V=$(cat results/NAX6_DONE)
 case "$V" in
-  "D4X: PASS"*|"D4X: DIFFERS"*) BASE=nax6; CTRL=ref2tnax; BATCH=ref2tnfh; CORE=ref2tnax; IFXREF=ref2tnax ;;
+  "D4X: PASS"*|"D4X: DIFFERS"*) BASE=nax6; CTRL=$NAXC; BATCH=$NAXB; CORE=ref2tnax; IFXREF=ref2tnax; MODE=$STORE ;;
   "D4X: FAIL"*) BASE=ref2t; CTRL=ref2tf0; BATCH=ref2tfh; CORE=ref2t; IFXREF=ref2t.r2 ;;
   *) say "NAX6: '$V': no valid base for the batch: runner 43 stops"; exit 5 ;;
 esac
-say "NAX6 '$V': the batch runs on the $BASE base (control $CTRL, batch $BATCH, core reference $CORE)"
+say "NAX6 '$V': the batch runs on the $BASE base (control $CTRL, batch $BATCH, core reference $CORE), store $MODE"
+if [ "$MODE" = converted ]; then
+  w=0
+  until full_converted; do
+    [ $((w % 10)) = 0 ] && say "waiting for BigMoE's conversion (all 48 layers, index still for 2 min)"
+    w=$((w + 1)); sleep 60
+  done
+  say "records3 is converted: check 2: tools/r3check.sh snap/bigmoe-da8e7a6 ref2tf0.r2 converted ref2tf0.r1,ref2t.r2"
+  tools/r3check.sh snap/bigmoe-da8e7a6 ref2tf0.r2 converted ref2tf0.r1,ref2t.r2 >> "$LOG" 2>&1; c2=$?
+  echo "check 2 rc $c2 ($(date +%H:%M))" > results/CHECK2_DONE
+  [ $c2 = 0 ] || { say "check 2 rc $c2: ref2tf0 on the converted store != check 1: runner stops (VOID there)"; exit 5; }
+  say "check 2 PASS; the NAX6-N bridge: $CTRL.r1 on the step-0 keys vs ref2tnax's Part 1 rows"
+  run_rows "$CTRL.r1" 3 --sets ifeval,humaneval --keys results/q42/step0_keys.txt
+  $PY - "$CTRL.r1" <<'BRIDGE' >> "$LOG" 2>&1; br=$?
+import json, sys
+keys = open("results/q42/step0_keys.txt").read().split()
+load = lambda v: {r["key"]: r for r in map(json.loads, open(f"results/{v}/decode.jsonl"))}
+a, b = load(sys.argv[1]), load("ref2tnax")
+bad = [k for k in keys if a[k]["completion_ids"] != b[k]["completion_ids"]]
+print(f"NAX6-N bridge: {sys.argv[1]} (converted store) vs ref2tnax (row-major, Part 1): "
+      + (f"DIFFERENT on {bad}" if bad else "token-identical"))
+sys.exit(5 if bad else 0)
+BRIDGE
+  [ $br = 0 ] || { say "NAX6-N bridge failed: runner stops (VOID for converted-store runs)"; exit 5; }
+fi
 n0=$(count results/$CTRL/decode.jsonl)
 run_rows "$CTRL" $((n0 + 53)) --sets ruler,agent
 run_rows "$BATCH" 53 --sets ruler,agent
@@ -128,12 +168,4 @@ if [ $d = 10 ]; then
   fi
 fi
 touch results/F1_ROWS_DONE
-if [ "$(left)" -gt 5400 ]; then
-  calm
-  say "records3 check 1: tools/r3check.sh snap/bigmoe-da8e7a6 ref2tf0.r1 rowmajor ref2t.r2"
-  tools/r3check.sh snap/bigmoe-da8e7a6 ref2tf0.r1 rowmajor ref2t.r2 >> "$LOG" 2>&1
-  say "check 1 rc $? (results/r3check.log)"
-else
-  say "records3 check 1 does not fit before the deadline: left for later"
-fi
 say "runner 43 end"

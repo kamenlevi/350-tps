@@ -213,8 +213,10 @@ class DraftSubset:
     def logits(self, draft, hid):
         rows = hid.size // hid.shape[-1]
         x = hid.reshape(rows, hid.shape[-1])
-        yb = qmm16c(x, self.wb, self.sb, self.bb)
-        yx = mx.where(self.xok[None], qmm16c(x, self.xw, self.xs, self.xb), mx.array(-float("inf"), yb.dtype))
+        q = lambda w, s_, b: (qmm16c(x, w, s_, b) if rows <= 16 else      # > 16 rows (generic; D17's head sees 16): chunks, the
+                              mx.concatenate([qmm16c(x[i:i + 16], w, s_, b) for i in range(0, rows, 16)], axis=0))   # same bits
+        yb = q(self.wb, self.sb, self.bb)
+        yx = mx.where(self.xok[None], q(self.xw, self.xs, self.xb), mx.array(-float("inf"), yb.dtype))
         lg = mx.concatenate([yb, yx], axis=-1).reshape(*hid.shape[:-1], -1)
         lg = lg * draft.config.output_multiplier
         cap = draft.config.final_logit_softcapping

@@ -26,9 +26,10 @@ K="$K,humaneval/HumanEval/101,humaneval/HumanEval/63"
 U="BIGMOE_EXT_BUILD=build_qom,R57_FAST=U3C,R57_U3C_LEN=1,R57_REFTOK="   # one binary for every arm (QOM + lever 2 inside)
 # Wed 15:5x (the orchestrator agreed): the all-in is QOM-based (by day at C 160: QOM all-in +26.3 % vs U3C, bytes x0.77):
 QA="BIGMOE_EXT_BUILD=build_qom,R57_REFTOK=,R57_FAST=QOM,R57_D17=1,R57_D7B=code,R57_HC8=1,REF2_HC8_FAST=1,R57_DNR=1,R57_HCB=1"
-QA="$QA,REF2_SMALL_NATIVE=1,R57_D7BNAX=1"   # + Leap def104e: D7b on qmm16c (-2 ms per code check; smoke 16:18 OK)                             # Leap's small-call native qmm (FAST, -1.15 ms); no REF2_OOO_1C (QOM's
+QA="$QA,REF2_SMALL_NATIVE=1,R57_D7BNAX=1,REF2_OOO_1C=1"   # + Leap def104e: D7b on qmm16c (-2 ms per code check; smoke 16:18 OK)                             # Leap's small-call native qmm (FAST, -1.15 ms); no REF2_OOO_1C (QOM's
 Q8="BIGMOE_EXT_BUILD=build_qom,R57_REFTOK=,R57_FAST=QOM,R57_D17=1,R57_D8NAX=1,R57_HC8=1,REF2_HC8_FAST=1,R57_DNR=1"
-Q8="$Q8,R57_HCB=1,REF2_SMALL_NATIVE=1"                 # qall8 = qall with Leap's 8-bit NAX drafter (2945bf7) in place of D7b
+Q8="$Q8,R57_HCB=1,REF2_SMALL_NATIVE=1,REF2_OOO_1C=1"   # + one-call OOO, QOM-aware (Leap 00961fc;
+# smoke 17:09: ooo_1c_qom 432, qom_opt 41K)                 # qall8 = qall with Leap's 8-bit NAX drafter (2945bf7) in place of D7b
 QF="$QA,BIGMOE_FC_F=4,BIGMOE_FC_FS=2,R57_ARMS=gate+t+pf,BIGMOE_PRED_LINES=4"   # -2 slots); qallf = + lever 2 (+pf posts the forecast)
 say "all-in FAST start (pid $$, C $CC, swap $C45_SWAP0 GB)"
 R57_KEYS=$K MG=${ALLIN_MG:-4} C45_ALARM=900 \
