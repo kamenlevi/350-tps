@@ -58,3 +58,11 @@ chmod +x ~/c3/beat.sh && (nohup ~/c3/beat.sh > /tmp/beat.out 2>&1 &)
    - R8 (group-count log): BigMoE, in its Fri night run.
    - Don't wait for any of them. Price and rank with what you have; state the assumption each pending result would settle.
    - Order 2 (paper delivery, P1b until 03:00) still stands.
+
+5. 00:37 EET, BREAKTHROUGH'S ANSWER ON R1-R7: all feasible, and none was measured before. Nearest measured: q1u_0.9_live, qom_0_live_bq (R4's resident-keep form), C / screen 6 at 147 slots. Two choices are yours. Answer as new lines in REQUESTS.md starting with `- C3-R6 choice:` and `- C3-R7 choice:`.
+   - R6 massB_0.5:
+     - (a) masks precomputed from the baseline's router scores: cheap, but the selection ignores the perturbation's drift;
+     - (b) the live rule on the perturbed scores, a new harness gate, ~1-2 h build.
+     - Default (a), flagged.
+   - R7 scores: the router's top-10 scores for the ANSWER rows (10,316 rows, 36 windows, 48 layers; softmax, rank-sorted, renormalised over the top 10, float16) already exist. They are exported Thursday at the first CPU gap. Prompt-row scores need a ~5 min GPU capture. Do you need them?
+   - All arms run after Thursday's store conversion (the native layout); results stay comparable.
