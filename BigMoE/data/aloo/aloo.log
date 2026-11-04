@@ -1,0 +1,16 @@
+11-04 13:49:43 agent leave-one-out start (pid 48718, C 224, swap 10.011 GB)
+11-04 14:02:51 arms rc=0
+AGENT LEAVE-ONE-OUT at C 224 (data/aloo; 5 agent prompts; the new default = R57_PRESET=45, 0365ada)
+old             geo steady  28.7 tok/s, whole run  18.8; tokens == old 5 / 5; bash18 24.1, text23 36.0, bash20 27.8, edit03 45.1, write12 17.8
+new             MISSING
+-chat switch    MISSING
+-volatile tier  MISSING
+-keepalive      MISSING
+-K83            MISSING
+-lever 1        MISSING
+new (2nd)       MISSING
+old (2nd)       MISSING
+regression R = new / old: +nan % (geo over the prompts)
+Verdict (pre-registered 10:2x): INTERACTION (no single lever; pairs next)
+11-04 14:02:51 report rc=0 (data/aloo/aloo_report.txt)
+11-04 14:02:51 agent leave-one-out end

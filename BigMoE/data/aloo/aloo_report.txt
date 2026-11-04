@@ -1,0 +1,13 @@
+AGENT LEAVE-ONE-OUT at C 224 (data/aloo; 5 agent prompts; the new default = R57_PRESET=45, 0365ada)
+old             geo steady  28.7 tok/s, whole run  18.8; tokens == old 5 / 5; bash18 24.1, text23 36.0, bash20 27.8, edit03 45.1, write12 17.8
+new             MISSING
+-chat switch    MISSING
+-volatile tier  MISSING
+-keepalive      MISSING
+-K83            MISSING
+-lever 1        MISSING
+new (2nd)       MISSING
+old (2nd)       MISSING
+regression R = new / old: +nan % (geo over the prompts)
+swap per arm (GB grown from its start to the next arm's start or the report; NO-SWAP at its start): aold +0.32 (45 GB), anew +1.37 (51 GB); SWAP GUARD fired
+Verdict (pre-registered 10:2x): INCOMPLETE, no verdict: 1 of 9 arms ran (missing: new, -chat switch, -volatile tier, -keepalive, -K83, -lever 1, new (2nd), old (2nd))

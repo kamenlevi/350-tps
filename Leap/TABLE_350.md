@@ -6724,3 +6724,37 @@ shapes, since latency does not depend on the values.
     - on == hc8r.read bitwise; 1- and 8-row calls == the 16-row call's rows (SD == AR);
     - off -> eager, written equal, FAST vs eager rel rms <= 5e-3;
     - bf16 mixers on == off bitwise.
+
+## DENSE-N-RAM: DENSE-N with one copy of the weights (Leap, pre-registered Wed 2026-11-04 14:4x; BigMoE 14:3x: "your RAM-neutral DENSE-N form would be welcome" before its next 45 GB slot)
+- **Why:** at 45 GB RAM binds. DENSE-N kept MLX's layout for prefill (+1.5 GB = ~11 cache slots), so BigMoE runs it at C 213
+  vs C 224. BigMoE's default has K83_EXACT (R-83's qkv | z concat), so DENSE-N is worth ~-2.0 ms per check there.
+- **Design (ref2):** dense_native_convert(model, head=False) replaces each eligible 4-bit dense weight in place by its
+  native copy, 4-D on purpose so that any direct reader fails loudly (one copy; the originals are freed).
+  - _qmm: a converted weight takes qmm16n at <= 16 rows (bitwise == qmm16c). Otherwise (prefill, or ref2 off) it is
+    rebuilt in MLX's layout per call (_dn_unpack: the exact inverse) for MLX's own kernel: stock bits.
+  - R-83's _InProjExact unpacks converted modules at construction and converts its concat; its prefill path slices the
+    unpacked form.
+- **Test** (scripts/dn_ram_check.py, share lock):
+  - (a) unpack(repack(w)) == w bitwise on the dense shapes;
+  - (b) converted vs unconverted modules: outputs bitwise at rows 1 / 8 / 16 (ref2 on) and 17 / 32 / 256 (prefill),
+    and with ref2 off;
+  - (c) R-83 built from converted modules == unconverted, on- and off-path;
+  - (d) active memory after convert vs before (one copy);
+  - (e) ref2.self_test.
+- **Lines:** PASS = all bitwise AND memory within +-2 % of before; KILL = any bit difference that survives one fix.
+- **Prediction:** PASS. The risk is code outside ref2 reading a converted weight directly. It fails loudly; BigMoE's smoke
+  run would show it.
+- **Result (Wed 14:40, share lock; data/dn_ram_check.txt; on the candidate, then live): PASS.**
+  - (a) unpack(repack(w)) == w bitwise on 7 shapes (incl. R-83's concat and the lm_head).
+  - (d) 8 weights converted (98 MB; the stand-in's 5 modules + the GDN's qkv / z + R-83's concat). Active memory
+    0.513 -> 0.513 GB (+0.00 %): one copy. The lm_head stays in MLX's layout. MLX's kernel on a converted weight
+    raises.
+  - (b) After convert == before, bitwise: ref2 on at rows 1 / 8 / 16 / 17 / 32 / 256, ref2 off at 16 / 64 (17 native
+    calls, 25 unpacked).
+  - (c) R-83 matches: converted by convert() when built before, converted at construction when built after, both ==
+    unconverted, on- and off-path.
+  - (e) dense_native_unconvert restores weights and outputs bitwise. ref2.self_test PASS. DENSE-N's and HC8-1P's
+    wiring checks still PASS.
+  - **Use:** after load, ref2.apply(); ref2.dense_native_convert(model) (head=False). That gives DENSE-N at no RAM cost
+    (BigMoE's default with R-83: ~-2.0 ms per check). BigMoE's prefill evaluates per layer, so the unpacked transients
+    stay at ~one layer.
