@@ -45,7 +45,11 @@ EXTRA=~/Breakthrough/data/s67_extra.txt   # the orchestrator 20:1x: optional ext
 # "<arm> <est min> <start by HH:MM>": an extra arm runs after s7_trl is done, once it is in dm_ablations.py, and only if it
 # starts by its time. "PENDING 0 <HH:MM>" keeps the slot waiting for a hand-off until then.
 xlines() { [ -f $EXTRA ] && awk 'NF >= 3 && $1 !~ /^#/' $EXTRA; }
-xarms() { xlines | awk '$1 != "PENDING" && $1 != "ALONE" && $1 != "HOLD" {print $1}'; }
+xarms() { xlines | awk '$1 != "PENDING" && $1 != "ALONE" && $1 != "HOLD" && $1 != "WHEN" {print $1}'; }
+expect() { case $1 in *+code) echo 12;; *) echo 36;; esac; }   # "<arm>+code": the 12 code windows (DM_SETS=code)
+fullonly() { local a; for a in "$@"; do case $a in *+code) ;; *) echo -n "$a ";; esac; done; }   # the arms map_kl can print (all 3 domains)
+when_ok() { local w; w=$(xlines | awk -v a="$1" '$1 == "WHEN" && $2 == a {$1 = ""; $2 = ""; print; exit}'); [ -z "$w" ] && { echo yes; return; }
+  $PY ~/Breakthrough/scripts/dm_s7/cond_eval.py $w 2>/dev/null || echo pending; }   # "WHEN <arm> <kind> <args>" (cond_eval.py)
 xby() { xlines | awk -v a="$1" '$1 == a {print $3; exit}'; }
 by_ts() { date -j -f "%Y-%m-%d %H:%M" "$(date +%Y-%m-%d) $1" +%s; }
 est() { local x; x=$(xlines | awk -v a="$1" '$1 == a {print $2; exit}'); [ -n "$x" ] && { echo $x; return; }
@@ -72,12 +76,12 @@ why_not() {
 trl_whole() { (cd $DM && DM_TRL_FALLBACK= $PY -c "import dm_t3; dm_t3.trl_gate([7, 18, 30, 41], 'mix')" > /dev/null 2>&1); }
 nwin() { [ -f $DM/out/$1.json ] && $PY -c "import json; d = json.load(open('$DM/out/$1.json')); print(sum(1 for v in d.values() if isinstance(v, dict) and 'tk' in v))" 2>/dev/null || echo 0; }
 installed() { local p; for p in $(echo "$1" | tr '+' ' '); do grep -qF "\"$p\"" $DM/dm_ablations.py || return 1; done; }   # a "+" stack: every part (Thu 07:1x)
-btodo() { local a; for a in $ARMS; do [ "$(nwin $a)" = 36 ] || echo -n "$a "; done; }
-todo() { local a; for a in $ARMS $(xarms); do [ "$(nwin $a)" = 36 ] || echo -n "$a "; done; }
+btodo() { local a; for a in $ARMS; do [ "$(nwin $a)" = "$(expect $a)" ] || echo -n "$a "; done; }
+todo() { local a; for a in $ARMS $(xarms); do [ "$(nwin $a)" = "$(expect $a)" ] || echo -n "$a "; done; }
 pick_next() {   # the first arm in order that is not done, fits the clock, and (s7_trl) whose store is whole; DENSE-3 and the
   local a t by xa now=$(date +%s); PICK=; TRLWAIT=0; XWAIT=0; t=" $(todo)"   # extra arms only once s7_trl is done; sets
   xa=$(xby ALONE); if [ -n "$xa" ]; then xa=$(by_ts $xa); else xa=$XALONE; fi   # PICK, TRLWAIT, XWAIT. From the alone time
-  [ $now -ge $xa ] && t=" $(for a in $(xarms); do [ "$(nwin $a)" = 36 ] || echo -n "$a "; done)$(btodo)"   # ($EXTRA's
+  [ $now -ge $xa ] && t=" $(for a in $(xarms); do [ "$(nwin $a)" = "$(expect $a)" ] || echo -n "$a "; done)$(btodo)"   # ($EXTRA's
   by=$(xby HOLD); if [ -n "$by" ] && [ $now -lt $(by_ts $by) ]; then XWAIT=1; return; fi   # "HOLD 0 HH:MM": nothing
   for a in $t; do                       # starts before then (P-CAP first, the orchestrator 21:18); "ALONE 0 HH:MM" line,
                                         # else XALONE: from then on the extra arms go FIRST
@@ -89,6 +93,7 @@ pick_next() {   # the first arm in order that is not done, fits the clock, and (
       [ $now -le $(by_ts $by) ] || continue
       if [ $now -lt $xa ]; then case "$t" in *" s7_trl "*) XWAIT=1; continue;; esac; fi   # from the alone time on, alone
       installed $a || { XWAIT=1; continue; }
+      case "$(when_ok $a)" in yes) ;; no) continue;; *) XWAIT=1; continue;; esac   # a WHEN condition: no = skipped for good
     fi
     PICK=$a; return
   done
@@ -98,7 +103,9 @@ for n in s7_trl s7_ref3 q1u_0.9_live_bonus9g qom_0.5_live_bonus5g qom_0_live_bal
   grep -qF "\"$n\"" $DM/dm_ablations.py || { say "$n is not in dm_ablations.py (scripts/dm_s7/install_s7.sh, install_late.sh, install_dense3.sh); not run"; exit 1; }
 done
 say "armed (the orchestrator 14:3x / 15:3x, NewIdeas 14:5x / 16:5x): $ARMS; start >= $(date -r $START '+%a %H:%M'), no new arm after $(date -r $LASTGO '+%a %H:%M'), hard stop $(date -r $DEADLINE '+%a %H:%M')"
-rd() { [ "$(nwin $1)" = 36 ] || return; $PY $DM/dm_screen_read.py "$@" >> $LOG 2>&1; say "read-out: $(grep '^VERDICT' $DM/out/SCREEN_read_$1.txt 2>/dev/null || echo "$1 none")"; }
+rd() { [ "$(nwin $1)" = "$(expect $1)" ] || return
+  case $1 in *+code) local o; o=$($PY ~/Breakthrough/scripts/dm_s7/code_read.py "$1" "$2" 2>&1); echo "$o" >> $LOG; say "read-out: $(echo "$o" | grep "^VERDICT" || echo "$1 none")"; return;; esac   # code-only (code_read.py)
+  $PY $DM/dm_screen_read.py "$@" >> $LOG 2>&1; say "read-out: $(grep "^VERDICT" $DM/out/SCREEN_read_$1.txt 2>/dev/null || echo "$1 none")"; }
 readouts() {   # $1 = interim (the first wait for the TRL store; the orchestrator 17:3x) or final; CPU, the out/ JSONs only
   echo "[s67] read-outs ($1): map_kl.py (NewIdeas, read-only use): C, screen 6, screen 7, DENSE-3 $(date '+%a %H:%M:%S')" >> $LOG
   KL=$($PY ~/NewIdeas/scripts/map_kl.py qom_0_live_bq_c147_t3 qom_0_live_ball_c147_t3 s7_ref s7_ref3 s7_trl s7_cal s7_cal_all $D3 2>&1); echo "$KL" >> $LOG
@@ -127,7 +134,7 @@ while :; do
       last=trl; sleep 120; continue
     fi
     if [ $XWAIT = 1 ]; then [ "$last" = x ] || say "waiting for an extra arm (the orchestrator 20:1x; $EXTRA): $(xlines | tr '\n' ';')"; last=x; sleep 60; continue; fi
-    [ -n "$(todo)" ] && say "nothing left fits the clock; left: $(todo)"; break
+    [ -n "$(todo)" ] && say "nothing left to run (past its time, or its WHEN condition said no); left: $(todo)"; break
   fi
   w=$(why_not)
   if [ -n "$w" ]; then need=3; [ "$w" != "$last" ] && say "waiting: $w"; last=$w; sleep 10; continue; fi
@@ -139,6 +146,7 @@ while :; do
   [ "$PICK" = "$D3" ] && say "Leap's dense3.py sha256 $(shasum -a 256 ~/Leap/scripts/dense3.py | cut -c1-16) (smoked: $D3SHA)"
   # cwd = the session folder (Wed 18:1x): fanwatch and quiet_window.sh freeze research jobs by working folder, and
   # ~/FableGod is not one, so a heat pause froze everyone's jobs but this map run (100 % CPU under PAUSE at 18:10)
+  case "$PICK" in *+code) export DM_SETS=code;; *) unset DM_SETS;; esac   # "<arm>+code": the code windows only
   (cd ~/Breakthrough && exec $PY $DM/run_map.py "$PICK" --max 12 --skip-done) >> $LOG 2>&1 & P=$!
   bad=0; pz=0; stopped=
   while kill -0 $P 2>/dev/null; do
@@ -153,16 +161,16 @@ while :; do
   done
   wait $P 2>/dev/null; rc=$?; peer unlock >> $LOG 2>&1
   if [ -n "$stopped" ]; then need=3; say "stopped $PICK for: $stopped"; else need=1; fi
-  say "$PICK ended (rc $rc, $([ "$(nwin $PICK)" = 36 ] && echo 'done, 36 windows' || echo 'NOT done')); left: $(todo); unlocked"
+  say "$PICK ended (rc $rc, $([ "$(nwin $PICK)" = "$(expect $PICK)" ] && echo "done, $(expect $PICK) windows" || echo 'NOT done')); left: $(todo); unlocked"
   [ $(date +%s) -ge $DEADLINE ] && break
 done
 say "batch over; left: $(todo)"
 [ $final = 0 ] && readouts final
-xs=$(for a in $(xarms); do [ "$(nwin $a)" = 36 ] && echo -n "$a "; done)
+xs=$(for a in $(xarms); do [ "$(nwin $a)" = "$(expect $a)" ] && echo -n "$a "; done)
 if [ -n "$xs" ]; then   # an extra line's fields 4+ are its twins, the primary first: dm_screen_read.py vs each (the primary
   tw=$(for a in $xs; do xlines | awk -v a="$a" '$1 == a {for (i = 4; i <= NF; i++) print $i}'; done | sort -u | tr '\n' ' ')
   echo "[s67] map_kl.py (NewIdeas, read-only use), extra arms + twins: $xs$tw $(date '+%a %H:%M:%S')" >> $LOG
-  $PY ~/NewIdeas/scripts/map_kl.py $xs $tw >> $LOG 2>&1                   # last, so its SCREEN_read file holds the verdict)
+  $PY ~/NewIdeas/scripts/map_kl.py $(fullonly $xs $tw) >> $LOG 2>&1   # map_kl prints all 3 domains: not for +code arms (code_read.py)                   # last, so its SCREEN_read file holds the verdict)
   for a in $xs; do for t in $(xlines | awk -v a="$a" '$1 == a {for (i = NF; i >= 4; i--) print $i}'); do rd $a $t; done; done
   say "read-out (extra arms) done"
 fi

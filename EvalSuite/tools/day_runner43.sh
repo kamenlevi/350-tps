@@ -15,7 +15,8 @@
 # gives the batch's core lines (results/f1_d4x.txt). A stage 2 runs here only if it fits before 14:00 and the base's
 # IFX rows exist. The verdict (RULER line, agent flags, copy breaks, gates) is tools/f1_report.py's, run by the
 # session. AR at C 192, share locks ("MEM 36 GB"), the day rule's MEM wait, the code
-# pin (exit 7), the store's layout (exit 8), no chunk after Thu 14:00 (exit 6). Stop it by pid only, and its cli child too.
+# pin (exit 7), the store's layout (exit 8), and no chunk starts unless start + its measured length ends by 14:15 (exit 6;
+# the orchestrator Thu 07:5x: cutoffs bound a chunk's END). Stop it by pid only, and its cli child too.
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 cd "$HOME/EvalSuite" || exit 1
 LOG=results/day43_runner.log
@@ -104,6 +105,9 @@ pick_c() {      # C by free memory (tokens do not depend on C): the largest of 1
     [ "$(left)" -gt 3600 ] || { say "deadline near while waiting for memory: runner stops"; exit 6; }
   done
 }
+CUTOFF=$(date -j -f "%Y-%m-%d %H:%M" "2026-11-05 14:15" +%s); CUTOFF_HM=14:15   # chunks END by it (the orchestrator Thu 07:5x)
+EST=3000                                          # a 45-min chunk + load and its last row, until measured
+fits() { [ $(( $(date +%s) + EST )) -le "$CUTOFF" ]; }
 run_rows() {   # run, rows wanted, stage args...: chunks under a share lock until the run has that many rows
   local run=$1 want=$2 b n rc w; shift 2
   NOPROG=0
@@ -117,13 +121,15 @@ run_rows() {   # run, rows wanted, stage args...: chunks under a share lock unti
     done
     [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }
     store_ok || { say "records3 is not $MODE as this run needs (index.json): runner stops at $run $b/$want rows"; exit 8; }
-    [ "$(left)" -gt 3600 ] || { say "deadline near (no chunk starts after 14:00): runner stops at $run $b/$want rows"; exit 6; }
+    fits || { say "no chunk fits before $CUTOFF_HM (measured chunk $((EST / 60)) min): runner stops at $run $b/$want rows"; exit 6; }
     pick_c
     say "$run: chunk at C $C (--need $NEED; $(freegb) GB NO-SWAP)"
+    t0=$(date +%s)
     EVALSUITE_STAGE_ENV="$TIERENV" ./bin/evalsuite gpu decode $run "$@" --chunk-minutes 45 --share --C "$C" \
       --need "$NEED" --minutes 60 >> "$LOG" 2>&1; rc=$?
+    d=$(( $(date +%s) - t0 )); [ "$d" -gt "$EST" ] && EST=$d     # the longest chunk so far bounds the next start
     n=$(count results/$run/decode.jsonl)
-    say "$run: chunk rc=$rc ($n/$want rows)"
+    say "$run: chunk rc=$rc ($n/$want rows, $((d / 60)) min)"
     after_chunk "$rc" "$b" "$n"
   done
 }
@@ -175,7 +181,7 @@ $PY tools/d4x.py "$BATCH" "$CORE" "$IFXREF" > results/f1_d4x.txt 2>&1; d=$?
 say "the batch's core lines: $(grep '^D4X:' results/f1_d4x.txt | tail -1) (d4x rc $d)"
 if [ $d = 10 ]; then
   nx=$(grep -c '"key": "ifevalx/' "results/$IFXREF/decode.jsonl" 2>/dev/null || echo 0)
-  if [ "$nx" -ge 220 ] && [ "$(left)" -gt 9000 ]; then
+  if [ "$nx" -ge 220 ] && [ $(( $(date +%s) + 5760 )) -le "$CUTOFF" ]; then   # stage 2 (~1.6 h) must END by the cutoff
     run_rows "$BATCH" 483 --sets ifevalx --keys results/ifx/stage1_keys.txt
     $PY tools/d4x.py "$BATCH" "$CORE" "$IFXREF" > results/f1_d4x.txt 2>&1; d=$?
     say "after the batch's stage 2: $(grep '^D4X:' results/f1_d4x.txt | tail -1) (d4x rc $d)"

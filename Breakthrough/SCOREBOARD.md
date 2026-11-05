@@ -3174,3 +3174,45 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
     - the PERT is exactly {rmask, renorm False};
     - 36 windows, byte-equal to the source, with routing shapes;
     - ranks 0-1 kept on every row.
+- Thu 07:20, after Fable C's audit (AUDIT_1105.md 07:18; masks final, "as built"):
+  - check_c3_masks.py re-run: the same 36/36 rebuilds and nesting.
+  - install_c3.sh: c3_b2d, c3_b2c, c3_b2d_reach07, c3_b2b_band5, c3_b2b_top1 are in, from snapshots in out/c3 with sha256 (test:
+    PERT, loader, 36 windows byte-equal, routing shapes, rank 0 kept). c3_b2d_reach07_u7 is not installed: the audit says no.
+  - R6 builder per Fable C's rulings 2-3: ranks 0-1 always kept, then the budget (--as-written for the record form); a row
+    without scores takes the rank profile (a fallback only).
+  - Answer-row test, all checks: the budget alone leaves out rank 0 on 0.92 / 0.40 / 0.38 % of row-layers and rank 1 on
+    4.4 / 2.1 / 1.8 %. The floor adds back 0.53 / 0.25 / 0.22 % of cells. Kept share 0.735 / 0.649 / 0.644 (Fable C's guess
+    for code was 0.76-0.78).
+- PRE-REGISTRATION Thu 07:2x: TEST 1 of Fable C's audit (AUDIT_1105 section 2; the orchestrator 07:2x; NewIdeas QUEUE Thu
+  07:3x, masks 9b6451e), before any run.
+  - split_0.9 = qom_0_split0.9_live_bq, split_0.99 = qom_0_split0.99_live_bq: the map's qom_0_live_bq form at the 45 GB pool
+    (QOM cf 0 + the bonus row gated by its next draft). Drafted rows with cf >= 0.9 / 0.99 keep ranks 0-1 + union members
+    only, with no resident keep; every other row is as QOM; loads unchanged. Harness q1_union(<masks>), no t3, 36 windows.
+  - Twin: qom_0_live_bq (measured 0.39 / 4.09 / 3.26 %); each split also against the other.
+  - Beside them on Friday: c3_b2d and c3_b2c (Cloud3's masks, as built).
+  - Lines, code decisive, all-row flips: PASS <= 1.34 %; BETWEEN 1.34-2.0 %; KILL > 2.0 %. The lever dies if both splits are
+    > 2.0 % on code (or if BigMoE's C3-R8 shows QOM's group count <= 0.6x exact's). Chat runs as the control.
+  - Priors [G, Fable C]: split_0.9 1.2-1.5 %, split_0.99 0.9-1.2 %; c3_b2d 1.3-1.5, c3_b2c 1.2-1.4 on code; IFEval 6-8 %, multi
+    4.5-6 % on chat. NewIdeas reads them with chat_arm_read.py, which writes into its repo, so NewIdeas runs it.
+  - Then, per the audit: c3_b2d_reach07 on code only, and only if a code arm passes (PASS <= 1.34, KILL > 2.0); R15, then R15b
+    only with >= 0.5 of margin on multi; band5 and top1 on code only; topk8; then the scores capture + massB last.
+  - u7: not run.
+  - Install 07:25 (install_c3.sh, snapshots in out/ni, 8/8: PERT, loader, 36 windows byte-equal, routing shapes, ranks 0-1
+    kept on every row).
+  - My count vs qom_0_live_bq: split_0.99 drops 910,285 experts on 5,691 rows (2,136 added by LRU drift); split_0.9 drops
+    1,382,387 on 7,339 rows (2,239 added). Equal to NewIdeas' check_split.log.
+  - Runner, Thu 07:2x: code-only arms ("<arm>+code", DM_SETS=code, 12 windows, read by code_read.py) and WHEN conditions
+    (cond_eval.py: codepass / multile). Dry tests right.
+    - A bash 3.2 parse error went into b6a2e29 (its commit ran after a failed syntax check) and was fixed in 6457a15, before
+      any run.
+- Thu 07:32, test 1's PRIMARY arms are the DRAFT17 _ball splits (the orchestrator 07:3x; NewIdeas QUEUE Thu 07:3x, masks
+  c22da10; the lines unchanged), installed from snapshots (out/ni, 8/8 per arm):
+  - qom_0_split0.9_live_ball and qom_0_split0.99_live_ball, and their twin qom_0_live_ball (QOM-KEEP + DRAFT17 at the 45 GB
+    pool, never run on the map).
+  - My count vs the twin: split_0.99 drops 953,764 experts on 5,849 rows (2,377 added by LRU drift); split_0.9 drops
+    1,429,194 on 7,455 rows (2,376 added). The twin differs from qom_0_live_bq on 3,575 rows. All equal to NewIdeas'
+    check_split_ball.log.
+  - Code tiles per kept token at 45 GB (NewIdeas): _ball 291.4 -> 182.9 / 147.9 (x0.628 / 0.508); bq x0.654 / 0.537; the
+    audit's replay x0.601 / 0.469.
+  - Today's queue (data/thu_extra.txt), in order: split_0.9_ball+code, split_0.99_ball+code, qom_0_live_ball+code, DENSE-3,
+    the bq pair +code, cf04.

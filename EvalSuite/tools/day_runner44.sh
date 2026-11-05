@@ -7,7 +7,8 @@
 # (NAX6's row-major Part 1 rows: NAX6-N == NAX6 at the model level). Rows -> results/r56n/; the verdict is the session's
 # (tools/r56b.py, extended for the arm). It runs only after a NAX6 PASS (results/NAX6_DONE) with all 48 layers
 # converted, once runner 43 has ended. Share lock per 9-min process ("MEM 34 GB"), the day rule's MEM wait, the code pin
-# (exit 7), the store staying converted (exit 8), no process after Thu 16:15 (exit 6). Stop it by pid only, and its cli child too.
+# (exit 7), the store staying converted (exit 8), and no process starts unless start + its measured length ends by
+# 16:00 (exit 6; the orchestrator Thu 07:5x: cutoffs bound a chunk's END). Stop it by pid only, and its cli child too.
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 cd "$HOME/EvalSuite" || exit 1
 LOG=results/day44_runner.log
@@ -56,6 +57,8 @@ pin() {
     | shasum | cut -c1-12
 }
 alive() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
+CUTOFF=$(date -j -f "%Y-%m-%d %H:%M" "2026-11-05 16:00" +%s)   # processes END by 16:00 (the orchestrator Thu 07:5x)
+EST=1200                                          # a 9-min process + its load and last prompt, until measured
 freegb() { .venv/bin/python -c "import sys; sys.path.insert(0, '.'); from evalsuite.cli import free_gb; print(int(free_gb()))"; }
 pick_c() {      # the gate needs C >= MAXK 160: C 192 (need 34) or C 160 (need 30) by free memory, else wait (no lock held)
   local fg w=0
@@ -98,11 +101,13 @@ while [ "$(nrows)" -lt 36 ]; do
   done
   [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }
   full_converted || { say "records3 is not fully converted any more: runner stops at $b/36 rows"; exit 8; }
-  [ "$(left)" -gt 900 ] || { say "deadline near (no process after 16:15): runner stops at $b/36 rows"; exit 6; }
+  [ $(( $(date +%s) + EST )) -le "$CUTOFF" ] || { say "no process fits before 16:00 (measured $((EST / 60)) min): runner stops at $b/36 rows"; exit 6; }
   pick_c
+  t0=$(date +%s)
   EVALSUITE_STAGE_ENV="$STAGEENV" ./bin/evalsuite gpu live16b ref --arm "$ARM" --keys "$KEYS" \
     --chunk-minutes 9 --C "$C" --need "$NEED" --minutes 18 --share >> "$LOG" 2>&1; rc=$?
-  say "$ARM: chunk rc=$rc ($(nrows)/36 rows)"
+  d=$(( $(date +%s) - t0 )); [ "$d" -gt "$EST" ] && EST=$d    # the longest process so far bounds the next start
+  say "$ARM: chunk rc=$rc ($(nrows)/36 rows, $((d / 60)) min)"
   if tail -4 "$LOG" | grep -q "can't tell which Claude session\|left the queue"; then
     say "the session that owns this runner's locks is gone: runner stops (relaunch it from a live session)"; exit 3
   fi

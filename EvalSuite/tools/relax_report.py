@@ -382,6 +382,11 @@ def report(arm_names, tag, modes=False, do_score=False, tok=None, outfile=None):
             if do_score and n == 210:
                 ok4, txt = score(d)
                 verdict = "KILL" if not ok4 else ("PASS" if b["blunders_ok"] and b["drift_ok"] else "BETWEEN")
+                gaps = {x: sum(1 for pr in arms[x]["prompts"].values() if pr["replay"] is None)
+                        for x in set(MODES[m].values()) if x in arms}
+                gaps = {x: n_ for x, n_ in gaps.items() if n_}
+                if ok4 and gaps:                  # the bars need every gated arm's REF2-T replay (Thu 07:3x: C, G, T3ALL short)
+                    verdict = "INCOMPLETE (replays missing: " + ", ".join(f"{x} {n_}" for x, n_ in sorted(gaps.items())) + ")"
                 slow = sorted({x for x in MODES[m].values() if x in RELAXED and task_kill(pts.get(x, {}))})
                 if slow:                          # the per-task line (amendment Wed 21:5x) overrides decision 4
                     verdict = f"KILL (per task: {', '.join(slow)} faster per token, slower per task)"

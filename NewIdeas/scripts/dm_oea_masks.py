@@ -74,6 +74,8 @@ def parse(arm):
     if m: return float(m.group(1)), int(m.group(2)), 10
     m = re.fullmatch(r"qom_([0-9.]+)_u(\d+)(?:_reach[0-9.]+)?", arm)   # Thu 07:0x (Cloud3 C3-R15 / R15b): QOM with unsure rows
     if m: return float(m.group(1)), 2, int(m.group(2))      # at top-u + union members + resident; _reach<tau>: REACH-CUT too
+    m = re.fullmatch(r"qom_([0-9.]+)_split([0-9.]+)", arm)  # Thu 07:2x (Fable C audit F4 / test 1): QOM, but drafted rows with
+    if m: return float(m.group(1)), 2, 10                   # cf >= the split keep ranks 0-1 + members only (no resident keep)
     raise SystemExit(f"unknown arm {arm}")
 
 
@@ -120,11 +122,13 @@ def masks(out_dir, arm):
     tau = float(arm0.split("_")[2]) if arm0.startswith("reach_") else None
     mr = re.search(r"^qom_[0-9.]+_u\d+_reach([0-9.]+)$", arm0)   # Thu 07:0x: QOM's REACH-CUT (rows keep residents, the qom path)
     if mr: tau = float(mr.group(1))
+    ms_ = re.search(r"^qom_[0-9.]+_split([0-9.]+)$", arm0)   # Thu 07:2x: the strict band (loads unchanged; strict rows touch
+    scf = float(ms_.group(1)) if ms_ else None               # only what they keep, as audit_split_replay.py)
     qom = arm0.startswith("qom_"); CL = ([cpool] * 48 if cpool else pool_sizes()) if qom else None
     base = json.load(open(os.path.join(OUT, "baseline.json")))
     G = dm_gate.load()
     od = os.path.join(out_dir, arm); os.makedirs(od, exist_ok=True)
-    st, qs, bqn = {}, {}, {}
+    st, qs, bqn, tls = {}, {}, {}, {}
     for dom, wf in dm_gate.WALK.items():
         Z = np.load(os.path.join(dm_gate.TD, wf))
         cache = [OrderedDict() for _ in range(48)]               # qom: the base pool per layer, carried across windows
@@ -173,22 +177,32 @@ def masks(out_dir, arm):
                                 keep[p, l, k0[j]:] = False if plain else np.isin(ids[p, l, k0[j]:], U)
                                 if qom:
                                     mem = keep[p, l, k0[j]:].copy()
-                                    keep[p, l, k0[j]:] |= np.isin(ids[p, l, k0[j]:], res)
+                                    if scf is None or cfs[j] < scf: keep[p, l, k0[j]:] |= np.isin(ids[p, l, k0[j]:], res)
                                     q[0] += 10 - k0[j]; q[1] += int(mem.sum()); q[2] += int((keep[p, l, k0[j]:] & ~mem).sum())
                                 if t3 and thr is not None and k0[j] == ks:   # a sure row of this check (never the
                                     keep[p, l, :ks] = False                 # live bonus row: its cf is -1); its top-ks
                                     # ranks go to the t3 gate (harness t3k = ks; ks 2 = every arm before Wed 04:0x)
+                        if qom:                                  # tiles: distinct kept experts of the block, every row
+                            Us, rs = set(U.tolist()), set(res.tolist()); kset = set()   # (stand-ins too), as the audit
+                            for j, r in enumerate(rows):
+                                rr = ids[r, l].tolist(); kk = int(k0[j]); kset.update(rr[:kk])
+                                sj = scf is not None and cfs[j] >= scf
+                                kset.update(e for e in rr[kk:] if e in Us or (not sj and e in rs))
+                            tls.setdefault(dom, [0, 0])[0] += len(kset)
                         if qom:                                  # kept resident experts are used: touch them (all sure rows)
                             for j, r in enumerate(rows):
                                 if k0[j] < 10:
+                                    sj = scf is not None and cfs[j] >= scf     # a strict row touches only its members
                                     for e in ids[r, l, k0[j]:].tolist():
-                                        if e in c: c.move_to_end(e)
+                                        if e in c and (not sj or e in Us): c.move_to_end(e)
                         d[2] += int(keep[A:fm + 1, l].sum()); d[3] += fm + 1 - A
+                    if qom: tls.setdefault(dom, [0, 0])[1] += min(k, fm - A) + 1   # kept tokens of this segment
             np.savez_compressed(os.path.join(od, nm), keep=keep)
     for dom, (u, ux, kp, rl) in st.items():
         print(f"{arm} {dom}: union x{u / ux:.3f} per check, experts kept per realized row-layer {kp / max(rl, 1):.2f} of 10",
               flush=True)
         if bq: print(f"  {arm} {dom}: realized bonus rows gated by their next draft: {bqn.get(dom, 0)}", flush=True)
+        if qom and dom in tls: print(f"  {arm} {dom}: tiles per kept token {tls[dom][0] / max(tls[dom][1], 1):.1f}", flush=True)
         if qom:
             n, mem, res, ld, ms = qs[dom]
             print(f"  qom {dom} (pool {cpool or os.environ.get('QOM_C', 'm')}): sure-row rank 2-9 pairs {n}: kept as union members "

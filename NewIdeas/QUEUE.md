@@ -2210,3 +2210,44 @@ block 32 (net ~+2 % under this cost model unless the drafter nears the oracle); 
   - Fable C's bytes read: the raw x0.82 / x0.64 cuts are worth x0.91 / x0.82 of the engine's chat bytes and +2-4 %
     chat tok/s at 24 GB (SSD is ~6 of ~70 ms per chat check).
   - My replay's raw cuts are x0.78 / 0.73 and x0.65 / 0.62.
+- Thu 07:3x: SPLIT ARMS BUILT, BIT-CHECKED, PRE-REGISTERED (the orchestrator 07:2x; Fable C's audit F4 / test 1, its
+  top-ranked lever).
+  - Rule (audit_split_replay.py strict_row): the map's qom_0_live_bq form (QOM cf 0 + the bonus row gated by its next
+    draft, 45 GB pool). Drafted rows whose cf >= 0.9 (split_0.9) / >= 0.99 (split_0.99) keep ranks 0-1 + union members
+    only (no resident keep); every other row as QOM; loads unchanged.
+  - Build: dm_oea_masks.py gains qom_<thr>_split<cf> (strict rows also touch only what they keep, as the audit's replay)
+    and a tiles-per-kept-token stat.
+    - split_0.9 = qom_0_split0.9_live_bq; split_0.99 = qom_0_split0.99_live_bq.
+  - Bit-checks (scripts/split_check.py, data/dm_masks/check_split.log): OK.
+    - qom_0_split1.1_live_bq == qom_0_live_bq bit for bit (36 / 36); ranks 0-1 never touched.
+    - split_0.99 drops 910,285 experts on 5,691 rows; split_0.9 drops 1,382,387 on 7,339 rows.
+    - LRU drift adds ~2,200 elsewhere.
+  - Tiles per kept token [P, this builder, 45 GB pool]:
+    - code 294.7 (QOM) -> 192.7 (x0.654) / 158.4 (x0.537);
+    - IFEval 490 -> 452 / 405 (x0.92 / 0.83); multi 477 -> 449 / 413 (x0.94 / 0.86).
+  - Cross-check vs the audit's replay: QOM's code tiles agree (294.7 vs 291), but its split ratios are lower (x0.60 /
+    x0.47). Cause: the bonus-row convention. The audit's replay gives a check-final bonus row the next block's first
+    draft cf (6 exact code rows, 3,319 rows >= 0.9); the map's _bq form leaves it exact (125 exact rows, 3,033 >= 0.9).
+    The g arrays are identical. The _ball (DRAFT17) form would sit between (3,158 >= 0.9); one command if wanted.
+  - Lines (the audit's test 1; code decisive, all-row flips):
+    - PASS <= 1.34 %; BETWEEN 1.34-2.0 %; KILL > 2.0 %. The lever is killed if both arms are > 2.0 % on code, or if
+      BigMoE's R8 group-count log shows QOM's groups <= 0.6x exact's.
+    - Priors (audit [G]): split_0.9 1.2-1.5 %, split_0.99 0.9-1.2 %.
+    - Chat runs as the control (lines 5.42 / 3.69, information).
+  - Twin: qom_0_live_bq (measured 0.39 / 4.09 / 3.26).
+  - Harness line: PERT.update(rmask='/Users/kamen/NewIdeas/data/dm_masks/<arm>', renorm=False); no t3; 36 windows.
+    Read: scripts/chat_arm_read.py <arm>.
+- Thu 07:3x: SPLIT ARMS, DRAFT17 _ball FORM = test 1's PRIMARY split arms (the orchestrator 07:3x: the engine's FAST keep
+  QOM-KEEP gives every last row a cf). The bq pair (9b6451e) stays as the gentler bracket, run only if the window has
+  time, else Friday.
+  - Arms: qom_0_split0.9_live_ball, qom_0_split0.99_live_ball. Twin: qom_0_live_ball (QOM-KEEP + DRAFT17 at the 45 GB
+    pool). Never measured on the map, so it is offered as the control arm. It differs from the measured qom_0_live_bq on
+    3,575 rows: the no-next-draft bonus rows gated, plus LRU drift.
+  - Bit-checks (data/dm_masks/check_split_ball.log): OK.
+    - qom_0_split1.1_live_ball == qom_0_live_ball bit for bit (36 / 36); ranks 0-1 never touched.
+    - split_0.99 drops 953,764 experts on 5,849 rows; split_0.9 drops 1,429,194 on 7,455 rows; ~2,400 added by LRU drift.
+  - Code tiles per kept token, 45 GB pool [P]: QOM-KEEP 291.4 -> 182.9 (x0.628) / 147.9 (x0.508).
+    - Side by side: bq x0.654 / 0.537; _ball x0.628 / 0.508; the audit's replay x0.601 / 0.469 (its QOM 291).
+    - Chat tiles: IFEval 490 -> 452 / 405 (x0.92 / 0.83); multi 477 -> 449 / 413 (x0.94 / 0.86).
+  - Lines unchanged (QUEUE Thu 07:3x; the audit's test 1): code PASS <= 1.34 %, BETWEEN 1.34-2.0 %, KILL > 2.0 % (the
+    lever dies if both arms are > 2.0 %, or on R8 <= 0.6x). Chat runs as the control.

@@ -28,7 +28,10 @@ GS_LASTGO="2026-11-05 14:45:00" GS_DEADLINE="2026-11-05 15:00:00" bash $H/script
 rc=$?; say "scores-capture smoke: $([ $rc = 0 ] && echo PASS || echo 'FAILED or not run') (data/gslot/scap_smoke.log)"
 [ $rc = 0 ] || { say "the arms do not run on an unchecked store; Friday"; exit 1; }
 cp $X $H/data/s67_extra_wed.txt 2>/dev/null
-printf '# Thursday leftovers (the orchestrator 07:0x): <arm> <est min> <start by HH:MM> <primary twin> <info twins...>\nqom_0_live_ball_c147_t3+dense3 10 14:45 qom_0_live_ball_c147_t3\nqom_0.3_live_c147_bonus4g 5 14:45 qom_0.3_live_c147_bonus3g qom_0.5_live_c147_bonus5g\nALONE 0 13:00\n' > $X
+# the arm list is read from data/thu_extra.txt at this point (Thu 07:3x: editable until the smoke ends, no re-arm needed);
+# without it, the 07:0x list (DENSE-3, then the cf 0.4 arm)
+if [ -s $H/data/thu_extra.txt ]; then { cat $H/data/thu_extra.txt; echo "ALONE 0 13:00"; } > $X; say "arm list from data/thu_extra.txt: $(grep -v '^#' $X | awk '{print $1}' | tr '\n' ' ')"
+else printf '# Thursday leftovers (the orchestrator 07:0x)\nqom_0_live_ball_c147_t3+dense3 10 14:45 qom_0_live_ball_c147_t3\nqom_0.3_live_c147_bonus4g 5 14:45 qom_0.3_live_c147_bonus3g qom_0.5_live_c147_bonus5g\nALONE 0 13:00\n' > $X; fi
 now="$(date '+%Y-%m-%d %H:%M:%S')"
 S67_START="$now" S67_LASTGO="2026-11-05 14:45:00" S67_DEADLINE="2026-11-05 15:00:00" S67_XALONE="$now" bash $H/scripts/dm_s7/s67_slot.sh
 say "runner ended (rc $?)"

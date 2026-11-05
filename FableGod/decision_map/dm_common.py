@@ -55,8 +55,9 @@ RT = {}
 
 def load_windows(max_per_set=12):
     """[(domain, name, ids(np.int32), off, gen)] : positions >= gen+1 (the answer) are the measured ones."""
-    W = []
+    W = []; only = [d for d in os.environ.get("DM_SETS", "").split(",") if d]   # (Thu 11-05) e.g. "code": those sets only
     for dom, wf in SETS:
+        if only and dom not in only: continue
         z = np.load(os.path.join(TD, wf))
         for s, nm in enumerate(z["names"]):
             if s >= max_per_set: break

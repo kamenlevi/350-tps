@@ -20,12 +20,20 @@ PREDS = {"qom_0.5_live_c147_bonus5g": {"code": "~0.7", "ifeval": "~4.6", "multi"
          "qom_0.5_u8_live_c147_bonus5g": {"code": "C3 <= 0.81; FC +0.2-0.4", "ifeval": "C3 <= 4.40; FC 4.5-4.7",
                                           "multi": "C3 <= 2.83; FC 2.9-3.1"},
          "qom_0.5_u8_reach0.5_live_c147_bonus5g": {"code": "C3 ~0.74", "ifeval": "C3 ~4.65; FC ~4.95",
-                                                   "multi": "C3 ~3.27; FC ~3.6"}}
+                                                   "multi": "C3 ~3.27; FC ~3.6"},
+         "qom_0_split0.9_live_bq": {"code": "FC 1.2-1.5 (decisive)", "ifeval": "control", "multi": "control"},
+         "qom_0_split0.99_live_bq": {"code": "FC 0.9-1.2 (decisive)", "ifeval": "control", "multi": "control"},
+         "qom_0_split0.9_live_ball": {"code": "FC 1.2-1.5 (decisive)", "ifeval": "control", "multi": "control"},
+         "qom_0_split0.99_live_ball": {"code": "FC 0.9-1.2 (decisive)", "ifeval": "control", "multi": "control"}}
 PRED = PREDS.get(ARM, {d: "-" for d in ("code", "ifeval", "multi")})
 INFOS = {"qom_0.3_live_c147_bonus3g": ("qom_0.5_live_c147_bonus5g", "qom_0_live_bq_c147_t3", "qom_0_live"),
          "qom_0.3_live_c147_bonus4g": ("qom_0.3_live_c147_bonus3g", "qom_0.5_live_c147_bonus5g"),
          "qom_0.5_u8_live_c147_bonus5g": ("qom_0.5_live_c147_bonus5g",),
-         "qom_0.5_u8_reach0.5_live_c147_bonus5g": ("qom_0.5_live_c147_bonus5g", "qom_0.5_u8_live_c147_bonus5g")}
+         "qom_0.5_u8_reach0.5_live_c147_bonus5g": ("qom_0.5_live_c147_bonus5g", "qom_0.5_u8_live_c147_bonus5g"),
+         "qom_0_split0.9_live_bq": ("qom_0_live_bq", "qom_0_split0.99_live_bq"),
+         "qom_0_split0.99_live_bq": ("qom_0_live_bq", "qom_0_split0.9_live_bq"),
+         "qom_0_split0.9_live_ball": ("qom_0_live_ball", "qom_0_live_bq", "qom_0_split0.99_live_ball"),
+         "qom_0_split0.99_live_ball": ("qom_0_live_ball", "qom_0_live_bq", "qom_0_split0.9_live_ball")}
 INFO = INFOS.get(ARM, ("qom_0.5_live_bonus5g", "qom_0.5_live_c164", "qom_0.5_live"))
 DST = os.path.expanduser("~/NewIdeas/data/ledger/chat_arm_read" + ("" if len(sys.argv) < 2 else "_" + ARM) + ".txt")
 
