@@ -5,7 +5,7 @@ rows at screen 7's layers. Every weight comes from a source the Thursday records
   MSB-3 = records3's rule (~/BigMoE/DESIGN_3bit.md): 2s (q >> 1) + bf16(b + s mean(q & 1)) per group of 64;
   MSB-2 = the map's s7_cal rule (~/MoonShots/scripts/to2bit.py, bias 'mid'): s2 = 2 s3 = 4s, codes (q >> 1) >> 1,
           b2 = bf16(b3 + 0.5 s3);
-  TRL   = Fit12's 8-bit view of the store (read-only import of ~/Fit12/scripts/fit_trl_judge.view).
+  TRL   = Fit12's 8-bit view of the store (~/Fit12/scripts/fit_trl_judge.view, copied verbatim: no records3 read at all).
 Rows: Breakthrough's xcapture (~/FableGod/decision_map/out/xcap, 36 windows: the MoE input x per layer, rank-sorted ids,
 normalised router weights). Per (row, rank) pair: Fit12's whole-expert error ||y(W) - y(W4)||^2 with all three
 projections replaced, and the same x w^2 (router-weighted: the expert's share of the MoE output error); pooled sums per
@@ -21,8 +21,35 @@ XCAP = f"{H}/FableGod/decision_map/out/xcap"
 OUT = f"{H}/MoonShots/data/msb2_judge.json"
 DOMS = ("code", "ifeval", "multi")
 PROJ = ("gate", "up", "down")
-sys.path.insert(0, f"{H}/Fit12/scripts")
-import fit_trl_judge as J                                            # noqa: E402  (read-only: the store's 8-bit view)
+STORE = f"{H}/Fit12/data/trl"
+KS = {"gate": 2, "up": 2, "down": 3}
+
+
+class J:
+    """Fit12's fit_trl_judge.view / silu, copied verbatim (importing that module would read records3's index through
+    fit_q at import; this script must not touch records3 during Thursday's in-place conversion)"""
+
+    @staticmethod
+    def silu(z):
+        return z / (1.0 + np.exp(-z))
+
+    @staticmethod
+    def view(L, e, p):
+        """the store's 8-bit view -> fp32 [o, i], exactly s * q + b (MLX packs element j of a uint32 in bits 8j..8j+7)."""
+        f = os.path.join(STORE, f"L{L}", f"e{e:03d}_{p}_k{KS[p]}.safetensors")
+        with open(f, "rb") as fh:
+            n = struct.unpack("<Q", fh.read(8))[0]
+            h = json.loads(fh.read(n))
+            buf = fh.read()
+        t = {}
+        for k in ("w", "s", "b"):
+            a, b = h[k]["data_offsets"]
+            t[k] = np.frombuffer(buf[a:b], np.uint32 if k == "w" else np.uint16).reshape(h[k]["shape"])
+        q = t["w"].view(np.uint8).astype(np.float32)                 # [o, i]
+        s = (t["s"].astype(np.uint32) << 16).view(np.float32)
+        b = (t["b"].astype(np.uint32) << 16).view(np.float32)
+        return np.repeat(s, 64, 1) * q + np.repeat(b, 64, 1)
+
 
 _WM = json.load(open(f"{MD}/model.safetensors.index.json"))["weight_map"]
 _HDR = {}

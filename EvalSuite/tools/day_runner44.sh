@@ -9,6 +9,9 @@
 # converted, once runner 43 has ended. Share lock per 9-min process ("MEM 34 GB"), the day rule's MEM wait, the code pin
 # (exit 7), the store staying converted (exit 8), and no process starts unless start + its measured length ends by
 # 16:00 (exit 6; the orchestrator Thu 07:5x: cutoffs bound a chunk's END). Stop it by pid only, and its cli child too.
+# The by-day order (the orchestrator Thu 09:1x): Breakthrough's split code arms (~20 min) go between runner 43 and this
+# one: it holds until results/q44/GO (Breakthrough touches it when they are done) or Q44_HOLD (default 14:50); each
+# process still waits while another session's MEM job runs. "HH:MM" in results/q44/CUTOFF (<= 16:30) moves the END bound.
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 cd "$HOME/EvalSuite" || exit 1
 LOG=results/day44_runner.log
@@ -57,7 +60,11 @@ pin() {
     | shasum | cut -c1-12
 }
 alive() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
-CUTOFF=$(date -j -f "%Y-%m-%d %H:%M" "2026-11-05 16:00" +%s)   # processes END by 16:00 (the orchestrator Thu 07:5x)
+CUTOFF0_HM=16:00                                  # processes END by it (the orchestrator Thu 07:5x), or results/q44/CUTOFF's
+cutoff_hm() { local h; h=$(head -c 5 results/q44/CUTOFF 2>/dev/null)
+  [[ "$h" =~ ^(0[0-9]|1[0-6]):[0-5][0-9]$ ]] && [[ ! "$h" > 16:30 ]] && echo "$h" || echo "$CUTOFF0_HM"; }
+cutoff() { date -j -f "%Y-%m-%d %H:%M" "2026-11-05 $(cutoff_hm)" +%s; }
+HOLD_HM=${Q44_HOLD:-14:50}; HOLD_AT=$(date -j -f "%Y-%m-%d %H:%M" "2026-11-05 $HOLD_HM" +%s)
 EST=1200                                          # a 9-min process + its load and last prompt, until measured
 freegb() { .venv/bin/python -c "import sys; sys.path.insert(0, '.'); from evalsuite.cli import free_gb; print(int(free_gb()))"; }
 pick_c() {      # the gate needs C >= MAXK 160: C 192 (need 34) or C 160 (need 30) by free memory, else wait (no lock held)
@@ -90,6 +97,9 @@ until full_converted; do
   [ $((w % 10)) = 0 ] && say "waiting for a fully converted store (Part 2 runs NAX6-N)"; w=$((w + 1)); sleep 60
   [ "$(left)" -gt 3600 ] || { say "no converted store before the deadline: Part 2 waits for a new launch"; exit 6; }
 done
+[ -e results/q44/GO ] || [ "$(date +%s)" -ge "$HOLD_AT" ] || say "holding for Breakthrough's split code arms: until results/q44/GO or $HOLD_HM"
+while [ ! -e results/q44/GO ] && [ "$(date +%s)" -lt "$HOLD_AT" ]; do sleep 30; done
+say "hold over: $([ -e results/q44/GO ] && echo "results/q44/GO exists" || echo "the $HOLD_HM cap")"
 say "go: $ARM on $KEYS ($(grep -c . "$KEYS") prompts), share, C 192 or 160 by free memory"
 while [ "$(nrows)" -lt 36 ]; do
   b=$(nrows)
@@ -101,7 +111,7 @@ while [ "$(nrows)" -lt 36 ]; do
   done
   [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }
   full_converted || { say "records3 is not fully converted any more: runner stops at $b/36 rows"; exit 8; }
-  [ $(( $(date +%s) + EST )) -le "$CUTOFF" ] || { say "no process fits before 16:00 (measured $((EST / 60)) min): runner stops at $b/36 rows"; exit 6; }
+  [ $(( $(date +%s) + EST )) -le "$(cutoff)" ] || { say "no process fits before $(cutoff_hm) (measured $((EST / 60)) min): runner stops at $b/36 rows"; exit 6; }
   pick_c
   t0=$(date +%s)
   EVALSUITE_STAGE_ENV="$STAGEENV" ./bin/evalsuite gpu live16b ref --arm "$ARM" --keys "$KEYS" \

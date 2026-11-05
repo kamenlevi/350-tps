@@ -3216,3 +3216,20 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
     audit's replay x0.601 / 0.469.
   - Today's queue (data/thu_extra.txt), in order: split_0.9_ball+code, split_0.99_ball+code, qom_0_live_ball+code, DENSE-3,
     the bq pair +code, cf04.
+- Thu 09:09, FRIDAY DRIVER ARMED (scripts/dm_s7/fri_c3.sh, data/fri_extra.txt; the orchestrator 07:2x / 09:0x).
+  - It starts at Fri 00:30, behind the quiet queue (P-OFF, BigMoE), on a uniform converted records3, with build_nat.
+  - Order: test 1 on 36 windows (the _ball splits, their twin, c3_b2d, c3_b2c); WHEN reach07+code (codepass over test 1);
+    R15; WHEN R15b (multi <= 3.19); band5+code; top1+code; any Thursday leftovers; topk8; then the all-rows capture and
+    massB_0.5 (built + installed in the driver).
+  - Hard stop 10:30, the tail cut first by start-by times.
+  - On every exit after 00:30 (the end, an abort, a stop) it stops its runs, unlocks, then touches
+    ~/EvalSuite/results/q45/GO (EvalSuite runner 45). Before 00:30 a stop writes no GO.
+  - Tested on scratch dirs: the stop path, the normal end, the pre-slot stop, and a missing GO dir (logged, never created).
+  - Dry test of the pick order: right.
+- Thu 09:2x, Thursday's run MOVED (the orchestrator 09:1x: EvalSuite's runners 43 + 44 fill ~10:30-15:50).
+  - Driver scripts/dm_s7/thu_splits.sh, slot from 10:10. It waits for records3 to be CONVERTED (the in-place rewrite done; a
+    row-major index is not enough) and no conversion process.
+  - Then the capture smoke, then split_0.9_ball+code, split_0.99_ball+code and qom_0_live_ball+code (~20 min).
+  - Last start 11:15, hard stop 11:45. On every exit from 10:10 it touches ~/EvalSuite/results/q44/GO (runner 44). Tested:
+    no GO on a pre-slot stop; GO on a stop in the slot.
+  - The bq pair, DENSE-3 and cf04 move to Friday's "Thursday leftovers". The 13:10 driver is stopped.

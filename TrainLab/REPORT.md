@@ -3285,6 +3285,19 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
 - **PASS = every step's loss within 2e-3 relative** of L1-20's logged loss (5.343977, 4.695799, 4.796175, 4.645471,
   3.723465). Step 1 already agrees to 1e-4; later steps add GPU-vs-CPU accumulation drift through Adam. FAIL otherwise.
   Tool: port/compare_l120.py.
+- Slot amendment (Thu 09:13; PASS line unchanged): runner 42 ran as a shared run (MEM 36 GB), but only 15 GB was
+  available beside it (swap 10.7 GB), so the NO-SWAP >= 20 GB rule failed and the check did not start beside it. Fallback
+  (the orchestrator's conversion window): turns/steps_after_conv.sh waits for BigMoE's records3 conversion (a quiet lock
+  right after 42's verdict, ~10:15-10:25) to end, then runs port_steps_thu.sh with its rules unchanged (no quiet lock or
+  ticket, >= 32 GB available for 3 clear minutes); it gives up at 11:30. The walk re-measure follows under the same lock.
+- Cap (Thu 09:2x, the orchestrator): EvalSuite holds runner 43 until this check ends, cap ~10:50. So the steps start
+  only by 10:38, anything still running at 10:50 is stopped (every step's loss is in the log, so a stop leaves a partial
+  read-out over the steps done), and the walk starts only by 10:44. If 43 can't be held: the 43-44 gap (~14:10).
+- Gate, replacing the cap (Thu 09:2x, the orchestrator's 2nd note): runner 43 now waits for ~/EvalSuite/results/q43/GO
+  (this script touches it on every exit path) or 10:50, and while any share lock shows MEM > 5 GB (mine says MEM 12
+  GB). By day this check and Breakthrough's split code arms (~20 min, also right after the conversion) go one at a
+  time, in either order: the gate also waits while another session's lock shows MEM > 5 GB, and backs off if two locks
+  land together. Start by 11:30 (the give-up stays); the walk only by 11:40; 12:00 = runaway stop.
 
 ### P-OFF diagnostic RESULT (Wed 11-04 22:10): ALIVE. The 125B's greedy token equals the corpus answer on 0.86 of answer tokens
 - On-path rate (assistant tokens): **0.860** by the extractor's line over windows 4-260 (the decision line), **0.8622**

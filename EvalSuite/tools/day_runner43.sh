@@ -17,6 +17,10 @@
 # session. AR at C 192, share locks ("MEM 36 GB"), the day rule's MEM wait, the code
 # pin (exit 7), the store's layout (exit 8), and no chunk starts unless start + its measured length ends by 14:15 (exit 6;
 # the orchestrator Thu 07:5x: cutoffs bound a chunk's END). Stop it by pid only, and its cli child too.
+# The by-day order (the orchestrator Thu 09:1x, 09:2x): after the conversion, Breakthrough's split arms and MTP Head's
+# PORT check (CPU, MEM 12 GB) run first, one at a time. Before its first GPU job the runner holds until results/q43/GO
+# or Q43_HOLD (default 11:10), then until no other session's MEM job has run for 3 min straight (a gap between the two
+# short jobs does not let it in). "HH:MM" in results/q43/CUTOFF (<= 15:00) moves the END bound without a relaunch.
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 cd "$HOME/EvalSuite" || exit 1
 LOG=results/day43_runner.log
@@ -33,6 +37,7 @@ R3IDX=$HOME/BigMoE/models/bare/records3/index.json
 STORE=${Q43_STORE:-rowmajor}                     # where the NAX6-base batch runs (see above)
 NAXC=${Q43_NAXC:-ref2tnax}; NAXB=${Q43_NAXB:-ref2tnfh}   # the NAX6-base control / batch on that store
 MODE=rowmajor
+HOLD_HM=${Q43_HOLD:-11:10}; HOLD_AT=$(date -j -f "%Y-%m-%d %H:%M" "2026-11-05 $HOLD_HM" +%s)
 say() { echo "$(date +%H:%M:%S) $*" >> "$LOG"; }
 left() { echo $(( EVALSUITE_DEADLINE - $(date +%s) )); }
 count() { [ -f "$1" ] && wc -l < "$1" | tr -d ' ' || echo 0; }
@@ -105,9 +110,27 @@ pick_c() {      # C by free memory (tokens do not depend on C): the largest of 1
     [ "$(left)" -gt 3600 ] || { say "deadline near while waiting for memory: runner stops"; exit 6; }
   done
 }
-CUTOFF=$(date -j -f "%Y-%m-%d %H:%M" "2026-11-05 14:15" +%s); CUTOFF_HM=14:15   # chunks END by it (the orchestrator Thu 07:5x)
+CUTOFF0_HM=14:15                                  # chunks END by it (the orchestrator Thu 07:5x), or results/q43/CUTOFF's
+cutoff_hm() { local h; h=$(head -c 5 results/q43/CUTOFF 2>/dev/null)
+  [[ "$h" =~ ^(0[0-9]|1[0-5]):[0-5][0-9]$ ]] && [[ ! "$h" > 15:00 ]] && echo "$h" || echo "$CUTOFF0_HM"; }
+cutoff() { date -j -f "%Y-%m-%d %H:%M" "2026-11-05 $(cutoff_hm)" +%s; }
 EST=3000                                          # a 45-min chunk + load and its last row, until measured
-fits() { [ $(( $(date +%s) + EST )) -le "$CUTOFF" ]; }
+fits() { [ $(( $(date +%s) + EST )) -le "$(cutoff)" ]; }
+hold() {   # GO file, cap (epoch), why: wait for the file or the cap, then until no other session's MEM job (day rule) has
+  local w=0 q=0   # run for 3 checks in a row, 1 min apart
+  [ -e "$1" ] || [ "$(date +%s)" -ge "$2" ] || say "holding for $3: until $1 or $(date -r "$2" +%H:%M)"
+  while [ ! -e "$1" ] && [ "$(date +%s)" -lt "$2" ]; do sleep 30; done
+  say "hold over: $([ -e "$1" ] && echo "$1 exists" || echo "the $(date -r "$2" +%H:%M) cap"); then 3 min without another MEM job"
+  while [ "$q" -lt 3 ]; do
+    if mem_busy; then
+      q=0; [ $((w % 10)) = 0 ] && say "another session's MEM job holds a shared lock: waiting (day rule)"; w=$((w + 1))
+    else
+      q=$((q + 1))
+    fi
+    [ "$q" -lt 3 ] && { sleep 60; calm; }
+  done
+  say "no other MEM job for 3 min: go"
+}
 run_rows() {   # run, rows wanted, stage args...: chunks under a share lock until the run has that many rows
   local run=$1 want=$2 b n rc w; shift 2
   NOPROG=0
@@ -121,7 +144,7 @@ run_rows() {   # run, rows wanted, stage args...: chunks under a share lock unti
     done
     [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }
     store_ok || { say "records3 is not $MODE as this run needs (index.json): runner stops at $run $b/$want rows"; exit 8; }
-    fits || { say "no chunk fits before $CUTOFF_HM (measured chunk $((EST / 60)) min): runner stops at $run $b/$want rows"; exit 6; }
+    fits || { say "no chunk fits before $(cutoff_hm) (measured chunk $((EST / 60)) min): runner stops at $run $b/$want rows"; exit 6; }
     pick_c
     say "$run: chunk at C $C (--need $NEED; $(freegb) GB NO-SWAP)"
     t0=$(date +%s)
@@ -155,7 +178,11 @@ if [ "$MODE" = converted ]; then
     [ $((w % 10)) = 0 ] && say "waiting for BigMoE's conversion (all 48 layers, index still for 2 min)"
     w=$((w + 1)); sleep 60
   done
-  say "records3 is converted: check 2: tools/r3check.sh snap/bigmoe-da8e7a6 ref2tf0.r2 converted ref2tf0.r1,ref2t.r2"
+  say "records3 is converted"
+fi
+hold results/q43/GO "$HOLD_AT" "the split arms + PORT (the orchestrator's by-day order)"
+if [ "$MODE" = converted ]; then
+  say "check 2: tools/r3check.sh snap/bigmoe-da8e7a6 ref2tf0.r2 converted ref2tf0.r1,ref2t.r2"
   pick_c; R3_C=$C tools/r3check.sh snap/bigmoe-da8e7a6 ref2tf0.r2 converted ref2tf0.r1,ref2t.r2 >> "$LOG" 2>&1; c2=$?
   echo "check 2 rc $c2 ($(date +%H:%M))" > results/CHECK2_DONE
   [ $c2 = 0 ] || { say "check 2 rc $c2: ref2tf0 on the converted store != check 1: runner stops (VOID there)"; exit 5; }
@@ -181,7 +208,7 @@ $PY tools/d4x.py "$BATCH" "$CORE" "$IFXREF" > results/f1_d4x.txt 2>&1; d=$?
 say "the batch's core lines: $(grep '^D4X:' results/f1_d4x.txt | tail -1) (d4x rc $d)"
 if [ $d = 10 ]; then
   nx=$(grep -c '"key": "ifevalx/' "results/$IFXREF/decode.jsonl" 2>/dev/null || echo 0)
-  if [ "$nx" -ge 220 ] && [ $(( $(date +%s) + 5760 )) -le "$CUTOFF" ]; then   # stage 2 (~1.6 h) must END by the cutoff
+  if [ "$nx" -ge 220 ] && [ $(( $(date +%s) + 5760 )) -le "$(cutoff)" ]; then   # stage 2 (~1.6 h) must END by the cutoff
     run_rows "$BATCH" 483 --sets ifevalx --keys results/ifx/stage1_keys.txt
     $PY tools/d4x.py "$BATCH" "$CORE" "$IFXREF" > results/f1_d4x.txt 2>&1; d=$?
     say "after the batch's stage 2: $(grep '^D4X:' results/f1_d4x.txt | tail -1) (d4x rc $d)"
