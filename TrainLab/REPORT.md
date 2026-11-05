@@ -3354,6 +3354,30 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   be told apart from noise. L1-20 stays the drafter. Settling it needs one of: a noise probe (L1-20's recipe rerun) or
   the full 160K version. Both need night slots; data: data/poff_*.log, data/d02b_walk_poff*.
 
+### SEED: L1-20 retrain noise (pre-registration, Fri 11-06 01:4x, before the run; the orchestrator 01:2x)
+- Why: P-OFF 60K came out +0.11 code kept per check over L1-20 (BETWEEN), and retrain noise was never measured. The
+  TF32-off retrain probe's "no effect" line (|delta| < 0.10) needs it too.
+- Run: sticky/seed_train.py = sticky/d09_train.py (L1-20's trainer) plus --seed. --seed 1 reseeds the training data order
+  and the pmask draws; the 24 VAL groups stay L1-20's. Everything else is L1-20's recorded args (l120_ft.state.json):
+  --epochs 2 --minutes 50 --lr 2e-5 --S 4 --A 64 --val-every 100 --micro 1 --cache-gb 2 --bs 32 --pmask 0.5, data
+  ~/Leap/data/l120, MLX's default TF32 like L1-20. Then the D-02b walk, code + math (the default sets, which reproduce
+  L1-20's 9.57 / 7.00 exactly).
+- Slot: turns/seed_l120.sh, not before 02:10. It queues a quiet ticket after 3 clear minutes with no other quiet lock
+  or ticket, so it runs after Leap's NATIVE-FRI and FLAT-2.
+  - MEM 37 GB (P-OFF's footprint was 36.8). Swap guard +2 GB.
+  - The chunk must end by 10:15: no start after 09:25, and a stop at 10:12.
+- Measure: |dcode| = |kept(seed 1) - 9.57| and |dmath| = |kept(seed 1) - 7.00|. That is one sample of the seed-to-seed
+  difference, so it gives a rough scale only.
+- Reading for P-OFF's +0.11:
+  - |dcode| >= 0.11: P-OFF is within one seed difference. Read it as no effect; the 160K version isn't worth a slot on
+    this evidence.
+  - |dcode| <= 0.04: +0.11 is ~3x one seed difference. Likely a small real gain (still below PASS); the 160K version is
+    worth a slot.
+  - Between: still unreadable; a second seed would be needed.
+- For the TF32-off probe: if |dcode| or |dmath| >= 0.10, one run per arm can't separate TF32 from noise. It is
+  re-priced with seeds before it runs.
+- Void if the run doesn't finish all 201 steps (cap, guard or the 10:12 stop).
+
 ### PORT walk footprint re-measure: pre-registration (Wed 11-04 23:4x, before the run)
 - Why: the 21:0x math walk peaked at 5.97 GB (section 'PORT walk validated'), over my 4 GB rule for port tests. The fix
   (one bf16 head output buffer, 256-row chunks) passed head parity at 2.55 GB, but the walk itself was not re-run.

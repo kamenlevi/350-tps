@@ -291,3 +291,43 @@ The ticket got its quiet lock at 07:38, after RELAX. NO-SWAP was 47.3 GB at the 
 - Overlays: scratch/model_mix's index renamed .rowmajor-stale; the decision map's overlay (already renamed .STALE-... by its
   owner) still has its own index and must be re-indexed or deleted. Back: convert_records_p11.py --inverse with the
   row-major md5s.
+
+## Fri 6 Nov 00:52-01:23: the palindrome run (data/fri/fri_report.txt)
+
+The quiet lock came at 00:52 with 41 GB available, which gave the C 192 rung. The frx0 gate passed: the relaxed copy with
+its flags off == REF2-T (2 prompts, 128 tokens). Every arm ran both passes on all 12 HumanEval. A heat freeze hit the
+first half at 01:00-01:02 (162 s; it was not flagged PAUSED).
+
+| arm | pair-mean geo steady tok/s | first / second pass | kept per check |
+|---|---|---|---|
+| u3c | 82.5 | 89.8 / 75.1 | 10.61 |
+| qall | 86.8 | 88.3 / 85.3 | 10.05 |
+| s99 | 81.3 | 71.9 / 90.7 | 10.10 |
+| s90 | 89.1 | 85.8 / 92.2 | 10.14 |
+| qallr | 87.9 | 98.5 / 75.0 | 11.04 |
+| span | 78.5 | 88.9 / 67.8 | 11.10 |
+
+### Verdicts
+
+**Split (s99 / s90): VOID, not NOT PASS.** The all-in arms set REF2_OOO_1C. On that one-call path, Leap's ref2 applies
+QOM's drop inside the kernel (ooo1c.a3c_one_call_qom; t["qom"] is popped) and never calls qom_keep_mx. The split plumbing
+(R57_QOM_SPLIT) and the new group counters live in r57's two-phase _ooo_call_t3, which these arms do not use:
+- the counters are 0 on every check;
+- the strict rows (7.1 / 8.9 per check) are counted on the host only.
+
+So s99 / s90 ran qall. Their -6.3 % / +2.7 % against qall measure tonight's noise floor between identical configs: about
++-6 %.
+
+**Rule C: KILL** (pre-registered).
+- s per task 1.167x; tokens per task 1.000x.
+- Kept per check is +10.4 %, but tok/s is -9.5 %: the per-check host work (token decodes for the tagger and a sync per
+  check) costs more than the extra kept tokens.
+
+**Relaxed 0.5:** tok/s +1.3 % (inside the noise) at kept +9.9 %: the same per-check cost eats the gain.
+
+**C3-R8: unresolved.** On this path 'uses' is the loader's posted count, before the drop: qall 2,812 vs exact 3,708 per
+check (0.759x). Groups really computed need the counter inside the one-call path.
+
+### Next
+- Test the split on the two-phase path, where it works: qall / s99 / s90 with REF2_OOO_1C off. No new code is needed.
+- Or have Leap move the split into the one-call kernel's keep flags.

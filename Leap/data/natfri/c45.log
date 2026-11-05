@@ -1,0 +1,6 @@
+01:26:35 c45 start (arm list): nfdc_224:224 nfnc_224:224:R57_NAX=1,R57_REFTOK= nfncb_224:224:R57_NAX=1,R57_REFTOK= nfdcb_224:224
+01:26:35 run nfdc_224 (NO-SWAP 44 GB, swap 8.00824 GB)
+01:33:14 SWAP GUARD in nfdc_224
+01:33:17 done nfdc_224 rc=143: 
+01:33:17 nfnc_224: swap grew > 2 GB since the run's start (8.00824 -> 10.8558 GB): stop (the swap rule)
+01:33:17 c45 end

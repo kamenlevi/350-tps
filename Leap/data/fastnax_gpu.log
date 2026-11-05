@@ -38,3 +38,5 @@ lock released
 11-05 23:23:01 unlocked; results: data/ooo1cq_check.txt
 11-05 23:23:01 RESTORED ref2.py to the pre-19:1x version (md5 04f18c02) because: ref2.self_test rc 1
 11-05 23:47:25 ref2.py swapped back to the pre-19:1x version (md5 04f18c02) for BigMoE's Fri run (their request 23:4x); FAST-NAX copy: data/ref2_fastnax_eda11b8b.py
+11-06 01:24:40 ref2 re-apply armed (pid 19846): the FAST-NAX version after BigMoE's 'Fri run end'
+11-06 01:24:40 RE-APPLIED the FAST-NAX ref2 (md5 eda11b8b, switch off by default) after BigMoE's Fri run end

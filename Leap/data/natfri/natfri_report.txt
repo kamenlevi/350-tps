@@ -1,0 +1,13 @@
+NATIVE-FRI phase C (Leap; TABLE_350 'NATIVE-FRI' AMENDMENT Thu 19:0x), C 224, ref14 prompts, Dc / Nc / Nc / Dc
+Dc = the 45 GB default on the converted records3 (3c-N); Nc = + R57_NAX=1 (NAX6-N). Data: /Users/kamen/Leap/data/natfri/r57
+nfdc: tokens == REF2-T on 0 / 0 prompts
+nfdcb: tokens == REF2-T on 0 / 0 prompts
+Nc pass 1 == pass 2 on 0 / 0 prompts
+steady tok/s (tpsw, pair means, geo over 0 prompts both arms kept): Dc nan, Nc nan -> Nc / Dc = nan (+nan %)
+per domain Nc / Dc: 
+order effect (Dc pass 2 / pass 1, Nc pass 2 / pass 1): +nan %, +nan %
+nfdc: no footprint line
+nfnc: no screen output
+nfncb: no screen output
+nfdcb: no screen output
+Verdict (pre-registered Thu 19:0x: PASS Nc / Dc >= +6 %, KILL < +2 %, else BETWEEN; BUG / VOID rules): VOID (nfdc: 0 prompts; nfnc: 0 prompts; nfncb: 0 prompts; nfdcb: 0 prompts)

@@ -169,3 +169,13 @@ lock released
 23:24:35 [Leap: FLAT-2 (zero's fixed-cost measurement, fri / all arms x ~3 min, C 224, MEM ~38 GB)] start: PEAK 38 GB, ticket 25 min, window from Thu 23:47 to Fri 12:00, after: sh /Users/kamen/Leap/scripts/flat2_after.sh, cmd: /bin/bash /Users/kamen/FableGod/zero/build_1105/run_flat2.sh
 23:44:14 [BigMoE: Fri palindrome (qall / split / relaxed / rule C, 12 HumanEval, C 224-192), MEM ~41-44 GB] stopped by hand before 23:47 (never queued): NO-SWAP 32.4 GB, re-armed with PEAK 28 (the C 128 rung)
 23:44:16 [BigMoE: Fri palindrome (qall / split / relaxed / rule C, 12 HumanEval, C 224 down to 128 by NO-SWAP), MEM ~32-44 GB] start: PEAK 28 GB, ticket 60 min, window from Thu 23:47 to Fri 02:30, cmd: /bin/bash scripts/fri_night.sh
+23:47:17 [BigMoE: Fri palindrome (qall / split / relaxed / rule C, 12 HumanEval, C 224 down to 128 by NO-SWAP), MEM ~32-44 GB] queue the quiet ticket (available 20 GB)
+queued #1; this returns when it's your turn and the Mac is quiet.
+your turn after 64 min: quiet lock held until 01:52. Measure now, and `peer unlock` as soon as you're done.
+00:52:42 [BigMoE: Fri palindrome (qall / split / relaxed / rule C, 12 HumanEval, C 224 down to 128 by NO-SWAP), MEM ~32-44 GB] granted, 41 GB available: run
+lock released
+01:23:10 [BigMoE: Fri palindrome (qall / split / relaxed / rule C, 12 HumanEval, C 224 down to 128 by NO-SWAP), MEM ~32-44 GB] done rc=0, ticket released
+01:25:24 [Leap: NATIVE-FRI phase C (Dc / Nc A-B-B-A, 14 ref14 prompts, C 224-128 by NO-SWAP, MEM ~28-40 GB)] start: PEAK 28 GB, ticket 45 min, window from Thu 23:47 to Fri 12:00, after: sh /Users/kamen/Leap/scripts/natfri_after.sh, cmd: /bin/bash /Users/kamen/Leap/scripts/natfri_c.sh
+01:25:24 [Leap: NATIVE-FRI phase C (Dc / Nc A-B-B-A, 14 ref14 prompts, C 224-128 by NO-SWAP, MEM ~28-40 GB)] queue the quiet ticket (available 33 GB)
+queued #1; this returns when it's your turn and the Mac is quiet.
+01:25:26 [Leap: FLAT-2 (zero's fixed-cost measurement, fri / all arms x ~3 min, C 224-128 by NO-SWAP, MEM ~28-40 GB)] start: PEAK 28 GB, ticket 25 min, window from Thu 23:47 to Fri 12:00, after: sh /Users/kamen/Leap/scripts/flat2_after.sh, cmd: /bin/bash /Users/kamen/Leap/scripts/flat2_ladder.sh

@@ -6845,6 +6845,13 @@ shapes, since latency does not depend on the values.
   - FLAT-2 gets the same ladder via scripts/flat2_ladder.sh, which passes FLAT2_C to zero's unchanged run_flat2.sh.
     - FLAT does not depend on C (zero's INSTALL).
     - The chosen C goes to data/flat2_ladder.log.
+- **RUN 1 (Fri 2026-11-06 01:26-01:33): VOID, the swap guard.**
+  - Granted 01:26:35 with NO-SWAP 44.8 GB, so the ladder took C 224 (needs 44.3): 0.5 GB to spare.
+  - Swap grew 8.0 -> 10.9 GB in the first arm (nfdc_224). The runner's guard stopped it at 01:33:14 (rc 143) and ran no
+    other arm. The report: 0 prompts in every arm -> VOID (data/natfri/natfri_report.txt, c45.log).
+  - FLAT-2 then ran at C 224 with 48.2 GB (3.9 GB to spare) with no swap growth. So the ladder's ~4 GB headroom is not
+    enough at the top rung; the re-run keeps >= 3 GB beyond the ladder's need.
+  - No verdict yet; the re-run is placed by the orchestrator.
 
 ## OOO-1C: one-call OOO on the NAX path (Leap, pre-registered Wed 2026-11-04 15:2x; BUILD_DAY #5, the orchestrator 15:0x; BigMoE 15:1x: "build it as a patch in your copies")
 - **Why:** OOO pays two expert calls per MoE layer: phase 1 on the resident pairs, the loader's spin, then phase 2 on the
@@ -8045,3 +8052,42 @@ screen); GPU tests small, on share locks.
       switch off by default.
     - The script is fixed.
   - Next: BigMoE's engine arm (the line above), then NAX6-NH inside the one-call, then the ooo1c head fix.
+
+## QOM-SPLIT-1C: R57_QOM_SPLIT on ref2's one-call (Leap, idea Fri 2026-11-06 01:3x; BigMoE's find, the orchestrator deciding)
+- The find (BigMoE, Fri 01:2x): with REF2_OOO_1C=1, R57_QOM_SPLIT does nothing.
+  - ref2's one-call (QOM-OOO, Wed 17:1x) drops an optional use by the loader's answer (-2 = not resident).
+  - It never calls Breakthrough's qom_keep_mx, the only place the split acts.
+  - So Thu night's split arms ran plain qall. FLAT-2's BASE (R57_QOM_SPLIT=0.9 + REF2_OOO_1C=1) measures qall's flat cost.
+- Why it is simple:
+  - qom_keep_mx keeps a use if its rank < k0, OR it is in the block's loads, OR (it is resident AND the row is not strict).
+  - The screen's optional uses are exactly the third case: opt = sure rows & ~(ranks 0-1 | the block's union).
+  - A strict row (sure, cf >= T) keeps none of them, whatever the loader says.
+  - So ref2 can drop opt & strict before the post: the row's rank-0 id, weight 0, as the two phases do with a dropped use.
+  - Other rows keep the bit-21 post. No kernel change.
+- Plan if the orchestrator says go:
+  - A ref2 switch, off by default: T from R57_QOM_SPLIT, cf from t["qom"][2].
+  - GPU check per call against BigMoE's two phases with the split (REF2_OOO_1C off), same loader state, bitwise.
+  - The one difference: strict rows' dropped uses no longer touch the loader, so cache histories can drift. That is fine on the
+    FAST track, which is certified under >= 2 histories.
+
+## FLAT-2 RESULT: zero's fixed-cost measurement (Leap ran it, Fri 2026-11-06 01:33-01:37, C 224, quiet lock): KILL
+- Lines (zero, LOSSY350_ZERO.md section 4): FLAT = the steady 2-row cycle minus 2 x the row sweep's warm slope.
+  PASS <= 30 ms, BETWEEN 30-36, KILL > 36. 350 tok/s itself needs <= 25 at K 12.
+- fri arm (the Friday FAST all-in: QOM + D17 + D7B code + HC8 + DNR + HCB + small native + D7BNAX + OOO-1C + split 0.9):
+  - FLAT 53.74 ms -> KILL.
+  - Cycle median 59.76 ms (IQR 59.30-60.17): draft 9.10, check + commit submit 50.60 (graph build 44.74, eval wait 5.59).
+  - Row slope 3.01 ms per row (warm intercept 36.46 ms); 885 expert groups per 2-row check.
+- all arm (+ DKV + DKV_ADD + GDNB): FLAT 55.20 ms -> KILL (cycle 61.22: graph build 46.09, eval wait 5.68).
+- Warm 2-row check, synced split (fri; 111.1 ms synced, one sync per piece):
+  - GDN 15.65, HC reads 10.96, attention 8.58, router + shared 5.74, experts 17.35, MoE tail 3.45, HC write 1.05,
+    PLE 0.70, embed + norm + head 2.27, layer glue -6.05; pure CPU graph build 13.35.
+  - Per added row (16 vs 2 rows) only the experts grow (+3.27 ms per row); every other piece is flat.
+- Reading:
+  - The fixed cost is ~29 ms above the 350 line and ~24 ms above PASS. It is spread over GDN, HC reads, attention,
+    router + shared and the experts' per-check part, not one piece.
+  - The check's submit (44.7 ms) is mostly per-layer work exposed by syncs; pure Python graph build is ~13 ms.
+  - So fixed-cost work is large. In order: lazy commit (Fable B), the HC reads, GDN, and fewer syncs per layer.
+- Caveats:
+  - The split (R57_QOM_SPLIT=0.9) was inert in both arms under REF2_OOO_1C (QOM-SPLIT-1C), so this is qall's flat cost.
+  - The memory was fine: NO-SWAP 48.2 GB at the start, swap flat at 11.1 GB through both arms.
+- Data: data/flat2/ (screens, json, logs; copied from ~/FableGod/zero/build_1105/out), data/flat2_ladder.log.
