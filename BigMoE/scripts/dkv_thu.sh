@@ -14,7 +14,7 @@ mkdir -p data/dkvt
 LOG="$PWD/data/dkvt/dkvt.log"
 say() { echo "$(date '+%m-%d %H:%M:%S') $*" >> "$LOG"; }
 swap_gb() { sysctl -n vm.swapusage | awk '{gsub("M","",$6); print $6 / 1024}'; }
-CC=224
+CC=${DKVT_C:-224}   # night_thu.sh picks 224 or 160 by NO-SWAP (tokens do not depend on C; Thu 00:1x)
 if [ -z "$DKVT_REPORT_ONLY" ]; then
   cp scripts/r57_screen.py data/r57/snap/r57_screen_dkvt.py && cp scripts/c45_runner.sh data/r57/snap/c45_runner_dkvt.sh || exit 2
   export C45_SCREEN=data/r57/snap/r57_screen_dkvt.py C45_DEADLINE=${DKVT_DEADLINE:-0830} C45_OUT="$PWD/data/dkvt"
@@ -27,7 +27,7 @@ if [ -z "$DKVT_REPORT_ONLY" ]; then
     C45_ARMS="dkvt_$CC:$CC:R57_DKV=1,R57_DKV_ADD=1" /bin/bash data/r57/snap/c45_runner_dkvt.sh
   say "arm rc=$?"
 fi
-"$HOME/BigMoE/.venv/bin/python" -I - "$CC" "$HOME/BigMoE/data/d45/ref14_tokens.json" >> "$LOG" 2>&1 <<'EOF'
+"${DKVT_PY:-$HOME/BigMoE/.venv/bin/python}" -I - "$CC" "$HOME/BigMoE/data/d45/ref14_tokens.json" >> "$LOG" 2>&1 <<'EOF'
 import ast, json, math, re, sys
 C, REF = sys.argv[1], sys.argv[2]
 g = lambda xs: math.exp(sum(map(math.log, xs)) / len(xs)) if xs else float("nan")

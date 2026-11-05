@@ -248,3 +248,6 @@ theta per domain comes from the map verdict (scripts/qom_read.py -> data/QOM_rea
   check (scripts/dkv_thu.sh: 14 ref14 prompts at C 224 vs REF2-T, plus the copy-free path count) is step 3 of the morning
   ticket, before the agent LOO (cut 08:35). Line (pre-registered): PASS = every token == REF2-T AND fast > 0 -> R57_PRESET=45
   after a same-run speed A/B; FAIL -> bisect DKV vs + ADD; VOID -> re-run.
+- Wed 22:5x: the 23:00 ticket was cancelled before it queued: NO-SWAP 36 GB at 22:51 with no big job running (the many
+  sessions' anonymous memory), below the 41 GB its smallest rung needed. The relaxed 0.5 arm and lever 2's exact stage 1 move
+  to the Fri 00:30 night (with FAR-G1 and Rule C); the C 224 trio runs in the Thu 07:05 ticket.

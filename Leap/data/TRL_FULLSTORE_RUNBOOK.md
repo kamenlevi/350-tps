@@ -5,6 +5,11 @@ experts, as a trl-v1 store that the TRL-NAX kernel serves.
 
 > (a quote from the project owner, kept private)
 
+**Status (Wed 23:3x): NOT BUILT.**
+- Screen 7 KILLed the 2.40 b mix (NewIdeas S7-TRL: in-frame code / IFEval / multi flips 1.45 / 9.54 / 10.44 %).
+- The trellis family stopped at 22:4x (NewIdeas TRL-JUDGE-MAP).
+- This runbook stays for a reopened family (e.g. a down-only TRL-3 arm).
+
 ## 0. Status of the parts (all verified Wed 20:1x-21:2x)
 | part | file | check |
 |---|---|---|

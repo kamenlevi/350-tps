@@ -3297,3 +3297,14 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   window (Leap's log: 56 tok/s). Footprint 17.7 GB (smoke 16.8, MEM 28 declared). Swap flat.
 - The training folder is built: ext/poff/train60 = L1-20's 109 windows + the 260 off-policy windows (60,162 assistant
   tokens). The training (turns/poff_t.sh, ~55 min + walk, MEM 34 GB) needs a Thursday slot from the orchestrator.
+
+### PORT walk footprint re-measure: pre-registration (Wed 11-04 23:4x, before the run)
+- Why: the 21:0x math walk peaked at 5.97 GB (section 'PORT walk validated'), over my 4 GB rule for port tests. The fix
+  (one bf16 head output buffer, 256-row chunks) passed head parity at 2.55 GB, but the walk itself was not re-run.
+- Run: turns/walk_foot.sh. The same command as the 21:0x validation: math, batch 30, --bf16-store, 4 threads, CPU only
+  (154 s then). Share lock MEM 7 GB. It starts only in a real gap: no other session's quiet lock or queued ticket, no
+  other MEM >= 5 GB lock, >= 24 GB available, lid open, 3 clear minutes. It gives up at Thu 06:45 (BigMoE's 07:05).
+  Tonight EvalSuite's RELAX holds quiet locks in hourly chunks, so it may give up; then it waits for a later gap.
+- Lines: footprint (/usr/bin/time -l peak memory footprint) <= 4.0 GB = FIXED; above = still over (walks beside other
+  jobs keep --batch <= 15). Kept per check must stay 7.01 +- 0.02 (2043 checks); outside that, the head change broke
+  the walk.

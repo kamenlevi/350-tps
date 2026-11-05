@@ -3211,3 +3211,53 @@ so R-01 should find about the same slots, not ~1 GB more.
     mix store is ~6.4 h vs ~65 h on CPU (option B's cost; Leap's log).
   - Fallbacks cancelled: Thu 06:00 finisher (task b9uxbzxp6) and the 22:44 branch cron. s7_trl runs in Breakthrough's map
     batch tonight. The screen's verdict is NewIdeas' map_kl read-out, to be recorded here and in TRIED when it lands.
+- SCREEN 7 VERDICT (NewIdeas d37b3ef, 22:2x; s7_trl ran 22:15-22:21, TRL 1,022-1,047 experts per window, fallback 0): the
+  mix = BETWEEN / KILL / KILL (code / IFEval / multi, in-frame 1.45 / 9.54 / 10.44 % flips). Its damage corresponds to an
+  effective error ratio r_eff 2.72 / 2.55 / 3.15 vs MSB-3, against the 1.62-1.87 that the MSE ratios predicted.
+
+### ROUTED JUDGE PER DOMAIN (Wed 4 Nov 22:39-22:46; NewIdeas 22:33 for the orchestrator's QUEUE 22:3x, pre-registered 5fa0f47)
+- Question: is screen 7's miss the inputs' distribution? The store was fit on a broad 7-domain mix; the map runs code,
+  IFEval and multilingual answers.
+- Pre-registered reading (NewIdeas):
+  - mix >= ~2.4 on code / multilingual inputs: distribution explains the miss (a GPU probe of TRL-3 gets built);
+  - <= ~2.0: trellis errors cost more KL per unit error on this model, and the family stops;
+  - in between: the orchestrator's call.
+- Method (/Users/kamen/Fit12/scripts/fit_trl_judge.py, fit_trl_judge_map.py; CPU, 4 threads, share lock, 2.4 + 1.1 min):
+  - For every expert of layers 7 / 18 / 30 / 41, on the rows routed to it, the error against W4 (the 4-bit model) of the
+    store's 8-bit view and of MSB-3: gate / up ||(W - W4) x||^2; down ||(W - W4) h4||^2 on the expert's own W4 hidden;
+    whole expert ||y(W) - y(W4)||^2 with all three projections replaced. Ratio = pooled store error / pooled MSB-3 error.
+  - Map inputs: Breakthrough's xcapture (/Users/kamen/FableGod/decision_map/out/xcap, read-only). These are the 36 map
+    windows, 10,316 answer rows (code 3,366 / IFEval 3,397 / multi 3,553), with rank-sorted router ids and weights. Ranks
+    2-9 = the experts s7_trl served from the store; whole_w weights each pair by router weight squared.
+  - B10-r capture (/Users/kamen/Fit12/data/b10rcap): held-out R8 + R9 (8,190 rows), the fit rows R0-R7 (in-sample) and U
+    (English prose). Per-token domains come from the parts' round-robin layout (/Users/kamen/Fit12/scripts/fit_dom_labels.py),
+    which matches tokens_by_domain in all 10 parts. Captured row r = token r (rows 0-2 are identical across the parts, as their
+    first 3 tokens are).
+  - Checks: the error code reproduces the encoder's own in-sample numbers to ~0.2 % (L41 e0, L7 e5, all fit rows); the
+    view decode equals mx.dequantize exactly.
+- Map inputs, ranks 2-9, L7 / L18 / L30 / L41:
+  | domain | whole_w | gate / up (TRL-2) | down (TRL-3) |
+  | code | 1.12 / 1.22 / 1.27 / 1.31 | 1.40 / 1.60 / 1.67 / 1.70-1.72 | 0.61-0.67 |
+  | IFEval | 1.58 / 1.65 / 1.67 / 1.83 | 2.03 / 2.21 / 2.31 / 2.48 | 0.76-0.79 |
+  | multi | 1.59 / 1.65 / 1.68 / 1.75 | 2.06 / 2.24 / 2.31 / 2.43 | 0.71-0.79 |
+  Ranks 0-1 are within ~5 % of ranks 2-9. Router weighting moves ranks 2-9 by <= 1.1 %.
+- B10-r held-out R8 + R9, routed (top-10 set), L7 / L18 / L30 / L41:
+  | domain | whole | gate / up | down |
+  | code | 1.00 / 1.06 / 1.12 / 1.25 | 1.25-1.64 | 0.55-0.60 |
+  | multi | 1.29 / 1.18 / 1.23 / 1.38 | 1.56-1.86 | 0.62-0.67 |
+  | instr (IFEval prompts only) | 1.24 / 1.13 / 1.18 / 1.40 | 1.47-1.85 | 0.62-0.66 |
+  | all 7 domains | 1.21 / 1.20 / 1.25 / 1.42 | 1.53-1.87 | 0.63-0.65 |
+  | U prose (out of domain) | 1.62 / 1.71 / 1.76 / 1.92 | 2.09-2.64 | 0.78-0.80 |
+  In-sample (fit rows) whole is 0.90-1.30. Code is the store's best domain everywhere; ratios rise with depth.
+- Reading:
+  - The map's chat answers are harder for the store than the held-out parts: gate/up ~2.0-2.5 vs ~1.6, whole ~1.6-1.8 vs
+    ~1.25. Code is not: whole ~1.1-1.3 either way. So the distribution explains part of the chat miss and none of the code miss.
+  - Whole-expert ratio (comparable to a uniform MSB-family r, since down at TRL-3 is 0.6-0.8x): <= 2.0 in all three
+    domains, so the pre-registered reading is that the family stops. The map damage is 2.1-2.4x this on code and 1.4-2.0x
+    on chat.
+  - TRL-2 gate/up ratio: code <= 2.0; IFEval / multi 2.0-2.5 (L41 at the 2.4 line), which is the orchestrator's call.
+  - Which measure applies depends on how s7_cal's r is defined. NewIdeas and the orchestrator decide.
+  - SETTLED (NewIdeas 22:49): the pre-registration (5fa0f47) names the whole-expert output error, because the SWEEP's r is
+    a uniform per-expert error ratio (MSB-2 = 5x MSB-3). Whole-expert is <= 2.0 in all three domains, so the TRELLIS
+    FAMILY STOPS. NewIdeas cites these files in its QUEUE 22:4x and the SWEEP (fb39925, 3d45584). It reads the leftover gap
+    (KL implies 2.6-3.2 vs 1.1-1.8 here) as partly noise, and asked Breakthrough whether s7_trl and s7_cal touch the same reads.

@@ -267,3 +267,16 @@ For each arm and set:
 - **Shared keys with the control:** HumanEval+ 60 and the first 10 math (A, B, C), the first 20 IFEval (E, F, G), and
   AT14 (B).
 - Nothing else changes.
+
+## Amendment (Wed 2026-11-04 22:54, before any night row): C 160, and the start moves up
+- **Memory:** NO-SWAP is 36 GB with nothing big running (the orchestrator 22:51). C 256 (gate 46 GB) and C 192 (38 GB)
+  do not fit. BigMoE cancelled its 23:00 ticket for the same reason, and the orchestrator said "Start RELAX as soon as your
+  memory gate passes ... use a lower C, your call."
+- **So the arms and the replays run at C 160:** --need 30, gate 34 GB, BigMoE's by-day C.
+  - Tokens do not depend on C: the gate decisions (cf, copy) and the numerics are the same.
+  - The timing read-outs and the per-task line compare every arm with the control in the same run, at the same C. So
+    they stay valid as ratios; they are not comparable with C 256 numbers.
+- **Runner 40 now waits for memory** (NO-SWAP >= need + 4) before each chunk, so a memory wait never counts as a failed
+  chunk.
+- **The start moves to now (22:54),** because the GPU is free (no BigMoE 23:00 ticket). END stays Thu 08:10, so no arm
+  chunk starts after 06:40 and no replay chunk after 07:10.

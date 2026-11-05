@@ -56,6 +56,18 @@ pin() {
     | shasum | cut -c1-12
 }
 alive() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
+freegb() { .venv/bin/python -c "import sys; sys.path.insert(0, '.'); from evalsuite.cli import free_gb; print(int(free_gb()))"; }
+pick_c() {      # the gate needs C >= MAXK 160: C 192 (need 34) or C 160 (need 30) by free memory, else wait (no lock held)
+  local fg w=0
+  while :; do
+    fg=$(freegb)
+    if [ "$fg" -ge 38 ]; then C=192; NEED=34; return 0; fi
+    if [ "$fg" -ge 34 ]; then C=160; NEED=30; return 0; fi
+    [ $((w % 10)) = 0 ] && say "waiting for memory: $fg GB NO-SWAP (C 160 needs 34)"
+    w=$((w + 1)); sleep 60; calm
+    [ "$(left)" -gt 900 ] || { say "deadline near while waiting for memory: runner stops"; exit 6; }
+  done
+}
 SWAPTRIPS=0; NOPROG=0
 PIN0=$(pin)
 echo $$ > results/q44.pid; trap 'rm -f results/q44.pid' EXIT
@@ -75,7 +87,7 @@ until full_converted; do
   [ $((w % 10)) = 0 ] && say "waiting for a fully converted store (Part 2 runs NAX6-N)"; w=$((w + 1)); sleep 60
   [ "$(left)" -gt 3600 ] || { say "no converted store before the deadline: Part 2 waits for a new launch"; exit 6; }
 done
-say "go: $ARM on $KEYS ($(grep -c . "$KEYS") prompts), share, C 192"
+say "go: $ARM on $KEYS ($(grep -c . "$KEYS") prompts), share, C 192 or 160 by free memory"
 while [ "$(nrows)" -lt 36 ]; do
   b=$(nrows)
   calm
@@ -87,8 +99,9 @@ while [ "$(nrows)" -lt 36 ]; do
   [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }
   full_converted || { say "records3 is not fully converted any more: runner stops at $b/36 rows"; exit 8; }
   [ "$(left)" -gt 900 ] || { say "deadline near (no process after 16:15): runner stops at $b/36 rows"; exit 6; }
+  pick_c
   EVALSUITE_STAGE_ENV="$STAGEENV" ./bin/evalsuite gpu live16b ref --arm "$ARM" --keys "$KEYS" \
-    --chunk-minutes 9 --C 192 --need 34 --minutes 18 --share >> "$LOG" 2>&1; rc=$?
+    --chunk-minutes 9 --C "$C" --need "$NEED" --minutes 18 --share >> "$LOG" 2>&1; rc=$?
   say "$ARM: chunk rc=$rc ($(nrows)/36 rows)"
   if tail -4 "$LOG" | grep -q "can't tell which Claude session\|left the queue"; then
     say "the session that owns this runner's locks is gone: runner stops (relaunch it from a live session)"; exit 3

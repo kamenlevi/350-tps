@@ -7541,6 +7541,29 @@ Pre-registered before the run (scripts/ooo1c.py qom forms, ref2 _ooo_1c_call; oo
   - Read: ~4.7 us per 32-key step, and more chunks make it slower. Each step waits ~16 times on scattered device loads
     (latency), with low occupancy (~190 registers per thread). Next: v2 stages each K / V tile in threadgroup memory
     with coalesced 16-byte loads by all 128 threads.
+- **Result v2 (17:39, same share lock; data/dsdpa_check.txt, second block).** Recorded and committed at 23:3x: it was
+  left out when MISSION 33 started at 17:4x. The code is unchanged since the run (mtime 17:39:13, run 17:39:37).
+  - v2 stages each 32-key K / V tile in threadgroup memory (coalesced loads by all 128 threads); it is attend's
+    default.
+  - The run was more contended: the MLX baseline was 1.5x slower at ctx 1,008 than 3 minutes earlier.
+  - Accuracy PASS: <= 1.00 ulp at every ctx_len / s; adversarial window rows 1.00 ulp.
+  - Timing still MISSED the line, by a hair at 2,054:
+
+    | arm (ms per 5 layers) | ctx 1,008 | ctx 2,054 |
+    |---|---|---|
+    | MLX path (bool mask) | 0.991 | 1.252 |
+    | MLX path (additive mask) | 0.923 | 1.101 |
+    | v1 nc 4 | 0.680 | 0.704 |
+    | v2 nc 2 (best) | 0.627 (x0.63) | 0.634 (x0.51) |
+    | v2 nc 4 | 0.655 | 0.670 |
+    | v2 nc 8 | 0.686 | 0.709 |
+    | v2 nc 16 | 0.749 | 0.749 |
+
+  - Read: v2 is 8-10 % faster than v1 in the same run.
+  - x0.51 against the x0.50 line comes from a contended run; only a quiet re-time would settle it.
+  - PARKED. DKV (PASS, handed to BigMoE) already removes the concat copy that is part of this baseline, so DSDPA's
+    gain over DKV + MLX's SDPA is smaller: roughly 0.2 ms per propose at 2,054 (DSDPA-0's SDPA alone 0.83 ms vs v2's
+    0.63 ms; different runs, an estimate).
 
 ## DKV: a copy-free drafter window cache (Leap, Wed 2026-11-04 17:4x; drafter glue, exact)
 Pre-registered before the run (scripts/dkv.py, scripts/dkv_check.py, data/dkv_check.txt).
@@ -7668,6 +7691,13 @@ Goal: be ready if tonight's screen 7 passes (NewIdeas' corrected estimate: code 
 layer 18 (Fit12's store = the reference); size the 48-layer Hessian capture. (2) the decode path for serving: k 3 and
 the engine wiring are new; pre-register the speed line. No full-store disk writes (31-36 GB is Kamen's call after the
 screen); GPU tests small, on share locks.
+- **OUTCOME (Wed 23:3x): screen 7 KILLed the mix and the trellis family STOPS, so no full store gets built.** From the
+  owners' records (~/TRIED/newideas.md):
+  - S7-TRL (NewIdeas): in-frame flips code / IFEval / multi 1.45 / 9.54 / 10.44 %. Pre-registered verdict: code over
+    its line, chat KILL x2; re-derived by Breakthrough 8a473b0.
+  - TRL-JUDGE-MAP (NewIdeas 22:49, on Fit12's routed judge): the inputs' distribution does not explain the miss
+    (whole-expert error ratio <= 2.0 on every domain), so the family stops by the pre-registered rule.
+  - Kept as tools: the bitwise Metal encoder, TRL-NAX (0.87x NAX6-N), and the trl-v1 store + runbook.
 - **Prior art:** QTIP (Tseng et al., NeurIPS 2024) encodes with a Viterbi per tile on CUDA GPUs and decodes with
   computed codes (1MAD / 3INST) in fused matvec kernels. ik_llama.cpp's IQ*_KT have a Metal decode port. Not found: a
   Metal Viterbi encoder, or a trellis decode grouped per expert inside a routed MoE GLU. Tag: published method; the
@@ -7906,3 +7936,10 @@ screen); GPU tests small, on share locks.
   - The memory / swap guard never fired; free memory stayed 34-44 GB with the walk up.
   - Handed to Fit12 21:40. Fit12 checks, then copies via temp names and renames, then announces the whole store
     (Breakthrough's dm_t3.trl_gate reads Fit12's store). Log: data/trl41_finish.log.
+- **23:3x:** s7_trl has been read (OUTCOME above), and Fit12 had asked me to keep my copy until then.
+  - Check: Fit12's L41 has 1,536 / 1,536 files; my 1,107 match by name and size.
+  - The staging dir ~/Leap/data/trl41_for_fit12 (1.8 GB) is deleted at the first moment with no held quiet lock and no
+    PAUSE / HOLD. The script re-checks and cmp's 7 files first (EvalSuite's RELAX held quiet until 00:32; heat PAUSE
+    at 23:31).
+  - **DELETED Thu 05:02:00** at the first such gap. The re-check was clean: Fit12's L41 1,536 / 1,536, 0 name / size
+    mismatches, 7 / 7 sampled files identical (cmp). 132 GiB free afterwards.

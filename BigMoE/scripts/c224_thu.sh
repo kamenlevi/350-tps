@@ -14,7 +14,7 @@ mkdir -p data/c224t
 LOG="$PWD/data/c224t/c224t.log"
 say() { echo "$(date '+%m-%d %H:%M:%S') $*" >> "$LOG"; }
 swap_gb() { sysctl -n vm.swapusage | awk '{gsub("M","",$6); print $6 / 1024}'; }
-CC=224
+CC=${C224T_C:-224}   # night_thu.sh picks C (and C224T_NOQF / C224T_MG) by NO-SWAP at its start (Thu 00:1x)
 if [ -z "$C224T_REPORT_ONLY" ]; then
   cp scripts/r57_screen.py data/r57/snap/r57_screen_c224t.py && cp scripts/c45_runner.sh data/r57/snap/c45_runner_c224t.sh || exit 2
   export C45_SCREEN=data/r57/snap/r57_screen_c224t.py C45_DEADLINE=${C224T_DEADLINE:-0815} C45_OUT="$PWD/data/c224t"
@@ -27,11 +27,13 @@ if [ -z "$C224T_REPORT_ONLY" ]; then
   QA="$QA,REF2_SMALL_NATIVE=1,R57_D7BNAX=1,REF2_OOO_1C=1"
   QF="$QA,BIGMOE_FC_F=4,BIGMOE_FC_FS=2,R57_ARMS=gate+t+pf,BIGMOE_PRED_LINES=4"
   say "C $CC FAST trio start (pid $$, deadline $C45_DEADLINE, swap $C45_SWAP0 GB)"
-  R57_KEYS=$K MG=${C224T_MG:-10} C45_ALARM=900 C45_ARMS="u3ct_$CC:$CC:$U qallt_$CC:$CC:$QA qallft_$CC:$CC:$QF" \
+  AR="u3ct_$CC:$CC:$U qallt_$CC:$CC:$QA qallft_$CC:$CC:$QF"
+  [ -n "$C224T_NOQF" ] && AR="u3ct_$CC:$CC:$U qallt_$CC:$CC:$QA"   # no forecast-read arm when memory is short
+  R57_KEYS=$K MG=${C224T_MG:-10} C45_ALARM=900 C45_ARMS="$AR" \
     /bin/bash data/r57/snap/c45_runner_c224t.sh
   say "arms rc=$?"
 fi
-"$HOME/BigMoE/.venv/bin/python" -I - "$CC" >> "$LOG" 2>&1 <<'EOF'
+"${C224T_PY:-$HOME/BigMoE/.venv/bin/python}" -I - "$CC" >> "$LOG" 2>&1 <<'EOF'
 import json, math, statistics as S, sys
 C = sys.argv[1]
 g = lambda xs: math.exp(sum(map(math.log, xs)) / len(xs)) if xs else float("nan")

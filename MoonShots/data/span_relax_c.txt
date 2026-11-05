@@ -22,3 +22,9 @@ Lines (FULL R2.1, HumanEval+): x1.074 (PASS >= 1.10, KILL < 1.05), 0 accepts out
   rule C_noguard: kept(16) ratio x1.147 = engine 12.09; relaxed accepts 93 (1.51 % of positions), outside in_comment rows 0, code-token deviations 0; draft text outside a comment on re-scan 0 (0.0 %)
 Lines (FULL R2.1, HumanEval+): x1.137 (PASS >= 1.10, KILL < 1.05), 0 accepts outside in_comment rows, re-scan disagreement 0.0 % -> context only: the pre-registered line is on the fresh 12 windows (BETWEEN x1.074 above) [FULL's pooled-24 prediction x1.15 profile]
 (0 s)
+== SPANRELAX-C rule C (Wed 2026-11-04 22:37): walk mbpp, top-8 source rulec_mbpp.json: 100 windows, 15351 positions; in_comment rows 3052, conditions 1-3 2841, blocked by the line-end guard 45; alignment: the 125B's top-1 == the draft agrees with the walk's own exact acceptance on 99.04 % of positions
+  exact profile kept(16) 5.01
+  rule C        : kept(16) ratio x1.125 = engine 11.86; relaxed accepts 294 (1.92 % of positions), outside in_comment rows 0, code-token deviations 0; draft text outside a comment on re-scan 0 (0.0 %)
+  rule C_noguard: kept(16) ratio x1.135 = engine 11.96; relaxed accepts 316 (2.06 % of positions), outside in_comment rows 0, code-token deviations 0; draft text outside a comment on re-scan 0 (0.0 %)
+Lines (FULL R2.1, MBPP): x1.125 (PASS >= 1.03, KILL < 1.01) -> PASS [prediction x1.04]
+(0 s)

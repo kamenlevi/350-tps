@@ -1,8 +1,8 @@
 #!/bin/bash
 # EvalSuite runner 40 (DRAFT until the smoke passes; detached, from a live evalsuite session): RELAX's night
-# (docs/PREREG_relax_2026-11-02.md, revision 2). G arms in order control, A, B, E, T3ALL, F, C, G (quiet tickets, C 256, --need
-# 42: R-56d's 33.4 GB at C 192 + 64 slots x 0.133 GB), each to all its keys (results/relax/keys_<arm>.txt) in 60-min
-# chunks; then the REF2-T replays of the arms with a gate, HC8 or other tiers (A, B, T3ALL, C, G; shared, C 192, --need 34); then
+# (docs/PREREG_relax_2026-11-02.md, revision 2). G arms in order control, A, B, E, T3ALL, F, C, G (quiet tickets, C RELAX_C,
+# default 256, --need from C: R-56d's 33.4 GB at C 192 + 0.133 GB per slot; Wed 22:5x: C 160 for arms and replays, NO-SWAP 36 GB), each to all its keys (results/relax/keys_<arm>.txt) in 60-min
+# chunks; then the REF2-T replays of the arms with a gate, HC8 or other tiers (A, B, T3ALL, C, G; shared, C RELAX_RC, default 192); a memory wait before each chunk; then
 # tools/relax_report.py --score -> results/relax_report.txt and results/RELAX_DONE.
 # Window: from START once results/relax/GO exists (NewIdeas / the orchestrator assigns the slot), until END: no chunk
 # starts in the last 90 min; what is left (G first, then C, then F: the PREREG's drop order) waits for a new launch.
@@ -16,6 +16,17 @@ LOG=results/day40_runner.log
 GO=results/relax/GO
 START=${RELAX_START:-"2026-11-05 00:30"}          # Thu 00:30 (or Wed 10:30 if NewIdeas orders it: RELAX_START=...)
 END=${RELAX_END:-"2026-11-05 15:00"}
+RC=${RELAX_C:-256}; RRC=${RELAX_RC:-192}     # arms / replays C (Wed 22:5x: NO-SWAP 36 GB -> C 160 for both, PREREG amendment)
+need_of() { python3 -c "import math; print(math.ceil(33.4 + ($1 - 192) * 0.133))"; }   # R-56d's 33.4 GB at C 192, 0.133 / slot
+freegb() { .venv/bin/python -c "import sys; sys.path.insert(0, '.'); from evalsuite.cli import free_gb; print(int(free_gb()))"; }
+mem_wait() {    # wait (no lock held) until NO-SWAP >= need + 4, the cli's gate, so a memory wait never counts as a failed chunk
+  local w=0
+  while [ "$(freegb)" -lt $(( $1 + 4 )) ]; do
+    [ $((w % 10)) = 0 ] && say "waiting for memory: $(freegb) GB NO-SWAP, need $(( $1 + 4 )) (C $2)"
+    w=$((w + 1)); sleep 60; calm
+    [ "$(left)" -gt "$3" ] || { say "deadline near while waiting for memory: runner stops"; exit 6; }
+  done
+}
 EARLIEST=$(date -j -f "%Y-%m-%d %H:%M" "$START" +%s)
 export EVALSUITE_DEADLINE=$(date -j -f "%Y-%m-%d %H:%M" "$END" +%s)
 export PEER_QUEUE_TIMEOUT=21600
@@ -90,8 +101,9 @@ for arm in $ARMS; do
     [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }
     [ "$(left)" -gt 5400 ] || { say "deadline near: runner stops (arm $arm at $(have $arm)/$(want $arm))"; exit 6; }
     b=$(have $arm)
+    mem_wait "$(need_of $RC)" "$RC" 5400
     EVALSUITE_STAGE_ENV="$(envof $arm)" ./bin/evalsuite gpu relax ref --arm $arm --keys results/relax/keys_$arm.txt \
-      --chunk-minutes 60 --C 256 --need 42 --minutes 80 >> "$LOG" 2>&1; rc=$?
+      --chunk-minutes 60 --C "$RC" --need "$(need_of $RC)" --minutes 80 >> "$LOG" 2>&1; rc=$?
     say "G $arm: chunk rc=$rc ($(have $arm)/$(want $arm) rows)"
     after "G $arm" $rc $b $(have $arm)
   done
@@ -105,8 +117,9 @@ for arm in $REPLAY; do
     [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }
     [ "$(left)" -gt 3600 ] || { say "deadline near: replays stop (arm $arm at $(replayed $arm)/$(have $arm))"; exit 6; }
     b=$(replayed $arm)
-    EVALSUITE_STAGE_ENV="$STAGEENV" ./bin/evalsuite gpu relax-replay ref --arm $arm --chunk-minutes 60 --C 192 --need 34 \
-      --minutes 80 --share >> "$LOG" 2>&1; rc=$?
+    mem_wait "$(need_of $RRC)" "$RRC" 3600
+    EVALSUITE_STAGE_ENV="$STAGEENV" ./bin/evalsuite gpu relax-replay ref --arm $arm --chunk-minutes 60 --C "$RRC" \
+      --need "$(need_of $RRC)" --minutes 80 --share >> "$LOG" 2>&1; rc=$?
     say "replay $arm: chunk rc=$rc ($(replayed $arm)/$(have $arm) prompts)"
     after "replay $arm" $rc $b $(replayed $arm)
   done

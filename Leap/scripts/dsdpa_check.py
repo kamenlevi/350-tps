@@ -18,7 +18,7 @@ OUT = os.path.expanduser("~/Leap/data/dsdpa_check.txt")
 def say(s):
     print(s, flush=True)
     open(OUT, "a").write(s + "\n")
-say(f"\nDSDPA-1 check {time.strftime('%a %H:%M:%S')}: MLX {mx.__version__}")
+say(f"\nDSDPA-1 check {time.strftime('%a %H:%M:%S')}: MLX {mx.__version__}; (a) checks attend's default (v2 since 17:4x)")
 HQ, HK, D, L, SW, NL = 32, 8, 128, 16, 2048, 5
 scale = D ** -0.5
 
@@ -92,8 +92,9 @@ for ctx_len in (1008, 2054):
                            mask=mask).transpose(0, 2, 1, 3).reshape(1, L, HQ * D) for q, kc, vc, kp, vp in X]
 
     A = {"mlx16": mlx(m), "mlx16add": mlx(madd)}
-    for nc in (4, 8, 16):
-        A[f"dsdpa{nc}"] = (lambda nc_: lambda: [DS.attend(q, kc, vc, kp, vp, ctx_len, nc=nc_) for q, kc, vc, kp, vp in X])(nc)
+    for v, nc in ((1, 4), (2, 2), (2, 4), (2, 8), (2, 16)):
+        A[f"dsdpa{'v1' if v == 1 else ''}{nc}"] = (lambda nc_, v_: lambda: [DS.attend(q, kc, vc, kp, vp, ctx_len, nc=nc_, v=v_)
+                                                                        for q, kc, vc, kp, vp in X])(nc, v)
     for f in A.values():
         mx.eval(f())
     T = {k: [] for k in A}
@@ -105,6 +106,6 @@ for ctx_len in (1008, 2054):
             mx.synchronize()
             T[k].append((time.perf_counter() - t0) / 4)
     med = {k: float(np.median(v)) for k, v in T.items()}
-    best = min((k for k in med if k.startswith("dsdpa")), key=med.get)
+    best = min((k for k in med if k.startswith("dsdpa") and "v1" not in k), key=med.get)
     say(f"(b) ctx_len {ctx_len}: ms per 5 layers (median of 21): " + ", ".join(f"{k} {1e3 * v:.3f}" for k, v in med.items())
         + f"; best {best} = x{med[best] / med['mlx16']:.2f} of mlx16")

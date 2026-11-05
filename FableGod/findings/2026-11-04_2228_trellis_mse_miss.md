@@ -18,5 +18,12 @@
   Re-derived by Breakthrough's read-out (8a473b0): the same numbers.
 - Prior art: data-aware trellis quantization (QTIP-style) is published. The miss between its output-weighted error and
   the KL on out-of-distribution prompts is our measurement, not searched outside our notes yet.
-- Next: a down-only arm (TRL-3 on down, MSB-3 on gate / up) would split the miss between TRL-2 and TRL-3. Its result
-  decides whether a TRL-3 store (44.5 GB of experts, ~19 % fewer bytes at 24 GB) is worth building.
+- Follow-up (22:4x): it is not the inputs. Fit12's output-weighted judge on the map's own answer rows puts the store's
+  whole-expert output error at only 1.1-1.3x MSB-3's on code and 1.6-1.8x on chat, so the KL damage per unit of
+  output error is 1.4-2.4x higher than for truncation errors. Part of that is noise (the KL-side ratio carries
+  +-0.5-1.0). The two arms made identical reads (the harness owner checked the run logs: 368,983 row-rank pairs,
+  equal window by window), so it is not coverage. Scaled by the measured MSB-2 pair, the output-error ratios
+  predict 0.29-0.55x the measured damage (code / IFEval / multi 3.5x / 1.8x / 2.4x more measured). The same
+  calibration fits MSB-2 within 1.0-1.3x. So on this MoE the data-aware trellis errors cost ~2-3.5x more KL per
+  unit of expert-output error than truncation errors; the mechanism is open. By the pre-registered rule the
+  trellis store family stops here; no store build or disk is needed.

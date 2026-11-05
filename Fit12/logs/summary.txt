@@ -1971,3 +1971,7 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 21:40:48 SCR trl import: L41 experts 148..511 from Leap's Metal encoder (/Users/kamen/Leap/data/trl41_for_fit12): 1092 files copied, 0 already there; checks: 1092 source files whole with my tensors + metadata, 15 shared files byte-identical (experts [10, 50, 90, 146, 147]), spot [300, 511] == my C path (6 files); L41 now 1536 files (3 s)
 21:41:20 SCR trl encode: layer 41 complete (1536 files: e0-147 my C path, e148-511 Leap's Metal encoder imported 21:40:48); store WHOLE 6144 / 6144 files (10G); dm_t3.trl_gate([7,18,30,41],'mix') nothing missing (512 / 512 per layer); trl_view test OK at 7 / 30 / 41
 21:41:20 SCR trl thu (task b9uxbzxp6, pid 5718) stopped by the session: the store is whole tonight, branch (b) not needed; cron 89035df6 (22:44) cancelled
+22:39:15 SCR trl judge start: fit_trl_judge.py 7,18,30,41 0-511 (NewIdeas 22:33)
+22:41:38 SCR trl judge end (rc 0): 4 layer files in /Users/kamen/Fit12/data/trl_judge
+22:45:01 SCR trl map judge start: fit_trl_judge_map.py 7,18,30,41 (xcapture rows, NewIdeas 22:33)
+22:46:09 SCR trl map judge end (rc 0)

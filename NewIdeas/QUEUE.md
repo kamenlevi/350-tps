@@ -197,7 +197,7 @@ Why it matters at 24 GB too (R-43, BigMoE b43): there each extra checked row cos
 | M-38 | MoonShots (CPU replay, 1 core, share lock; the orchestrator Wed 20:5x) | FORESIGHT [far-ahead foresight screen: how much of the LRU -> OPT miss gap survives a partly-right forecast of the future expert schedule? M-14's chained cap45 replay (BigMoE seed45: 6 prompts, res0 forced per prompt, prompts 2-6 counted; one MSB-3 pool per layer) at K 266 (45 GB EXACT, M-14's C) and K 147 (24 GB, C_m of the 147 / 46 split). Policy FH(H): experts with a forecast use within the next H checks stay (all forecast: the farthest forecast use leaves first), the rest leave by LRU; the forecast never looks past the prompt's own last check (a drafter forecasts its own continuation). (1) perfect forecast H 1/2/4/8/16 + OPT (Belady). (2) noisy at H 8/16: each true future (layer, expert, check) use kept with probability r 0.5/0.7/0.9, drawn once per use; the dropped uses replaced by an equal count of false positives at the same check, drawn from that layer's leave-one-prompt-out popularity (recall = precision = r); 5 seeds. Refs: LRU; M-14's learned key re-fit per K (M-14: -7.9 % misses at K 266). Sensitivities after the lines: per-look noise (fresh draw every check, r 0.7); full-horizon checks only (long-generation proxy: captures are ~29 checks per prompt); M-14's crossing oracle convention. Bytes = misses x 2,162,688 B (MSB-3 parts; LSB outside the replay, as M-14). Lines (the orchestrator's): PASS = r 0.7, H 8, K 266: >= 20 % fewer misses than LRU AND better than the learned key; BETWEEN = 10-20 %; KILL = < 10 % or no better than the learned key. Novelty: published family SP-MoE, MoE-SpeQ, MoE-Infinity, ProMoE (and our own W24-belady / IDEAS:1139 perfect-foresight bounds); candidate new part = the 8-16-check horizon fed by a far-ahead drafter, priced under noise]: **PRE-REGISTERED Wed 21:00, before any run. PASS Wed 21:15: noisy FH at r 0.7, H 8, K 266 = 31.5 misses per kept token, -26.5 % vs LRU 42.9 (learned key -7.8 %, OPT -55.3 %); perfect H 1/2/4/8/16 -8 / -14 / -23 / -34 / -45 % (M-14's hor reproduced); H 8 r 0.5 / 0.9 -19.2 / -31.7 %; H 16 r 0.7 -33.2 %. 24 GB (K 147): r 0.7 H 8 -27.7 % (learned -5.7 %; perfect H 8 = 92 % of the gap). Holds under per-look noise (-22.0 %), recall falling 0.9 -> 0.5 with depth (-24.5 %), uniform false positives (-25.0 %), full-horizon checks (-27.3 %); a popularity-only forecast is +24 % (worse than LRU: the false positives are no hidden prior); 0 recall on LRU's misses still -19 % (the value is knowing which residents return within H). Target for the GPU recall step: per (layer, expert, check) recall 0.7 at precision 0.7 over 8 checks = residents' 'used again within 8 checks' at recall 0.92 / precision 0.72, vs recency's best 0.83 / 0.52 (m 8); r 0.5 falls to BETWEEN. data/foresight45.txt** **FAR follow-up Wed 22:0x (Fable FAR, same frame, ~/FableGod/far/FAR.md): at per-use recall ~ precision ~ 0.7, real forecasters cut misses only 7 % (nearest-row KNN) / 14.6 % (ridge state map), because their errors repeat across a resident's uses while M-38's are independent; the true-path ceiling is recall 0.68 (the rejected rows hold 32 % of the reuse); perfect H 8 cuts stalled layers only 5 % where misses fall 34 %. So the PASS holds for a forecaster at the per-resident 0.92 / 0.72, not for one at per-use 0.7. FAR-WAIT (22:1x): the SSD wait is ~10-16 ms + 0.15-0.17 ms per miss (bandwidth-bound above the floor), so a miss cut maps ~1:1 onto SSD time: -26.5 % = -20 ms (-14.5 %) of a cap45 check, -6..-9 % at the live 100-200 misses.** |
 | M-39 | MoonShots (CPU replay, 1 core, share lock; the orchestrator Wed 21:0x) | SPANRELAX [Fable FULL's bet 'relax only inside '#' comments', pre-registered in ~/FableGod/full/FULL.md section 5 (rules A / B, PASS / KILL lines, prediction A 12.1, B 12.3, 0.2 %); RELAX_350's positions (relax_curves.py, read-only) + Mission 25's region scan (comment_loophole.py, read-only) + EvalSuite relax_core.CodeScan / comment_rows as the engine's token view (read-only); scripts/span_relax_check.py]: **KILL by the letter Wed 21:17: 4 of rule A's 70 relaxed accepts (5.7 %; B 5 of 74, 6.8 %) sit where the scan and the token view disagree (line > 2 %), and they are what the line guards against: the 125B opens a comment (argmax ' #'), the scan labels that position 'comment' from its target token, and rule A accepts a code draft (' for', ' if'). Otherwise above the lines: A 12.65 (x1.200, profile) with 0 other deviations outside comments, B 12.78 at 0.14 % code-token deviation. With the engine's causal tagger (relax_core.CodeScan + comment_rows): A 12.69 with 0 code drafts accepted, B 12.78 at 0.11 %; its 5 disagreements are comment continuations (the draft extends a comment line the 125B ends) - a post-hoc variant, re-register before use. The 125B's top-8 covers 12 of the 24 windows (comment share 15.5 % there vs 13.5 % over 24); relaxed accepts on QOM-gated rows: all at cf 0, 63 % at cf >= 0.5, 14 % at cf >= 0.9. Profile kept, Mission 25 halves it for real; length inflation (arXiv 2610.23818) is invisible here. data/span_relax_check.txt** |
 | M-40 | MoonShots (CPU census, 1 core, share lock; the orchestrator Wed 21:4x) | R1CENSUS [Fable FULL's round 2 R2.2 (a), pre-registered in ~/FableGod/full/FULL.md '## Round 2': can one answer be written as parallel parts? ast census of recorded answers: parts = top-level defs / classes, edges = Name / Attribute references, the best independent set by body text (signatures, docstrings, imports, prose and driver code sequential), tokens = characters; HPD-0 walk 24 HumanEval+ + 100 MBPP windows, 38,284 Magicoder python items, the d16w agent windows; scripts/r1_census.py]: **KILL Wed 21:46 on every source (line: >= 30 % of answers with >= 2 independent parts holding >= 50 % of their tokens; KILL < 15 %): HumanEval+ 0 % (1.04 parts per answer), MBPP 0 % (1.00), Magicoder 1.2 % (>= 2 independent parts 7.2 %; those hold 34 % of their answer). Readings tried: each method its own part 6.3 % (>= 2 parts 30.6 %); that plus code-only denominators 16.8 %, still under 30. Concurrent text (what could run beside another stream) averages 0.8 % of a Magicoder answer (4.6 % per-method). The d16w agent windows carry no Python (bash, edits, a Swift file). FULL predicted HumanEval+ / MBPP <= 10 %, Magicoder 40-60 %. data/r1_census.txt** |
-| M-41 | MoonShots (CPU replay, 1 core, share lock; the orchestrator Wed 21:4x; data: Breakthrough's fresh top-8, 22:23) | SPANRELAX-C [Fable FULL's re-registered comment relax, pre-registered in ~/FableGod/full/FULL.md R2.1: rule C = the causal tagger (EvalSuite relax_core CodeScan + comment_rows, read-only) + the line-end guard ('\n' not in the argmax) + R2 top-3 at >= 0.1 p1 on in_comment rows only; fresh HumanEval+ = the 12 HPD-0 windows outside the map (Breakthrough's rulec_he12.json, the map harness's baseline config), MBPP = 100 windows (rulec_mbpp.json, pending); scripts/span_relax_c.py]: **HumanEval+ BETWEEN Wed 22:24: kept(16) x1.074 = engine 11.32 (PASS >= x1.10, KILL < x1.05; prediction x1.13); 21 relaxed accepts (0.73 % of positions), 0 outside in_comment rows, 0 code-token deviations, 0 % re-scan disagreement; alignment (top-1 == draft vs the walk's own acceptance) 99.79 %. The fresh windows have fewer comment rows (11.3 % vs 15.5 %) and an easier exact profile (10.15 vs 7.78 kept). Context: M-39's 12 seen windows x1.189; all 24 pooled x1.137 (FULL's pooled prediction x1.15); the guard costs 0.004-0.015. MBPP pending. data/span_relax_c.txt** |
+| M-41 | MoonShots (CPU replay, 1 core, share lock; the orchestrator Wed 21:4x; data: Breakthrough's fresh top-8, 22:23) | SPANRELAX-C [Fable FULL's re-registered comment relax, pre-registered in ~/FableGod/full/FULL.md R2.1: rule C = the causal tagger (EvalSuite relax_core CodeScan + comment_rows, read-only) + the line-end guard ('\n' not in the argmax) + R2 top-3 at >= 0.1 p1 on in_comment rows only; fresh HumanEval+ = the 12 HPD-0 windows outside the map (Breakthrough's rulec_he12.json, the map harness's baseline config), MBPP = 100 windows (rulec_mbpp.json, pending); scripts/span_relax_c.py]: **HumanEval+ BETWEEN Wed 22:24: kept(16) x1.074 = engine 11.32 (PASS >= x1.10, KILL < x1.05; prediction x1.13); 21 relaxed accepts (0.73 % of positions), 0 outside in_comment rows, 0 code-token deviations, 0 % re-scan disagreement; alignment (top-1 == draft vs the walk's own acceptance) 99.79 %. The fresh windows have fewer comment rows (11.3 % vs 15.5 %) and an easier exact profile (10.15 vs 7.78 kept). Context: M-39's 12 seen windows x1.189; all 24 pooled x1.137 (FULL's pooled prediction x1.15); the guard costs 0.004-0.015. MBPP PASS Wed 22:37: kept(16) x1.125 (PASS >= x1.03, KILL < x1.01; prediction x1.04) on 100 windows / 15,351 positions; 294 relaxed accepts (1.92 %), 0 outside in_comment rows, 0 code-token deviations, 0 % re-scan disagreement, alignment 99.04 %; MBPP answers hold 19.9 % comment rows (FULL guessed 5-8 %) and a hard exact profile (5.01 kept); the guard costs 0.010. data/span_relax_c.txt** |
 Parked seed, OPENED as R-54 (NewIdeas 20:48) (NewIdeas 19:3x, published, untested here): EXPERT-AWARE DRAFT SELECTION for the 24 GB line, where an extra checked row costs ~12 ms of SSD waiting (~108 reads, R-43). Pick draft rows / tree nodes by acceptance per marginal expert READ (non-resident experts not already loaded for this pass), not per row: EcoSpec (arXiv 2607.12696, marginal expert cost in draft selection, up to 1.62x on Qwen3-235B / DeepSeek-V3.1 / GPT-OSS-120B), S2-MoE (2608.15018, routing-aware tree expansion on edge devices), EVICT (2605.00342, cost-justified tree truncation). Cheapest screen: from real 24 GB verify passes' per-row expert ids, how unevenly marginal reads fall across rows (a heavy tail = room). Owner when opened: BigMoE after R-44, or Fit12 on account-2.
 PRIOR ART (Kamen's r/macmini lead, relayed by the orchestrator Wed 23:2x; NewIdeas Thu 15:5x): someone ran the 125B on a 24 GB M4 Pro Mac mini with ISTA-DASLab's GSQ-RCO IQ3_XXS (~76 GB on disk): 11 tok/s on short prompts, 8.5 long, 180 tok/s prefill, '9.5 GB peak runtime' (the post's numbers as relayed; the post itself not re-read). GSQ = Gumbel-Softmax scalar quantization per tensor (arXiv 2604.18556); RCO = Riemannian constrained optimization of the per-tensor type mix under a size budget (2605.00649); plain GGUF for llama.cpp (model card as listed by third parties). Their Flash-Next IQ3_XXS scores -0.55 points on the makers' task average, about T3R's size class (FOR_KAMEN 3, Tue). The 9.5 GB is almost surely llama.cpp's own allocations: the weights are mmapped, clean file-backed pages live in macOS's file cache outside the process footprint, so the whole 24 GB machine is their expert cache (my inference, unverified). Not comparable to our lifetime phys_footprint: our engines pread with F_NOCACHE into counted pools (bigmoe/stream.py, ext). Speed context: our exact 4-bit lines ~29 tok/s at 24 GB and ~16 at 12 GB on an M5 Pro (SSD ~2x an M4 Pro's). Nothing to adopt: non-exact, and mmap only moves memory out of the count.
 Parked seeds: on-policy distillation (AdaFlash OPD: +26 % in-domain on code; needs ~1M on-policy tokens from the 125B, ~5-9 h of **Priced by MTP Head Thu 15:5x**: 1M tokens = 44x L1-20's 22.5K anchors = 5.5 doublings; at D-09's log-linear slope (optimistic) code 9.57 -> ~10.1, math 7.00 -> ~8.0, for ~7 h of decode + ~10 h of training (~17 GPU-h, not laptop-sized). A 1/4 version (250K tokens: ~9.9 / ~7.6) costs ~2 h decode + ~2.6 h training. Parked: revisit only if the design study needs data that only the 125B can make.
@@ -2079,3 +2079,92 @@ block 32 (net ~+2 % under this cost model unless the drafter nears the oracle); 
     anything optimistic.
   - Next (cheapest split of the miss): a down-only arm at screen 7's 4 layers (TRL-3 on down, MSB-3 gate / up; the
     store already holds the files). It needs Breakthrough's TRL view to select matrices.
+- Wed 22:4x: POWER CHECK KILLS MY DOWN-ONLY ARM DESIGN before anyone builds it (data/ledger/down_arm_power.txt).
+  - s7_trl_down (TRL-3 on down, MSB-3 on gate / up, at screen 7's 4 layers) is feasible on Breakthrough's side (1-1.5 h
+    of build, ~7 min of map time).
+  - But the expected effect is z ~1-2 per domain, and the SE of TRL-3's effective ratio is ~1.0 with all three
+    domains combined. Separating 0.52 (MSE) from ~1.0 (the mix's miss factor) needs ~0.24, i.e. ~17x the rows or
+    layers. A 4-layer KL arm cannot decide TRL-3.
+  - Better tests, in cost order:
+    - (1) Fit12, CPU: its output-weighted judge on code / multilingual inputs, if it has such captures at L7 / 18 /
+      30 / 41. If TRL-2's ratio there is ~2.5-3.5 (vs 1.85 on its broad set), the miss is the inputs' distribution,
+      and TRL-3's ratio on the same inputs is its real r.
+    - (2) Breakthrough, GPU, about the down arm's build: a per-row layer-output probe at S on the map's own hidden
+      states. Squared error of the kept experts' summed output under MSB-3 / the mix / down-only TRL-3 vs 4-bit:
+      thousands of row-layers, so high power. It separates "the inputs differ" (output-error ratio ~2.5-3.2) from
+      "trellis errors cost more KL per unit error" (ratio ~1.6-1.9). In the second case only big KL arms can rank
+      trellis codes, and the family is closed here.
+    - (3) Stop: TRL-3's best case is ~19 % fewer bytes at 24 GB at about today's quality.
+- Wed 22:3x: the orchestrator agreed: no down-only arm. Test (1) goes to Fit12 directly (CPU only, <= 4 GB, share lock,
+  before 23:00 or Thursday by day). The GPU probe (2) is built only if (1) says the inputs explain the miss; otherwise
+  the trellis family stops here. PRE-REGISTERED reading of (1), before Fit12 runs it:
+  - Quantity: Fit12's output-weighted judge (routed tokens preferred) of the screen 7 store vs MSB-3 on captured
+    code / multilingual inputs at L7 / 18 / 30 / 41. Whole-expert output error if available, else the mean of the
+    three matrices (TRL-2 gate / up, TRL-3 down).
+  - Compare with the map's effective ratio for the mix: 2.72 / 2.55 / 3.15 (code / IFEval / multi; its broad-set
+    judge said 1.62-1.87).
+  - >= ~2.4 on the code or multilingual inputs: the inputs' distribution explains the miss. TRL-3's ratio on those
+    inputs is its real r, and the GPU probe (2) is worth building.
+  - <= ~2.0: the inputs do not explain it; trellis errors cost more KL per unit error here. The family stops.
+  - Between: weak; the orchestrator's call.
+- Wed 22:4x: CF 0.3 CHAT ARM = PASS / BETWEEN / BETWEEN (pre-registered 22:0x; Breakthrough's s67 read-out gives the
+  same numbers).
+  - qom_0.3_live_c147_bonus3g (= cf 0 drafted rows + the bonus row gated at next cf >= 0.3, 4-bit sure rows, 147
+    slots), landed 22:42. Flips 0.74 / 5.56 / 3.86 % vs lines 1.34 / 5.42 / 3.69; KL 0.0038 / 0.0201 / 0.0126.
+  - [G] range was 0.66-0.88 / 4.5-6.9 / 2.9-4.8: inside it, at its low end. A near miss on chat: +0.14 / +0.17 points
+    over the lines.
+  - Against the cf 0.5 arm, the cheaper route costs +0.03 / +1.26 / +1.13 points (McNemar p 1 / 0.0008 / 0.0001) and
+    saves 0.81 / 0.56 / 0.59x of the chat bytes. So the chat PASS route stays cf 0.5 at ~88 MB.
+  - Read: scripts/chat_arm_read.py qom_0.3_live_c147_bonus3g -> data/ledger/chat_arm_read_qom_0.3_live_c147_bonus3g.txt.
+- Wed 22:4x: SPLIT-THRESHOLD CHAT ROUTE, BYTES: both pre-registered hybrids DIE ON BYTES (scripts/split_price.py,
+  data/ledger/split_price.txt; line in the docstring before the run: <= 0.75x the cf 0.5 route's chat bytes on both).
+  - The checks reproduce (cf 0.5 87.9 / 87.2, cf 0.3 49.2 / 51.7).
+  - V1 (drafted 0.3 + bonus 0.5): 73.3 / 71.9 MB (x0.83 / 0.82). V2 (drafted 0.5 + bonus 0.3): 66.0 / 69.2 (x0.75 / 0.79).
+    Each of the two changes saves only ~17-25 %; the cf 0.3 route's ~42 % needs both.
+  - Not pre-registered, priced beside them: drafted 0.3 + bonus 0.4 = 62.4 / 64.0 MB (x0.71 / 0.73). It meets the
+    same bytes line. Quality [G], scaling the cf 0.5 -> 0.3 flip gap by bytes share: ~5.2 / ~3.5 % (lines 5.42 /
+    3.69), a coin flip slightly in its favour. A candidate map arm for Thursday, low priority (~28 % fewer chat bytes
+    than the PASS route if it passes).
+  - Side fact: drafted 0.3 with the bonus row never gated costs 88.7 / 82.7 MB, as much as the cf 0.5 route. On chat the
+    bonus row carries a large share of the bytes.
+- Wed 22:4x: TRELLIS TEST (1) READ: the inputs' distribution does NOT explain the miss, so the trellis family STOPS
+  (pre-registered 22:3x, 5fa0f47).
+  - Fit12 ran its output-weighted judge on the map's OWN answer rows (Breakthrough's xcapture, the 36 windows, 10,316
+    rows) at L7 / 18 / 30 / 41. Whole-expert output error of the store vs MSB-3, router-weighted, ranks 2-9:
+    code 1.12-1.31, IFEval 1.58-1.83, multi 1.59-1.75.
+  - Same judge on its own held-out parts: code 1.00-1.25, multi 1.18-1.38, IFEval prompts 1.13-1.40, English prose
+    1.62-1.92.
+  - Per matrix on the map's rows: gate / up (TRL-2) code 1.40-1.72, chat 2.03-2.48; down (TRL-3) 0.61-0.79.
+  - Rule: whole-expert ratio <= ~2.0 in all three domains -> STOP. Chat inputs are harder than Fit12's held-out parts
+    (whole ~1.7 vs ~1.25); code inputs are not.
+  - Residual: the KL damage is 2.1-2.4x the output-error ratio on code and 1.4-2.0x on chat. Part is noise (r_eff's SE
+    is ~+-1.0 on code, +-0.5-0.6 on chat). The rest means one of two things:
+    - trellis errors cost more KL per unit of output error than truncation (structured vs random errors); or
+    - s7_trl and s7_cal differ in which rows or ranks they touch. A harness question for Breakthrough; it changes no
+      build decision, only how rows 3-4 (TRL-3, GPTQ-3) are priced.
+  - Fit12's files: ~/Fit12/data/trl_judge/judge_map.json, judge_L{7,18,30,41}.json; scripts fit_trl_judge_map.py,
+    fit_trl_judge.py.
+- Wed 22:4x: PRE-REGISTERED (the orchestrator 22:5x: a low-priority Thursday arm after DENSE-3, only if a share slot is
+  free): qom_0.3_live_c147_bonus4g.
+  - The arm: cf 0 drafted rows (= qom_0.3_live_c147) + the bonus row gated at next cf >= 0.4. 313 of 1,368 bonus rows
+    gated; drops only; every row gated at 0.4 is gated identically at 0.3 (data/dm_masks/check_cf03_b4.log).
+  - Harness line: PERT.update(rmask='/Users/kamen/NewIdeas/data/dm_masks/qom_0.3_live_c147_bonus4g', renorm=False);
+    no t3; 36 windows; ~5 min.
+  - Bytes [P]: 53.9 / 62.4 / 64.0 MB per kept token at 24 GB (x0.87 / 0.71 / 0.73 of the cf 0.5 route).
+  - Lines, measured flips: PASS <= 1.34 / 5.42 / 3.69 on every domain = a ~63 MB chat route holds; BETWEEN <= 1.5x;
+    KILL above.
+  - [G]: code 0.7-0.8, IFEval 4.9-5.5, multi 3.2-3.8 %: the cf 0.5 -> 0.3 flip gap, scaled by bytes share.
+  - Paired with the cf 0.3 arm (primary) and the cf 0.5 arm. Read: scripts/chat_arm_read.py qom_0.3_live_c147_bonus4g.
+- Wed 22:5x: SAME READS CONFIRMED (Breakthrough, from the run logs). s7_trl and s7_cal made identical reads: 144 calls
+  and 368,983 (row, rank) pairs over the 36 windows, equal window by window. Every kept expert of the gated rows at the
+  4 layers (ranks 0-1 + the mask's 2-9) comes from the source; prompt rows stay on the 4-bit path; DRAFT17 gates every
+  realized check row. So screen 7's gap is not a coverage artifact.
+  - Predicted trl - ref from Fit12's whole-expert output ratios (layer means 1.23 / 1.68 / 1.67), scaled by the
+    measured MSB-2 pair: D_cal x ((r - 1) T01 + r E29) / (4 T01 + 5 E29) = 0.00017 / 0.00161 / 0.00177.
+  - Measured: 0.00060 / 0.00296 / 0.00419 -> 3.5x / 1.8x / 2.4x (code noisy: z 2.5).
+  - The same calibration fits MSB-2 itself within 1.0-1.3x.
+  - Finding: on identical reads and inputs, the trellis store's errors cost ~2-3.5x more KL per unit of expert-output
+    error than truncation's. Mechanism unknown: structured (data-aware) errors aligned with what later layers amplify
+    is the leading guess. SWEEP row 4 (GPTQ-3, also data-aware) carries the risk; any data-aware code needs a KL
+    screen, not an error ratio.
+  - The Thursday arm qom_0.3_live_c147_bonus4g is installed on Breakthrough's side (8 / 8 checks; 313 rows = mine).

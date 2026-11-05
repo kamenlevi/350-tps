@@ -27,7 +27,7 @@ unset MTPLX_FUSED_GATE_UP MTPLX_FUSED_GDN_INPROJ BIGMOE_GDN_EXACT BIGMOE_TIER BI
 export EVALSUITE_BIGMOE_CODE="$HOME/EvalSuite/snap/bigmoe-da8e7a6"
 TIERENV="BIGMOE_TIER=4433333333,BIGMOE_TIER_GLU=3c,BIGMOE_TIER_CL=112"
 PY=.venv/bin/python
-C=192; NEED=$(( (131 * C + 10200 + 999) / 1000 ))
+C=192; NEED=$(( (131 * C + 10200 + 999) / 1000 ))   # per chunk: pick_c (Wed 22:5x: C 192 / 160 / 128 by free memory)
 R3IDX=$HOME/BigMoE/models/bare/records3/index.json
 STORE=${Q43_STORE:-rowmajor}                     # where the NAX6-base batch runs (see above)
 NAXC=${Q43_NAXC:-ref2tnax}; NAXB=${Q43_NAXB:-ref2tnfh}   # the NAX6-base control / batch on that store
@@ -90,6 +90,20 @@ after_chunk() {   # rc, rows before, rows now
     NOPROG=0
   fi
 }
+freegb() { .venv/bin/python -c "import sys; sys.path.insert(0, '.'); from evalsuite.cli import free_gb; print(int(free_gb()))"; }
+pick_c() {      # C by free memory (tokens do not depend on C): the largest of 192 / 160 / 128 whose cli gate (need + 4) fits;
+  local fg w=0  # waits (no lock held) while none fits; sets C and NEED
+  while :; do
+    fg=$(freegb)
+    for C in 192 160 128; do
+      NEED=$(( (131 * C + 10200 + 999) / 1000 ))
+      [ "$fg" -ge $(( NEED + 4 )) ] && return 0
+    done
+    [ $((w % 10)) = 0 ] && say "waiting for memory: $fg GB NO-SWAP (C 128 needs $(( (131 * 128 + 10200 + 999) / 1000 + 4 )))"
+    w=$((w + 1)); sleep 60; calm
+    [ "$(left)" -gt 3600 ] || { say "deadline near while waiting for memory: runner stops"; exit 6; }
+  done
+}
 run_rows() {   # run, rows wanted, stage args...: chunks under a share lock until the run has that many rows
   local run=$1 want=$2 b n rc w; shift 2
   NOPROG=0
@@ -104,6 +118,8 @@ run_rows() {   # run, rows wanted, stage args...: chunks under a share lock unti
     [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }
     store_ok || { say "records3 is not $MODE as this run needs (index.json): runner stops at $run $b/$want rows"; exit 8; }
     [ "$(left)" -gt 3600 ] || { say "deadline near (no chunk starts after 14:00): runner stops at $run $b/$want rows"; exit 6; }
+    pick_c
+    say "$run: chunk at C $C (--need $NEED; $(freegb) GB NO-SWAP)"
     EVALSUITE_STAGE_ENV="$TIERENV" ./bin/evalsuite gpu decode $run "$@" --chunk-minutes 45 --share --C "$C" \
       --need "$NEED" --minutes 60 >> "$LOG" 2>&1; rc=$?
     n=$(count results/$run/decode.jsonl)
@@ -134,7 +150,7 @@ if [ "$MODE" = converted ]; then
     w=$((w + 1)); sleep 60
   done
   say "records3 is converted: check 2: tools/r3check.sh snap/bigmoe-da8e7a6 ref2tf0.r2 converted ref2tf0.r1,ref2t.r2"
-  tools/r3check.sh snap/bigmoe-da8e7a6 ref2tf0.r2 converted ref2tf0.r1,ref2t.r2 >> "$LOG" 2>&1; c2=$?
+  pick_c; R3_C=$C tools/r3check.sh snap/bigmoe-da8e7a6 ref2tf0.r2 converted ref2tf0.r1,ref2t.r2 >> "$LOG" 2>&1; c2=$?
   echo "check 2 rc $c2 ($(date +%H:%M))" > results/CHECK2_DONE
   [ $c2 = 0 ] || { say "check 2 rc $c2: ref2tf0 on the converted store != check 1: runner stops (VOID there)"; exit 5; }
   say "check 2 PASS; the NAX6-N bridge: $CTRL.r1 on the step-0 keys vs ref2tnax's Part 1 rows"

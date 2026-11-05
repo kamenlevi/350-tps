@@ -295,3 +295,4 @@ def dense3(which=None):
 ABLATIONS["dense3"] = dense3()
 ABLATIONS["qom_0.5_live_c147_bonus5g"] = q1_union(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0.5_live_c147_bonus5g"))   # NewIdeas 20:1x chat route (QUEUE 20:1x 4fb08ca, masks 4324e09): 1(c)'s rule on a 147-slot pool, 4-bit stock path
 ABLATIONS["qom_0.3_live_c147_bonus3g"] = q1_union(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0.3_live_c147_bonus3g"))   # NewIdeas 22:02 (QUEUE 22:0x 04ac744): the chat route at cf 0.3, 147-slot pool, 4-bit stock path
+ABLATIONS["qom_0.3_live_c147_bonus4g"] = q1_union(os.path.expanduser("~/NewIdeas/data/dm_masks/qom_0.3_live_c147_bonus4g"))   # NewIdeas 22:49 (QUEUE 22:4x fb39925): the chat route, bonus row gated at 0.4, 147-slot pool, 4-bit stock path

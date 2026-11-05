@@ -21,6 +21,7 @@ export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$P
 cd "$HOME/EvalSuite" || exit 1
 SNAP=$1; RUN=$2; WANT=$3; REFS=$4; EXTRA=$5
 LOG=results/r3check.log
+C=${R3_C:-192}                         # pool size (tokens do not depend on C; runners pick it by free memory)
 R3IDX=$HOME/BigMoE/models/bare/records3/index.json
 TIERENV="BIGMOE_TIER=4433333333,BIGMOE_TIER_GLU=3c,BIGMOE_TIER_CL=112"   # runner 38's, for ref2t.r2
 say() { echo "$(date +%H:%M:%S) $*" | tee -a "$LOG"; }
@@ -33,9 +34,9 @@ grep -q '"ref2tf0"' evalsuite/model.py || { say "variant ref2tf0 is not in evals
 [ "$(store)" = "$WANT" ] || { say "records3 is $(store), this check wants $WANT: not running"; exit 2; }
 while [ -e "$HOME/.local/share/quiet/PAUSE" ] || [ -e "$HOME/.local/share/quiet/HOLD" ]; do sleep 30; done
 export EVALSUITE_BIGMOE_CODE="$(cd "$SNAP" && pwd)"   # absolute, as the runners pass it
-say "r3check $RUN: records3 $(store); snapshot $SNAP ($(head -c 140 "$SNAP/SOURCE")); refs $REFS; extra env: ${EXTRA:-none}"
+say "r3check $RUN: records3 $(store); snapshot $SNAP ($(head -c 140 "$SNAP/SOURCE")); refs $REFS; C $C; extra env: ${EXTRA:-none}"
 EVALSUITE_STAGE_ENV="$TIERENV${EXTRA:+,$EXTRA}" ./bin/evalsuite gpu decode "$RUN" --sets ifeval,ifevalx \
-  --keys results/r3check_keys.txt --chunk-minutes 30 --C 192 --share >> "$LOG" 2>&1; rc=$?
+  --keys results/r3check_keys.txt --chunk-minutes 30 --C "$C" --share >> "$LOG" 2>&1; rc=$?
 say "decode $RUN rc=$rc"
 [ "$rc" = 0 ] || exit "$rc"
 .venv/bin/python - "$RUN" "$REFS" <<'EOF' 2>&1 | tee -a "$LOG"; r=${PIPESTATUS[0]}

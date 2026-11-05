@@ -1482,4 +1482,8 @@ only last-rank 2-bit (4433333322-class) might pass, worth ~5 % of expert bytes. 
     lines up: the 125B's top-1 agrees with the walk's own acceptance at 99.79 % of positions.
   - The fresh windows give less to gain: 11.3 % comment rows (15.5 % on the map's 12) and an easier exact profile (10.15
     vs 7.78 kept).
-  - Pooled over all 24 windows it reaches x1.137, near FULL's x1.15. MBPP lands ~22:33.
+  - Pooled over all 24 windows it reaches x1.137, near FULL's x1.15.
+  - MBPP PASS (22:37, 100 windows, 15,351 positions): x1.125 against PASS >= x1.03 (prediction x1.04), again with 0 code
+    deviations and 0 % disagreement. MBPP answers hold 19.9 % comment rows (FULL guessed 5-8 %) on a hard exact profile
+    (5.01 kept), so the comment rule pays more there than on HumanEval+. The engine number (10.54 x ratio) uses HumanEval+'s
+    base; MBPP's own live kept is lower.

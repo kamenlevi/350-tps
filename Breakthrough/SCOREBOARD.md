@@ -3082,3 +3082,35 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
   - Screen 6, 1(b) and 1(c): the same as the interim read-out (screen 6 PASS on code; 1(b) PASS; 1(c) COST).
   - After the batch: dm_t3 got the padded layout name (22:21:23) and r3_overlay was moved aside.
   - Then the Rule C passes started (22:21:30), and the cf 0.3 arm is chained after them (start by 22:50).
+- RULE C PASSES done (Wed 22:21-22:38) [K]: data/rulec/rulec_he12.json (12 windows, 2,961 positions, 97 s) and
+  rulec_mbpp.json (100 windows, 15,441 positions, 876 s); MLX peak 14.2 GB; every row 8 wide. Sent to MoonShots for the
+  CPU replay of Fable FULL's rule C (FULL.md Round 2's pre-registered lines are theirs to read).
+- RESULT, the cf 0.3 chat arm (Wed 22:38-22:43) [K]: qom_0.3_live_c147_bonus3g, 36 windows, 0 warnings: code PASS, IFEval
+  and multi BETWEEN (just over the lines). Data: data/dm_s7/results_wed/cf03_readout_2243.txt.
+  - Flips: code 0.74 % (25/3366), IFEval 5.56 % (189/3397), multi 3.86 % (137/3553), against the lines 1.34 / 5.42 / 3.69.
+    NewIdeas' guess: IFEval 4.5-6.9 %, multi 2.9-4.8 %, "a coin flip".
+  - KL 0.0038 / 0.0201 / 0.0126.
+  - McNemar vs the chat arm (cf 0.5, primary): code 9 / 8, z +0.24; IFEval 100 / 57, z +3.43; multi 73 / 33, z +3.89. cf 0.3
+    costs significantly on chat.
+  - Vs C (information): 9 / 20, z -2.04; 78 / 163, z -5.48; 59 / 135, z -5.46.
+  - Tonight's map work ended at 22:43 (hard stop 23:00 unused).
+  - Thursday leftovers: DENSE-3 (after the records3 conversion, BIGMOE_EXT_BUILD=build_nat). The s7_trl_down build is on
+    hold (NewIdeas 22:32: a 4-layer KL arm lacks the power; the orchestrator picks an alternative).
+- ADDENDUM Wed 22:5x, before its run: NewIdeas' CF 0.4 CHAT ARM for Thursday (pre-registered QUEUE 22:4x, fb39925; the
+  orchestrator: low priority, after DENSE-3, only if a share slot is free).
+  - Arm qom_0.3_live_c147_bonus4g: the chat arms' q1_union form (no t3, 4-bit stock path), the bonus row gated at 0.4,
+    147-slot pool, 36 windows, ~5 min. Twins: qom_0.3_live_c147_bonus3g (primary), qom_0.5_live_c147_bonus5g.
+  - Install (22:50, install_cf04.sh + test_cf04_arm.py, 8/8 ok):
+    - the PERT is exactly {rmask, renorm False}; 36 windows, shapes equal to the base's, cf 0.3's and the routing's;
+    - against the cf 0 base qom_0_live_c147: drops only, ranks 0-1 identical, exactly 313 rows differ (NewIdeas: 313);
+    - every changed row is also changed at cf 0.3 (313 within 528).
+- NOTE Wed 22:5x [K], for NewIdeas' error-vs-KL question: s7_trl and s7_cal made exactly the same reads.
+  - 144 calls and 368,983 (row, rank) pairs over the 36 windows, equal window by window (e.g. HumanEval_10: 4 calls,
+    9,636 pairs in both).
+  - By construction: the same masks; at S every kept expert of the gated rows (ranks 0-1 forced in + the mask's 2-9) from
+    the source; prompt rows and ungated rows on the stock 4-bit path; other layers in s7_ref's form.
+  - Only the unique experts at those slots drift slightly (1,165 vs 1,156 on HumanEval_10), because routing below layer 7
+    sees different hidden states.
+  - Under DRAFT17 (the ball masks), every realized check row, the last row included, is gated, so no unsure full-top-10
+    rows take the source.
+  - The 2.6-3.2x KL vs 1.1-1.8x error gap is not from different reads.

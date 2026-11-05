@@ -15,9 +15,11 @@ DOMS = ("code", "ifeval", "multi")
 LINE = {"code": 1.34, "ifeval": 5.42, "multi": 3.69}
 ARM = sys.argv[1] if len(sys.argv) > 1 else "qom_0.5_live_c147_bonus5g"
 PREDS = {"qom_0.5_live_c147_bonus5g": {"code": "~0.7", "ifeval": "~4.6", "multi": "~3.0"},
-         "qom_0.3_live_c147_bonus3g": {"code": "0.66-0.88", "ifeval": "4.5-6.9", "multi": "2.9-4.8"}}
+         "qom_0.3_live_c147_bonus3g": {"code": "0.66-0.88", "ifeval": "4.5-6.9", "multi": "2.9-4.8"},
+         "qom_0.3_live_c147_bonus4g": {"code": "0.7-0.8", "ifeval": "4.9-5.5", "multi": "3.2-3.8"}}
 PRED = PREDS.get(ARM, {d: "-" for d in ("code", "ifeval", "multi")})
-INFOS = {"qom_0.3_live_c147_bonus3g": ("qom_0.5_live_c147_bonus5g", "qom_0_live_bq_c147_t3", "qom_0_live")}
+INFOS = {"qom_0.3_live_c147_bonus3g": ("qom_0.5_live_c147_bonus5g", "qom_0_live_bq_c147_t3", "qom_0_live"),
+         "qom_0.3_live_c147_bonus4g": ("qom_0.3_live_c147_bonus3g", "qom_0.5_live_c147_bonus5g")}
 INFO = INFOS.get(ARM, ("qom_0.5_live_bonus5g", "qom_0.5_live_c164", "qom_0.5_live"))
 DST = os.path.expanduser("~/NewIdeas/data/ledger/chat_arm_read" + ("" if len(sys.argv) < 2 else "_" + ARM) + ".txt")
 

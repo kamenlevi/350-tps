@@ -144,6 +144,137 @@ _SRC_A = r"""
     DSDPA_ST(3, ct_o3)
 """
 
+_SRC_A2 = r"""
+    constexpr int D = 128, L = 16, KS = 136;
+    constexpr float NEG = -1e30f;
+    threadgroup T Ks[32 * KS];
+    threadgroup T Vs[32 * KS];
+    const uint tid = thread_index_in_threadgroup;
+    constexpr float SCALE = 0.08838834764831845f;
+    const uint lane = thread_index_in_simdgroup;
+    const uint sg = simdgroup_index_in_threadgroup;
+    const int c = threadgroup_position_in_grid.x;
+    const int hk = threadgroup_position_in_grid.y;
+    const int h = hk * G + sg;
+    const int ctx_len = prm[0];
+    const int Nc = prm[1];
+    const int N = ctx_len + L;
+    const int CK = ((N + NC - 1) / NC + 31) / 32 * 32;
+    const int k_begin = c * CK;
+    const int k_end = min(N, k_begin + CK);
+    const short qid = lane >> 2;
+    const short fm = ((qid & 4) | ((lane >> 1) & 3));
+    const short fq = ((qid & 2) | (lane & 1));
+
+    constexpr auto desc = mpp::tensor_ops::matmul2d_descriptor(16, 32, 16, false, true, true,
+        mpp::tensor_ops::matmul2d_descriptor::mode::multiply_accumulate);
+    mpp::tensor_ops::matmul2d<desc, metal::execution_simdgroup> op;
+    auto ct_a = op.template get_left_input_cooperative_tensor<T, T, float>();
+    auto ct_b = op.template get_right_input_cooperative_tensor<T, T, float>();
+    using CTA = metal::remove_addrspace_t<decltype(ct_a)>;
+    using CTB = metal::remove_addrspace_t<decltype(ct_b)>;
+    auto ct_s = op.template get_destination_cooperative_tensor<CTA, CTB, float>();
+    auto ct_o0 = op.template get_destination_cooperative_tensor<CTA, CTB, float>();
+    auto ct_o1 = op.template get_destination_cooperative_tensor<CTA, CTB, float>();
+    auto ct_o2 = op.template get_destination_cooperative_tensor<CTA, CTB, float>();
+    auto ct_o3 = op.template get_destination_cooperative_tensor<CTA, CTB, float>();
+
+    T qv[8][8];                                         // A fragments of Q: run t, dims 16 t + 4 fq + j; rows fm / fm + 8
+    {
+        const device T* q0 = q + ((size_t)h * L + fm) * D + 4 * fq;
+        const device T* q1 = q + ((size_t)h * L + fm + 8) * D + 4 * fq;
+        for (short t = 0; t < 8; t++)
+            for (short j = 0; j < 4; j++) { qv[t][j] = q0[16 * t + j]; qv[t][4 + j] = q1[16 * t + j]; }
+    }
+    float m0 = NEG, m1 = NEG, l0 = 0.0f, l1 = 0.0f;
+    for (short i = 0; i < 16; i++) { ct_o0[i] = 0.0f; ct_o1[i] = 0.0f; ct_o2[i] = 0.0f; ct_o3[i] = 0.0f; }
+
+#define DSDPA2_PV(NT, CT)                                                                          \
+    for (short r = 0; r < 4; r++) {                                                               \
+        const short base = (r >> 1) * 8 + (r & 1) * 4;                                            \
+        const int dn = NT * 32 + (r >> 1) * 16 + fm + (r & 1) * 8;                                \
+        for (short j = 0; j < 4; j++) ct_b[base + j] = Vs[(16 * u + 4 * fq + j) * KS + dn];   \
+    }                                                                                             \
+    op.run(ct_a, ct_b, CT);
+
+    for (int kb = k_begin; kb < k_end; kb += 32) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);             // the last tile is consumed
+        for (short w = 0; w < 4; w++) {                              // 32 keys x 128 dims of K and V: 512 16-byte pieces each
+            const int ci = (int)tid + 128 * w;
+            const int kl = ci >> 4, d8 = (ci & 15) * 8;
+            const int n = kb + kl;
+            uint4 kv4 = uint4(0), vv4 = uint4(0);
+            if (n < N) {
+                const size_t ro = n < ctx_len ? ((size_t)hk * Nc + n) * D : ((size_t)hk * L + (n - ctx_len)) * D;
+                kv4 = *(const device uint4*)((n < ctx_len ? kc : kp) + ro + d8);
+                vv4 = *(const device uint4*)((n < ctx_len ? vc : vp) + ro + d8);
+            }
+            *(threadgroup uint4*)(Ks + kl * KS + d8) = kv4;
+            *(threadgroup uint4*)(Vs + kl * KS + d8) = vv4;
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        for (short i = 0; i < 16; i++) ct_s[i] = 0.0f;
+        for (short t = 0; t < 8; t++) {
+            for (short j = 0; j < 8; j++) ct_a[j] = qv[t][j];
+            for (short r = 0; r < 4; r++) {
+                const short base = (r >> 1) * 8 + (r & 1) * 4;
+                const threadgroup T* kr = Ks + ((r >> 1) * 16 + fm + (r & 1) * 8) * KS + 16 * t + 4 * fq;
+                for (short j = 0; j < 4; j++) ct_b[base + j] = kr[j];
+            }
+            op.run(ct_a, ct_b, ct_s);
+        }
+        float s[16];                                    // S element i: row fm + 8 ((i & 7) >> 2), key (i >> 3) 16 + 4 fq + (i & 3)
+        float r0 = NEG, r1 = NEG;
+        for (short i = 0; i < 16; i++) {
+            const int row = fm + 8 * ((i & 7) >> 2);
+            const int n = kb + (i >> 3) * 16 + 4 * fq + (i & 3);
+            const bool vis = n < N && (n >= ctx_len || n > ctx_len + row - SW);
+            s[i] = vis ? ct_s[i] * SCALE : NEG;
+            if ((i & 7) < 4) r0 = max(r0, s[i]); else r1 = max(r1, s[i]);
+        }
+        r0 = max(r0, simd_shuffle_xor(r0, 1)); r0 = max(r0, simd_shuffle_xor(r0, 8));
+        r1 = max(r1, simd_shuffle_xor(r1, 1)); r1 = max(r1, simd_shuffle_xor(r1, 8));
+        const float mn0 = max(m0, r0), mn1 = max(m1, r1);
+        const float a0 = exp(m0 - mn0), a1 = exp(m1 - mn1);
+        T pv[16];
+        float ps0 = 0.0f, ps1 = 0.0f;
+        for (short i = 0; i < 16; i++) {
+            const bool top = (i & 7) < 4;
+            const float p = s[i] <= 0.5f * NEG ? 0.0f : exp(s[i] - (top ? mn0 : mn1));
+            pv[i] = static_cast<T>(p);
+            const float pr_ = static_cast<float>(pv[i]);
+            if (top) ps0 += pr_; else ps1 += pr_;
+        }
+        ps0 += simd_shuffle_xor(ps0, 1); ps0 += simd_shuffle_xor(ps0, 8);
+        ps1 += simd_shuffle_xor(ps1, 1); ps1 += simd_shuffle_xor(ps1, 8);
+        l0 = l0 * a0 + ps0; l1 = l1 * a1 + ps1; m0 = mn0; m1 = mn1;
+        for (short i = 0; i < 16; i++) {
+            const float a = (i & 7) < 4 ? a0 : a1;
+            ct_o0[i] *= a; ct_o1[i] *= a; ct_o2[i] *= a; ct_o3[i] *= a;
+        }
+        for (short u = 0; u < 2; u++) {
+            for (short j = 0; j < 4; j++) { ct_a[j] = pv[8 * u + j]; ct_a[4 + j] = pv[8 * u + 4 + j]; }
+            DSDPA2_PV(0, ct_o0)
+            DSDPA2_PV(1, ct_o1)
+            DSDPA2_PV(2, ct_o2)
+            DSDPA2_PV(3, ct_o3)
+        }
+    }
+
+    const int pr = (h * NC + c) * L;
+    if (fq == 0) { mo[pr + fm] = m0; mo[pr + fm + 8] = m1; lo[pr + fm] = l0; lo[pr + fm + 8] = l1; }
+#define DSDPA2_ST(NT, CT)                                                                          \
+    for (short i = 0; i < 16; i++) {                                                              \
+        const int row = fm + 8 * ((i & 7) >> 2);                                                  \
+        const int dim = NT * 32 + (i >> 3) * 16 + 4 * fq + (i & 3);                               \
+        oo[(size_t)(pr + row) * D + dim] = CT[i];                                                 \
+    }
+    DSDPA2_ST(0, ct_o0)
+    DSDPA2_ST(1, ct_o1)
+    DSDPA2_ST(2, ct_o2)
+    DSDPA2_ST(3, ct_o3)
+"""
+
 _SRC_B = r"""
     constexpr int D = 128, L = 16, HQ = 32;
     const uint idx = thread_position_in_grid.x;
@@ -168,6 +299,12 @@ def _ka():
 
 
 @lru_cache(None)
+def _ka2():
+    return mx.fast.metal_kernel(name="leap_dsdpa_a2", input_names=["q", "kc", "vc", "kp", "vp", "prm"],
+                                output_names=["mo", "lo", "oo"], source=_SRC_A2, header=_HDR)
+
+
+@lru_cache(None)
 def _kb():
     return mx.fast.metal_kernel(name="leap_dsdpa_b", input_names=["mo", "lo", "oo"], output_names=["out"], source=_SRC_B)
 
@@ -175,7 +312,7 @@ def _kb():
 _PRM = {}
 
 
-def attend(q, kc, vc, kp, vp, ctx_len, sw=2048, nc=8):
+def attend(q, kc, vc, kp, vp, ctx_len, sw=2048, nc=8, v=2):
     """q [1, 32, 16, 128], kc / vc [1, 8, Nc >= ctx_len, 128] (rows 0 .. ctx_len - 1 used), kp / vp [1, 8, 16, 128]
     -> [1, 16, 4096] (o_proj's input)"""
     assert q.shape == (1, 32, 16, 128) and kp.shape == vp.shape == (1, 8, 16, 128) and kc.shape[2] >= ctx_len, \
@@ -187,7 +324,7 @@ def attend(q, kc, vc, kp, vp, ctx_len, sw=2048, nc=8):
             _PRM.clear()
         prm = _PRM[key] = mx.array(list(key), mx.int32)
     t = q.dtype
-    mo, lo, oo = _ka()(inputs=[q, kc, vc, kp, vp, prm], template=[("T", t), ("NC", nc), ("SW", sw), ("G", 4)],
+    mo, lo, oo = (_ka2() if v == 2 else _ka())(inputs=[q, kc, vc, kp, vp, prm], template=[("T", t), ("NC", nc), ("SW", sw), ("G", 4)],
                        grid=(nc * 128, 8, 1), threadgroup=(128, 1, 1),
                        output_shapes=[(32, nc, 16), (32, nc, 16), (32, nc, 16, 128)],
                        output_dtypes=[mx.float32, mx.float32, mx.float32])
