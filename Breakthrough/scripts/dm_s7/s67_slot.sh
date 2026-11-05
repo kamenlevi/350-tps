@@ -71,6 +71,7 @@ why_not() {
 }
 trl_whole() { (cd $DM && DM_TRL_FALLBACK= $PY -c "import dm_t3; dm_t3.trl_gate([7, 18, 30, 41], 'mix')" > /dev/null 2>&1); }
 nwin() { [ -f $DM/out/$1.json ] && $PY -c "import json; d = json.load(open('$DM/out/$1.json')); print(sum(1 for v in d.values() if isinstance(v, dict) and 'tk' in v))" 2>/dev/null || echo 0; }
+installed() { local p; for p in $(echo "$1" | tr '+' ' '); do grep -qF "\"$p\"" $DM/dm_ablations.py || return 1; done; }   # a "+" stack: every part (Thu 07:1x)
 btodo() { local a; for a in $ARMS; do [ "$(nwin $a)" = 36 ] || echo -n "$a "; done; }
 todo() { local a; for a in $ARMS $(xarms); do [ "$(nwin $a)" = 36 ] || echo -n "$a "; done; }
 pick_next() {   # the first arm in order that is not done, fits the clock, and (s7_trl) whose store is whole; DENSE-3 and the
@@ -87,7 +88,7 @@ pick_next() {   # the first arm in order that is not done, fits the clock, and (
     if [ -n "$by" ]; then
       [ $now -le $(by_ts $by) ] || continue
       if [ $now -lt $xa ]; then case "$t" in *" s7_trl "*) XWAIT=1; continue;; esac; fi   # from the alone time on, alone
-      grep -qF "\"$a\"" $DM/dm_ablations.py || { XWAIT=1; continue; }
+      installed $a || { XWAIT=1; continue; }
     fi
     PICK=$a; return
   done

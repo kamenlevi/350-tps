@@ -18,7 +18,7 @@ skip = "--skip-done" in args
 names = [a for a in args if not a.startswith("--")]
 if names == ["report"]: C.report(); sys.exit(0)
 for n in names:
-    if n not in ("baseline", "gate", "capture", "xcapture") and not n.startswith("ctx"): ablation(n)
+    if n not in ("baseline", "gate", "capture", "xcapture", "scapture") and not n.startswith("ctx"): ablation(n)
 if skip:
     names = [n for n in names if n == "gate" or not os.path.exists(os.path.join(C.OUT, n + ".json"))]
 print(f"[dm] runs: {names}", flush=True)
@@ -40,6 +40,7 @@ for name in names:
         elif name == "baseline": C.measure(model, windows, "baseline", lambda: None)
         elif name == "capture": C.measure(model, windows, "capture", lambda: C.CAPR.update(on=True))   # DAY9 routing
         elif name == "xcapture": C.measure(model, windows, "xcapture", lambda: C.CAPR.update(on=True, x=True))   # 11-02 shadows
+        elif name == "scapture": C.measure(model, windows, "scapture", lambda: C.CAPR.update(on=True, s=True))   # Thu 11-05: scores only (set DM_OUT)
         else: C.measure(model, windows, name, ablation(name))
     except Exception:
         C.clear(); C.REC["on"] = False

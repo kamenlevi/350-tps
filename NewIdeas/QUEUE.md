@@ -2168,3 +2168,29 @@ block 32 (net ~+2 % under this cost model unless the drafter nears the oracle); 
     is the leading guess. SWEEP row 4 (GPTQ-3, also data-aware) carries the risk; any data-aware code needs a KL
     screen, not an error ratio.
   - The Thursday arm qom_0.3_live_c147_bonus4g is installed on Breakthrough's side (8 / 8 checks; 313 rows = mine).
+- Thu 07:0x: CLOUD3 C3-R15 / R15b MASKS BUILT, BIT-CHECKED, BYTES RE-DERIVED (the orchestrator 07:0x; run in
+  Breakthrough's Fri 00:30 map slot after Cloud3's tile arms; hand-off after Fable C's ~09:00 audit).
+  - Build: dm_oea_masks.py parse() gains qom_<thr>_u<k>[_reach<tau>] (QOM with unsure rows at top-k + union members +
+    resident; optional REACH-CUT, rows keeping residents). Then Fable C's bonus gate at 0.5 (proxy g), exactly as the
+    measured route qom_0.5_live_c147_bonus5g. So each arm differs from the measured route by its cut alone. (Cloud3
+    wrote "qom_0.5_live_bq_c147's form"; the measured route uses the union-only gate, not dm_oea_masks' _bq.)
+    - R15 = qom_0.5_u8_live_c147_bonus5g
+    - R15b = qom_0.5_u8_reach0.5_live_c147_bonus5g
+  - Bit-checks (scripts/r15_check.py, data/dm_masks/check_r15.log): all OK.
+    - u10 rebuilds the route's base bit for bit (36 / 36).
+    - u8 drops only ranks 8-9 on the unsure rows. 7,724 sure rows move through the smaller unions and the lighter pool
+      (39,956 experts added, 46,610 dropped on unsure rows).
+    - The reach cut keeps ranks 0-1 everywhere.
+    - Both gates drop only, on the route's own 165 rows.
+  - Bytes, re-derived (scripts/r15_price.py; my replay: 24 GB, 11-bit parts, best split; the route reproduces 61.8 /
+    87.9 / 87.2):
+    - R15: 54.3 / 68.2 / 64.0 MB (x0.88 / 0.78 / 0.73; Cloud3 x0.93 / 0.81 / 0.82);
+    - R15b: 49.3 / 57.1 / 54.0 MB (x0.80 / 0.65 / 0.62; Cloud3 x0.86 / 0.64 / 0.64).
+    Within ~10 %, mine a little more favourable.
+  - PRE-REGISTERED (Cloud3's lines, adopted as filed; measured flips):
+    - R15: PASS = <= 1.34 / 5.42 / 3.69 on every domain AND within 1.3x of the route's 0.71 / 4.30 / 2.73. KILL if IFEval
+      or multi cross their lines. Prediction (Cloud3): within +0.1 of the route.
+    - R15b: PASS = <= 1.34 / 5.42 / 3.69. Prediction (Cloud3): route + 0.03 / 0.35 / 0.54 = ~0.74 / 4.65 / 3.27.
+    - Both are paired with the route (primary); R15b also with R15.
+  - Harness lines: PERT.update(rmask='/Users/kamen/NewIdeas/data/dm_masks/<arm>', renorm=False); no t3; 36 windows;
+    ~5 min each. Read: scripts/chat_arm_read.py <arm>.

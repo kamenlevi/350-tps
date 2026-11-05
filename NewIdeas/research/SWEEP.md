@@ -1,11 +1,11 @@
-# THE SWEEP: old "lossy" and error-bar kills, re-priced under today's FAST stack (v1.2, Wed 4 Nov 2026 19:5x; v1 14:4x)
+# THE SWEEP: old "lossy" and error-bar kills, re-priced under today's FAST stack (v1.3 FINAL LIST, Thu 5 Nov 2026 07:0x; v1.2 Wed 19:5x; v1 14:4x)
 
 > (a quote from the project owner, kept private)
 are the kinds of things which we should be searching for." Every KILL / PARKED from before the 11-02 two-track rule
 that was judged on an exact or error bar, and every published method set aside as "lossy", priced under today's FAST
 stack. The candidates with sources are in research/SWEEP_CANDIDATES.md (33 rows).
 
-Status: v1.2 (Wed 19:5x). The quality column uses screen 7's measured terms (scripts/sweep_engine.py,
+Status: v1.3 (Thu 07:0x) = the FINAL RANKED LIST below; the sections after it are v1.2's working (Wed 19:5x). The quality column uses screen 7's measured terms (scripts/sweep_engine.py,
 data/ledger/sweep_engine.txt). FRAME FIX: v1.1 (19:5x) added the 3-bit tail's cost (E29) to every row, judged against
 the 4-bit model. But the FAST stack certifies against REF2-T (EvalSuite PREREG_f1), and REF2-T itself serves ranks 2-9
 at 3 bits (4433333333). So the verdict frame is amendment 2's in-frame one: MSB-3 rows pay no E29, and a store pays
@@ -19,6 +19,41 @@ the independent quantizers (rows 1-4), two views differ enough to change verdict
 Both are shown until a same-scores run on a real store says which holds. Every number below is [P] (a replay or arithmetic on measured numbers) or [G] (a model). Nothing
 goes to Kamen before MoonShots' independent re-derivation (the orchestrator's rule). DRAFT17 already has it (x0.723 vs
 x0.706).
+
+## FINAL RANKED LIST (v1.3, Thu 5 Nov 07:0x)
+
+Ranked by what to do next. Bytes are SSD MB per kept token in decode at 24 GB (code / IFEval / multi), my replay's
+convention (11-bit parts, best RAM split). Flips are measured on the decision map unless marked [G]; lines 1.34 / 5.42 /
+3.69 %. "Re-derived" = an independent second computation exists (MoonShots / Breakthrough / Cloud3 / Fit12, named).
+
+| rank | candidate | role | 24 GB bytes | flips % (verdict) | re-derived? | next |
+|---|---|---|---|---|---|---|
+| 1 | today's FAST stack (MSB-3 11-bit + POOLSPLIT + DRAFT17), row 0 | the 24 GB CODE route | 19.5 / 14.3 / 10.6 | 1.08 / 7.61 / 5.98 in-frame (PASS on code) | yes: bytes MoonShots M-35; screen 6 Breakthrough | EvalSuite same-scores (the FAST adoption path) |
+| 2 | the chat gate rule: QOM cf 0.5 + bonus gate 0.5, 4-bit sure rows, row 10a | the 24 GB CHAT route (per request) | 61.8 / 87.9 / 87.2 | **0.71 / 4.30 / 2.73 (PASS x3)** | yes: bytes MoonShots c388167; flips Breakthrough 8a473b0 | EvalSuite same-scores on chat |
+| 3 | route + unsure rows at top-8 + REACH-CUT 0.5 (Cloud3 C3-R15b) | a cheaper chat route | 49.3 / 57.1 / 54.0 (x0.65 / 0.62 on chat) | [G] ~0.74 / 4.65 / 3.27 (Cloud3) | bytes yes (Cloud3 + mine, within ~10 %) | map arm Fri 00:30 (pre-registered QUEUE Thu 07:0x) |
+| 4 | route + unsure rows at top-8 (Cloud3 C3-R15) | a cheaper chat route | 54.3 / 68.2 / 64.0 (x0.78 / 0.73) | [G] within +0.1 of the route (Cloud3) | bytes yes (as above) | map arm Fri 00:30 |
+| 5 | drafted 0.3 + bonus gate 0.4 | a cheaper chat route | 53.9 / 62.4 / 64.0 (x0.71 / 0.73) | [G] ~0.75 / 5.2 / 3.5, a coin flip | no (my replay only) | map arm Thu after DENSE-3, only if a share slot is free |
+| 6 | FAST 3-bit prefill, row 5 | the prompt's bytes (prefill is 62-86 % of process bytes at 24 GB) | prefill x0.74 (code 117.9 -> 87.4) | unknown | bytes no | a map arm with 3-bit prompt rows (harness work) |
+| 7 | GPTQ-3 g64, row 4 | same bytes as row 0, better 3-bit code | 19.5 / 14.3 / 10.6 | [G] credit 0.94 / 6.85 / 5.03 from its MSE ratio, but see below | bytes yes (M-35) | only after a KL screen (Hessians for all experts: the capture question) |
+| 8 | plane-aware prefetch, row 7 | engine reads -5-9 % | - | none (prefetch only) | no | an engine arm (BigMoE) |
+| 9 | gate-mass-adaptive tiers, row 9; trunk diet, row 6 | ~x0.9 / ~x0.96 | - | small, unknown | no | gate masses / a map arm; low priority |
+
+CLOSED (no store build, no disk):
+- The trellis family (rows 1-3: TRL-2, the 2.40 b mix, TRL-3). Screen 7 KILL: 1.45 / 9.54 / 10.44 % in-frame,
+  re-derived by Breakthrough. Fit12's judge on the map's own inputs shows the inputs do not explain the miss.
+- The cf 0.3 chat route: 0.74 / 5.56 / 3.86 %, BETWEEN on chat, a near miss. Both split hybrids die on bytes.
+- 3-bit sure rows on the chat route (10b, [G] BETWEEN on chat).
+- The 2-bit warm tier (row 8): cannot reach the chat budget in the model. Plus the subsumed / dead list below.
+
+What it adds up to:
+1. **Code at 24 GB:** the cheapest measured PASS is today's stack at ~19.5 MB per kept token. No store gets code under
+   10 MB with a PASS: the trellis route is closed, and GPTQ-3 only changes quality, not bytes.
+2. **Chat at 24 GB:** the gate rule PASSES at ~88 MB. Cloud3's two cuts may bring it to ~54-68 MB (Fri 00:30).
+3. **Data-aware codes need KL screens.** On identical reads and inputs, the trellis store cost ~2-3.5x more KL per unit
+   of expert-output error than truncation (QUEUE Wed 22:5x; computed from measured numbers, not independently
+   re-derived). GPTQ-3's MSE advantage may not survive a KL screen.
+4. **Prefill dominates the FAST stack's process bytes** for these prompts. If Kamen's 10 MB line counts the prompt, the
+   next wall is prefill, and FAST 3-bit prefill (x0.74) is only a start.
 
 **Re-derivation (MoonShots 14:4x, its own replay scripts/sweep_stores_check.py on Breakthrough's capture checks, QUEUE
 M-35, d05b2ac):**
@@ -159,7 +194,15 @@ pool): IFEval 0.0164 - 0.0093 = 0.0071; multi 0.0114 - 0.0101 = 0.0013.
   orchestrator's queue. They price chat's bytes-for-quality trade directly. The two-tier store (row 8) cannot reach the
   budget in this model, so it stays parked.
 
-## Next (cheapest first)
+## Next (cheapest first; v1.3)
+
+- Fri 00:30 (Breakthrough's map slot, after Cloud3's tile arms): C3-R15 and C3-R15b. Masks are built and bit-checked;
+  hand-off after Fable C's ~09:00 audit.
+- Thu, only if a share slot is free after DENSE-3: drafted 0.3 + bonus gate 0.4 (pre-registered Wed 22:4x).
+- EvalSuite same-scores for rows 1-2 of the final list (the adoption path; its queue, not mine).
+- Designs, not runs: the 3-bit-prompt map arm (row 5), and a GPTQ-3 KL screen (needs a Hessian capture plan).
+
+(v1.2's Next, kept for the record:)
 
 - The 3-bit tail stays: s7_ref3 PASSED on code (18:4x, 1.04 % at 239 slots). Flag 4 would have cost ~2x bytes
   (W4PRICE 16:3x), so it is not needed.

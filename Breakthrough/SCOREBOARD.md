@@ -3114,3 +3114,43 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
   - Under DRAFT17 (the ball masks), every realized check row, the last row included, is gated, so no unsure full-top-10
     rows take the source.
   - The 2.6-3.2x KL vs 1.1-1.8x error gap is not from different reads.
+
+## CLOUD FABLE 3's MAP ARMS C3-R11..R17 (the orchestrator 06:5x; specs ~/FableGod/cloud3/live/cloud3/REQUESTS.md): MASK BIT-CHECKS
+- Thu 06:5x [K] (scripts/dm_s7/check_c3_masks.py; data/c3/check_c3_*.log; CPU, read-only): an INDEPENDENT REBUILD of
+  every band arm from its spec text plus the conventions in cloud3's builder docstrings.
+  - Conventions: the MoonShots export's live-cut checks and dcf; stand-ins p + 97; only realized rows masked; the bonus row
+    by its next draft; strict union members; reach = the product of the earlier drafts' cf.
+  - c3_b2d, c3_b2c, c3_b2d_reach07, c3_b2d_reach07_u7, c3_b2b, c3_b2b_top1, c3_new1: bit-equal on 36/36 windows each (3,570
+    checks, 14,093 rows).
+  - c3_b2b_band5: bit-equal 36/36 once the layer 8-35 cap of 5 applies to DRAFTED rows with cf < 0.9 only.
+    - With no-draft rows capped too, 14/36 windows differ: cloud3's build keeps a no-draft row exact. The R12 spec text is
+      silent; flagged.
+  - Format, every arm: keep [N, 48, 10] bool; N == the map's routing rows; the export's ids == the map's routing; rank 0
+    kept on every row; rows outside every check all kept.
+  - Nesting holds on 36/36: b2d within b2c, reach07 within b2d, reach07_u7 within reach07, b2b_top1 and b2b_band5 within
+    b2b.
+  - The walk's dcf equals the gate file's cf on all 8,587 realized drafted rows (max |diff| 5e-7), so the bands use the
+    engine gate's confidence.
+  - To redo on the final masks after Fable C's ~09:00 audit, then snapshot, install and pre-register.
+- Thu 06:59: the scores-only capture installed for R6 (the orchestrator: option (i)), via install_scap.sh.
+  - dm_common gets CAPR "s": each MoE layer's router top-10 scores for EVERY row, without the hidden states, saved to
+    <DM_OUT>/scores/<window>.npz. run_map gets the name "scapture".
+  - Diff: only the new lines; the default paths are unchanged. Import and clear() tested.
+  - Runs with DM_OUT set to a scratch dir, so the map's out/routing stays untouched. A 1-window GPU smoke comes before the
+    full pass.
+- Thu 07:0x [K, partial: answer-row scores only, 88 % of checks] R6 massB_0.5's rule tested before the all-rows capture
+  (scripts/dm_s7/build_massb.py --xcap --partial; the rule from REQUESTS C3-R6 + REPORT_P2 section 4).
+  - Rule: per (check, layer), U = the check rows' distinct top-10 experts, B = ceil(0.5 |U|); keep the B experts with the
+    largest summed renormalised weight; every realized row keeps its top-10 within that set.
+  - Drop rates, on scored checks:
+
+    | domain | rank 0 outside the budget | rank 1 outside | kept share |
+    |---|---|---|---|
+    | code | 1.05 % | 4.8 % | 0.73 |
+    | IFEval | 0.43 % | 2.2 % | 0.65 |
+    | multi | 0.40 % | 1.9 % | 0.64 |
+
+  - The block counted from realized rows only (no stand-ins) gives 0.95 / 0.41 / 0.37 % and 4.3 / 2.0 / 1.6 %.
+  - REPORT_P2 section 4 (one window per domain) said 0.000 for rank 0 and 0.000-0.002 for rank 1. On the 36 windows the
+    half-union budget does drop rank 0 sometimes and rank 1 a few percent. Flagged for Fable C's audit; it is not a blocker,
+    and the arm runs as defined.

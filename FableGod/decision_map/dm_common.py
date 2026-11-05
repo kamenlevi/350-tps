@@ -291,11 +291,11 @@ def install():
         if CAPR["on"] and li is not None:                 # the block's own router, ranked (argpartition has no order)
             g = self.gate(x); g = g.reshape(-1, g.shape[-1])
             CAPR["L"].setdefault(li, []).append(mx.argsort(-g.astype(mx.float32), axis=-1)[:, :10].astype(mx.int16))
-            if CAPR.get("x"):                             # sketch-on-miss (11-02): the routed experts' input + router weights
+            if CAPR.get("x") or CAPR.get("s"):            # sketch-on-miss (11-02): the routed experts' input + router weights; "s" (Thu 11-05): scores only
                 gg = mx.softmax(g.astype(mx.float32), axis=-1, precise=True); o = mx.argsort(-gg, axis=-1)[:, :10]
                 wv = mx.take_along_axis(gg, o, axis=-1)
                 if self.norm_topk_prob: wv = wv / wv.sum(axis=-1, keepdims=True)
-                CAPR["X"].setdefault(li, []).append(x.reshape(-1, x.shape[-1]).astype(mx.float16))
+                if CAPR.get("x"): CAPR["X"].setdefault(li, []).append(x.reshape(-1, x.shape[-1]).astype(mx.float16))
                 CAPR["W"].setdefault(li, []).append(wv.astype(mx.float16))
         if not _moe_on() or li is None or Q._moe_prefill_combine_applies(self, x):
             return orig(self, x)                          # stock path; >= 32 rows meet _combine_p inside _prefill_call
@@ -342,7 +342,7 @@ def _t3_add(block, li, x):
 CAPR = {"on": False, "L": {}, "x": False, "X": {}, "W": {}}  # DAY9 bytes side ('capture' run): per layer, rank-sorted top-10 expert ids per call
 TEARDOWN = []   # undo callables registered by a setup that changes the model itself (hc8w); run by clear()
 def clear():
-    ACTIVE.clear(); PREV.clear(); PERT.clear(); CUR["k"] = None; CUR["rm"] = None; CUR["skip"] = None; CAPR["on"] = False; CAPR["x"] = False
+    ACTIVE.clear(); PREV.clear(); PERT.clear(); CUR["k"] = None; CUR["rm"] = None; CUR["skip"] = None; CAPR["on"] = False; CAPR["x"] = False; CAPR["s"] = False
     while TEARDOWN: TEARDOWN.pop()()
 
 _BASE = {}
@@ -451,6 +451,11 @@ def measure(model, windows, name, setup):
             os.makedirs(os.path.join(OUT, "routing"), exist_ok=True)
             np.savez(os.path.join(OUT, "routing", nm), ids=np.stack(R, axis=1)[:len(ids) - 1], tokens=ids, gen=gen)
             extra += f"; routing {R[0].shape[0]} rows"
+            if CAPR.get("s"):                               # <OUT>/scores/<window>.npz: every row's top-10 scores (Thu 11-05, C3-R6)
+                S = np.stack([np.array(mx.concatenate(CAPR["W"][L])) for L in range(48)], axis=1)[:len(ids) - 1]
+                os.makedirs(os.path.join(OUT, "scores"), exist_ok=True)
+                np.savez(os.path.join(OUT, "scores", nm), scores=S.astype(np.float16), ids=np.stack(R, axis=1)[:len(ids) - 1], a=a)
+                extra += f"; scores {S.shape}"
             if CAPR.get("x"):                               # out/xcap/<window>.npz: answer rows' MoE input x [m, 48, 2560] and
                 X = np.stack([np.array(mx.concatenate(CAPR["X"][L]))[a:len(ids) - 1] for L in range(48)], axis=1)   # weights
                 W = np.stack([np.array(mx.concatenate(CAPR["W"][L]))[a:len(ids) - 1] for L in range(48)], axis=1)

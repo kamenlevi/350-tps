@@ -72,6 +72,8 @@ def parse(arm):
     if m: return float(m.group(1)), 2, 10
     m = re.fullmatch(r"qom_([0-9.]+)_k(\d+)", arm)          # Wed 04:0x: QOM with sure rows at top-k (k 1: + resident ranks 1-9)
     if m: return float(m.group(1)), int(m.group(2)), 10
+    m = re.fullmatch(r"qom_([0-9.]+)_u(\d+)(?:_reach[0-9.]+)?", arm)   # Thu 07:0x (Cloud3 C3-R15 / R15b): QOM with unsure rows
+    if m: return float(m.group(1)), 2, int(m.group(2))      # at top-u + union members + resident; _reach<tau>: REACH-CUT too
     raise SystemExit(f"unknown arm {arm}")
 
 
@@ -116,6 +118,8 @@ def masks(out_dir, arm):
     if bq and not live: raise SystemExit("_bq needs a _live arm")
     thr, ks, ku = parse(arm0); plain = arm0.startswith("top_k")
     tau = float(arm0.split("_")[2]) if arm0.startswith("reach_") else None
+    mr = re.search(r"^qom_[0-9.]+_u\d+_reach([0-9.]+)$", arm0)   # Thu 07:0x: QOM's REACH-CUT (rows keep residents, the qom path)
+    if mr: tau = float(mr.group(1))
     qom = arm0.startswith("qom_"); CL = ([cpool] * 48 if cpool else pool_sizes()) if qom else None
     base = json.load(open(os.path.join(OUT, "baseline.json")))
     G = dm_gate.load()

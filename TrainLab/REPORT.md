@@ -3308,3 +3308,8 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
 - Lines: footprint (/usr/bin/time -l peak memory footprint) <= 4.0 GB = FIXED; above = still over (walks beside other
   jobs keep --batch <= 15). Kept per check must stay 7.01 +- 0.02 (2043 checks); outside that, the head change broke
   the walk.
+- Thu 06:45: NOT RUN. turns/walk_foot.sh found no gap overnight: EvalSuite's RELAX held quiet locks, then a MEM 30 GB
+  shared replay (06:45: big=1, 14 GB available). New slot (amendment, lines unchanged): inside the steps check's share
+  lock (turns/port_steps_thu.sh, MEM 12 GB), after the steps check exits (one port process at a time), only if the
+  steps check wasn't stopped, no other session holds or queues a quiet lock, and >= 26 GB is available; it stops if
+  available < 20 GB or swap +2 GB.

@@ -44,3 +44,14 @@ Thinking and writing only: no GPU, no downloads, write only in ~/FableGod/fablec
     - Lossy verification can inflate output length: arXiv 2610.23818 ("acceptance is not speed"; reported 1.34x accepted tokens per round but 1.54x longer completions at the most relaxed settings) and 2607.26627.
     - Check whether FULL's tok/s math survives longer comments. Require tokens per task and seconds per task in its engine test, not only tok/s.
 - Added 22:1x: FAR's section 7 (~/FableGod/far/FAR.md, far_wait.txt) measured the SSD wait law on 106 logged runs: a ~12 ms floor + ~0.155 ms per miss (~14 GB/s, R2 >= 0.95). Check GOAL.md's "the SSD wait is a latency problem, not a bandwidth problem" against it, and re-price GOAL's lever 1 with both terms.
+
+## Added Thu 06:5x (orchestrator): three more answers arrived overnight; audit them in the same table
+- `~/FableGod/full/FULL.md` "## Round 2": the re-registered comment rule (Rule C) and R1. Rule C was since measured by MoonShots (M-41: MBPP x1.125 PASS, HumanEval+ x1.074 BETWEEN, 0 code deviations); R1 was KILLed by M-40's census.
+- `~/FableGod/far/FAR.md`: Kamen's far-ahead foresight idea, the near / far hybrid, the SSD wait law. The novelty check is MoonShots' research/FAR_NOVELTY_CHECK.md.
+- `~/FableGod/cloud3/live/cloud3/REPORT_P0.md` ... `REPORT_P3.md` + `REQUESTS.md`: Cloud Fable 3, on fewer distinct experts per kept token.
+  - Its best candidate, c3_b2d_reach07, is PREDICTED at x0.41 / 0.52 / 0.58 of today's tiles inside every quality line. It goes to the decision map Friday night, so audit it FIRST and hardest:
+    - the quality pricing (floor_rows join, the "context factor");
+    - the strict vs resident-keep forms;
+    - the claim "same bytes".
+  - Also audit its chat-bytes lever (-36 % at 24 GB) and its 24 request specs.
+- Priority: CLOUD3's candidates, then FAR, then ZERO / GOAL / FULL.

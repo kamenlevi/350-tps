@@ -5,6 +5,9 @@
 # needs >= 32 GB available (12 + 20) for 3 clear minutes and no other session's quiet lock / queued quiet ticket.
 # Gives up at $GIVE_UP (default 11:15; the conversion window ~11:20 is the fallback, ask the orchestrator).
 # Swap guard +2 GB (SIGTERM). Logs: data/port/steps_thu.log, data/port/steps_thu.json.
+# Added Thu 06:4x (REPORT 'PORT walk footprint re-measure'; turns/walk_foot.sh found no gap overnight): after the steps
+# check has exited (one port process at a time), the math walk re-measure (~4 min, <= 6 GB) under the same lock, only
+# if >= 26 GB is available and no other session holds or queues a quiet lock; same guards. Log data/port/walk_foot.log.
 cd ~/TrainLab || exit 1
 GIVE_UP=${GIVE_UP:-1115}
 log() { echo "[$(date +%H:%M:%S)] $*"; }
@@ -22,7 +25,7 @@ while :; do
   [ "$(date +%H%M)" -ge "$GIVE_UP" ] && { log "GIVE UP at $GIVE_UP: quiet=$q avail=${a} GB"; exit 3; }
   sleep 30
 done
-out=$(peer lock share 40m --cpu 600 --gpu 0 "MEM 12 GB: MTP Head PORT steps 1-5 vs L1-20 (CPU only, ~10 min; the orchestrator 21:5x)" 2>&1)
+out=$(peer lock share 40m --cpu 600 --gpu 0 "MEM 12 GB: MTP Head PORT steps 1-5 vs L1-20, then a 4-min walk re-measure (CPU only, ~15 min; the orchestrator 21:5x)" 2>&1)
 log "lock: $(printf '%s' "$out" | head -1)"
 printf '%s' "$out" | grep -q "reserved" || { log "NO LOCK"; exit 4; }
 s0=$(swap_mb); log "start (swap $s0 MB)"
@@ -34,10 +37,28 @@ while kill -0 $pid 2>/dev/null; do
   sleep 15
   s=$(swap_mb); a=$(avail_gb)
   if awk -v x="$s" -v y="$s0" 'BEGIN{exit !(x-y>2048)}' || [ "$a" -lt 20 ]; then
-    log "swap $s MB / avail ${a} GB: NO-SWAP margin gone, stopping"; pkill -TERM -f "port/train_por[t].py"; break
+    log "swap $s MB / avail ${a} GB: NO-SWAP margin gone, stopping"; stopped=1; pkill -TERM -f "port/train_por[t].py"; break
   fi
 done
 wait $pid; log "rc=$? footprint $(grep 'peak memory footprint' data/port/steps_thu.log | awk '{printf "%.1f GB", $1/2^30}')"
+q=$(nquiet); a=$(avail_gb)
+if [ "${stopped:-0}" -eq 0 ] && [ "$q" -eq 0 ] && [ "$a" -ge 26 ]; then
+  s0=$(swap_mb); log "walk re-measure: start (${a} GB available, swap $s0 MB)"
+  /usr/bin/time -l ~/TrainLab/.venv-torch/bin/python -I port/walk_port.py --sets "math=$HOME/Leap/data/dfl2d_math" \
+    --bf16-store --threads 4 --batch 30 > data/port/walk_foot.log 2>&1 &
+  pid=$!
+  while kill -0 $pid 2>/dev/null; do
+    sleep 10
+    s=$(swap_mb); a=$(avail_gb)
+    if awk -v x="$s" -v y="$s0" 'BEGIN{exit !(x-y>2048)}' || [ "$a" -lt 20 ]; then
+      log "swap $s MB / avail ${a} GB: NO-SWAP margin gone, stopping the walk"; pkill -TERM -f "port/walk_por[t].py"; break
+    fi
+  done
+  wait $pid; log "walk rc=$?: $(grep -E '^  math' data/port/walk_foot.log | cut -c1-150)"
+  log "walk footprint $(grep 'peak memory footprint' data/port/walk_foot.log | awk '{printf "%.2f GB", $1/2^30}')"
+else
+  log "walk re-measure skipped: steps stopped=${stopped:-0}, quiet=$q, ${a} GB available (needs 0, 0, >= 26)"
+fi
 peer unlock 2>&1 | tail -1
 [ -f data/port/steps_thu.json ] && ~/TrainLab/.venv-torch/bin/python -I port/compare_l120.py data/port/steps_thu.json
 log "DONE"
