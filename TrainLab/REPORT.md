@@ -3299,6 +3299,24 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   time, in either order: the gate also waits while another session's lock shows MEM > 5 GB, and backs off if two locks
   land together. Start by 11:30 (the give-up stays); the walk only by 11:40; 12:00 = runaway stop.
 
+#### RESULT (Thu 11-05 10:38-10:43): **FAIL**. Step 1 matches L1-20 to 1.1e-4; steps 2-5 are 1.5-3.8 % ABOVE its log.
+| step | port loss | L1-20 logged | rel | port grad-norm | lr (both: the same schedule) |
+|---|---|---|---|---|---|
+| 1 | 5.343394 | 5.343977 | 1.09e-4 | 20.61 | 2.00e-7 |
+| 2 | 4.851293 | 4.695799 | **3.31e-2** | 27.06 | 1.19e-6 |
+| 3 | 4.978863 | 4.796175 | **3.81e-2** | 24.19 | 2.18e-6 |
+| 4 | 4.796092 | 4.645471 | **3.24e-2** | 21.14 | 3.17e-6 |
+| 5 | 3.777776 | 3.723465 | **1.46e-2** | 29.24 | 4.16e-6 |
+- Reading: the forward is right (step 1, and the step-to-step shape follows L1-20's batches, so data order and masks
+  match), but after the first update the port's model is worse on every next batch. Something in the update differs:
+  the gradient (e.g. a stop-gradient placed differently, so the loss value matches but its gradient doesn't), the
+  trainable set, clip, or AdamW. L1-20's trainer is sticky/d09_train.py (identical to Leap's scripts/dfl2c_train.py,
+  last changed 10-24 16:42, before L1-20's run): trains layers + norm + candidate_selector, AdamW(wd 0), clip 1.0, warm-up
+  1 % -> 100 % over 20 steps (the port's logged lr matches it). Diagnosis next (code first, then a small differential).
+- The port is NOT yet validated past step 1: Kaggle runs wait for this fix.
+- Run: 258 s wall (41-59 s per step at 6 threads, CPU). Footprint **14.4 GB** vs MEM 12 GB declared (fp32 weights +
+  AdamW moments + grads). Swap flat (10,629 -> 10,621 MB); 47 GB available after it. Runner 43's GO touched 10:44:52.
+
 ### P-OFF diagnostic RESULT (Wed 11-04 22:10): ALIVE. The 125B's greedy token equals the corpus answer on 0.86 of answer tokens
 - On-path rate (assistant tokens): **0.860** by the extractor's line over windows 4-260 (the decision line), **0.8622**
   over all 260 (sticky/poff_data.py). The pre-registered alive line was >= 0.75, so it passes.
@@ -3326,3 +3344,39 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   lock (turns/port_steps_thu.sh, MEM 12 GB), after the steps check exits (one port process at a time), only if the
   steps check wasn't stopped, no other session holds or queues a quiet lock, and >= 26 GB is available; it stops if
   available < 20 GB or swap +2 GB.
+
+#### RESULT (Thu 11-05 10:42:52-10:44:52): NOT FIXED. Footprint **4.74 GB** (was 5.97; line <= 4.0). The walk itself is fine.
+- math, batch 30, --bf16-store, 4 threads: 60 samples, 2043 checks, kept per check **7.01**, per-token rate 0.8710,
+  P(first 15 right) 0.087. Identical to the 21:0x run, so the head-buffer change didn't break the walk. 112 s (was 154).
+- The head fix saved 1.2 GB; the remaining ~0.7 GB over the line is elsewhere (likely the 30 samples' context features
+  and the batch's fp32 context tensor). Rule stays: walks beside other jobs use --batch <= 15.
+
+### PORT steps FAIL, diagnosis 1 (Thu 11-05 10:59): one batch's gradient, MLX (GPU, the trainer's own code) vs port, first layer only: MATCH
+- Setup: port/ref_mlx.py grad --gpu vs port/test_parity.py grad; first HF layer, A 8, 1 train group, pmask 0.5 (the
+  trainer's PM_RNG); per-parameter norms + 8 hashed +-1 projections (port/grad_stats.py, identical in both venvs).
+  Data: data/port/gradpar/ (mlx.json, port.json, compare.txt).
+- Loss 12.749070 vs 12.748799 (rel 2.1e-5). Total gradient norm 16.159 vs 16.170 (ratio 1.0007).
+- Every layer-0 parameter and the final norm: relative difference 3e-4 to 3e-3, the bf16 roundings' level. Exact on the
+  small ones (q_norm / k_norm 9e-4, base kernels 1.4-1.7e-3, final norm 3.3e-4).
+- NOT covered: the candidate selector's gradient is ZERO on both sides (a 1-layer drafter never ranks the true token in
+  its top 16, so the selector loss is inactive). Also not covered: the full run's --ckpt-layers, --attn-chunk 8 and
+  --rows 128 (this test used no recompute and no chunking), 5 layers, and the optimizer over steps.
+- Footprints: MLX side 5.47 GB (MLX peak 3.85), port 4.10 GB; the MLX side is over my 4 GB port-test rule (short,
+  share lock MEM 4 GB, 25 GB available, swap flat).
+
+### PORT steps FAIL, diagnoses 2-3 (Thu 11-05 11:02-11:05): recompute exact, selector gradients match, data identical over 5 steps
+- 2a (port only, 1 layer, A 8): --ckpt-layers + --attn-chunk 4 + --rows 128 vs none: loss identical, gradients
+  identical to <= 7e-8. The full run's recompute and chunking are not the cause.
+- 2b (MLX GPU vs port, all 5 layers fp32 and frozen, so the final norm and the candidate selector get gradients and the
+  selector loss is active): loss 2.022318 vs 2.025148 (1.4e-3); gradient norms within 0.1-0.4 %; estimated relative
+  differences ~1e-2 (successor codebook 1.1e-2, hidden projection 7.7e-3, predecessor codebook 7.4e-3, norm 6.1e-3
+  exact). Larger than layer 0's 1e-3 but no systematic error; consistent with near-tie flips at the top-16 boundary of
+  the bf16-rounded logits.
+- 3 (no model; port/test_data_steps.py): the MLX trainer's own load_windows / groups_of / make_batch (from its source)
+  plus its pre-loop RNG use and item selection vs the port's, over L1-20's first 5 steps: the same groups (step 1:
+  gsm_21, gsm_20, he_160, gsm_7) and BITWISE IDENTICAL batch arrays (context, positions, tokens, top-32 targets, masks,
+  weights). 0.7 GB.
+- So far: data, forward, one-batch gradients (layers, norm, selector) and recompute all match. Untested: the update
+  applied over steps (diagnosis 4, running) and gradients at the full scale.
+- Footprints: 3.87-4.91 GB (port), 5.21 GB (MLX side); share lock MEM 5 GB; swap flat. Data: data/port/gradpar2/,
+  data/port/data_steps.txt.

@@ -19,20 +19,45 @@ ap.add_argument("--steps", type=int, default=5); ap.add_argument("--layers", typ
 ap.add_argument("--pmask", type=float, default=0.5); ap.add_argument("--bs", type=int, default=32)
 ap.add_argument("--lr", type=float, default=2e-5); ap.add_argument("--S", type=int, default=1)
 ap.add_argument("--attn", default="explicit"); ap.add_argument("--threads", type=int, default=8)
+ap.add_argument("--freeze-layers", action="store_true")   # grad: only the final norm + the selector get gradients
+ap.add_argument("--ckpt-layers", action="store_true"); ap.add_argument("--attn-chunk", type=int, default=0)
+ap.add_argument("--rows", type=int, default=256)          # the trainer's recompute / chunking options (Thu 11-05)
+ap.add_argument("--data", default="~/Leap/data/l120")       # a folder with only the windows needed (memory)
+ap.add_argument("--freeze-selector", action="store_true")   # train: no selector parameters (memory)
 r = ap.parse_args()
 torch.set_num_threads(r.threads)
 t0 = time.time()
-m = M.build(attn_impl=r.attn)
+m = M.build(n_layers=(r.layers or None), attn_impl=r.attn)      # the first --layers layers of the HF drafter
 m.head.q4.unpack_u8(); m.head.q4.packed = torch.empty(0, dtype=torch.int32)
 if r.layers:
     m.layers = m.layers[:r.layers]
-ref = np.load(os.path.expanduser(r.ref))
-wins = DP.load_windows("~/Leap/data/l120")
+m.ckpt_layers, m.attn_chunk = r.ckpt_layers, r.attn_chunk
+if r.freeze_layers:
+    for p in m.layers.parameters():
+        p.requires_grad_(False)
+if r.freeze_selector:
+    for p in m.candidate_selector.parameters():
+        p.requires_grad_(False)
+ref = np.load(os.path.expanduser(r.ref)) if r.mode != "grad" else None   # grad: r.ref is the OUTPUT json
+wins = DP.load_windows(r.data)
 tr = [g for w_ in wins if w_["split"] == "train" for g in DP.groups_of(w_, r.A)]
 pm = np.random.default_rng(20)                       # the MLX trainer's PM_RNG
 print(f"[port] loaded in {time.time() - t0:.0f}s; {len(wins)} windows, {len(tr)} train groups, layers {len(m.layers)}, "
       f"attn {r.attn}", flush=True)
 res = {}
+if r.mode == "grad":                     # Thu 11-05: one batch's loss + full gradient -> port/grad_stats.py JSON
+    import grad_stats as GS
+    import resource
+    b = DP.to_torch(DP.make_batch(tr[:r.groups], r.A, r.bs, m.MASK, r.pmask, pm), "cpu")
+    norm = max(1.0, float(b["w"].sum()))
+    l = m.loss_sum(m.fwd(b["hc"], b["upos"], b["anc"], b["tok"]), b["pred"], b["tkl"], b["lpl"], b["y"], b["w"],
+                   rows=r.rows) / norm
+    l.backward()
+    per = {n: GS.stats(n, p.grad.detach().float().numpy()) for n, p in m.named_parameters() if p.grad is not None}
+    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2 ** 30
+    GS.save(os.path.expanduser(r.ref), float(l), per, dict(norm=norm, rss_peak_gb=rss))
+    print(f"[port] grad loss {float(l):.6f} (norm {norm:.0f}); {len(per)} parameters; rss peak {rss:.2f} GB", flush=True)
+    sys.exit(0)
 if r.mode == "fwd":
     nb = DP.make_batch(tr[:r.groups], r.A, r.bs, m.MASK, r.pmask, pm)
     same_in = all(np.array_equal(nb[k], ref[k]) for k in ("w", "tok", "tkl", "pred", "y"))

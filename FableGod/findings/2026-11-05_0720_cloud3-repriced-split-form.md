@@ -27,3 +27,14 @@
   windows.
 - Prior art: confidence-keyed expert counts per row are adapted (PSR, AcceptMoE, OEA, LExI; audit section 4). The split
   is engineering on our own cache-conditional keep rule; not searched outside our notes yet.
+- Follow-up (2026-11-05 10:36, map test on code): both split forms PASS on code [K Breakthrough, 12 code windows,
+  3,366 rows, all-row flips vs the baseline argmax, line 1.34 %]. These use the engine's own last-row convention (DRAFT17
+  gates every last row), slightly gentler than the replay priced above.
+  - Cut on rows with cf >= 0.99: 0.92 % (31 rows); code tiles x0.628 of the preset's.
+  - Cut on rows with cf >= 0.9: 1.31 % (44 rows), just under the line; code tiles x0.508.
+  - The preset itself (QOM-KEEP + DRAFT17, first map run at 45 GB): 0.51 %. Each split costs a significant +0.41 / +0.80
+    points against it on the same rows (paired z +2.47 / +3.94), and both stay under the line.
+  - Still open: the chat control (Friday, 36 windows), an engine log of distinct experts per layer call (exact vs FAST),
+    and the engine A/B (tok/s >= +8 % at kept within 1 %). The tok/s gain is not measured yet.
+  - Side result: this was the first map run on the store converted to the native layout. It reproduced the stored
+    routing on 100 % of cells and the baseline top-1 on 144 / 144 rows.

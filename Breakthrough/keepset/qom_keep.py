@@ -30,15 +30,24 @@ def loads(ids, k0):
     return np.unique(np.concatenate([ids[r, :int(k0[r])] for r in range(ids.shape[0])]))
 
 
-def keep(ids, k0, block_loads, resident):
-    """-> keep [R, 10] bool, rank-sorted. resident = the layer's pool after the block's loads (any int iterable or array)."""
+def strict_rows(cf, k0, split=None, ks=KS):
+    """The split threshold (Thu 2026-11-05; Fable C's audit test 1, SPLIT90): sure rows whose draft cf >= split are STRICT
+    (ranks < ks + the block's loads only, no resident keep). split None = off (every sure row keeps its residents: QOM)."""
+    k0 = np.asarray(k0)
+    if split is None: return np.zeros(len(k0), bool)
+    c = np.nan_to_num(np.asarray(cf, dtype=np.float64), nan=-1.0)
+    return (k0 == ks) & (c >= split)
+
+def keep(ids, k0, block_loads, resident, strict=None):
+    """-> keep [R, 10] bool, rank-sorted. resident = the layer's pool after the block's loads (any int iterable or array).
+    strict [R] bool (strict_rows): those rows keep no resident expert beyond the block's loads."""
     ids = np.asarray(ids); kp = np.ones(ids.shape, bool)
     res = np.asarray(list(resident) if not isinstance(resident, np.ndarray) else resident)
     for r in range(ids.shape[0]):
         k = int(k0[r])
         if k < K:
             tail = ids[r, k:]
-            kp[r, k:] = np.isin(tail, block_loads) | np.isin(tail, res)
+            kp[r, k:] = np.isin(tail, block_loads) | (False if strict is not None and strict[r] else np.isin(tail, res))
     return kp
 
 
@@ -64,24 +73,30 @@ def t3_mask(kp, k0, ks=KS):
     return m
 
 
-def touch_order(ids, k0, resident):
+def touch_order(ids, k0, resident, strict=None, block_loads=None):
     """The map replay's pool touches after the block (optional for the engine): every sure row's ranks >= k0 that are
-    resident, row by row in rank order (duplicates kept; an LRU applies them in this order)."""
+    resident, row by row in rank order (duplicates kept; an LRU applies them in this order). A strict row touches only what
+    it keeps: its resident tail experts that are among the block's loads."""
     ids = np.asarray(ids); res = set(int(e) for e in resident); out = []
+    U = set(int(e) for e in block_loads) if block_loads is not None else None
     for r in range(ids.shape[0]):
         k = int(k0[r])
-        if k < K: out += [int(e) for e in ids[r, k:] if int(e) in res]
+        if k < K:
+            st = strict is not None and strict[r]
+            out += [int(e) for e in ids[r, k:] if int(e) in res and (not st or int(e) in U)]
     return out
 
 
-def block(ids, cf, resident_after, thr=THR, ks=KS, top_bits=3, tail_bits=4):
+def block(ids, cf, resident_after, thr=THR, ks=KS, top_bits=3, tail_bits=4, split=None):
     """One call per (block, layer) once the pool holds the block's loads: -> (k0, loads, keep, bits). Use loads(ids,
-    k0_from_cf(cf)) first if the engine needs the load list before it can say what is resident."""
-    k0 = k0_from_cf(cf, thr, ks); U = loads(ids, k0); kp = keep(ids, k0, U, resident_after)
+    k0_from_cf(cf)) first if the engine needs the load list before it can say what is resident. split: see strict_rows."""
+    k0 = k0_from_cf(cf, thr, ks); U = loads(ids, k0); st = strict_rows(cf, k0, split, ks)
+    kp = keep(ids, k0, U, resident_after, st)
     return k0, U, kp, bits(kp, k0, ks, top_bits, tail_bits)
 
 
-def qom_keep_mx(ids, scores, conf, resident, thr=THR, ks=KS, top_bits=3, tail_bits=4, exact_bits=4, valid=None, ranked=True):
+def qom_keep_mx(ids, scores, conf, resident, thr=THR, ks=KS, top_bits=3, tail_bits=4, exact_bits=4, valid=None, ranked=True,
+                split=None):
     """The same rule on MLX arrays, no host sync (for the engine's tier call). Leading batch dims are allowed.
       ids      [..., R, 10] int   the block's routed experts per row (R = the block's rows, the last row included)
       scores   [..., R, 10]       the router's normalised top-10 weights (the combine weights before the rule)
@@ -91,14 +106,17 @@ def qom_keep_mx(ids, scores, conf, resident, thr=THR, ks=KS, top_bits=3, tail_bi
       valid    [..., R] bool      optional: padded rows (False) load nothing and are left all-kept
       ranked   True: columns are in rank order (rank 0 first). False: any column order (e.g. argpartition's); ranks come
                from argsort(-scores as float32), as the map's harness ranks them, and the outputs keep the input order.
+    split    optional (default off): sure rows with conf >= split keep NO resident expert (ranks < ks + the block's loads
+             only; Fable C's audit test 1 / SPLIT90, T = 0.9 or 0.99); every other row unchanged
     -> keep [..., R, 10] bool, weights = scores x keep (dropped ranks zeroed; no renormalisation), bits [..., R, 10] int8
        (0 = dropped; C's form: a sure row's ranks < ks at top_bits, its kept others at tail_bits, exact rows exact_bits).
-    keep = rank < k0 OR the expert is among the block's loads (every row's ranks < k0) OR resident."""
+    keep = rank < k0 OR the expert is among the block's loads (every row's ranks < k0) OR (resident AND the row is not
+    strict)."""
     import mlx.core as mx
     if not ranked:
         o = mx.argsort(-scores.astype(mx.float32), axis=-1); inv = mx.argsort(o, axis=-1)
         g = lambda a: mx.take_along_axis(a, o, axis=-1)
-        kp, _, b = qom_keep_mx(g(ids), g(scores), conf, g(resident), thr, ks, top_bits, tail_bits, exact_bits, valid, True)
+        kp, _, b = qom_keep_mx(g(ids), g(scores), conf, g(resident), thr, ks, top_bits, tail_bits, exact_bits, valid, True, split)
         kp, b = mx.take_along_axis(kp, inv, axis=-1), mx.take_along_axis(b, inv, axis=-1)
         return kp, scores * kp.astype(scores.dtype), b
     sure = conf >= thr                                         # NaN compares False: no draft = an exact row
@@ -107,6 +125,7 @@ def qom_keep_mx(ids, scores, conf, resident, thr=THR, ks=KS, top_bits=3, tail_bi
     lo = rank < mx.where(sure, ks, K)[..., None]               # [..., R, 10]: ranks < k0 (the block's loads)
     lu = lo if valid is None else mx.logical_and(lo, valid[..., None])
     inU = mx.logical_and(ids[..., :, :, None, None] == ids[..., None, None, :, :], lu[..., None, None, :, :]).any(axis=(-2, -1))
-    kp = mx.logical_or(mx.logical_or(lo, inU), resident)
+    res = resident if split is None else mx.logical_and(resident, mx.logical_not(mx.logical_and(sure, conf >= split))[..., None])
+    kp = mx.logical_or(mx.logical_or(lo, inU), res)
     b = mx.where(kp, mx.where(sure[..., None], mx.where(rank < ks, top_bits, tail_bits), exact_bits), 0).astype(mx.int8)
     return kp, scores * kp.astype(scores.dtype), b

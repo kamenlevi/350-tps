@@ -32,7 +32,7 @@ convention (11-bit parts, best RAM split). Flips are measured on the decision ma
 | 2 | the chat gate rule: QOM cf 0.5 + bonus gate 0.5, 4-bit sure rows, row 10a | the 24 GB CHAT route (per request) | 61.8 / 87.9 / 87.2 | **0.71 / 4.30 / 2.73 (PASS x3)** | yes: bytes MoonShots c388167; flips Breakthrough 8a473b0 | EvalSuite same-scores on chat |
 | 3 | route + unsure rows at top-8 + REACH-CUT 0.5 (Cloud3 C3-R15b) | a cheaper chat route | 49.3 / 57.1 / 54.0 (x0.65 / 0.62 on chat) | [G] ~0.74 / 4.65 / 3.27 (Cloud3) | bytes yes (Cloud3 + mine, within ~10 %) | map arm Fri 00:30 (pre-registered QUEUE Thu 07:0x) |
 | 4 | route + unsure rows at top-8 (Cloud3 C3-R15) | a cheaper chat route | 54.3 / 68.2 / 64.0 (x0.78 / 0.73) | [G] within +0.1 of the route (Cloud3) | bytes yes (as above) | map arm Fri 00:30 |
-| 5 | drafted 0.3 + bonus gate 0.4 | a cheaper chat route | 53.9 / 62.4 / 64.0 (x0.71 / 0.73) | [G] ~0.75 / 5.2 / 3.5, a coin flip | no (my replay only) | map arm Thu after DENSE-3, only if a share slot is free |
+| 5 | drafted 0.3 + bonus gate 0.4 | a cheaper chat route | 53.9 / 62.4 / 64.0 (x0.71 / 0.73) | [G] ~0.75 / 5.2 / 3.5, a coin flip | yes: MoonShots M-42 52.8 / 62.0 / 64.2, x0.71 / 0.73 (cd5f64b) | map arm Thu after DENSE-3, only if a share slot is free |
 | 6 | FAST 3-bit prefill, row 5 | the prompt's bytes (prefill is 62-86 % of process bytes at 24 GB) | prefill x0.74 (code 117.9 -> 87.4) | unknown | bytes no | a map arm with 3-bit prompt rows (harness work) |
 | 7 | GPTQ-3 g64, row 4 | same bytes as row 0, better 3-bit code | 19.5 / 14.3 / 10.6 | [G] credit 0.94 / 6.85 / 5.03 from its MSE ratio, but see below | bytes yes (M-35) | only after a KL screen (Hessians for all experts: the capture question) |
 | 8 | plane-aware prefetch, row 7 | engine reads -5-9 % | - | none (prefetch only) | no | an engine arm (BigMoE) |
@@ -54,9 +54,10 @@ What it adds up to:
 1. **Code at 24 GB:** the cheapest measured PASS is today's stack at ~19.5 MB per kept token. No store gets code under
    10 MB with a PASS: the trellis route is closed, and GPTQ-3 only changes quality, not bytes.
 2. **Chat at 24 GB:** the gate rule PASSES at ~88 MB. Cloud3's two cuts may bring it to ~54-68 MB (Fri 00:30).
-3. **Data-aware codes need KL screens.** On identical reads and inputs, the trellis store cost ~2-3.5x more KL per unit
-   of expert-output error than truncation (QUEUE Wed 22:5x; computed from measured numbers, not independently
-   re-derived). GPTQ-3's MSE advantage may not survive a KL screen.
+3. **Data-aware codes need KL screens.** On identical reads and inputs, the trellis store cost ~1.7-3.2x more KL per unit
+   of expert-output error than truncation (~1.7-3.5x across both measurements; re-derived by MoonShots M-43, cd5f64b: direct ratio 3.18 / 1.65 / 2.34x;
+   code noisy, +-1.3; IFEval / multi clear 1 by > 2 SE; MSB-2's error ratio measured at 4.98-5.10x, as assumed).
+   GPTQ-3's MSE advantage may not survive a KL screen.
 4. **Prefill dominates the FAST stack's process bytes** for these prompts. If Kamen's 10 MB line counts the prompt, the
    next wall is prefill, and FAST 3-bit prefill (x0.74) is only a start.
 

@@ -1487,3 +1487,19 @@ only last-rank 2-bit (4433333322-class) might pass, worth ~5 % of expert bytes. 
     deviations and 0 % disagreement. MBPP answers hold 19.9 % comment rows (FULL guessed 5-8 %) on a hard exact profile
     (5.01 kept), so the comment rule pays more there than on HumanEval+. The engine number (10.54 x ratio) uses HumanEval+'s
     base; MBPP's own live kept is lower.
+- Thu 10:2x-10:3x, four CPU jobs after the records3 conversion (one share lock):
+  - R57_RELAX_SPAN tests ALL OK (data/test_relax_span.txt). The patch's own functions, fed text the way r57 feeds its
+    comment tagger, reproduce the rule C replay's accept decisions on all 21,504 tested rows: 0 differ. M-41's numbers
+    stand (x1.189 / x1.074 / x1.125; the whole-window feed equals the engine's answer feed on every row). BigMoE
+    integrated it (fef5586); the engine arm runs Fri ~01:40 after the rx0 gate.
+  - M-42 SPLITCHECK CONFIRMED (data/split_route_check.txt). SWEEP rank 5 (drafted 0.3 + bonus gate 0.4) = 52.8 / 62.0 /
+    64.2 MB per kept token vs NewIdeas' 53.9 / 62.4 / 64.0, chat x0.71 / 0.73 of the cf 0.5 route, the same best Cl. Far
+    stand-ins put chat 3-9 % higher at the same ratio.
+  - M-43 KLPERERR CONFIRMED, slightly smaller (data/kl_per_error_check.txt, data/msb2_judge.json).
+    - Measured directly on the same rows, with no model in between, the trellis store costs 3.18x / 1.65x / 2.34x the
+      KL of MSB-2 truncation per unit of router-weighted expert-output error (code noisy, SE ~+-1.3).
+    - The calibration's assumption holds: MSB-2's output error is 4.98-5.10x MSB-3's on real rows.
+    - Fit12's layer means understate the store's error: pooled by error it is 1.29-1.82x MSB-3, because late layers
+      carry more error. That shrinks NewIdeas' 3.5 / 1.8 / 2.4 to about 3.2 / 1.65 / 2.3.
+    - msb2_judge.py rebuilds W4 / MSB-3 / MSB-2 from the original 4-bit safetensors, so it is immune to the records3
+      conversion. Its trellis / MSB-3 ratios reproduce Fit12's records3-based ones to 3 decimals.

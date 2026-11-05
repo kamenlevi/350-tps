@@ -12,13 +12,20 @@ ap.add_argument("--A", type=int, default=8); ap.add_argument("--groups", type=in
 ap.add_argument("--steps", type=int, default=5); ap.add_argument("--layers", type=int, default=0)
 ap.add_argument("--pmask", type=float, default=0.5); ap.add_argument("--bs", type=int, default=32)
 ap.add_argument("--lr", type=float, default=2e-5); ap.add_argument("--S", type=int, default=1)
+ap.add_argument("--gpu", action="store_true")      # Thu 11-05: MLX's CPU qmm is ~4 % off; the GPU is the reference
+ap.add_argument("--freeze-layers", action="store_true")   # grad: only the final norm + the selector get gradients
+ap.add_argument("--data", default="~/Leap/data/l120")       # a folder with only the windows needed (memory)
+ap.add_argument("--freeze-selector", action="store_true")   # train: no selector parameters (memory)
 r = ap.parse_args()
 import mlx.core as mx
-mx.set_default_device(mx.cpu)
+if not r.gpu:
+    mx.set_default_device(mx.cpu)
 src = open(os.path.expanduser("~/TrainLab/sticky/d09_train.py")).read()
 src = src[:src.index("# ---------------------------------------------------------------- modes")]
+if r.layers:                                       # truncate before the trainer casts its layers to fp32 (memory)
+    src = src.replace("draft.freeze()\n", f"draft.freeze()\ndraft.layers = draft.layers[:{r.layers}]\n", 1)
 sys.argv = ["d09_train.py", "--A", str(r.A), "--S", str(r.S), "--bs", str(r.bs), "--micro", "1", "--pmask", str(r.pmask),
-            "--lr", str(r.lr), "--data", "~/Leap/data/l120", "--epochs", "2"]
+            "--lr", str(r.lr), "--data", r.data, "--epochs", "2", "--cache-gb", "0.25"]
 ns = {"__name__": "d09_ref"}
 exec(compile(src, "d09_train.py", "exec"), ns)
 import numpy as np
@@ -31,6 +38,23 @@ wins = ns["load_windows"]()
 tr = [g for w_ in wins if w_["split"] == "train" for g in ns["groups_of"](w_)]
 print(f"[ref] {len(wins)} windows, {len(tr)} train groups (A {A.A}), layers {len(draft.layers)}", flush=True)
 out = {}
+if r.mode == "grad":                               # Thu 11-05: one batch's loss + full gradient -> port/grad_stats.py JSON
+    import mlx.nn as nn
+    from mlx.utils import tree_flatten
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import grad_stats as GS
+    if r.freeze_layers:                            # the layers stay fp32 (the trainer's cast), without gradients
+        for L in draft.layers:
+            L.freeze()
+    b = ns["make_batch"](tr[:r.groups], A.pmask)
+    norm = mx.array(max(1.0, float(b[-1].sum())))
+    l, g = nn.value_and_grad(draft, lambda m_, b_, n_: ns["loss_fn"](b_, n_))(draft, b, norm)
+    mx.eval(l, g)
+    per = {k: GS.stats(k, np.array(v.astype(mx.float32))) for k, v in tree_flatten(g)}
+    peak = mx.get_peak_memory() / 2 ** 30
+    GS.save(os.path.expanduser(r.out), float(l), per, dict(norm=float(norm), mlx_peak_gb=peak, device="gpu" if r.gpu else "cpu"))
+    print(f"[ref] grad loss {float(l):.6f} (norm {float(norm):.0f}); {len(per)} parameters; MLX peak {peak:.2f} GB", flush=True)
+    sys.exit(0)
 if r.mode == "fwd":
     b = ns["make_batch"](tr[:r.groups], A.pmask)
     hctx, upos, anc, tok, tkl, lpl, y, pred, w = b
@@ -45,6 +69,8 @@ if r.mode == "fwd":
                w=np.array(w), tok=np.array(tok), tkl=np.array(tkl), pred=np.array(pred), y=np.array(y))
     print(f"[ref] fwd loss {float(loss):.6f} (norm {float(norm):.0f})", flush=True)
 else:
+    if r.freeze_selector:                          # Thu 11-05: inactive at 1 layer (zero gradient); saves ~2 GB
+        draft.candidate_selector.freeze()
     import mlx.nn as nn, mlx.optimizers as optim
     from mlx.utils import tree_map
     loss_and_grad = nn.value_and_grad(draft, lambda m, b, norm: ns["loss_fn"](b, norm))

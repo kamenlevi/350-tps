@@ -37,9 +37,12 @@ def touch(c, e, C):
 
 def replay(arm, tail_bits=4, vec=None):
     t3 = arm.endswith("_t3"); a = arm[:-3] if t3 else arm
-    mc = re.search(r"_c(\d+)$", a); assert mc, arm; C = int(mc.group(1)); a = a[:mc.start()]
+    mc = re.search(r"_c(\d+)$", a)
+    if mc: CL = [int(mc.group(1))] * 48; a = a[:mc.start()]          # a uniform pool of N slots per layer
+    else: CL = json.load(open(os.path.expanduser("~/MoonShots/data/laysz45_256.json")))["C_m"]   # the 45 GB pool, per layer
     ball = a.endswith("_ball"); a = a[:-5] + "_bq" if ball else a
-    assert a == "qom_0_live_bq", f"{arm}: this test covers C's family (qom_0_live_{{bq|ball}}_c<N>[_t3])"
+    ms = re.fullmatch(r"qom_0_split([0-9.]+)_live_bq", a); split = float(ms.group(1)) if ms else None   # Thu 11-05: SPLIT
+    assert a == "qom_0_live_bq" or ms, f"{arm}: this test covers C's family (qom_0[_split<T>]_live_{{bq|ball}}[_c<N>][_t3])"
     base = json.load(open(os.path.join(OUT, "baseline.json"))); G = dm_gate.load()
     eq = tot = 0; first_bad = None; mix = {}
     for dom, wf in dm_gate.WALK.items():
@@ -54,7 +57,7 @@ def replay(arm, tail_bits=4, vec=None):
             kp_all = np.ones((N, 48, 10), bool)
             for p in range(base[nm]["a"]):                      # the prompt warms the pool
                 for l in range(48):
-                    for e in ids[p, l].tolist(): touch(cache[l], e, C)
+                    for e in ids[p, l].tolist(): touch(cache[l], e, CL[l])
             for (k_, m_, A_), dc_ in zip(Z[f"{i}_checks"].tolist(), Z[f"{i}_dcf"].tolist()):
                 for (k, m, A, dc, nxt) in live_segments_nxt(k_, m_, A_, dc_):
                     last, fm = min(A + m, N - 1), min(A + k, N - 1)
@@ -65,19 +68,19 @@ def replay(arm, tail_bits=4, vec=None):
                         if p - A == m and (nxt >= 0 or ball): c_ = nxt if nxt >= 0 else 1.0   # the last row: next / 17th draft
                         cfs.append(c_)
                     if not rows: continue
-                    k0 = K.k0_from_cf(cfs); nreal = fm + 1 - A
+                    k0 = K.k0_from_cf(cfs); nreal = fm + 1 - A; st = K.strict_rows(cfs, k0, split)
                     for l in range(48):
                         idsb = ids[rows, l, :]
                         U = K.loads(idsb, k0); c = cache[l]
-                        for e in U.tolist(): touch(c, e, C)
+                        for e in U.tolist(): touch(c, e, CL[l])
                         res = np.fromiter(c.keys(), np.int64, len(c))
-                        kp = K.keep(idsb, k0, U, res); b = K.bits(kp, k0, tail_bits=tail_bits)
+                        kp = K.keep(idsb, k0, U, res, st); b = K.bits(kp, k0, tail_bits=tail_bits)
                         kp_all[A:fm + 1, l] = (K.t3_mask(kp, k0) if t3 else kp)[:nreal]
                         sr = k0[:nreal] == K.KS; bb = b[:nreal]
                         s += [int(sr.sum()), int((bb[sr] == 3).sum()), int((bb[sr] == 4).sum()), int((~sr).sum()), int((bb[sr] == 0).sum())]
                         if vec is not None and nwin == 1:           # test vectors: every block-layer of the first window per domain
                             vec.append((dom, nm, l, idsb.astype(np.int32), np.array(cfs, np.float32), np.isin(idsb, res), kp, b))
-                        for e in K.touch_order(idsb, k0, res): c.move_to_end(e)
+                        for e in K.touch_order(idsb, k0, res, st, U): c.move_to_end(e)
             ref = np.load(os.path.join(MASKS, arm, nm))["keep"]
             ok = ref.shape == kp_all.shape and np.array_equal(ref, kp_all); eq += ok; tot += 1
             if not ok and first_bad is None:
@@ -118,7 +121,18 @@ def check_mx():
            and np.array_equal(np.where(v, np.take_along_axis(np.array(bq), un, axis=-1), 0), np.where(v, z["bits"], 0)))
     print(f"qom_keep_mx on {z['ids'].shape[0]} test vectors (block-layers of the first window per domain, {z['arm']}): "
           f"keep + bits == the numpy rule {ok1}; weights = scores x keep {ok2}; argpartition column order (ranked=False) {ok3}", flush=True)
-    return ok1 and ok2 and ok3
+    ok4 = True                                                  # the split (Thu 11-05): split=T vs the numpy rule with strict rows
+    for T in (0.9, 0.99):
+        kq = np.array(K.qom_keep_mx(a["ids"], a["scores"], a["conf"], a["resident"], valid=a["valid"], split=T)[0]); bad_v = nst = 0
+        for v in range(z["ids"].shape[0]):
+            R = int(z["valid"][v].sum()); ids_ = z["ids"][v, :R].astype(np.int64); cf = z["conf"][v, :R]
+            k0 = K.k0_from_cf(cf); st = K.strict_rows(cf, k0, T); nst += int(st.sum())
+            exp = K.keep(ids_, k0, K.loads(ids_, k0), ids_[z["resident"][v, :R]], st)
+            bad_v += not np.array_equal(kq[v, :R], exp)
+        ok4 &= bad_v == 0
+        print(f"  split {T}: qom_keep_mx(split) == the numpy rule with strict rows on {z['ids'].shape[0] - bad_v}/{z['ids'].shape[0]} "
+              f"vectors ({nst} strict row-layers)", flush=True)
+    return ok1 and ok2 and ok3 and ok4
 
 
 if __name__ == "__main__":

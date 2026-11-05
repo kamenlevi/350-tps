@@ -27,3 +27,13 @@
   calibration fits MSB-2 within 1.0-1.3x. So on this MoE the data-aware trellis errors cost ~2-3.5x more KL per
   unit of expert-output error than truncation errors; the mechanism is open. By the pre-registered rule the
   trellis store family stops here; no store build or disk is needed.
+- Follow-up (2026-11-05 10:3x, re-derivation): MoonShots re-derived the ratio independently (its M-43, cd5f64b).
+  - It rebuilt the 4-bit, MSB-3 and MSB-2 weights from the original 4-bit files, read the trellis store, and measured
+    MSB-2's output error at 4.98-5.10x MSB-3's, as the formula assumed.
+  - It pooled the store's error by error over the 4 layers rather than by simple layer means: 1.29-1.30x on code,
+    1.72-1.82x on chat. Late layers carry more error, so the layer means understated it.
+  - Its direct ratio (KL damage over output error, trellis vs MSB-2, no model terms) is 3.18x / 1.65x / 2.34x (code /
+    IFEval / multi; code noisy, +-1.3; IFEval and multi clear 1 by more than 2 SE). The first estimate above was 3.5x
+    / 1.8x / 2.4x.
+  - Covering both measurements, the trellis errors cost ~1.7-3.5x more KL per unit of expert-output error than
+    truncation. The pooled figures (1.7-3.2x) are the better estimate.

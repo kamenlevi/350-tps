@@ -281,3 +281,13 @@ The ticket got its quiet lock at 07:38, after RELAX. NO-SWAP was 47.3 GB at the 
    - aold ran 444 s, lifetime peak 40.3 GB.
    - anew ran 718 s, lifetime peak 42.1 GB, and included a 182 s heat freeze at 08:06.
    - The SWAP GUARD stopped -vtier at 08:14:50: swap grew 8.39 -> 10.51 GB since the LOO started.
+
+## Thu 5 Nov 10:20-10:28: the records3 in-place conversion (done)
+- Ran by hand after runner 42's GO: NAX6_DONE 'D4X: PASS', CHECK1_DONE 'check 1 rc 0 (10:20)', RELAX_DONE written 08:55,
+  heads-up 08:54:24 (86 min before), BigMoE's quiet lock, nothing open in records3.
+- The read-only check passed; md5 of the 48 row-major files (data/records3_md5_rowmajor.txt); converted in 370 s;
+  md5 of the converted files (data/records3_md5_p11.txt); index check: 48 layers native+p11+pad with their rowmajor
+  entries kept, and load_index refuses row-major readers. Log: data/conversion.log.
+- Overlays: scratch/model_mix's index renamed .rowmajor-stale; the decision map's overlay (already renamed .STALE-... by its
+  owner) still has its own index and must be re-indexed or deleted. Back: convert_records_p11.py --inverse with the
+  row-major md5s.

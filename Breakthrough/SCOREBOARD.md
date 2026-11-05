@@ -3233,3 +3233,25 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
   - Last start 11:15, hard stop 11:45. On every exit from 10:10 it touches ~/EvalSuite/results/q44/GO (runner 44). Tested:
     no GO on a pre-slot stop; GO on a stop in the slot.
   - The bq pair, DENSE-3 and cf04 move to Friday's "Thursday leftovers". The 13:10 driver is stopped.
+- RESULT, TEST 1 on the code windows (Thu 10:29-10:35) [K]: both DRAFT17 _ball splits PASS on code. 12 code windows, 3,366
+  rows, all-row flips vs the baseline argmax; on the CONVERTED records3 with build_nat; data data/dm_s7/results_thu/.
+  - The capture smoke first (the first map run on the converted store): routing ids == the map's stored routing on 100 % of
+    (row, layer) cells, baseline top-1 == the map's baseline on 144/144 rows, scores |diff| 0.00 vs the 11-03 xcapture.
+    PASS: the converted store reads bit-for-bit as before.
+
+    | arm | code flips | vs the twin (only arm / only twin) | verdict |
+    |---|---|---|---|
+    | twin qom_0_live_ball (QOM-KEEP + DRAFT17, 45 GB) | 0.51 % (17/3366) | vs qom_0_live_bq (0.39 %): 11 / 7, z +0.94 | PASS |
+    | split_0.99 (qom_0_split0.99_live_ball) | 0.92 % (31/3366) | 23 / 9, z +2.47 | PASS |
+    | split_0.9 (qom_0_split0.9_live_ball) | 1.31 % (44/3366) | 37 / 10, z +3.94 | PASS, just under 1.34 |
+
+  - split_0.9 vs split_0.99: 21 / 8, z +2.41.
+  - Fable C's priors: split_0.9 1.2-1.5 %, split_0.99 0.9-1.2 %; both landed inside.
+  - Each split costs significantly against QOM-KEEP (+0.41 / +0.80 points) and stays under the line. Tiles (NewIdeas):
+    x0.628 / x0.508 of QOM's on code at 45 GB.
+  - The audit's full PASS also needs BigMoE's C3-R8 (QOM's group count >= 0.85x exact's): the engine side.
+  - The chat control (36 windows) runs Friday.
+  - GO touched in ~/EvalSuite/results/q44 at 10:35:37; the lock was released first.
+- Thu 10:3x (BigMoE's 10:28 lounge note after the conversion): the moved-aside r3_overlay.STALE-before-records3-conversion
+  had its index.json renamed to index.json.STALE-row-major-entries-do-not-use, so a reader pointed at it fails loudly (no
+  index) instead of decoding converted bytes as row-major. Nothing deleted.

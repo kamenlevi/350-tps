@@ -419,7 +419,16 @@ if VTIER:                                                # NewIdeas' RANKED 33, 
     say(f"R57_VTIER: {_vb} / {_vs} slots per base / sidecar pool = {VT_BYTES / 1e9:.2f} GB volatile (purgeable: NOT in "
         f"phys_footprint; macOS reclaims it before compression or swap)")
 FG = dict(on=False, keep=None, sure=None, sure_np=None, t3=False,   # R57_FAST: this check's keep mask [rows, top-k] / U3's
-          cold=False, warm=None, cap=None, dump=None, chk=0, qom=False)   # qom: QOM's optional uses (bit 21)   # U3C: the request's warm table [48, 512], prefill capture, dump
+          cold=False, warm=None, cap=None, dump=None, chk=0, qom=False, qcf=None)   # qom: QOM's optional uses (bit 21)   # U3C: the request's warm table [48, 512], prefill capture, dump
+# R57_QOM_SPLIT=T (Breakthrough keepset 4963da6, Fable C's audit test 1; the orchestrator Thu 10:3x, Fri's engine A/B): a sure
+# row whose draft cf >= T is strict (ranks 0-1 + the block's loads, NO resident keep). FG["qcf"] carries each row's draft cf
+# (row j verifies draft j; the last row: the 17th draft's cf on a full D17 block, the draft past the cut on a cut one, as
+# QOM's own gate). Unset = today's QOM-KEEP, the same call as before.
+QSPLIT = float(os.environ["R57_QOM_SPLIT"]) if os.environ.get("R57_QOM_SPLIT") else None
+assert QSPLIT is None or FAST == "QOM", "R57_QOM_SPLIT is a QOM-KEEP option (R57_FAST=QOM)"
+if QSPLIT is not None:
+    import inspect as _insp
+    assert "split" in _insp.signature(QK.qom_keep_mx).parameters, "R57_QOM_SPLIT needs Breakthrough's keepset 4963da6 or later"
 # R57_CBB=1 (the stale-slot check, the orchestrator 11-03 22:5x on Leap's S7B-PROBE 50de28c / fb999be: a slot the GPU read
 # earlier in the SAME command buffer can be re-read stale after the CPU rewrites it; across buffers it is fresh): every MoE
 # layer call starts a new command buffer (its input and routing evaluated first), so each earlier read of any slot sits in
@@ -465,7 +474,7 @@ if FAST:                                                 # EvalSuite's install_g
                 km = (uns[:, None] | top2 | inU).reshape(indices.shape)
                 if FG["qom"]:                                # QOM: U3's drops become OPTIONAL uses (bit 21): the loader
                     opt = sr[:, None] & ~(top2 | inU)        # serves them only when resident (else -2, never read);
-                    self._bm["tier"]["qom"] = (opt, sr)      # _ooo_call_t3 flags ONLY its base post's copy (bit 21) and
+                    self._bm["tier"]["qom"] = (opt, sr, FG.get("qcf"))   # _ooo_call_t3 flags ONLY its base post's copy (bit 21) and
                     km = None                                # applies Breakthrough's rule after the spin; the graph's ids
                                                              # stay clean (15:29: flagged ids in the graph -> a bad id at L5)
             if FG["t3"]:
@@ -526,8 +535,13 @@ if FAST:                                                 # EvalSuite's install_g
             sl = mx.where(nl2, -2, gate.spin(mx.depends(dep_l, after), t["side"], n_l).reshape(M, R4)) if R4 else None
             if qm is not None:                           # QOM: Breakthrough's keep-set rule on the loader's answer (resident
                 ids_r = ids.reshape(M, K).astype(mx.int32) & 0xFFFFF   # = a slot; an optional miss came back -2, unread)
-                cf_ = mx.where(qm[1].reshape(M), 0.0, float("nan"))    # sure rows verify a draft; the bonus row is exact
-                kq, _, _ = QK.qom_keep_mx(ids_r, sc.reshape(M, K), cf_, sm >= 0)
+                if QSPLIT is None:
+                    cf_ = mx.where(qm[1].reshape(M), 0.0, float("nan"))    # sure rows verify a draft; the bonus row is exact
+                    kq, _, _ = QK.qom_keep_mx(ids_r, sc.reshape(M, K), cf_, sm >= 0)
+                else:                                    # R57_QOM_SPLIT: the rows' draft cf; strict where cf >= T
+                    assert qm[2] is not None and qm[2].shape[0] == M, ("R57_QOM_SPLIT: the rows' cf", M)
+                    cf_ = mx.where(qm[1].reshape(M), qm[2].reshape(M), float("nan"))
+                    kq, _, _ = QK.qom_keep_mx(ids_r, sc.reshape(M, K), cf_, sm >= 0, split=QSPLIT)
                 sm = mx.where(kq, sm, sm[:, :1])         # a dropped use reads the row's rank-0 slot (always loaded), weight 0
                 sc = mx.where(kq, sc.reshape(M, K), mx.zeros_like(sc.reshape(M, K)))
             y2 = TG.tier_glu_phase(x2, t["base"], t["sideP"], sm, sl, phase, 2, plan=_BT3.PLAN)
@@ -960,7 +974,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             cyc.append(c0 - c_prev)
         c_prev = c0
         ref2.remove()
-        fk_ = sq_ = None                                 # R57_FAST: this check's keep mask / U3's sure rows (DFlash2 only)
+        fk_ = sq_ = qcf_ = None                          # R57_FAST: this check's keep mask / U3's sure rows (DFlash2 only)
         wsp = WARMSPLIT and not mtp and len(kept) >= 2 and len(kept) % WARMSPLIT == 0   # a warm-split sample (16 rows)
         if mtp:
             if pend is not None:                         # the last check's kept rows -> the head's history
@@ -1006,6 +1020,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                         sq_[len(dr)] = c16 is not None and c16 >= fz["thr"]   # of the draft past the cut (gate_rows')
                 else:
                     sq_[len(dr)] = False                 # today: the last row verifies no draft -> exact
+                if QSPLIT is not None:                   # R57_QOM_SPLIT: each row's draft cf, aligned with sq_ (the gate's
+                    qcf_ = np.array((list(cg_) + [c16 if c16 is not None else 1.0])[:len(dr) + 1], dtype=np.float32)   # cf)
                 fst["gated"] += int(sq_.sum())
                 if not sq_.any() and not U3FORCE:
                     sq_ = None
@@ -1040,12 +1056,13 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                 s_, t_ = stats(), time.perf_counter()
                 FG.update(on=fk_ is not None or sq_ is not None, keep=mx.array(fk_[:w_]) if fk_ is not None else None,
                           sure=mx.array(sq_[:w_]) if sq_ is not None else None, sure_np=sq_[:w_] if sq_ is not None else None,
-                          t3=bool(fz and fz.get("t3")), qom=bool(fz and fz.get("qom")) and sq_ is not None)   # R57_FAST's gate in
+                          t3=bool(fz and fz.get("t3")), qom=bool(fz and fz.get("qom")) and sq_ is not None,   # R57_FAST's gate in
+                          qcf=mx.array(qcf_[:w_]) if qcf_ is not None else None)
                 try:                                     # the warm split too: a gated arm's warm per-row cost (Fable C's
                     with ref2.verify_scope(model):       # gated expert term, the orchestrator 23:2x)
                         lg_ = model(inp_[:, :w_], cache=cache)
                 finally:
-                    FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, qom=False)
+                    FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, qom=False, qcf=None)
                 mx.eval(mx.argmax(lg_[0], axis=-1))
                 d_ = stats() - s_
                 rec_ = [w_, round(1e3 * (time.perf_counter() - t_), 2), int(d_[0]), round(1e3 * d_[1], 2), round(1e3 * d_[2], 2)]
@@ -1065,7 +1082,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             tap_reset(); TAP["on"] = True
         FG.update(on=fk_ is not None or sq_ is not None, keep=mx.array(fk_) if fk_ is not None else None,   # R57_FAST
                   sure=mx.array(sq_) if sq_ is not None else None, sure_np=sq_, t3=bool(fz and fz.get("t3")),   # (in the graph)
-                  cold=bool(fz and fz.get("cold")) and sq_ is not None, qom=bool(fz and fz.get("qom")) and sq_ is not None)
+                  cold=bool(fz and fz.get("cold")) and sq_ is not None, qom=bool(fz and fz.get("qom")) and sq_ is not None,
+                  qcf=mx.array(qcf_) if qcf_ is not None else None)
         if PREROUTE and not mtp:                         # R57_PREROUTE: this check's capture; EvalSuite's block records
             PR.update(on=True, cur=None, y={}, blk={}, cap={}, dump=[] if PRDUMP else None)   # each layer's true top-10
             EM.STATE.capture = {}
@@ -1073,7 +1091,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             with ref2.verify_scope(model):
                 lg = model(mx.array([[tok] + dr]), cache=cache)
         finally:
-            FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, cold=False, qom=False, chk=FG["chk"] + 1)
+            FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, cold=False, qom=False, qcf=None, chk=FG["chk"] + 1)
             PR["on"] = False
         cb = time.perf_counter()                         # graph built: the sync-free gate waits on each layer's router ids
         TAP["on"] = False

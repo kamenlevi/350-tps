@@ -476,6 +476,8 @@ def build(n_layers=None, intermediate=None, init="hf", head_mode="bf16", attn_im
         for k, (a, tag) in st_load(path).items():
             if is_hf and (k.startswith("fc.") or k.startswith("hidden_norm.")):
                 continue
+            if is_hf and k.startswith("layers.") and int(k.split(".")[1]) >= len(m.layers):
+                continue                  # n_layers below the checkpoint's: its first n layers (small parity tests)
             if k in ("candidate_selector.predecessor_codebook", "candidate_selector.successor_codebook"):
                 k = k + ".weight"
             assert k in P, f"unexpected weight {k}"

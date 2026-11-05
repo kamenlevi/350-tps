@@ -13,7 +13,7 @@ the walk streams reproduce the replay's accept decisions token for token). CPU o
    per-row accept decisions must match the 'answer' replay token for token; differences from M-41's 'window' feed are
    listed and the kept ratios of both printed.
 usage: [BigMoE venv] python test_relax_span.py [--no-walk]"""
-import hashlib, importlib.util, inspect, math, os, random, sys
+import ast, hashlib, importlib.util, math, os, random, sys
 
 H = os.path.expanduser("~")
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -88,7 +88,12 @@ def t_module():
     sc4 = RXC.CodeScan(); sc4.feed("```python\na = 1\nb = 2\ns = 'x # y")
     rows4, _ = RSP.span_rows(RXC, sc4, [" z"], [" w"])
     check(rows4 == set(), "span_rows: a '#' inside a string is not a comment")
-    same = all(inspect.getsource(getattr(RXC, f)) == inspect.getsource(getattr(RXE, f))
+    def defs(path):
+        src = open(path).read()
+        return {n.name: ast.get_source_segment(src, n) for n in ast.parse(src).body
+                if isinstance(n, (ast.FunctionDef, ast.ClassDef))}
+    de, dv = defs(f"{H}/EvalSuite/evalsuite/relax_core.py"), defs(f"{H}/BigMoE/scripts/relax_core.py")
+    same = all(de.get(f) is not None and de.get(f) == dv.get(f)
                for f in ("CodeScan", "nontool", "comment_rows", "comment_draft_ok", "rule_ok")) and RXC.TOOL_PREFIXES == RXE.TOOL_PREFIXES
     check(same, "the engine's vendored relax_core equals EvalSuite's in CodeScan, nontool, comment_rows, comment_draft_ok, rule_ok")
 
@@ -158,18 +163,18 @@ def t_walk():
                 if A > fed:                                              # r57: each check's committed tokens, decoded alone
                     sc.feed("".join(TKZ.decode([int(x)]) for x in ids[fed + 1:A + 1])); fed = A
                 dr = [int(x) for x in dtok[c * per:c * per + m]]
-                n = 0
-                while n < len(dr) and 0 <= A + n - row0 < len(rows):
-                    n += 1
-                dr = dr[:n]
+                dr = dr[:max(0, min(len(dr), len(ids) - 1 - A))]
                 if not dr:
                     continue
                 am, dlm, drk = [], [], []
                 for j, d in enumerate(dr):
-                    tk, lp = rows[A + j - row0]
-                    am.append(tk[0])
-                    dlm.append(lp[tk.index(d)] - lp[0] if d in tk else -math.inf)
-                    drk.append(sum(1 for v in lp if v > lp[tk.index(d)]) if d in tk else 99)
+                    if 0 <= A + j - row0 < len(rows):
+                        tk, lp = rows[A + j - row0]
+                        am.append(tk[0])
+                        dlm.append(lp[tk.index(d)] - lp[0] if d in tk else -math.inf)
+                        drk.append(sum(1 for v in lp if v > lp[tk.index(d)]) if d in tk else 99)
+                    else:                                                # no top-8 row (a window's first row): the
+                        am.append(int(ids[A + j + 1])); dlm.append(-math.inf); drk.append(99)   # walk's own token; not compared
                 dtx = [TKZ.decode([x]) for x in dr]; atx = [TKZ.decode([x]) for x in am]
                 srows, _ = RSP.span_rows(RXC, sc, dtx, atx)
                 for j in range(min(k + 1, len(dr))):
