@@ -40,7 +40,9 @@ import os, sys
 for p in ('~/BigMoE', '~/Leap/third_party/ms_gdn', '~/Leap/scripts'):
     sys.path.insert(0, os.path.expanduser(p))
 import ref2
+ref2.apply()          # self_test needs _ORIG from apply() (Thu 23:22: KeyError qmm without it, a false restore)
 r = ref2.self_test()
+ref2.remove()
 print('ref2.self_test ->', r, flush=True)
 sys.exit(0 if r and all(r.values()) else 1)" >> "$LOG" 2>&1 &
 guard $!; wait $!; st=$?; say "ref2.self_test rc=$st"

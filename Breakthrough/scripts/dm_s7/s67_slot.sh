@@ -51,7 +51,9 @@ fullonly() { local a; for a in "$@"; do case $a in *+code) ;; *) echo -n "$a ";;
 when_ok() { local w; w=$(xlines | awk -v a="$1" '$1 == "WHEN" && $2 == a {$1 = ""; $2 = ""; print; exit}'); [ -z "$w" ] && { echo yes; return; }
   $PY ~/Breakthrough/scripts/dm_s7/cond_eval.py $w 2>/dev/null || echo pending; }   # "WHEN <arm> <kind> <args>" (cond_eval.py)
 xby() { xlines | awk -v a="$1" '$1 == a {print $3; exit}'; }
-by_ts() { date -j -f "%Y-%m-%d %H:%M" "$(date +%Y-%m-%d) $1" +%s; }
+by_ts() {   # "HH:MM" -> its last time at or before DEADLINE (Thu 23:2x: today's date read Friday's 10:10 as Thu 10:10 when armed
+  local t   # at Thu 23:45, which would have skipped every arm; a batch's start-by times all fall in the 24 h before its hard stop)
+  t=$(date -j -f "%Y-%m-%d %H:%M:%S" "$(date -r $DEADLINE +%Y-%m-%d) $1:00" +%s); [ $t -gt $DEADLINE ] && t=$((t - 86400)); echo $t; }
 est() { local x; x=$(xlines | awk -v a="$1" '$1 == a {print $2; exit}'); [ -n "$x" ] && { echo $x; return; }
   case $1 in s7_cal_all) echo 35;; s7_ref3|$D3) echo 10;; s7_trl|s7_cal) echo 7;; q1u_0.9_live_bonus9g|qom_0.5_live_bonus5g) echo 5;; *) echo 6;; esac; }
 ts() { date -j -f "%Y-%m-%d %H:%M:%S" "$1" +%s; }

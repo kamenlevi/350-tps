@@ -6834,6 +6834,17 @@ shapes, since latency does not depend on the values.
     data/tierglu_nax6h_before_p11.py.
   - P11PAD check with NAX6-NH added (layers 20 / 44, 128 experts): NAX6-NH on padded p11 == unpadded p11 == bf16
     native pools, 4 / 4 / 4 per layer. All other kernels still PASS; ref2.self_test PASS.
+- **AMENDMENT 2 (Thu 2026-11-05 23:4x, before it ran; the orchestrator 23:4x: NO-SWAP ~33-38 GB tonight).** Phase C
+  gets BigMoE's lower fri_night rungs, so it runs instead of waiting out WAITMEM 44:
+  - Ladder: 224:44.3 / 208:42.2 / 192:40.0 / 176:37.9 / 160:35.7 / 144:33.6 / 128:31.4.
+    - NO-SWAP needed = lifetime peak + ~4 GB, at 0.134 GB per C slot.
+    - Measured at C 160: exact 31.7 GB, qall 31.2 GB.
+  - turn45: PEAK 28, WAITMEM 32 (was 40 / 44). The arms, the lines and the order are unchanged.
+  - All four arms share one C, so the Nc / Dc pair stays like for like. Exact tokens don't depend on C, and the report
+    labels C.
+  - FLAT-2 gets the same ladder via scripts/flat2_ladder.sh, which passes FLAT2_C to zero's unchanged run_flat2.sh.
+    - FLAT does not depend on C (zero's INSTALL).
+    - The chosen C goes to data/flat2_ladder.log.
 
 ## OOO-1C: one-call OOO on the NAX path (Leap, pre-registered Wed 2026-11-04 15:2x; BUILD_DAY #5, the orchestrator 15:0x; BigMoE 15:1x: "build it as a patch in your copies")
 - **Why:** OOO pays two expert calls per MoE layer: phase 1 on the resident pairs, the loader's spin, then phase 2 on the
@@ -8012,3 +8023,25 @@ screen); GPU tests small, on share locks.
 - **Engine line** (BigMoE's arm, after the checks): qall + R57_NAX=1 + REF2_NAX_1CQ=1 vs qall, pair-mean geo steady
   tok/s on fri_night's 12 HumanEval. PASS >= +8 %, KILL < +3 %. Adoption via EvalSuite same-scores (FAST).
 - **Next if the engine line passes:** NAX6-NH inside the one-call (the hybrid's ALU path for one-pair groups).
+- **RESULT Thu 23:22-23:2x (share lock, MLX 0.32.2): correctness PASS, speed PASS (0.835x).** Data:
+  data/ooo1cq_check.txt, data/fastnax_gpu.log.
+  - (a) released before the call. 8 calls on L20 / L44, with 40 dropped pairs and 48 U3 sure rows: the one-call-Q +
+    combine is bitwise == NAX6-N on the final slots + combine (drops at weight 0). rs_m / rs_l are right, dropped rows
+    are 0, no timeouts. PASS.
+  - (b) a late release (20 ms): PASS.
+  - (c) is covered inside both, since every call mixes U3 sure rows and drops.
+  - (e) ms per MoE layer call (48-call chains, median of 15, ~96 % resident): NAX6-N 1C-Q + combine 1.242 vs 3c-N 1C
+    QOM 1.487 -> 0.835x. PASS against the <= 0.85x line, though a little short of the 0.65-0.80x prediction.
+    - This settles Wednesday's contradiction: per call, NAX6-N's one-call is faster than 3c-N's. Wednesday's 1.5x timed
+      NAX6's two phases under contention.
+  - (d) diagnostic, the existing ooo1c NAX6-N one-call on the same U3 scenarios: 5 of 8 calls wrong (3 outputs
+    differ, 5 rs_l wrong). This confirms the side find.
+    - That path stays off and unused.
+    - R57_NAX + REF2_OOO_1C without REF2_NAX_1CQ stays unsafe (BigMoE's note).
+    - With REF2_NAX_1CQ=1, every NAX one-call takes the new head.
+  - Harness slip: fastnax_gpu.sh called ref2.self_test() without ref2.apply() (KeyError 'qmm').
+    - So its guard restored the pre-19:1x ref2 at 23:23:01.
+    - I re-applied it from git (md5 eda11b8b) after a proper self_test (apply() first): all five checks True, the
+      switch off by default.
+    - The script is fixed.
+  - Next: BigMoE's engine arm (the line above), then NAX6-NH inside the one-call, then the ooo1c head fix.

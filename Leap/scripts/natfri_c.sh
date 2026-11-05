@@ -1,7 +1,8 @@
 #!/bin/bash
 # NATIVE-FRI phase C (Leap, Thu 2026-11-05 19:0x; TABLE_350 'NATIVE-FRI' AMENDMENT, written before arming): the 45 GB default
 # on the converted records3 (Dc: 3c-N, OOO two phases) vs the same + R57_NAX=1 (Nc: NAX6-N, nax_native), Dc / Nc / Nc / Dc
-# on the 14 ref14 prompts at the largest C of 224 / 208 / 192 that fits NO-SWAP. Kamen 15:0x: R57_PRESET=45 moves to NAX6-N
+# on the 14 ref14 prompts at the largest C of 224 / 208 / 192 / 176 / 160 / 144 / 128 that fits NO-SWAP (lower rungs Thu
+# 23:4x, BigMoE's fri_night ladder: the orchestrator expects NO-SWAP ~33-38 GB tonight). Kamen 15:0x: R57_PRESET=45 moves to NAX6-N
 # "if NATIVE-FRI passes".
 # Runs BigMoE's scripts/c45_runner.sh and scripts/r57_screen.py as COPIES made at run time in ~/Leap/data/natfri/snap
 # (read-only use of BigMoE's files). The screen copy's OUT line is patched to ~/Leap/data/natfri/r57, so the arms' files
@@ -96,9 +97,9 @@ if [ -n "$NATFRI_REPORT_ONLY" ]; then report "${1:?C}"; exit $?; fi
 A=${NATFRI_AVAIL:-$(avail_gb)}
 CC=${NATFRI_C:-}
 if [ -z "$CC" ]; then
-  for c in 224:44.3 208:42.2 192:40.0; do awk -v a="$A" -v n="${c#*:}" 'BEGIN {exit !(n <= a)}' && { CC=${c%%:*}; break; }; done
+  for c in 224:44.3 208:42.2 192:40.0 176:37.9 160:35.7 144:33.6 128:31.4; do awk -v a="$A" -v n="${c#*:}" 'BEGIN {exit !(n <= a)}' && { CC=${c%%:*}; break; }; done
 fi
-[ -z "$CC" ] && { say "NO-SWAP $A GB < 40.0: nothing fits, nothing runs"; exit 0; }
+[ -z "$CC" ] && { say "NO-SWAP $A GB < 31.4: nothing fits, nothing runs"; exit 0; }
 SRC=$HOME/BigMoE/scripts/r57_screen.py
 FS="$D/snap/r57_screen_natfri.py"; RUN="$D/snap/c45_runner_natfri.sh"
 ANCHOR='OUT = os.path.expanduser("~/BigMoE/data/r57"); os.makedirs(OUT, exist_ok=True)'

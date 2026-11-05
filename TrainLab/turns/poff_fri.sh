@@ -2,7 +2,7 @@
 # MTP Head, Wed 11-04 22:2x (the orchestrator 22:2x): P-OFF's 60K training + code walk goes FIRST in the Fri night, ahead
 # of Leap's NATIVE-FRI arms and BigMoE's FAR-G1 capture. REPORT 'P-OFF amendment' (60K lines: PASS >= +0.18 code,
 # KILL <= +0.05) and 'P-OFF diagnostic RESULT' (alive, 0.86).
-#  1. Not before Fri 2026-11-06 00:30.
+#  1. Not before $START (Thu 2026-11-05 23:45; was Fri 00:30, see the amendment below).
 #  2. A QUEUED quiet ticket (peer lock quiet --queue 90m; PEER_QUEUE_TIMEOUT 3 h): the queue shows us #1 in line, and the
 #     grant comes once T0 (EvalSuite's 14 GB share job, to ~00:15) has ended and the Mac has drained. No grant by ~03:30
 #     -> stop (the orchestrator re-slots). Nothing of mine may `peer unlock` meanwhile (it would drop the ticket).
@@ -11,16 +11,19 @@
 #     checkpoints). This replaces turns/poff_t.sh, which takes a share lock that would overwrite the quiet one.
 # Run attached (run_in_background) so the lock sees the process. Logs: data/poff_fri.log, data/poff_train.log,
 # data/poff_walk.log.
+> (a quote from the project owner, kept private)
+# Thu 17:53; only Leap's FAST-NAX share check (~23:25-23:40) is ahead; BigMoE queues behind us at 23:47. Steps unchanged.
 cd ~/TrainLab || exit 1
 log() { echo "[$(date '+%a %H:%M:%S')] $*"; }
 swap_mb() { sysctl -n vm.swapusage | awk '{print $6}' | tr -d M; }
 PY=~/BigMoE/.venv/bin/python3
 OUT=$HOME/TrainLab/ext/poff/poff60.safetensors
-TARGET=$(date -j -f "%Y-%m-%d %H:%M" "2026-11-06 00:30" +%s)
-log "1. waiting for Fri 2026-11-06 00:30 ($(( (TARGET - $(date +%s)) / 60 )) min)"
+START=${START:-2026-11-05 23:45}
+TARGET=$(date -j -f "%Y-%m-%d %H:%M" "$START" +%s)
+log "1. waiting for $START ($(( (TARGET - $(date +%s)) / 60 )) min)"
 while [ "$(date +%s)" -lt "$TARGET" ]; do sleep 60; done
 log "2. queueing a quiet ticket (waits for T0's end and a drained Mac; leaves the queue after 3 h)"
-PEER_QUEUE_TIMEOUT=10800 peer lock quiet --queue 90m "MEM 34 GB: MTP Head P-OFF 60K training + code walk (~65 min; the orchestrator 22:2x: first in the Fri night)" > data/poff_fri_lock.log 2>&1
+> (a quote from the project owner, kept private)
 rc=$?
 log "ticket rc=$rc: $(tail -1 data/poff_fri_lock.log)"
 if [ $rc -ne 0 ] || ! grep -q "quiet lock held" data/poff_fri_lock.log; then log "NO GRANT: stop (ask the orchestrator)"; exit 4; fi

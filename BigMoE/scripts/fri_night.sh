@@ -31,8 +31,9 @@ swap_gb() { sysctl -n vm.swapusage | awk '{gsub("M","",$6); print $6 / 1024}'; }
 avail_gb() { vm_stat | awk '/page size of/ {ps=$8} /^Pages (free|speculative|purgeable):/ || /^File-backed pages:/ {v=$NF; sub("[.]","",v); s+=v} END {printf "%.1f", s*ps/1e9}'; }
 A=${FRI_AVAIL:-$(avail_gb)}
 fits() { awk -v a="$A" -v n="$1" 'BEGIN {exit !(n <= a)}'; }
-CC=; for c in 224:44.3 208:42.2 192:40.0; do fits ${c#*:} && { CC=${c%%:*}; break; }; done
-[ -z "$CC" ] && { say "NO-SWAP $A GB < 40.0: nothing fits, nothing runs"; exit 0; }
+CC=; for c in 224:44.3 208:42.2 192:40.0 176:37.9 160:35.7 144:33.6 128:31.4; do   # Thu 23:4x: lower rungs (NO-SWAP 32.4 GB with apps closed; qall 31.2 / exact 31.7 GB at C 160, 0.134 per row)
+ fits ${c#*:} && { CC=${c%%:*}; break; }; done
+[ -z "$CC" ] && { say "NO-SWAP $A GB < 31.4: nothing fits, nothing runs"; exit 0; }
 cp scripts/r57_screen.py data/r57/snap/r57_screen_fri.py && cp scripts/r57_screen_rlx.py data/r57/snap/r57_screen_frir.py \
   && cp scripts/relax_delta.py scripts/relax_span.py data/r57/snap/ && cp scripts/c45_runner.sh data/r57/snap/c45_runner_fri.sh || exit 2
 RUN="/bin/bash data/r57/snap/c45_runner_fri.sh"
@@ -141,14 +142,15 @@ for b in B:
 for b in ("u3c", "s99", "s90", "qallr", "span"):
     r_, n_ = ratio(b, tps); k_, _ = ratio(b, kept)
     L.append(f"{b} vs qall: tok/s {100 * (r_ - 1):+.1f} % over {n_}, kept {100 * (k_ - 1):+.1f} %")
+IND = f" INDICATIVE ONLY at C {C} < 160 (the design C of the FAST path and of the replay lines is >= 160)" if int(C) < 160 else ""
 for b in ("s99", "s90"):
     r_, n_ = ratio(b, tps); k_, _ = ratio(b, kept)
     v = "MISSING" if n_ == 0 else "PASS" if r_ >= 1.08 and abs(k_ - 1) <= 0.01 else "NOT PASS"
-    L.append(f"Verdict split {b} (pre-registered Thu 10:40): {v} (PASS = tok/s >= +8 % vs qall AND kept within 1 %)")
+    L.append(f"Verdict split {b} (pre-registered Thu 10:40){IND}: {v} (PASS = tok/s >= +8 % vs qall AND kept within 1 %)")
 s_, n_ = ratio("span", secs, agg=S.median); t_, _ = ratio("span", ntok, agg=S.median)
 v = ("MISSING" if n_ == 0 else "KILL" if s_ >= 0.97 or t_ >= 1.15 else
      "PASS pending comment share (MoonShots tags tokens.json)" if s_ <= 0.92 and t_ <= 1.05 else "BETWEEN")
-L.append(f"Verdict rule C (pre-registered): {v}; s per task {s_:.3f}x, tokens per task {t_:.3f}x vs qall (medians of per-prompt "
+L.append(f"Verdict rule C (pre-registered){IND}: {v}; s per task {s_:.3f}x, tokens per task {t_:.3f}x vs qall (medians of per-prompt "
          f"ratios over {n_})")
 ex = [per_check("fexr", lambda e: e.get("uses", []))] if chk["fexr"] else []
 gq = {b: [grp(t) for t in (f"f{b}", f"f{b}b") if chk[t]] for b in ("qall", "s99", "s90")}

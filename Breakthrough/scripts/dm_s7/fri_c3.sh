@@ -1,9 +1,10 @@
 #!/bin/bash
 # Friday night's map arms (Breakthrough, Thu 2026-11-05 09:xx; the orchestrator 06:5x / 07:0x / 07:2x / 09:0x; Fable C's audit
-# AUDIT_1105 sections 2-3 and 7; NewIdeas' masks). From Fri 00:30, behind MTP Head's P-OFF and BigMoE's ticket in the quiet
+# AUDIT_1105 sections 2-3 and 7; NewIdeas' masks). From Thu 23:45 (FRI_AT; was Fri 00:30 until Kamen 23:1x, via the
+# orchestrator: "start the night now"), behind MTP Head's P-OFF and BigMoE's ticket in the quiet
 # queue (the runners wait while another session holds or waits for a quiet window, or runs > 5 GB). Every map process runs
 # with BIGMOE_EXT_BUILD=build_nat (records3 is converted on Thursday).
-#   1. wait for 00:30, then until records3's index is uniform and no conversion runs;
+#   1. wait for FRI_AT (Thu 23:45), then until records3's index is uniform and no conversion runs;
 #   2. the s67 runner on data/fri_extra.txt (test 1's arms on all 36 windows, the code-only and conditional arms, the tail);
 #   3. the all-rows scores capture (gslot.sh, scap_pass.py run), then build_massb.py (Fable C's rulings: ranks 0-1 always,
 #      then the budget; the rank profile for a row without scores), check_massb, install_c3.sh massB_0.5, and a second runner
@@ -26,8 +27,8 @@ handoff() {   # once: stop my runs (TERM, then KILL if frozen; never SIGCONT), u
   else say "handed on ($1), but $GO_DIR does not exist: GO NOT written (not mine to create)"; fi
 }
 trap 'handoff "exit"' EXIT; trap 'handoff "stopped"; exit 1' INT TERM HUP
-at=$(date -j -f "%Y-%m-%d %H:%M" "2026-11-06 00:30" +%s); stop_by=$(date -j -f "%Y-%m-%d %H:%M" "2026-11-06 10:00" +%s)
-say "armed: start >= Fri 00:30 behind the quiet queue; hard stop 10:30; GO for EvalSuite runner 45 on every exit; BIGMOE_EXT_BUILD=$BIGMOE_EXT_BUILD"
+at=$(date -j -f "%Y-%m-%d %H:%M" "${FRI_AT:-2026-11-05 23:45}" +%s); stop_by=$(date -j -f "%Y-%m-%d %H:%M" "2026-11-06 10:00" +%s)   # Thu 23:2x: was Fri 00:30
+say "armed: start >= $(date -r $at '+%a %H:%M') behind the quiet queue; hard stop 10:30; GO for EvalSuite runner 45 on every exit; BIGMOE_EXT_BUILD=$BIGMOE_EXT_BUILD"
 while [ $(date +%s) -lt $at ]; do sleep 30; done
 ACTIVE=1   # from here on, every exit hands the GPU on with GO
 layouts() { $PY -c "import json, os; L = json.load(open(os.path.expanduser('~/BigMoE/models/bare/records3/index.json')))['layers']; print(' '.join(sorted({str(v.get('layout')) for v in L.values()})))" 2>/dev/null; }

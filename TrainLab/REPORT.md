@@ -3328,6 +3328,31 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   window (Leap's log: 56 tok/s). Footprint 17.7 GB (smoke 16.8, MEM 28 declared). Swap flat.
 - The training folder is built: ext/poff/train60 = L1-20's 109 windows + the 260 off-policy windows (60,162 assistant
   tokens). The training (turns/poff_t.sh, ~55 min + walk, MEM 34 GB) needs a Thursday slot from the orchestrator.
+- Slot (Thu 11-05 23:2x; lines and steps unchanged): turns/poff_fri.sh queues its quiet ticket at Thu 23:45, not Fri
+> (a quote from the project owner, kept private)
+  comparable with L1-20.
+
+### P-OFF 60K RESULT (Fri 11-06 00:52): BETWEEN. Code walk kept per check 9.68 vs L1-20's 9.57 (+0.11; PASS >= +0.18, KILL <= +0.05)
+- Run: turns/poff_fri.sh, quiet lock granted Thu 23:45:06. sticky/poff_train.py from L1-20 (l120_ft), 1 epoch of
+  ext/poff/train60 (369 windows: L1-20's + the 260 off-policy ones; 1,453 train groups, 82,406 anchors), L1-20's recipe
+  (lr 2e-5, S 4, A 64, micro 1, bs 32, pmask 0.5), MLX's default TF32 like L1-20.
+- The 55-min cap bound: 341 of 364 steps. Steps took 9.7 s, not the 8.3 s assumed. The 23 missing steps would have run
+  at lr <= 2.2e-6, about 11 % of the peak.
+- Memory: MLX peak 34.4 GB active + 2.2 GB cache; footprint 36.8 GB (time -l). Swap flat (8,224 -> 8,208 MB).
+- Code walk (sticky/d02b_walk.py, the same 24 dfl2d_code files):
+
+  | | checks | kept per check | per-token rate | P(first 15 right) |
+  |---|---|---|---|---|
+  | P-OFF | 658 | 9.68 | 0.9270 | 0.300 |
+  | L1-20 | 666 | 9.57 | 0.9239 | |
+
+  The walk's header still reads "L1-20" (fixed text). The numbers differ from L1-20's exactly reproduced 666 / 9.57,
+  so the P-OFF weights were the ones walked.
+- VAL (L1-20's 24 val groups, on-path top-1): depths 1-2 up 0.001-0.003. Depths 3-16 down 0.003-0.021 (depth 7
+  0.807 -> 0.793, depth 14 0.446 -> 0.425).
+- Reading: +0.11 is about half the on-policy slope's prediction (+0.19-0.24). Retrain noise is unmeasured, so it can't
+  be told apart from noise. L1-20 stays the drafter. Settling it needs one of: a noise probe (L1-20's recipe rerun) or
+  the full 160K version. Both need night slots; data: data/poff_*.log, data/d02b_walk_poff*.
 
 ### PORT walk footprint re-measure: pre-registration (Wed 11-04 23:4x, before the run)
 - Why: the 21:0x math walk peaked at 5.97 GB (section 'PORT walk validated'), over my 4 GB rule for port tests. The fix
@@ -3453,3 +3478,7 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
 - Build cost: BigMoE's R57_DA wiring (a second command queue so the draft overlaps the verify's waits; discard on a miss)
   + one timeline measurement of GPU idle per 45 GB check. The surer lever stays a cheaper drafter (D8-NAX, DSUB, 4-bit
   weights + a short 4-bit-aware fine-tune: D7B-1), which stacks with draft-ahead.
+- BigMoE's number (Thu 23:1x, quoted as given; C 208 FAST, medians): all-in svc 19.3 ms per check (p90 38.6; an upper
+  bound on GPU idle, since svc includes the spin on loads), U3C 33.4; the drafter takes 10.0 ms; checks run 86-96 ms. So
+  the 10 ms draft fits in the idle only if most of svc is real idle: plausible, not shown. If it fits, draft-ahead saves
+  ~0.34-0.43 x 10 ms = 3.4-4.3 ms per check (~+4-5 %, the same share as estimated). A timeline of real GPU idle decides.
