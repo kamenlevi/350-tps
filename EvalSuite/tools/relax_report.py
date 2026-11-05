@@ -30,9 +30,11 @@ MODES = {                                                # mode -> set -> the ar
     "B_F": dict(math="B", humaneval="B", ifeval="F"),    # chat + R2
     "B_G": dict(math="B", humaneval="B", ifeval="G"),    # chat + the gate
     "T3ALL": dict(math="T3ALL", humaneval="T3ALL", ifeval="T3ALL"),   # every rank at 3 bits (NewIdeas 02:42); its
-}                                                        # code-only fallback reads the math and HumanEval+ lines
+                                                         # code-only fallback reads the math and HumanEval+ lines
+    "ship8": dict(math="B", humaneval="B", ifeval="E8"), # Fri: ship with HC8 on chat too (E8 = E + HC8; HC8 is global)
+}
 BARS = {"blunder_per_10k": 1.0, "drift": 1.5}            # math + code; none in agent tool calls; q4 / q1 <= 1.5
-RELAXED = ("B", "C", "E", "F", "G")                       # arms with a relaxed acceptance rule (R1 / R2 / the comment rule)
+RELAXED = ("B", "C", "E", "F", "G", "E8")                 # arms with a relaxed acceptance rule (R1 / R2 / the comment rule)
 TASK_SLOWER = 1.05     # the per-task line (the orchestrator Wed 21:5x; PREREG_relax amendment): faster per token AND
 #                        > 5 % slower per task (prefill + decode s) vs the control on shared keys = KILL for FAST
 LONG = 512
@@ -358,11 +360,41 @@ def report(arm_names, tag, modes=False, do_score=False, tok=None, outfile=None):
                 f"{len(q['blunders']):>6}{1e4 * len(q['blunders']) / max(q['tokens'], 1):>7.2f}{q['long']:>5}"
                 f"{q['kld_q'][0]:>9.5f}{q['kld_q'][3]:>9.5f}{('-' if dr is None else f'{dr:.2f}'):>7}"
                 f"{fmt_pct(q['dev_q'][0]):>8}{fmt_pct(q['dev_q'][3]):>8}")
+    code_sets = ("humaneval", "humanevalx", "agentlong")   # PREREG_relax_drift: every code row of >= 512 tokens, pooled
+    for a in arms:
+        qs_ = [allq[a][s] for s in code_sets if s in allq[a]]
+        if not any(s in allq[a] for s in ("humanevalx", "agentlong")):
+            continue
+        k_ = [[sum(q["qk"][i][0] for q in qs_), sum(q["qk"][i][1] for q in qs_)] for i in range(4)]
+        mk = [x / n if n else 0.0 for x, n in k_]
+        r_ = (mk[3] / mk[0]) if mk[0] > 0 else None
+        say(f"\n== long-code drift (PREREG_relax_drift): arm {a}, {sum(q['long'] for q in qs_)} rows >= {LONG} tokens "
+            f"over {', '.join(s for s in code_sets if s in allq[a])}: KLD q1 {mk[0]:.5f}, q4 {mk[3]:.5f}, ratio "
+            + ("-" if r_ is None else f"{r_:.2f}") + f" (line <= {BARS['drift']}): "
+            + ("no long rows" if r_ is None else "PASS" if r_ <= BARS["drift"] else "FAIL"))
+        for s in code_sets:
+            if s in allq[a]:
+                q = allq[a][s]
+                dr_ = "-" if q["drift"] is None else f"{q['drift']:.2f}"
+                say(f"  {s}: {q['long']} long rows, drift {dr_}")
+        for k, pr in sorted(arms[a]["prompts"].items()):
+            if pr["row"]["set"] in code_sets and len(pr["row"]["completion_ids"]) >= LONG and pr["replay"] is not None:
+                qs = quarters(len(pr["row"]["completion_ids"]))
+                acc = [[0.0, 0] for _ in range(4)]
+                for t in tokens(pr):
+                    acc[qs[t["pos"]]][0] += t["kld"]; acc[qs[t["pos"]]][1] += 1
+                m_ = [x / n if n else 0.0 for x, n in acc]
+                say(f"  {k}: {len(pr['row']['completion_ids'])} tokens, KLD q1 {m_[0]:.5f}, q4 {m_[3]:.5f}")
     say("\n== blunders (E's p of the committed token < 0.01)")
     for a in arms:
         for s, q in sorted(allq[a].items()):
             for k, pos, t, p in q["blunders"]:
-                say(f"{a} {s} {k} @{pos}: token {t}{(' ' + repr(tok(t))) if tok else ''}, p {p}")
+                where = ""
+                if tok and s in ("agent", "agentlong"):        # the tool call's first parameter (command / code) or later
+                    ids_ = arms[a]["prompts"][k]["row"]["completion_ids"][:pos]
+                    where = " (after the first parameter)" if "</parameter>" in "".join(tok(i) for i in ids_) \
+                        else " (in the first parameter: the command / code)"
+                say(f"{a} {s} {k} @{pos}: token {t}{(' ' + repr(tok(t))) if tok else ''}, p {p}{where}")
     say("\n== must-fix deviations (numbers; any token in code / agent answers), information")
     for a in arms:
         for s, q in sorted(allq[a].items()):

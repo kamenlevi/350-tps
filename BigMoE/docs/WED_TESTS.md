@@ -251,3 +251,33 @@ theta per domain comes from the map verdict (scripts/qom_read.py -> data/QOM_rea
 - Wed 22:5x: the 23:00 ticket was cancelled before it queued: NO-SWAP 36 GB at 22:51 with no big job running (the many
   sessions' anonymous memory), below the 41 GB its smallest rung needed. The relaxed 0.5 arm and lever 2's exact stage 1 move
   to the Fri 00:30 night (with FAR-G1 and Rule C); the C 224 trio runs in the Thu 07:05 ticket.
+
+## Thu 5 Nov morning ticket (07:38-08:15, memory-adaptive night_thu.sh): results
+
+The ticket got its quiet lock at 07:38, after RELAX. NO-SWAP was 47.3 GB at the start. The runner 42 GO was touched at
+08:14:53, ~30 min before the planned ~08:45.
+
+1. **C 256 headline: SKIPPED.** Its arms need NO-SWAP >= 52.7 GB; there was 47.3.
+2. **FAST trio at C 208:** the largest C where qallft fit. 12 HumanEval, order u3ct / qallt / qallft (data/c224t/c224t_report.txt).
+
+   | arm | geo steady tok/s | kept per check | SSD MB per kept | lifetime peak | ck ms per check |
+   |---|---|---|---|---|---|
+   | u3ct (U3C len) | 102.9 | 10.54 | 20.4 | 37.3 GB | 86.4 |
+   | qallt (QOM all-in) | 97.6 | 10.33 | 8.1 | 37.6 GB | 91.2 |
+   | qallft (+ lever 2) | 93.4 | 10.33 | 51.5 | 43.4 GB | 96.4 |
+
+   - Ratios: qallt vs u3ct -5.1 %; qallft vs qallt -4.3 % (lever 2's forecast reads: 76,957 issued, 9,010 used).
+   - **Confounded, no verdict.** The arms ran in a fixed order with no control arm (the order control was in the cancelled
+     Wed 23:00 run). The die warmed 60 -> 84 C under the 5,500 rpm quiet fan cap, and ck rose 86 -> 91 -> 96 ms in arm
+     order, although the all-in's levers should lower ck. The byte figures stand: the all-in reads 0.40x U3C's SSD bytes
+     per kept token.
+   - The by-day C 160 result (all-in +26.3 % vs U3C) is not contradicted until an A-B-A run says so. The Fri relaxed-copy
+     run gets u3c at both ends.
+   - Memory: qallft peaked at 43.4 GB at C 208, above the ladder's 41.2 estimate. Forecast reads add ~5.8 GB over qall at
+     C 208, not 2.6-3.3. The Fri ladder uses the measured value.
+3. **DKV token check at C 224: PASS** (pre-registered). Tokens == REF2-T on 14 / 14 prompts; the copy-free path was taken
+   1,345 times (slow 180, adopt 125). Next: a same-run speed A/B (on / off), then R57_PRESET=45.
+4. **Agent LOO: INCOMPLETE** (2 of 9 arms).
+   - aold ran 444 s, lifetime peak 40.3 GB.
+   - anew ran 718 s, lifetime peak 42.1 GB, and included a 182 s heat freeze at 08:06.
+   - The SWAP GUARD stopped -vtier at 08:14:50: swap grew 8.39 -> 10.51 GB since the LOO started.

@@ -2251,3 +2251,35 @@ block 32 (net ~+2 % under this cost model unless the drafter nears the oracle); 
     - Chat tiles: IFEval 490 -> 452 / 405 (x0.92 / 0.83); multi 477 -> 449 / 413 (x0.94 / 0.86).
   - Lines unchanged (QUEUE Thu 07:3x; the audit's test 1): code PASS <= 1.34 %, BETWEEN 1.34-2.0 %, KILL > 2.0 % (the
     lever dies if both arms are > 2.0 %, or on R8 <= 0.6x). Chat runs as the control.
+- Thu 08:5x: KAMEN'S DECISION on RELAX's ship mode (08:52, verbatim, via the orchestrator): "Ship after the check".
+  - What ships, as the FAST track's mode (EXACT stays the default): B on code (Q1-UNION cf >= 0.9 + copy gate, HC8,
+    comment rule) + E on chat (R1 0.5). EvalSuite's RESULT 8797f54: ship = BETWEEN (decision 4 PASS; bars fail
+    thinly).
+  - The check: EvalSuite's long-row drift re-check for B (PREREG a692f0f, ~1.7 h), Friday by day, ending before 15:00.
+    PASS -> B on code ships; KILL -> the code part does not ship. E on chat is not affected. Nothing ships before the
+    drift verdict.
+  - HC8 code-only? As built, HC8 is process-global: Leap's hc8r.hc8_install swaps the trunk GatedResidual mixers to
+    8-bit QuantizedLinear in place (keep=False frees the bf16 originals: that is its -0.6 GB), and ref2's hc8_fast read
+    serves every row, prefill included (BigMoE scripts/r57_screen.py: R57_HC8 = install + switch together).
+    - Code-only would need keep=True (bf16 kept, the -0.6 GB lost) plus a per-request module swap and hc8_fast toggle
+      at request boundaries. That is engine code (BigMoE / Leap), not built or tested.
+    - My recommendation: HC8 global, and E8 (E + HC8, ~1.5 h) joins Friday's check. One engine state, the RAM saving
+      kept, and chat gains HC8's fixed-cost cut too.
+    - Fallback if E8 cannot fit before 15:00 or fails: the request-boundary swap, bit-checked so that each domain
+      reproduces its tested tokens.
+- Thu 08:5x: RELAX SHIP, THE E8 CASE DECIDED (the orchestrator asked for it in writing, so Friday has no open question).
+  E8 confirmed: HC8 ships global, and E8 runs Friday right after the drift check, both before 15:00.
+  - Drift PASS + E8 PASS -> ship the FAST mode as decided: B on code + E on chat, both with HC8.
+  - Drift PASS + E8 FAIL -> FAST ships for CODE ONLY (B with HC8); chat stays on EXACT, the default. Chat's FAST follows
+    once it can run E without HC8 (as tested), in one of two ways:
+    - (i) if the shipped FAST mode picks a code / chat profile per launch, the chat profile simply does not install HC8
+      (R57_HC8 off): no engine work, but E must then be the tested E-without-HC8 build;
+    - (ii) if one process serves both domains, BigMoE's request-boundary swap (keep=True + module swap + hc8_fast toggle),
+      bit-checked so each domain reproduces its tested tokens.
+> (a quote from the project owner, kept private)
+    was never gated by it. An E8 fail is an engineering-scope problem (HC8 on chat), not a fail of the tested E, so it
+    should not hold back the code part that passed its own check. Chat does not ship anything untested.
+    Note: a process with HC8 installed is not exact, so "chat on EXACT" means chat uses the EXACT launch (no HC8), not
+    the FAST process.
+  - Drift KILL -> the code part does not ship. E on chat ships only if E8 PASSES (HC8 global) or as (i) / (ii) above.
+  - Nothing ships before the drift verdict. Kamen can override any of this via the orchestrator.

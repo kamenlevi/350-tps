@@ -587,7 +587,10 @@ def pf1(on):
 
 def stats():                                             # misses, demand SSD busy (load batches' wall time), gate service of
     s = st.stats()                                       # calls with misses (post seen -> release: the GPU's spin bound;
-    return np.array([s["misses"], s["io_s"], s["slow_s"], s["slow_calls"]], dtype=np.float64)   # OOO overlaps part of it)
+    return np.array([s["misses"], s["io_s"], s["slow_s"], s["slow_calls"],      # OOO overlaps part of it); then (Cloud Fable 3's
+                     s.get("uses", 0), s.get("stalled", 0)], dtype=np.float64)  # C3-R8, Thu 08:5x) the ext's expert uses = distinct
+                                                         # experts computed per layer call, resident included, and the layer calls
+                                                         # that waited on loads (ext :881); appended, so indices 0-3 keep their meaning
 
 class _RU4(ctypes.Structure):                            # rusage_info_v4: a 16-byte uuid, then uint64 fields
     _fields_ = [("uuid", ctypes.c_uint8 * 16)] + [(f"u{i}", ctypes.c_uint64) for i in range(40)]
@@ -1192,6 +1195,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                 rb=rb, ml=ml, kt=kt, mb=rb / 1e6 / kt, mpk=ml / kt,   # per kept token: SSD MB and misses, the whole loop
                 pc=dict(rows=rows_, kept=kept, ck=[1e3 * x for x in ck_t], drf=[1e3 * x for x in drf[:len(ck_t)]],
                         miss=sm[:, 0].tolist(), io=(1e3 * sm[:, 1]).tolist(), svc=(1e3 * sm[:, 2]).tolist(), mb=[x / 1e6 for x in cb_],
+                        uses=sm[:, 4].tolist(), stl=sm[:, 5].tolist(),   # C3-R8: expert groups and stalled layer calls per check
                         bld=[1e3 * x for x in bld_], wt=[1e3 * x for x in wt_], ws=wsf_), wspl=WSPL,
                 tpsw=sum(kept[2:]) / max(sum(wl[2:]), 1e-9), cut=cut, bad=bad, stall=stall,   # tpsw: steady state, checks >= 2
                 copy=dict(cst, ms=round(1e3 * cst["ms"], 2)) if cg is not None else None,
