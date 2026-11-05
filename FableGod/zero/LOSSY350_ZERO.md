@@ -5,14 +5,17 @@ Mission: orchestrator 15:55 (Kamen: FAST is the main mode; 350 tok/s lossy at 45
 `KERNEL90.md` 90-116, `DAY9` 93 / 875, `far/FAR.md` 7b, `far/LOSSY350_FAR.md`, greps of `~/TRIED/TRIED.md`.
 Marks: [K] measured (source), [P] arithmetic or replay on [K], [G] judgement. No GPU. Three CPU replays of my own
 (numpy, one process, 3-12 s each, swap unchanged): `late_count.py` -> `late_count.out` / `.json`,
-`late_count_pools.py` -> `late_count_pools.out`, `late_terms.py` -> `late_terms.out`, beside this file.
+`late_count_pools.py` -> `late_count_pools.out`, `late_terms.py` -> `late_terms.out`, `late_terms_base.py` ->
+`late_terms_base.out`, beside this file.
 
 **What changed since v1.** (a) v1 called LATE-INJECT "never tried": wrong. It is the project's deferral family (TRIED
 29, 33, 76, 183, 608, 631, 959, 970; my first grep missed "half a layer late"), and FAR reached the same lever
 independently as NEVER-WAIT with measured engine numbers (`far/LOSSY350_FAR.md`). FAR owns it; my arm names are
 withdrawn for FAR's. (b) v2 priced the SSD wait from a replay at the 45 GB mask pool (5-6 ms); FAR's logs measure
-18.8-20.6 ms at the engine's C 208. Section 5 shows the two agree once the pool size is the same. (c) Nothing here is
-a new idea: it is a constraint sheet, a count that fixes the joint test's exposure, and one decisive measurement.
+18.8-20.6 ms on the engine's "C 208" run. The gap is not only pool size: that run's reads are ~3.0 base + ~3.6
+sidecar per kept token, and my replays model base misses only (section 5d; my first reading, "208 slots = the
+engine", was wrong and FAR corrected it from the log). (c) Nothing here is a new idea: it is a constraint sheet, a
+count that brackets the joint test's exposure, and one decisive measurement.
 
 ## 0. Verdict in seven lines
 
@@ -32,11 +35,14 @@ a new idea: it is a constraint sheet, a count that fixes the joint test's exposu
 5. Three flat terms can LEAVE the critical path instead of being ground down: the SSD wait (FAR's NEVER-WAIT:
    18.8-20.6 ms today), the drafter (10.1 ms today, 3.5 at its floor; PARKED Mirror-SD), the commit (design D).
    With all three off the path, dense may sit at 19-21 ms and 350 closes at K 12 [P].
-6. For the joint test [P my replay]: QOM's demand misses per kept token on the map's code windows are **2.21 at
-   the pool QOM's masks were built on, 3.58 at 266 slots, 6.74 at 208 slots** (the engine logs: 6.6). The late MoE
-   mass is 0.98 / 1.62 / 3.11 % per row-layer counting each row's own top-2, and 1.14 / - / 3.55 % with the
-   members it keeps (section 5b: ~10 late terms per realized row at 208 slots, on 93 % of rows). An arm built on
-   the mask pool tests a third of the engine's exposure; the decisive arm's cold set must come from 208 slots.
+6. For the joint test [P my replays; K FAR on BigMoE's log]: QOM's base-pool demand misses per kept token on the
+   map's code windows are 2.2 at the pool QOM's masks were built on, 2.7 at 290 uniform slots, 3.5 at 266, 6.6 at
+   208. The engine's "C 208" run is C_m 226 + a 64-slot volatile tier, and its 6.6 reads per kept are **~3.0 base
+   + ~3.6 sidecar** by its own bytes (9.3 MB over 6.6 reads). So its late-term exposure is the 266-290 rows: 4-5
+   late terms per realized row, 1.4-1.9 % of the MoE mass, on 82-87 % of rows (section 5d). The 208-slot arm is
+   about twice that (the upper end); the mask-pool arm is ~70 % of it, not a third. My earlier "208 slots = the
+   engine" was a coincidence of totals (corrected by FAR, 17:0x). Over half of the reads the wait pays for are
+   sidecars, which need no late term at all: the expert can run on time from its resident 3-bit record.
 7. **The measurement that decides whether 350 is possible at all: FLAT-2**, the steady cycle
    [draft + 2-row warm all-resident check + commit] with every owned lever on. 350 needs flat <= 25 ms.
    Today ~57 with no waits [P on K FAR 1a]. Lines in section 4.
@@ -143,18 +149,21 @@ Code blocks: 7.9 kept / 9.6 rows.
 | laysz45_256 (mean 295, 160-448) = the map masks' pool | 17.5 (2.21) | 6.9 / 10.3 / 0.4 | 11.3 / 5.6 | 1.89 | 0.98 % / 0.49 % | 2.12; 1.36 | 2.13; 1.29 |
 | 266 uniform (FAR's replays) | 28.3 (3.58) | 11.5 / 16.2 / 0.5 | 15.4 / 8.5 | 3.02 | 1.62 % / 0.79 % | 2.61; 1.66 | 2.35; 1.44 |
 | 224 uniform | 45.4 (5.73) | 19.1 / 25.5 / 0.7 | 20.8 / 12.5 | 4.77 | 2.63 % / 1.26 % | 3.95; 2.44 | 3.16; 1.94 |
-| **208 uniform (today's engine logs)** | **53.3 (6.74)** | 22.6 / 29.9 / 0.8 | 22.8 / 14.1 | **5.56** | **3.11 % / 1.48 %** | 4.72; 2.87 | 3.65; 2.24 |
+| **208 uniform (equals the engine's TOTAL reads per kept, base + sidecar: see 5d)** | **53.3 (6.74)** | 22.6 / 29.9 / 0.8 | 22.8 / 14.1 | **5.56** | **3.11 % / 1.48 %** | 4.72; 2.87 | 3.65; 2.24 |
 | 160 uniform | 83.4 (10.5) | 35.8 / 46.2 / 1.3 | 28.6 / 19.2 | 8.47 | 4.90 % / 2.32 % | 8.03; 4.69 | 5.79; 3.50 |
 | 147 uniform (24 GB) | 93.6 (11.8) | 40.5 / 51.6 / 1.5 | 30.1 / 20.8 | 9.48 | 5.53 % / 2.60 % | 9.24; 5.35 | 6.61; 3.97 |
 
 Readings [P]:
-- **One curve, three points.** Fable C's 4.8 MB per kept (2.2 misses), FAR's 3.7-3.8 and the engine's 6.6 are the
-  same replay at 295, 266 and 208 slots. The mask pool is the most generous of the three.
-- **The wait follows it.** FAR's law on the 208-slot count: 22.8 stalled layers x 0.27 + 53.3 x 0.155 = 14.4 ms per
-  9.6-row block against 18.8 measured at 62 misses; at the mask pool the same law gives 5-6 ms (v2's number).
-- **So does the quality exposure.** A never-wait arm built on the mask pool puts 0.98 % of the MoE mass late on
-  code; the engine by day would put 3.1 %, with 5.6 late top-2 terms per row per pass instead of 1.9. FAR's scaling
-  from LATE RANK 1 (2.05 + 1.31 late terms per kept row) should be redone at ~3.1 + 2.4 for the C 208 engine [P].
+- **One curve, two points and a coincidence.** Fable C's 4.8 MB per kept (2.2 misses) and FAR's 3.7-3.8 are this
+  replay at 295 and 266 slots. The engine's 6.6 is NOT the 208-slot point: it counts base and sidecar reads
+  together, and its base pool is 226 + 64 volatile slots (5d). I first read the match as the engine's exposure;
+  FAR found the pool line in the log.
+- **The wait.** FAR's law on the 208-slot count gives 22.8 stalled layers x 0.27 + 53.3 x 0.155 = 14.4 ms per
+  9.6-row block against 18.8 measured at 62 reads; it lands near because sidecar reads stall layers too, not
+  because the base misses are that many. At the mask pool the law gives 5-6 ms (v2's number).
+- **The quality exposure.** The engine's base misses put 1.4-1.9 % of the MoE mass late on code (5d), not 3.1 %;
+  FAR's scaling from LATE RANK 1 (2.05 + 1.31 late terms per kept row, taken at 266 slots) was already at the
+  right point. The 208-slot arm over-tests by about 2x, which is the safe side for a PASS.
 - **Rank 1 is 58 % of the misses at every pool size**; waiting for rank 0 only halves the late mass and removes
   ~half the wait (14.1 x 0.27 + 22.6 x 0.155 = 7.3 of 14.4 ms at 208 slots).
 - At 147 slots the late mass on code is 5.5 %: the 24 GB line is a different quality regime from the 45 GB one,
@@ -168,16 +177,40 @@ undrafted row's tail. The table above counted own top-2 only. With members:
 
 | domain | pool, bonus form | demand misses per kept | late terms per realized row: nw1 (own top-2 / members / undrafted tails) | nw1r1 (rank 0 waits) | late MoE mass per realized row-layer: nw1 / nw1r1 | realized rows with a late term: nw1 / nw1r1 |
 |---|---|---|---|---|---|---|
-| code | 208, `_ball` (the spec's decisive arm) | 6.64 | **9.98** (6.05 / 3.94 / 0) | 5.39 | **3.55 %** / 1.59 % | 93 % / 90 % |
+| code | 208, `_ball` (the spec's decisive arm, the upper end: see 5d) | 6.64 | **9.98** (6.05 / 3.94 / 0) | 5.39 | **3.55 %** / 1.59 % | 93 % / 90 % |
 | IFEval | 208, `_ball` | 4.40 | 3.79 (2.67 / 1.12 / 0) | 2.17 | 1.48 % / 0.70 % | 64 % / 58 % |
 | multi | 208, `_ball` | 3.44 | 2.81 (2.07 / 0.73 / 0) | 1.69 | 1.12 % / 0.56 % | 61 % / 55 % |
 | code | 224, `_ball` | 5.64 | 8.53 (5.14 / 3.39 / 0) | 4.65 | 3.02 % / 1.37 % | 92 % / 89 % |
 | code | laysz45_256, `_ball` (the published masks' pool) | 2.16 | 3.24 (1.97 / 1.27 / 0) | 1.85 | 1.14 % / 0.54 % | 77 % / 69 % |
 | code | 147, `_ball` (24 GB) | 11.66 | 17.52 (10.57 / 6.96 / 0) | 9.33 | 6.23 % / 2.76 % | 97 % / 96 % |
 
-So at the engine's exposure nearly every code row has a late term somewhere in its 48 layers (10 per row, 4 of
-them small member terms), and the lever is an all-row perturbation, not a rare event; its size is 3.5 % of the MoE
-mass, a layer late. If the driver prints ~5.6 late terms per row on code, the mask missed the members.
+So at the 208-slot upper end nearly every code row has a late term somewhere in its 48 layers (10 per row, 4 of
+them small member terms); at the engine's own base exposure (5d) it is 4-5 per row on 82-87 % of rows. Either way
+the lever is an all-row perturbation, not a rare event. If the driver prints ~5.6 late terms per row on code at
+`_c208`, the mask missed the members.
+
+### 5d. Where the engine sits between the two pools (`late_terms_base.out`, 6 s; K: `BigMoE/data/c224t/qallt_208.txt`)
+
+The log of the run FAR priced the wait on: "tier 4433333333: C_m=226 C_l=112 per layer" plus "R57_VTIER: 64 / 32
+slots per base / sidecar pool" (uniform; found by FAR). Pooled per kept token: SSD 9.3 MB, 6.6 misses. With 2.163
+MB per base record and 0.770 MB per sidecar: 2.163 x + 0.770 (6.6 - x) = 9.3 gives **x = 3.0 base reads and 3.6
+sidecar reads per kept** (46 / 54 % of the reads, 70 / 30 % of the bytes) [P on K].
+
+| base slots (uniform), `_ball`, code | demand misses per kept | late terms per realized row: nw1 (own top-2 / members) | nw1r1 | late MoE mass per realized row-layer: nw1 / nw1r1 | realized rows with a late term: nw1 / nw1r1 |
+|---|---|---|---|---|---|
+| 226 (the base pool alone, volatile tier gone) | 5.52 | 8.35 (5.03 / 3.32) | 4.55 | 2.95 % / 1.34 % | 92 % / 88 % |
+| 266 | 3.51 | 5.33 (3.20 / 2.13) | 2.96 | 1.87 % / 0.87 % | 87 % / 80 % |
+| 290 (226 + the 64 volatile slots intact) | 2.66 | 3.99 (2.40 / 1.59) | 2.26 | 1.39 % / 0.66 % | 82 % / 74 % |
+| for scale: laysz45_256 (the published masks' pool) | 2.16 | 3.24 (1.97 / 1.27) | 1.85 | 1.14 % / 0.54 % | 77 % / 69 % |
+| for scale: 208 (the spec's upper-end arm) | 6.64 | 9.98 (6.05 / 3.94) | 5.39 | 3.55 % / 1.59 % | 93 % / 90 % |
+
+Readings [P]: the engine's 3.0 base misses per kept fall between the 266 and 290 rows, so never-wait at today's
+engine means ~4.5 late terms per realized row and ~1.6 % of the MoE mass a layer late. The other 3.6 reads per
+kept are sidecars of experts whose 3-bit record is resident: under never-wait they need no late term (run the
+expert from the resident planes now, read the sidecar in the background), i.e. a 3-bit top-2 on ~4 % of the top-2
+picks, far below the all-sure-rows 3-bit form that already passed the map at the 24 GB pool (1.07 % [K DAY9 875]).
+So more than half of the reads behind the 18.8 ms wait leave the path with no lateness at all [P/G: BigMoE's
+answer to the spec's 8.1 confirms the split by rank].
 
 ### 5c. My one review of the joint spec (sent to FAR 16:5x), for the record
 
@@ -202,5 +235,5 @@ the check's start, since pre-landed reads cannot show the cost of SSD traffic du
 ## 7. TRIED lines (for the recorder; I write only in this folder)
 
 - ZERO-FLAT (Fable ZERO, LOSSY350_ZERO v2.1): the 350 inequality flat + e x K <= 2.857 x K; with the split form on NAX6-NH (e 0.77-0.9 ms per kept) 350 on code needs flat (dense + SSD wait + draft + commit) <= 23.5-25 ms at K 12 | wall: fixed-cost | line: 45 GB FAST | exact: no | verdict: FRAMING (arithmetic on FULL's table, AUDIT F4, FAR 1a); test proposed = FLAT-2 (draft + 2-row warm all-resident check + commit: PASS flat <= 30, KILL > 36 ms) | flat today ~76-78 measured (47 compute + 18.8-20.6 wait + 10.1-10.6 draft), realistic 32.5 night, floor 23 | 2026-11-05 | ~/FableGod/zero/LOSSY350_ZERO.md
-- LATE-COUNT (Fable ZERO, CPU replay, 10 s): QOM0BQ's demand misses per live block on the 36 map windows by pool size | wall: SSD | line: 45 / 24 GB FAST | exact: n/a (measurement) | verdict: MEASURED | code misses per kept 2.21 (laysz45_256, mean 295 slots) / 3.58 (266) / 5.73 (224) / 6.74 (208 = the engine's 6.6) / 11.8 (147); late MoE mass per row-layer 0.98 / 1.62 / 2.63 / 3.11 / 5.53 %; stalled layers 11.3 / 15.4 / 20.8 / 22.8 / 30.1 of 48; rank 0 : rank 1 = 42 : 58 at every size | 2026-11-05 | ~/FableGod/zero/late_count_pools.out
-- NW-EXPOSURE (Fable ZERO, review input to FAR's NEVER-WAIT test): a never-wait map arm built on the mask pool tests a third of the engine's by-day exposure; the decisive arm's cold set should come from 208 slots | wall: SSD / quality | line: 45 GB FAST | exact: no | verdict: PROPOSED to FAR (arm qom_nw1_c208, a combined arm with the split form, nw2 for the 350 pace) | 1.9 vs 5.6 late top-2 terms per row per pass on code | 2026-11-05 | ~/FableGod/zero/LOSSY350_ZERO.md section 5
+- LATE-COUNT (Fable ZERO, CPU replays, 3-12 s): QOM0's base-pool demand misses and late terms per live block on the 36 map windows by pool size | wall: SSD | line: 45 / 24 GB FAST | exact: n/a (measurement) | verdict: MEASURED | code misses per kept 2.16-2.21 (laysz45_256, mean 295 slots) / 2.66 (290) / 3.51-3.58 (266) / 5.52 (226) / 5.64-5.73 (224) / 6.64-6.74 (208) / 11.7-11.8 (147); late terms per realized row with members 3.24 / 3.99 / 5.33 / 8.35 / 8.53 / 9.98 / 17.5; late MoE mass per realized row-layer 1.14 / 1.39 / 1.87 / 2.95 / 3.02 / 3.55 / 6.23 %; rank 0 : rank 1 = 42 : 58 at every size | 2026-11-05 | ~/FableGod/zero/late_count_pools.out, late_terms.out, late_terms_base.out
+- NW-EXPOSURE (Fable ZERO + Fable FAR, for FAR's NEVER-WAIT test): BigMoE's qallt_208 run is C_m 226 + 64 volatile base slots and its 6.6 reads per kept are ~3.0 base + ~3.6 sidecar (9.3 MB over 6.6 reads); the engine's late-term exposure is the replay's 266-290-slot rows (4-5 late terms per realized row, 1.4-1.9 % of the MoE mass), the 208-slot arm is the upper end (x2), the published-pool arm ~70 % | wall: SSD / quality | line: 45 GB FAST | exact: no | verdict: MEASURED / in the joint spec (far/NEVERWAIT_TEST.md 2.2, 8.1) | sidecar misses need no late term (run from the resident 3-bit record) | 2026-11-05 | ~/FableGod/zero/LOSSY350_ZERO.md section 5d

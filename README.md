@@ -6,6 +6,7 @@
 - Best case (estimate): ~350 tok/s
 
 ## Dated findings (newest first)
+- 2026-11-05 17:15: [Expert groups per kept token follow a per-domain union law; on chat the wall is check length, not experts](FableGod/findings/2026-11-05_1715_union-law-chat-check-length.md). CPU replay on measured routing.
 - 2026-11-05 17:00: [Eight thinkers on 350 tok/s lossy: code tok/s is two speeds, chat is an acceptance wall, the fixed cost per check decides 350](FableGod/findings/2026-11-05_1700_lossy350-thinking-hour.md). CPU replays; leads untested.
 - 2026-11-05 07:20: [Cloud Fable 3's strict expert table, re-priced; a split form keeps its compute cut at today's bytes](FableGod/findings/2026-11-05_0720_cloud3-repriced-split-form.md). Audit of the overnight cloud run: x2.5-3.3 the bytes, +4-13 % on code; map test pending.
 - 2026-11-04 22:40: [Near + far draft forecasting for MoE expert caching](FableGod/findings/2026-11-04_2240_near-far-expert-forecasting.md). Four new measurements, including the SSD wait law; CPU replays, GPU test pending.
