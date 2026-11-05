@@ -260,4 +260,56 @@ TRIED lines:
   - 2026-11-05, lunatic/wl_slot.out.
 
 ## 9. After 17:00 (refinement log)
-(open)
+### 9.1 On chat at 45 GB, experts are a third of the cycle, so a 2x in groups is ~1.2x in chat speed [P on K]
+- A chat cycle at the live cut has three parts:
+  - draft 12.0 ms [K charter];
+  - trunk at 3.7 rows ~15-17.5 ms [P: 12.7 ms of trunk bytes + 3.6 fixed + 0.32 per row; PHYSICS 17-23 at 16 rows];
+  - experts 4.5 + 1,181 groups x 7-10 us = 12.8-16.5 ms [P: 492 groups x 2.4 kept; NAX6 7 us, NAX4 fit 10.15 us].
+- That is 40-46 ms per 2.4 kept = 52-60 tok/s, matching the measured 56-63 [K Fable C UNION_STACK].
+- Experts are ~32-36 % of the cycle, the trunk ~38 %, the draft ~27-30 %.
+- Halving chat's groups per kept token therefore buys ~1.2x chat tok/s at 45 GB. At 24 / 12 GB the expert bytes are the
+  exposed term, and the 2x counts nearly in full.
+- Chat's 45 GB lever is kept per check: it spreads the draft, the trunk and the groups at once. This agrees with Fable
+  C's UNION_STACK chat line ("no union cut moves chat toward 350; it is the row wall and the drafter") and the drafter
+  plan's ceiling (FINDINGS line 106: chat kept 3-3.5 with affordable drafters, 5-8 only with the trunk as drafter).
+- The measurement added here: in f(R), chat is CHEAPER than code at equal length. So once chat checks get longer, their
+  expert term falls faster than code's did.
+
+### 9.2 Width on chat is worth more in time than in groups [P on K]
+- One pass for B8 chat streams, EXACT:
+  - one batched draft call ~15-20 ms [K ANE-2: 12.4 ms for 3 candidates, 16-17 for 7];
+  - trunk 12.7 + 3.6 + 29.6 rows x 0.32 = 25.8 ms;
+  - experts 4.5 + 6,125 groups x 7-10 us = 47-66 ms;
+  - total 88-112 ms per 19.2 kept tokens.
+- That is 170-220 tok/s aggregate = x3.3-3.7 of one chat stream, although its groups fall only to x0.65. The draft and
+  the trunk are shared across streams.
+- Per stream it is 21-27 tok/s, slower than solo (52-60). Width is an aggregate lever: the right one for a user running
+  many agents, the wrong one for one person chatting.
+- Code at B8, same arithmetic: 105.5 groups x 68 kept, 113-139 ms per pass, 490-600 tok/s aggregate (x3.1-4.4 of the
+  model's one-stream code line).
+- The 10-minute microbench in section 6 tests only the expert term. The trunk and draft sharing is arithmetic on
+  measured terms and needs the engine's multi-stream pass to confirm.
+
+### 9.3 REFRESH: KILL by arithmetic [P + G]
+- A refresh close enough to matter (K <= 32 rows) costs 48 x U(32) / 32 = 172 groups per token. That is more than any
+  cut it would protect saves: Q1 0.5 saves ~200 on code [P, T2: 304.5 -> 105.1].
+- At an affordable K (>= 256: 53 groups per token) it removes only the perturbation of rows >= 256 back.
+- 36 of 48 layers are gated linear attention with decaying state, so F3's floor is mostly recent rows [G]. The refresh
+  cannot reach it.
+
+### 9.4 Where the hunt ends (17:1x)
+- No NEW expert-side mechanism survived. The per-stream wall is f(R), the 125B's own union law (independent experts, T1),
+  times acceptance (the drafter).
+- Both halves were known in parts:
+  - the chat side in Fable C's UNION_STACK and the drafter plan;
+  - the expert side in TRIED's base / delta / reroute kills.
+- What this file adds:
+  - f(R) per domain, with chat cheaper than code at equal length;
+  - the expert-independence checks TRIED lacked (common subspace, near-duplicate neurons, single-expert rank);
+  - width priced per domain on the map's routing (code streams share like one stream; chat streams do not) and its
+    time effect on chat (draft + trunk shared: aggregate x3.3-3.7 at B8 where groups say x0.65);
+  - the 2x lines in kept per check: code ~38, IFEval ~9-10, multi ~6-7 at zero waste.
+- The live bet is W. Its owners would be BigMoE (multi-stream pass) and Leap (the microbench). Kamen decides whether one
+  engine should serve his concurrent agents.
+- A findings-note draft in the README's shape is beside this file (`FINDING_DRAFT_1105_union_law.md`) for the
+  orchestrator to place; I do not write in ~/FableGod/findings/.

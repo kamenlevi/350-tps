@@ -18,14 +18,17 @@ from .relax_core import R, kld_top
 
 def main(rt, st, a, log):
     arm, chunk_s, C = a.arm, (a.chunk_minutes * 60) or 540, a.C
-    assert os.environ.get("BIGMOE_MAXK") == "160" and os.environ.get("BIGMOE_EXT_BUILD") == "build_next"
+    ext_ok = (os.environ.get("BIGMOE_EXT_BUILD") == "build_next"     # the Oct 30 gate build; since BigMoE's Nov 4 build
+              or (os.path.basename(env.BIGMOE_CODE.rstrip("/")) != "bigmoe-6c64148"   # ext/build serves MAXK 160 too
+                  and os.environ.get("BIGMOE_EXT_BUILD") in (None, "build")))           # (MAXK is runtime)
+    assert os.environ.get("BIGMOE_MAXK") == "160" and ext_ok
     got = {k_: os.environ.get(k_) for k_ in OOO_ENV}
     assert got == OOO_ENV, f"tier env {got}"
     OUT = out_dir(arm)
     os.makedirs(os.path.join(OUT, "replay"), exist_ok=True)
     threading.Thread(target=_tick, daemon=True).start()
     t_start, HARD = time.time(), chunk_s + 300
-    rv = EM.variant("ref2t")
+    rv = EM.variant(os.environ.get("EVALSUITE_RELAX_VARIANT", "ref2t"))   # ref2tf0 on the converted store (Fri)
     ref2 = EM.ref2_import(rv)
     assert ref2.CFG.get("key_buckets") is True, ref2.CFG
     import bigmoe.stream as BS

@@ -37,7 +37,7 @@ PAUSE = os.path.expanduser("~/.local/share/quiet/PAUSE")
 FAN_CAP = os.path.expanduser("~/.local/share/quiet/FAN_CAP")
 OOO_ENV = {"BIGMOE_TIER": "4433333333", "BIGMOE_TIER_GLU": "3c", "BIGMOE_TIER_CL": "112", "BIGMOE_TIER_COMBINE": "1",
            "BIGMOE_OOO": "1"}
-SETS = ("math", "ifeval", "humaneval", "multi", "agent")
+SETS = ("math", "ifeval", "humaneval", "multi", "agent", "humanevalx", "agentlong")   # + the drift re-check's (Fri)
 
 
 def S_(thr=None, copy=False, rules=(), loop=None, union=False):
@@ -51,8 +51,10 @@ G99 = dict(thr=0.9, copy=True, union=True)              # revision 3: Q1-UNION a
 ARMS = {                                                 # PLAN_relax sec 9 (cloud task 14 merged), PREREG revision 1
     "control": dict(hc8=False, sets={s: OFF for s in SETS}),
     "A": dict(hc8=False, sets=dict(humaneval=S_(**G99), math=S_(**G99), agent=S_(**G99))),            # the gate alone
-    "B": dict(hc8=True, sets=dict(humaneval=S_(**G99, loop=R2), math=S_(**G99), agent=S_(**G99))),    # the mode
+    "B": dict(hc8=True, sets=dict(humaneval=S_(**G99, loop=R2), math=S_(**G99), agent=S_(**G99),       # the mode
+                                  humanevalx=S_(**G99, loop=R2), agentlong=S_(**G99))),   # PREREG_relax_drift
     "E": dict(hc8=False, sets=dict(ifeval=S_(rules=[R1]), multi=S_(rules=[R1]))),                     # chat R1
+    "E8": dict(hc8=True, sets=dict(ifeval=S_(rules=[R1]), multi=S_(rules=[R1]))),                     # E + HC8 (Fri)
     "F": dict(hc8=False, sets=dict(ifeval=S_(rules=[R1, R2]), multi=S_(rules=[R1, R2]))),             # + R2
     "C": dict(hc8=True, sets=dict(humaneval=S_(**G99, rules=[R1], loop=R2), math=S_(**G99, rules=[R1]))),   # B + R1
     "G": dict(hc8=False, sets=dict(ifeval=S_(0.999, True, [R1]), multi=S_(0.999, True, [R1]))),       # E + the gate
@@ -162,8 +164,11 @@ def main(rt, st, a, log):
     assert arm in ARMS, f"--arm must be one of {sorted(ARMS)}"
     for k_ in ("MTPLX_FUSED_GATE_UP", "BIGMOE_VERIFY_MIDLOOP"):
         assert k_ not in os.environ, f"{k_} is set"
-    assert os.environ.get("BIGMOE_MAXK") == "160" and os.environ.get("BIGMOE_EXT_BUILD") == "build_next", \
-        "RELAX runs on the gate: BIGMOE_MAXK=160 and BIGMOE_EXT_BUILD=build_next"
+    ext_ok = (os.environ.get("BIGMOE_EXT_BUILD") == "build_next"     # the Oct 30 gate build; since BigMoE's Nov 4 build
+              or (os.path.basename(env.BIGMOE_CODE.rstrip("/")) != "bigmoe-6c64148"   # ext/build serves MAXK 160 too
+                  and os.environ.get("BIGMOE_EXT_BUILD") in (None, "build")))           # (MAXK is runtime)
+    assert os.environ.get("BIGMOE_MAXK") == "160" and ext_ok, \
+        "RELAX runs on the gate: BIGMOE_MAXK=160 and the gate's ext (build_next, or ext/build after Nov 4)"
     TIER = ARMS[arm].get("tier", REF_TIER)
     got, want = {k_: os.environ.get(k_) for k_ in OOO_ENV}, dict(OOO_ENV, BIGMOE_TIER=TIER)
     assert got == want, f"tier env {got}, arm {arm} wants {want}"
@@ -175,7 +180,7 @@ def main(rt, st, a, log):
     threading.Thread(target=_tick, daemon=True).start()
     t_start, swap0, HARD = time.time(), swap_gb(), chunk_s + 300
     sys.path.insert(0, os.path.join(LEAP, "third_party"))   # the drafter (dflash_model_mlx)
-    rv = EM.variant("ref2t")
+    rv = EM.variant(os.environ.get("EVALSUITE_RELAX_VARIANT", "ref2t"))   # ref2tf0 on the converted store (Fri)
     ref2 = EM.ref2_import(rv)
     assert ref2.CFG.get("key_buckets") is True, ref2.CFG
     import bigmoe.stream as BS

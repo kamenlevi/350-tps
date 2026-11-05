@@ -155,7 +155,8 @@ with the live cut (the engine's default adds COPYGATE and draft trims: ~10.5), s
 the result. The flips quoted for pass skipping count the drafter's wrong tokens in trusted blocks, not a map run. The pass
 skipping replay was run without a pre-registered line; I read it as BETWEEN-weak. Rows 4, 6 and 8 are [G] sizes with no
 replay behind them. Row 1's "off" status is read from ref2.py's CFG defaults and a grep of BigMoE's arm scripts, not from a
-run. Nothing was run on the GPU; no other session's files were touched; nothing was committed (this folder is not a git
+run. The brief names HC8_READ.md; no file of that name exists within four levels of the home folder, so the HC8 numbers here
+come from HC_READ.md and TRIED 492, 493, 533. Nothing was run on the GPU; no other session's files were touched; nothing was committed (this folder is not a git
 repository) and no findings note was written, since nothing here passed a line.
 
 ## 7. Lines in TRIED's shape (for whoever merges; I did not write into ~/TRIED)
