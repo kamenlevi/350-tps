@@ -7964,3 +7964,51 @@ screen); GPU tests small, on share locks.
     at 23:31).
   - **DELETED Thu 05:02:00** at the first such gap. The re-check was clean: Fit12's L41 1,536 / 1,536, 0 name / size
     mismatches, 7 / 7 sampled files identical (cmp). 132 GiB free afterwards.
+
+## FAST-NAX: the FAST path on NAX6-N, QOM + U3 on NAX6-N's one-call (Leap, pre-registered Thu 2026-11-05 19:0x; the orchestrator 15:5x / 18:5x item 2)
+- **Why:** on the converted store both the exact default and FAST qall (fri_night.sh's QA) run 3c-N, and NAX6-N / NH
+  never engage:
+  - qall sets no R57_NAX;
+  - ref2._ooo_sel refuses QOM on the NAX path;
+  - OOO-1C skips nax_hybrid.
+  - Experts per 16-row check, quiet: 3c 50.5 ms vs NAX6 43.2 (C2, Mon). NAX6-N ~33-36 and NAX6-NH ~31-33 (KERNEL90's
+    re-base). 3c-N is 4-7 % slower than 3c.
+  - The orchestrator 15:5x (EXPERT_KERNEL line 67): group cost is fixed whatever the rows, so the per-group kernel cost
+    is FAST's lever, not the rows.
+- **Prior art:** none needed. This wires our own kernels together (tag: integration).
+- **Build:** ooo1c.py + ref2, default OFF. The new CFG nax_1cq / REF2_NAX_1CQ=1 works together with ooo_1c and
+  tier_nax_ooo + nax_native.
+  - Grouping: late pairs are keyed by expert id, tier AND sidecar state, so a late group is uniform. A sidecar of -2 is
+    a U3 sure row's final tier 3.
+  - Kernel A head:
+    - a late base slot of -1 is polled;
+    - -2 drops the whole group: A writes rs_m = -2 and returns. In QOM, -2 is an optional-only expert the loader did
+      not read (decided per expert in ext ensure(), so the drop is uniform per group);
+    - each pair writes its OWN sidecar entry, and only for its 4-bit ranks.
+  - Kernel B: a dropped group writes zeros for its rows, so combine_phase adds nothing for it.
+  - ref2: _ooo_1c_call takes U3 (nolsb) and QOM on the native NAX path. If the one-call declines, QOM raises (as on
+    3c-N).
+- **Found while reading (fixed in the new head):** the existing NAX one-call's kernel A writes rs_l for every pair of a
+  group, using the first pair's tier.
+  - A resident group can mix a 4-bit pair with a -2 sidecar (LP1 or U3) and rank >= 2 pairs. Then the write lands on
+    the next row's rank-0 entry, or past the buffer for the last row.
+  - That path is default-off and unused (no arm runs R57_NAX with REF2_OOO_1C). Its own fix comes after the check
+    shows it.
+- **Correctness line** (GPU after Fri 00:15; scripts/ooo1cq_check.py; the converted records3's L20 / L44 pools through
+  BigMoE's loader, read-only):
+  - The reference: NAX6-N on the final slots (tier_glu_nax6n, per-pair tiers, U3 sure rows at tier 3) + combine_phase,
+    with the dropped pairs at weight 0.
+  - The one-call must be bitwise == it in each case:
+    (a) released before the call;
+    (b) a late release;
+    (c) U3 sure rows and QOM drops together.
+  - Any differing bit = a bug.
+- **Speed line** (kernel level, share lock, rough): ms per MoE layer call in 48-call chains, NAX6-N 1C-Q vs 3c-N 1C QOM
+  on the same calls.
+  - PASS (worth an engine arm) <= 0.85x; KILL > 0.95x; BETWEEN otherwise.
+  - Prediction 0.65-0.80x (C2 / KERNEL90).
+  - Caveat: the OOO-1C harness (Wed 15:1x, contended) measured NAX6's two phases at 1.5x 3c's time per layer. This test
+    settles that contradiction first.
+- **Engine line** (BigMoE's arm, after the checks): qall + R57_NAX=1 + REF2_NAX_1CQ=1 vs qall, pair-mean geo steady
+  tok/s on fri_night's 12 HumanEval. PASS >= +8 %, KILL < +3 %. Adoption via EvalSuite same-scores (FAST).
+- **Next if the engine line passes:** NAX6-NH inside the one-call (the hybrid's ALU path for one-pair groups).

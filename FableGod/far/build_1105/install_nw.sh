@@ -6,14 +6,15 @@
 #   2. scratch copies of the map's dm_common.py / dm_ablations.py, patched by nw_patch.py (anchored edits; a file that
 #      already holds the patch is left as it is);
 #   3. the CPU self-test on them: test_nw.py --base on the unpatched copies (stores their outputs), then test_nw.py on
-#      the patched ones (ALL OK needed: the old arms bit-equal, the three self-checks, the reference forward, measure());
+#      the patched ones (ALL OK needed: the old arms bit-equal, the three self-checks, the reference forward, measure()),
+#      in float64 and again in bfloat16 (the 125B's dtype: the exact checks);
 #   4. the masks snapshotted into <map>/out/far/<arm> (a fixed copy, so a later change in the build folder cannot change
 #      what runs; an older differing snapshot is renamed aside, nothing is deleted), md5s against MD5SUMS;
 #   5. check_install.py on the patched copies: every arm resolves and its 36 masks load through dm_common._nw_late;
 #   6. moved in with no map process running and the map's files unchanged since the copy. The old files stay beside
 #      them as dm_common.py.pre_nw / dm_ablations.py.pre_nw (written once).
 # Exit 0 = in (or already in), 1 = failed (the map's .py files unchanged), 2 = a map process is running (unchanged).
-# CPU only (MLX's CPU device), < 1 GB, about 20 s. No GPU, no model load.
+# CPU only (MLX's CPU device), < 1 GB, about 15 s. No GPU, no model load.
 # NW_DM=<dir>: install into another copy of the map (the build's own dry run). NW_SP=<dir>: the scratch root; each
 # run works in a new <scratch root>/run.<time> folder and deletes nothing.
 B=$(cd "$(dirname "$0")" && pwd); DM=${NW_DM:-$HOME/FableGod/decision_map}; PY=$HOME/BigMoE/.venv/bin/python
@@ -31,6 +32,10 @@ if [ $already = 0 ]; then
   NW_SNAP=$SNAP NW_TEST_SCRATCH=$SP/test $PY -I -B "$B/test_nw.py" "$SP/new" > "$SP/test_nw.log" 2>&1 \
     || { echo "nw: the CPU self-test FAILED ($SP/test_nw.log); unchanged"; grep -E "FAIL|Error" "$SP/test_nw.log" | head -5; exit 1; }
   echo "nw: CPU self-test $(tail -1 "$SP/test_nw.log") ($(grep -c '^  ok' "$SP/test_nw.log") checks; $SP/test_nw.log)"
+  NW_TEST_DTYPE=bfloat16 NW_TEST_SCRATCH=$SP/test $PY -I -B "$B/test_nw.py" --base "$SP/base" > "$SP/test_base_bf16.log" 2>&1 \
+    && NW_TEST_DTYPE=bfloat16 NW_SNAP=$SNAP NW_TEST_SCRATCH=$SP/test $PY -I -B "$B/test_nw.py" "$SP/new" > "$SP/test_nw_bf16.log" 2>&1 \
+    || { echo "nw: the CPU self-test in bfloat16 FAILED ($SP/test_nw_bf16.log); unchanged"; grep -E "FAIL|Error" "$SP/test_nw_bf16.log" | head -5; exit 1; }
+  echo "nw: the same in bfloat16 (the 125B's dtype; exact checks) $(tail -1 "$SP/test_nw_bf16.log") ($(grep -c '^  ok' "$SP/test_nw_bf16.log") checks)"
 else echo "nw: the map already holds the patch; checking the snapshots and the arms only"; fi
 for d in "$B"/masks/*/; do
   a=$(basename "$d")

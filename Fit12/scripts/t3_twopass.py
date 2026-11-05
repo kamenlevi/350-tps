@@ -52,6 +52,17 @@ _WIDE = (
     '        if _F12_K1U[0]:                                             # [Fit12 P1-K1] top-1 + union members (NewIdeas)\n'
     '            y = _F12_K1U_FN(mx, TG, x2, t, gate, L, S, ids, p20, _F12_K1U[0], K, W20, NORM_MASS, m3=_F12_M3[0])\n'
     '            return y.reshape(*x.shape[:-1], y.shape[-1]) + shared\n'
+    '        if _F12_TOPK[0] > 2:                                        # [Fit12 lever 2] top-k pass 1: REF2-T tiers on ranks 0..k-1\n'
+    '            k_ = _F12_TOPK[0]                                       # ranks 0-1 at 4 bits (base + side), 2..k-1 at 3 bits (base)\n'
+    '            rk = (ids[:, :k_] | W20).T.reshape(-1)                  # rank-major: every row\'s rank 0, 1, .., k-1\n'
+    '            r2 = (ids[:, :2] | W20).T.reshape(-1)\n'
+    '            dep_m, n_m = gate.post(L, rk, wk=255 | ((k_ * S) << 8))\n'
+    '            dep_l, n_l = gate.post(t["side"], r2, wk=255 | ((2 * S) << 8))\n'
+    '            sm = gate.spin(dep_m, L, n_m)[:k_ * S].reshape(k_, S).T\n'
+    '            sl = gate.spin(dep_l, t["side"], n_l).reshape(2, S).T\n'
+    '            wk_ = p20[:, :k_] / (p20[:, :K].sum(axis=-1, keepdims=True) if NORM_MASS else p20[:, :k_].sum(axis=-1, keepdims=True))\n'
+    '            y = TG(x2, t["base"], t["sideP"], sm, sl, plan="".join(T.PLAN[:k_]), scores=wk_)\n'
+    '            return y.reshape(*x.shape[:-1], y.shape[-1]) + shared\n'
     '        rows = (ids[:, :2] | W20).T.reshape(-1)                     # rank-major: every row\'s rank 0, then rank 1\n'
     '        if _F12_M3[0]:                                              # [Fit12 M3] ranks 0-1 at 3 bits: MSB-3 parts only\n'
     '            dep_m, n_m = gate.post(L, rows, wk=255 | ((2 * S) << 8))\n'
@@ -87,9 +98,14 @@ _PFTAP = ('                mx.eval(*hs)\n'
           '                    _F12_PFTAP[0](L, hs)\n'
           '                del mixed, hyper, inject, bos\n')
 _PFTAP_FN = [None]
+_TOPK = [0]      # (Thu 5 Nov 20:1x, 12 GB plan lever 2, Breakthrough 19:5x) k > 2: the WIDE pass 1 runs each row's ranks
+                 # 0..k-1 at REF2-T's tiers (0-1 at 4 bits, 2..k-1 at 3 bits) at their top-10 mass weights; 0 = off
 _K2 = [os.environ.get("F12_P1K2", "0") == "1"]   # pass 1's tier_glu on ranks 0-1 only (plan '44'): the 8 weight-0 pairs dropped
 PHLOG = [None]   # (Tue 3 Nov, T3P) a list: one row per timed phase (name, check, then at start and at end: CLOCK_UPTIME_RAW s,
                  # the gate's pass seq, disk bytes read by this process, loader misses); None = off (no extra calls)
+CAL = [None]     # (Thu 5 Nov 20:0x, 12 GB plan lever 1, certificate calibration) a list: one dict per check (path, the draft d,
+                 # its per-row cf, pass 1's per-row max softmax p1 / top-2 margin m1 / argmax g1 when pass 1 ran, the
+                 # committed tokens new); None = off: no extra op, the code path is unchanged
 _K1U = [0]       # (Tue 3 Nov 10:3x, P1-K1, NewIdeas 10:24 / ~/NewIdeas/QUEUE.md 'P1-OEA') KU > 0: a WIDE pass-1 call (3-16
                  # rows) reads only U = the rows' rank-0 experts, and each row's MoE = its ranks 0-9 that are in U (the map's
                  # oea_k1 mask, scripts/dm_oea_masks.py), the first KU of them in rank order, at 4 bits (U's LSB parts are
@@ -188,6 +204,7 @@ def apply(B):
     B.__dict__["_F12_K1U"] = _K1U
     B.__dict__["_F12_K1U_FN"] = k1u_moe
     B.__dict__["_F12_M3"] = _M3
+    B.__dict__["_F12_TOPK"] = _TOPK
     B.__dict__["_F12_PF2"] = _PF2
     B.__dict__["_F12_PF2_ROWS"] = PF2_ROWS
     B.__dict__["_F12_PF2_FN"] = pf2_extra
@@ -438,6 +455,7 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
             _ph("draft", _k)
             d = np.array(pth[0]).tolist()
             cf = np.array(cf[0]).tolist()
+            calrec = {}
             if (trim := dcache[0].offset - a) > 0:
                 DF._trim_recent_cache(dcache, trim)
             d = d[: max(0, max_tokens - len(out) - 1)]
@@ -461,11 +479,14 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
                 p1 = mx.max(mx.softmax(lg1, axis=-1), axis=-1)
                 g1 = mx.argmax(lg1, axis=-1)
                 extra = []                             # P1-K1 / P2-PREFETCH counters ride on pass 1's own eval
+                cal_t2 = []                            # calibration: pass 1's top-2 probabilities ride on the same eval
+                if CAL[0] is not None:                 # (kept out of `extra`, which is read by index below)
+                    cal_t2 = [mx.topk(mx.softmax(lg1.astype(mx.float32), axis=-1), 2, axis=-1)]
                 if K1U_ACC:
                     extra.append(mx.stack([a for a, _ in K1U_ACC]).sum(axis=0))
                 if PF2_ACC:
                     extra.append(mx.stack(PF2_ACC).sum().reshape(1))
-                mx.eval(p1, g1, tp1, *extra)
+                mx.eval(p1, g1, tp1, *extra, *cal_t2)
                 if K1U_ACC:
                     ka = extra[0].tolist()
                     st["k1u_kept"] += ka[0]; st["k1u_over"] += ka[1]; st["k1u_rl"] += sum(s_ for _, s_ in K1U_ACC)
@@ -479,6 +500,10 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
                 _t = time.perf_counter()
                 _k = _mk()
                 p1, g1 = p1.tolist(), g1.tolist()
+                if cal_t2:
+                    v2 = np.array(cal_t2[0])
+                    calrec.update(p1=[round(x, 5) for x in p1], g1=g1,
+                                  m1=[round(float(r.max() - r.min()), 5) for r in v2.reshape(-1, 2)])
                 st["rows1"] += S
                 n = 0
                 while n < len(d) and p1[n] >= theta and d[n] == g1[n]:
@@ -524,6 +549,8 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
             st["checks"] += 1
             if log is not None:
                 log.append((S, path, len(new), round(cf[0], 4) if cf else None))
+            if CAL[0] is not None:
+                CAL[0].append(dict(path=path, d=d, cf=[round(c_, 5) for c_ in cf[:len(d)]], new=list(new), **calrec))
             c0 = len(out)
             out += new[: max_tokens - len(out)]
             ctx, a = kt[: len(new)], a + len(new)

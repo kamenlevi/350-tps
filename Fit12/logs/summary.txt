@@ -1977,3 +1977,13 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 22:46:09 SCR trl map judge end (rc 0)
 18:56:34 SCR halfk start: fit_halfk_check.py 2,12,24,36,46 (the orchestrator 18:5x; swap 8573.44 MB)
 19:01:54 SCR halfk end (rc 0)
+19:40:55 SCR t3cal start: fit_t3.py c51 arms g1k1u + g1k2 F12_CAL=1, 16 HumanEval prompts (30 GB free, swap 8509 MB)
+19:51:37 SCR t3cal end (rc 0, 640 s, swap 8400 MB): 32 cal files
+19:58:59 SCR t3cal start: fit_t3.py c52 arms g1k3 + g1k4 + g1k5 F12_CAL=1, 16 HumanEval prompts (34 GB free, swap 8392 MB)
+19:59:09 SCR t3cal end (rc 1, 10 s, swap 8392 MB): 0 cal files
+20:00:01 SCR t3cal c52 first start failed at load+1 call (gated.post: 48 ids > BIGMOE_MAXK 40, the pinned engine's default); relaunching with BIGMOE_MAXK=80 (supported to 92; Breakthrough's B12 variants run 80)
+20:00:03 SCR t3cal start: fit_t3.py c52 arms g1k3 + g1k4 + g1k5 F12_CAL=1, 16 HumanEval prompts (34 GB free, swap 8392 MB)
+20:00:28 SCR t3cal end (rc 134, 25 s, swap 8392 MB): 1 cal files
+20:01:23 SCR t3cal c52 aborted at 20:00:28 (rc 134) after HumanEval/156 g1k3 (= ex, OK): 'bigmoe: 54 experts > C=47 at layer 0' = a 16-row top-4 pass 1 needs more distinct experts than the 12 GB pool's 47 slots per layer; top-3 alone next (c53)
+20:01:26 SCR t3cal start: fit_t3.py c53 arm g1k3 only (top-4 / 5 exceed C_m 47 at 16 rows: abort 20:00:28) F12_CAL=1, 16 HumanEval prompts (33 GB free, swap 8392 MB)
+20:06:32 SCR t3cal end (rc 0, 305 s, swap 8392 MB): 16 cal files

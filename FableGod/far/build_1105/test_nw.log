@@ -26,8 +26,11 @@ E. self-check (iii): rows, flags, writes
   ok   late writes == the (chunk, layer) pairs with a late flag (nw0 118, nw1 115, nw2 112)
   ok   nothing left stashed, no gates held after the last layer
   ok   both chunk widths stashed late terms (88 from _combine_p, 27 from the narrow path)
+  ok   nw1 with one wide chunk [80]: every late flag used once, nothing left stashed
   ok   nw1 with one wide chunk [80] == the reference
+  ok   nw1 with narrow chunks only [20, 20, 20, 20]: every late flag used once, nothing left stashed
   ok   nw1 with narrow chunks only [20, 20, 20, 20] == the reference
+  ok   nw1 with uneven chunks [33, 5, 42]: every late flag used once, nothing left stashed
   ok   nw1 with uneven chunks [33, 5, 42] == the reference
 F. guards
   ok   a late flag at a tail layer under nw1: refused (the mask must resolve the tail (no late flag in the last 1 layers))
@@ -38,13 +41,15 @@ G. no state leaks
   ok   the twin after the never-wait runs == the twin before them, bit for bit
   ok   the baseline after them == the baseline before, bit for bit
 H. dm_ablations arms
-  ok   12/12 arms resolve, alone and with +code, to the expected PERT and an absolute mask folder
+  ok   14/14 arms resolve, alone and with +code, to the expected PERT and an absolute mask folder
   ok   every arm name stands in dm_ablations.py in quotes (the s67 runner's installed() check)
   ok   run_window and clear reset the never-wait state; measure loads the late flags
 I. the real measure() and run_window(), end to end
   ok   measure(): nwz's JSON (top-8 ids and log-probs) == the twin's, exactly, on both windows; no WARNING
+  ok   measure(): nw0 runs with its record and no WARNING
   ok   measure(): nw0's top-8 ids == the twin's, max |d log p| 0.0e+00
-  ok   measure(): nw1's top-1 == the reference run's on both windows (max |d log p| 1.4e-06); res['nw'] holds d, late, terms, writes; no warn
+  ok   measure(): nw1's res['nw'] holds d, late, terms (== the mask's count), writes (== the chunk-layer pairs); no warn
+  ok   measure(): nw1's top-1 == the reference run's on both windows (max |d log p| 1.8e-07)
   ok   measure(): the 'never-wait' note is printed per window, no WARNING
   ok   measure(): nw1 moves the log-probs by up to 1.8e-02 against the twin (the arm is not a no-op)
   ok   measure(): a prefill that skips rows trips both WARNINGs (the row count's and the never-wait one) and marks the windows

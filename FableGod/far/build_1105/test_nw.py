@@ -6,7 +6,8 @@ through the patched dm_common's own wrappers (install()) in chunks of 40 / 33 / 
 narrow path of the MoE wrapper. Two stand-ins only, neither touched by never-wait: the mixer (a per-row linear map) and
 the routed experts themselves (small gated MLPs; sorted_experts hands their outputs over in a shuffled order with the
 inverse permutation, as the fused switch layer does). float64 because 48 random layers amplify float32 rounding noise
-about 5,000 x, which would blur "harness == reference"; NW_TEST_DTYPE=float32 NW_TEST_LAYERS=6 runs the small form.
+about 5,000 x, which would blur "harness == reference"; NW_TEST_DTYPE=float32 NW_TEST_LAYERS=6 runs the small form, and
+NW_TEST_DTYPE=bfloat16 a smoke run in the 125B's own dtype (exact checks hard, reference comparisons as notes).
 
 What is checked (ALL must pass; exit 0):
   A. the patch leaves the old arms alone: baseline, a topk arm and the rmask twin equal the UNPATCHED harness's output
@@ -59,7 +60,13 @@ def ok(c, m):
 
 D, HC, NL, E, K, I = 32, 4, int(os.environ.get("NW_TEST_LAYERS", "48")), 64, 10, 24
 DTN = os.environ.get("NW_TEST_DTYPE", "float64")               # float64 (MLX CPU only): 48 random layers amplify float32 rounding
-DT, NPDT = getattr(mx, DTN), getattr(np, DTN)                   # noise ~5,000 x, which would blur "harness == reference"
+HALF = DTN in ("bfloat16", "float16")                           # noise ~5,000 x, which would blur "harness == reference"
+DT, NPDT = getattr(mx, DTN), (np.float32 if HALF else getattr(np, DTN))
+# NW_TEST_DTYPE=bfloat16 (the 125B's dtype; the compiled residual write engages at >= 32 rows): a smoke run. The exact
+# checks stay hard (bit-equalities, counts, guards, measure()); the comparisons with the reference are printed as notes,
+# since 8-bit mantissas over 48 layers do not allow a tolerance.
+def A_(a): return mx.array(a).astype(DT)
+def N_(x): return np.array(x.astype(mx.float32)) if HALF else np.array(x)
 PL = 0.9 / NL                                                   # late flag rate per kept rank (about 4 late terms per answer row)
 args = Q.TextArgs(hidden_size=D, num_hidden_layers=NL, hc_count=HC, hc_lowrank=8, num_experts=E, num_experts_per_tok=K,
                   moe_intermediate_size=I, shared_expert_intermediate_size=I, norm_topk_prob=True,
@@ -119,8 +126,8 @@ def run_harness(h, chunks):
     """The harness path: the real DecoderLayer.__call__ per layer, chunk by chunk, with dm_common's wrappers on."""
     window_reset(); outs = []; p = 0
     for S in chunks:
-        x = fwd(mx.tile(mx.array(h[p:p + S])[None], (1, 1, HC)))
-        mx.eval(x); outs.append(np.array(x[0])); p += S
+        x = fwd(mx.tile(A_(h[p:p + S])[None], (1, 1, HC)))
+        mx.eval(x); outs.append(N_(x[0])); p += S
     return np.concatenate(outs)
 
 GR = C._ORIG[(Q.GatedResidual, "hc")]                           # the read, unwrapped
@@ -132,7 +139,7 @@ def run_ref(h, chunks, keep, late, d, wrong_gates=False, row_shift=0, strict=Tru
     by rank, delta_L written after layer (L + d)'s MoE write through layer L's inject gates."""
     outs = []; p = 0
     for S in chunks:
-        x = mx.tile(mx.array(h[p:p + S])[None], (1, 1, HC)); pend = {}
+        x = mx.tile(A_(h[p:p + S])[None], (1, 1, HC)); pend = {}
         for M, layer in enumerate(layers):
             mixed, hyper, inj = GR(layer.attn_hyper_connection, x)
             bo = layer.linear_attn(mixed, None, None)
@@ -157,7 +164,7 @@ def run_ref(h, chunks, keep, late, d, wrong_gates=False, row_shift=0, strict=Tru
                 dl_, inj_ = pend.pop(M - d)
                 x = W(x, dl_, inj if wrong_gates else inj_)
         if strict: assert not pend, sorted(pend)
-        mx.eval(x); outs.append(np.array(x[0])); p += S
+        mx.eval(x); outs.append(N_(x[0])); p += S
     return np.concatenate(outs)
 
 def rel(x, y): return float(np.abs(x - y).max() / np.abs(y).max())
@@ -205,6 +212,9 @@ if BASE_MODE:
 print(f"[t] patched harness from {PD}; MLX device {mx.default_device()}; {NL} layers x {D} dims, {E} experts, top {K}; window {N} rows "
       f"(answer from {a}) in chunks {CH}, {DTN}; late flags: {int(late1.sum())} (nw1), {int(late1[a:].sum()) / (N - 1 - a):.1f} per answer row", flush=True)
 TOL = 1e-9 if DTN == "float64" else 1e-4; LPT = max(10 * TOL, 5e-6)   # log-probs are stored as float32
+def soft(c, m):                                                 # a comparison with the reference: hard, but a note in half precision
+    if HALF: print(("  note " if c else "  NOTE (not within the float tolerance, expected in half precision) ") + m, flush=True)
+    else: ok(c, m)
 print("A. the old arms are unchanged by the patch")
 if os.path.exists(BF):
     z = np.load(BF)
@@ -212,7 +222,7 @@ if os.path.exists(BF):
        "baseline, topk4 and the rmask twin == the unpatched harness's outputs, bit for bit")
 else: ok(False, f"{BF} is missing: run this file with --base <unpatched dir> first")
 e_ref = rel(o_twin, run_ref(h, CH, keep, None, 0))
-ok(e_ref < TOL, f"the twin == the reference forward with no late flag (relative error {e_ref:.1e}): the reference copies the model's forward")
+soft(e_ref < TOL, f"the twin == the reference forward with no late flag (relative error {e_ref:.1e}): the reference copies the model's forward")
 
 print("B. self-check (i): never-wait path, late flags off")
 arm(P_twin, nw=1, nw_zero=True); o_z = run_harness(h, CH)
@@ -222,7 +232,7 @@ ok(C.NW["writes"] == 0 and C.NW["terms"] == 0 and not C.NW["stash"] and not C.NW
 print("C. self-check (ii): lateness 0")
 arm(P0, nw=0); o_0 = run_harness(h, CH); n0 = dict(C.NW)
 e0 = rel(o_0, o_twin)
-ok(e0 < TOL, f"nw0 == the twin up to the order of two adds (relative error {e0:.1e}; {DTN} here, bf16 rounding on the 125B)")
+soft(e0 < TOL, f"nw0 == the twin up to the order of two adds (relative error {e0:.1e}; {DTN} here, bf16 rounding on the 125B)")
 ok(not np.array_equal(o_0, o_twin), "nw0 is not bit-equal to the twin (the late writes did run)")
 ok(n0["terms"] == int(late0.sum()), f"every late flag used once ({n0['terms']} of {int(late0.sum())})")
 
@@ -233,18 +243,18 @@ C._nw_stash = stash_spy
 arm(P1, nw=1); o_1 = run_harness(h, CH); n1 = dict(C.NW); kpos1 = dict(C.CUR["kpos"])
 C._nw_stash = stash0
 r_1 = run_ref(h, CH, keep, late1, 1); e1 = rel(o_1, r_1)
-ok(e1 < TOL, f"nw1 == the reference (relative error {e1:.1e})")
+soft(e1 < TOL, f"nw1 == the reference (relative error {e1:.1e})")
 eff = rel(o_1, o_twin)
-ok(eff > 50 * max(e1, 1e-7), f"nw1 differs from the twin by {eff:.1e} (relative), {eff / max(e1, 1e-9):.0f} x the match: the late terms matter here")
+soft(eff > 50 * max(e1, 1e-7), f"nw1 differs from the twin by {eff:.1e} (relative), {eff / max(e1, 1e-9):.0f} x the match: the late terms matter here")
 for what, d_, kw in (("layer L + 1's gates instead of layer L's", 1, dict(wrong_gates=True)), ("the late rows shifted by one", 1, dict(row_shift=1)),
                      ("lateness 2 on nw1's flags", 2, {}), ("lateness 0 on nw1's flags", 0, {})):
     w = run_ref(h, CH, keep, late1, d_, strict=False, **kw)
-    ok(rel(o_1, w) > 50 * max(e1, 1e-7), f"power: a reference with {what} is {rel(o_1, w):.1e} from the harness ({rel(o_1, w) / max(e1, 1e-9):.0f} x the match)")
+    soft(rel(o_1, w) > 50 * max(e1, 1e-7), f"power: a reference with {what} is {rel(o_1, w):.1e} from the harness ({rel(o_1, w) / max(e1, 1e-9):.0f} x the match)")
 arm(P2, nw=2); o_2 = run_harness(h, CH); n2 = dict(C.NW)
 r_2 = run_ref(h, CH, keep, late2, 2); e2 = rel(o_2, r_2)
-ok(e2 < TOL, f"nw2 == the reference (relative error {e2:.1e})")
+soft(e2 < TOL, f"nw2 == the reference (relative error {e2:.1e})")
 w = rel(o_2, run_ref(h, CH, keep, late2, 1, strict=False))
-ok(w > 50 * max(e2, 1e-7), f"power: nw2 is {w:.1e} from a lateness-1 reference ({w / max(e2, 1e-9):.0f} x the match)")
+soft(w > 50 * max(e2, 1e-7), f"power: nw2 is {w:.1e} from a lateness-1 reference ({w / max(e2, 1e-9):.0f} x the match)")
 
 print("E. self-check (iii): rows, flags, writes")
 def pairs(lt, chunks=CH):                                       # (chunk, layer) pairs that hold a late flag
@@ -259,7 +269,8 @@ ok(not n1["stash"] and not n1["inj"] and not n2["stash"] and not n0["stash"], "n
 ok(2 in shapes and 3 in shapes, f"both chunk widths stashed late terms ({shapes.count(2)} from _combine_p, {shapes.count(3)} from the narrow path)")
 for nm_, chunks_ in (("one wide chunk", [N]), ("narrow chunks only", [20, 20, 20, 20]), ("uneven chunks", [33, 5, 42])):
     arm(P1, nw=1); o_ = run_harness(h, chunks_)
-    ok(rel(o_, run_ref(h, chunks_, keep, late1, 1)) < TOL and C.NW["terms"] == int(late1.sum()), f"nw1 with {nm_} {chunks_} == the reference")
+    ok(C.NW["terms"] == int(late1.sum()) and not C.NW["stash"], f"nw1 with {nm_} {chunks_}: every late flag used once, nothing left stashed")
+    soft(rel(o_, run_ref(h, chunks_, keep, late1, 1)) < TOL, f"nw1 with {nm_} {chunks_} == the reference")
 
 print("F. guards")
 def refuses(fn, what):
@@ -285,6 +296,8 @@ exp = {"qom_0_live_ball_c208": dict(rmask=S + "qom_0_live_ball_c208", renorm=Fal
        "qom_0_live_ball_c208_nw1r1": dict(rmask=S + "qom_0_live_ball_c208_nw1r1", renorm=False, nw=1),
        "qom_0_live_ball_nw1": dict(rmask=S + "qom_0_live_ball_nw1", renorm=False, nw=1),
        "qom_0_split0.99_live_ball_nw1": dict(rmask=S + "qom_0_split0.99_live_ball_nw1", renorm=False, nw=1),
+       "qom_0_live_ball_c266": dict(rmask=S + "qom_0_live_ball_c266", renorm=False),
+       "qom_0_live_ball_c266_nw1": dict(rmask=S + "qom_0_live_ball_c266_nw1", renorm=False, nw=1),
        "qom_0_live_ball_c208_nwz": dict(rmask=S + "qom_0_live_ball_c208", renorm=False, nw=1, nw_zero=True),
        "qom_0_live_ball_c208_nw0": dict(rmask=S + "qom_0_live_ball_c208_nw0", renorm=False, nw=0),
        "qom_0_live_ball_c208_nw2": dict(rmask=S + "qom_0_live_ball_c208_nw2", renorm=False, nw=2),
@@ -305,18 +318,19 @@ ok("_nw_reset()" in inspect.getsource(C.run_window) and "_nw_reset()" in inspect
 print("I. the real measure() and run_window(), end to end")
 if NL != 48: print("  --   skipped (measure() counts 48 layers; run with NW_TEST_LAYERS=48)")
 else:
-    EMB = np.random.RandomState(5).randn(100, D).astype(NPDT); HEAD = mx.array(np.random.RandomState(6).randn(HC * D, 50).astype(NPDT) * 0.05)
+    EMB = np.random.RandomState(5).randn(100, D).astype(NPDT); HEAD = A_(np.random.RandomState(6).randn(HC * D, 50).astype(NPDT) * 0.05)
     MODE = {"skip": False}
     def chunks_of(n): return [37] * (n // 37) + ([n % 37] if n % 37 else [])
     def top8(x):
-        lg = x @ HEAD; top = mx.argsort(-lg, axis=-1)[:, :8]
+        lg = x.astype(HEAD.dtype) @ HEAD; lg = lg.astype(mx.float32) if HALF else lg   # the real hook casts the logits to float32
+        top = mx.argsort(-lg, axis=-1)[:, :8]
         return top.astype(mx.int32), mx.take_along_axis(lg, top, axis=-1) - mx.logsumexp(lg, axis=-1, keepdims=True)
     def fake_prefill(rt, ids, **kw):
         """Stands in for G.restore_or_prefill_prompt_state: this model's forward over the window in chunks of 37 rows
         (the last one narrow), the hook's top-8 capture into C.REC. MODE["skip"]: the last chunk never runs the layers."""
         hh = EMB[np.array(ids) % 100]; p = 0
         for i, S_ in enumerate(chunks_of(len(ids))):
-            x0 = mx.tile(mx.array(hh[p:p + S_])[None], (1, 1, HC))
+            x0 = mx.tile(A_(hh[p:p + S_])[None], (1, 1, HC))
             x = x0 if (MODE["skip"] and p + S_ == len(ids)) else fwd(x0)
             if C.REC["on"]:
                 t, l = top8(x[0]); C.REC["tk"].append(t); C.REC["lp"].append(l)
@@ -343,19 +357,21 @@ else:
     ok(all(jt[w]["tk"] == jz[w]["tk"] and jt[w]["lp"] == jz[w]["lp"] for w in jt) and "WARNING" not in out_t + out_z,
        "measure(): nwz's JSON (top-8 ids and log-probs) == the twin's, exactly, on both windows; no WARNING")
     d0 = max(np.abs(np.array(R0[w]["lp"]) - np.array(T[w]["lp"])).max() for w in T)
-    ok(all(R0[w]["tk"] == T[w]["tk"] for w in T) and d0 < LPT and "WARNING" not in out_0, f"measure(): nw0's top-8 ids == the twin's, max |d log p| {d0:.1e}")
-    good = True; dref = 0.0
+    ok("WARNING" not in out_0 and all("nw" in R0[w] and R0[w]["nw"]["d"] == 0 for w in R0), "measure(): nw0 runs with its record and no WARNING")
+    soft(all(R0[w]["tk"] == T[w]["tk"] for w in T) and d0 < LPT, f"measure(): nw0's top-8 ids == the twin's, max |d log p| {d0:.1e}")
+    good = True; gref = True; dref = 0.0
     for dom, nm, ids, off, gen in WIN:
         kp, l0, l1, a_ = LT[nm]; hh = EMB[ids % 100]; ch = chunks_of(len(ids))
         t, l = top8(mx.array(run_ref(hh, ch, kp, l1, 1))); t, l = np.array(t)[a_:len(ids) - 1], np.array(l)[a_:len(ids) - 1]
-        good &= np.array_equal(t[:, 0], np.array(R1[nm]["tk"])[:, 0]) and R1[nm]["a"] == a_
+        gref &= np.array_equal(t[:, 0], np.array(R1[nm]["tk"])[:, 0]); good &= R1[nm]["a"] == a_
         dref = max(dref, float(np.abs(l - np.array(R1[nm]["lp"])).max()))
         nw = R1[nm].get("nw", {})
         good &= nw.get("d") == 1 and nw.get("terms") == int(l1.sum()) and nw.get("late") == int(l1[a_:].sum()) and nw.get("writes") == pairs(l1, ch) and "warn" not in R1[nm]
-    ok(good and dref < LPT, f"measure(): nw1's top-1 == the reference run's on both windows (max |d log p| {dref:.1e}); res['nw'] holds d, late, terms, writes; no warn")
+    ok(good, "measure(): nw1's res['nw'] holds d, late, terms (== the mask's count), writes (== the chunk-layer pairs); no warn")
+    soft(gref and dref < LPT, f"measure(): nw1's top-1 == the reference run's on both windows (max |d log p| {dref:.1e})")
     ok(out_1.count("never-wait d 1: late terms per answer row") == 2 and "WARNING" not in out_1, "measure(): the 'never-wait' note is printed per window, no WARNING")
     dt = max(np.abs(np.array(R1[w]["lp"]) - np.array(T[w]["lp"])).max() for w in T)
-    ok(dt > 20 * max(dref, LPT), f"measure(): nw1 moves the log-probs by up to {dt:.1e} against the twin (the arm is not a no-op)")
+    soft(dt > 20 * max(dref, LPT), f"measure(): nw1 moves the log-probs by up to {dt:.1e} against the twin (the arm is not a no-op)")
     MODE["skip"] = True
     RD, out_d = meas("t_skip", A.nw_mask(os.path.join(MK, "nw1"), 1))
     MODE["skip"] = False

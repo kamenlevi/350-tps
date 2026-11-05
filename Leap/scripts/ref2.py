@@ -61,6 +61,10 @@ What changes (monkeypatches on MTPLX, read-only):
     switch, 8-bit mixers take MTPLX's eager chain at 16 padded rows. COUNTS hc8_fast. hc8r is imported on first use.
     CFG hc8_v / REF2_HC8_V (default 4, Wed 14:5x): hc8r's kernel version; v4 is bitwise == v2 (96 / 96 reads) and
     4.97 vs 5.27 ms per 96-read chain (quiet); v2 is what EvalSuite's snap/leap-c805fd0 runs.
+  - FAST-NAX (Thu 2026-11-05, FAST, off by default; CFG["nax_1cq"] or REF2_NAX_1CQ=1, with ooo_1c + tier_nax_ooo +
+    nax_native, no hybrid; TABLE_350 'FAST-NAX'): U3's sure rows and QOM's drops on NAX6-N's one-call (scripts/ooo1cq.py:
+    late groups keyed by sidecar state too, a dropped group's rows are zeros, each pair writes its own sidecar entry).
+    COUNTS nax_1cq. GPU checks: scripts/ooo1cq_check.py.
   - OOO-1C (Wed 2026-11-04, exact, off by default; CFG["ooo_1c"] or REF2_OOO_1C=1): BigMoE's OOO in ONE expert call per
     MoE layer (scripts/ooo1c.py): the late pairs go last in the grid and resolve their slots inside kernel A from the
     loader's release region (coherent(system) polls of BigMoE's coherent-spin layout; no ext change). On BigMoE's 3c path
@@ -184,13 +188,14 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "hc8_fast": os.environ.get("REF2_HC8_FAST") == "1", "hc8_np": int(os.environ.get("REF2_HC8_NP", "20")),
        "hc8_v": int(os.environ.get("REF2_HC8_V", "4")),
        "ooo_1c": os.environ.get("REF2_OOO_1C") == "1", "small_native": os.environ.get("REF2_SMALL_NATIVE") == "1",
+       "nax_1cq": os.environ.get("REF2_NAX_1CQ") == "1",
        "hc_pend_mlp": os.environ.get("REF2_HC_PEND") == "1",
        "screened_head": os.environ.get("REF2_SCREENED_HEAD") == "1",
        "screened_head_n": int(os.environ.get("REF2_SCREENED_HEAD_N", "98304"))}
 _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
               kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
-              fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0, ooo_1c_qom=0)
+              fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0, ooo_1c_qom=0, nax_1cq=0)
 _ROWS = [R]                                          # F1-R8: the real rows of the attention call being built (_att)
 _ORIG = {}
 _WCAT = {}
@@ -762,14 +767,15 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
     assert not lo4 or lo4[0][0] == 0, t["segs"]
     offs = _ooo1c_offs(bm, t, R4)
     nlz = t.get("nolsb")                             # U3's 3-bit sure rows (BigMoE r57_screen _ooo_call_t3)
-    if offs is None or (nlz is not None and nax):    # (NAX + t3: not here; the two phases ignore nolsb too: BigMoE told)
-        return None
+    qn = bool(nax and CFG["nax_1cq"] and CFG["nax_native"])   # FAST-NAX (Thu 11-05): U3 + QOM on NAX6-N's one-call (ooo1cq)
+    if offs is None or (nlz is not None and nax and not qn):   # (NAX + t3 without FAST-NAX: not here; the two phases
+        return None                                  # ignore nolsb too: BigMoE told)
     if _NATIVE_FLAGS.get(id(t["base"])) is not None:  # N7-15's dirty-slot repack runs only on the two-phase path
         return None
     native = bool(CFG["nax_native"]) if nax else _native(t)   # Friday's converted store: NAX6-N / 3c-N one-call forms
     qm = t.get("qom")                                # QOM-OOO (Wed 17:1x): QOM's optional uses (BigMoE _ooo_call_t3);
-    if qm is not None and (nax or nlz is None):      # QOM: the 3c / 3c-N one-call (QOM rides on U3's t3)
-        return None
+    if qm is not None and ((nax and not qn) or nlz is None):   # QOM: the 3c / 3c-N one-call, or NAX6-N's with FAST-NAX
+        return None                                  # (QOM rides on U3's t3)
     gate, L = bm["gate"], bm["L"]
     BT.OOO_STATS["calls"] += 1
     COUNTS["ooo_1c"] += 1
@@ -802,7 +808,12 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
     OC = _ooo1c()
     if nax:
         TG = BT._tier_glu_mod()
-        f1c = OC.tier_glu_nax6n_1c if native else OC.tier_glu_nax6_1c
+        if qn:                                       # FAST-NAX: U3's -2 sidecars, QOM's dropped groups (zero rows)
+            import ooo1cq as OQ
+            f1c = OQ.tier_glu_nax6n_1cq
+            COUNTS["nax_1cq"] += 1
+        else:
+            f1c = OC.tier_glu_nax6n_1c if native else OC.tier_glu_nax6_1c
         y, _, _ = f1c(xin, t["base"], t["sideP"], pre_m, pre_l, ids.reshape(M, K), PLAN, gate.region, offs, gate.status)
         COUNTS["nax6_ooo"] += 1
         return TG.combine_phase(y.reshape(M * K, -1), y.reshape(M * K, -1), mx.ones((M, K), mx.int32),
@@ -823,6 +834,8 @@ def _ooo_nax6(x, ids, bm, t, post, sc, shared):
         y1c = _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax=True)   # OOO-1C: one NAX6 call
         if y1c is not None:
             return y1c
+    if t.get("qom") is not None:                     # FAST-NAX declined (or off): the two phases below would ignore QOM
+        raise RuntimeError("REF2: QOM on the NAX path needs FAST-NAX's one-call (ooo_1c + nax_1cq + nax_native, no hybrid)")
     import bigmoe.tier as BT
     N6 = _nax6mod()
     TG = BT._tier_glu_mod()
@@ -922,7 +935,9 @@ def _ooo_3cn(x, ids, bm, t, post, sc, shared):
 def _ooo_sel(x, ids, bm, t, post, sc, shared):
     """bigmoe.tier._ooo_call with REF2's C1 switch (off: BigMoE's 3c phases). A converted layer (layout 1 / 2) takes 3c-N,
     the native twin of BigMoE's 3c, even with REF2 removed (BigMoE 17:4x: r57_screen toggles REF2 around drafts)"""
-    if t.get("qom") is not None and ((_ON[0] and CFG["tier_nax_ooo"]) or (_layout(t) in (1, 2) and not (_ON[0] and CFG["ooo_1c"]))):
+    qn = bool(_ON[0] and CFG["tier_nax_ooo"] and CFG["ooo_1c"] and CFG["nax_1cq"] and CFG["nax_native"]
+              and not (CFG["nax_hybrid"] or CFG["nax_repack_p1"]))   # FAST-NAX (Thu 11-05): QOM on NAX6-N's one-call
+    if t.get("qom") is not None and ((_ON[0] and CFG["tier_nax_ooo"] and not qn) or (_layout(t) in (1, 2) and not (_ON[0] and CFG["ooo_1c"]))):
         raise RuntimeError("REF2: QOM on the NAX path, or on native records without ooo_1c, is not built (those two phases "
                            "would ignore t['qom']); QOM runs on 3c (BigMoE's two phases or ref2's one-call) and 3c-N (one-call)")
     if _ON[0]:

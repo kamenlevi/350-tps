@@ -27,6 +27,7 @@ def same_keep(a, b):
 
 print("1. twins against their references")
 for arm, refs in (("qom_0_live_ball_c208", [(ORIG, "NewIdeas' builder, unmodified")]),
+                  ("qom_0_live_ball_c266", [(ORIG, "NewIdeas' builder, unmodified")]),
                   ("qom_0_split0.99_live_ball_c208", [(ORIG, "NewIdeas' builder, unmodified")]),
                   ("qom_0_live_ball", [(os.path.join(DMO, "ni"), "the snapshot run Thu"), (NI, "NewIdeas' masks")]),
                   ("qom_0_split0.99_live_ball", [(os.path.join(DMO, "ni"), "the snapshot run Thu"), (NI, "NewIdeas' masks")]),
@@ -41,6 +42,7 @@ for arm, refs in (("qom_0_live_ball_c208", [(ORIG, "NewIdeas' builder, unmodifie
 ARMS = [("qom_0_live_ball_c208_nw1", "qom_0_live_ball_c208", 1, ""), ("qom_0_live_ball_c208_nw1r1", "qom_0_live_ball_c208", 1, "r1"),
         ("qom_0_live_ball_c208_nw0", "qom_0_live_ball_c208", 0, ""), ("qom_0_live_ball_c208_nw2", "qom_0_live_ball_c208", 2, ""),
         ("qom_0_live_ball_c208_nw1s", "qom_0_live_ball_c208", 1, "s"), ("qom_0_live_ball_nw1", "qom_0_live_ball", 1, ""),
+        ("qom_0_live_ball_c266_nw1", "qom_0_live_ball_c266", 1, ""),
         ("qom_0_split0.99_live_ball_nw1", "qom_0_split0.99_live_ball", 1, ""),
         ("qom_0_split0.99_live_ball_c208_nw1", "qom_0_split0.99_live_ball_c208", 1, ""),
         ("qom_0_split0.9_live_ball_nw1", "qom_0_split0.9_live_ball", 1, "")]

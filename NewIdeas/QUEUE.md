@@ -6,6 +6,47 @@
 # per 16-row check (13.2 GB; 350 needs ~5.5), tokens kept per check (D-rows), check overheads (R-40 REF2, R-50 / R-50b, R-52b),
 # exactness of the 16-row live loop. 24 GB follows; 12 GB keeps its sessions, behind 45 GB work in the queue.
 
+## ORDER BY GAIN (Thu 5 Nov 19:3x; Kamen ~19:3x: publish everything once LOSSY reaches 250-330 tok/s at 45 GB on code
+## AND 90-130 tok/s at 12 GB). Measured first, then priced. Every speed line names its workload: HumanEval-style code is
+## flattered by prompt copying (its answers re-emit the prompt's signature and docstring), so code gains are given per set.
+Tags: [K] = measured, [P] = priced from measured parts, [G] = a guess. 45 = the 45 GB line, 12 = the 12 GB line.
+
+MEASURED (quality measured; speed measured or priced):
+1. RELAX ship, B on code + E on chat (45). Speed [K, EvalSuite RESULT 8797f54, C 160, paired]:
+   - B: tok/s x1.49 HumanEval+, x1.32 math, x1.54 agent;
+   - E: tok/s x1.46 IFEval.
+> (a quote from the project owner, kept private)
+2. Split form, split 0.99 / 0.9 on QOM-KEEP (45). Quality [K]: map code PASS, 0.92 / 1.31 % (HumanEval-style code
+   windows); chat control Fri. Speed [P, Fable C's audit model]: expert tiles x0.63 / x0.51 -> the 22-27 ms expert
+   term on HumanEval code saves 9-14 ms of ~90 = +11-19 % raw, ~+5-9 % after the audit's halving. Engine A/B + R8:
+   BigMoE Fri.
+3. DRAFT17 (45 / 24 / 12): in the stack. Code bytes [P] x0.706 at 24 GB, x0.742 at 12 GB (HumanEval-style windows);
+   quality PASS [K].
+
+PRE-REGISTERED, NOT RUN (by expected gain on 45 GB code; lines in QUEUE Thu 19:0x unless noted):
+4. FAR never-wait nw1 (45). [P] median check 88 -> 72-76 ms on HumanEval code = +16-22 %. Map arm, then the engine form.
+5. Fable C K6 / K8 / A / A' / B (45), on top of split 0.99. [G from the audit's model] K6 = x0.45 tiles -> 12-15 ms of
+   the expert term on HumanEval code = +14-20 % raw over today's preset.
+6. GOAL INERT CD16 (45). [P, lexer replay] S 0.84 = tok/s x1.15 on the 12 HumanEval keys. Flattered by comment and
+   docstring copying; C16 / G16 / D16 are the milder forms. MBPP has no engine set yet.
+7. FULL comment-free code mode (45). Line tok/s >= +8 % (HumanEval-style; a product choice, Kamen's yes). FULL's copy
+   probe prices wide copy passes; their gain is HumanEval-specific (copied rows are 61-68 % of HE answer tokens).
+8. Fable A xs input-sparsity arms (45). [P] 5-7 ms of the 22-27 ms expert term on HumanEval code = +6-8 %, if code holds
+   beyond the split form.
+9. Fable B FAST-TAX switches (45). [P, measured pieces] -2.4 to -2.9 ms per check = +3-4 % (+5-6 % at split rows),
+   HumanEval code. Lines pending its INSTALL.md.
+
+MEASUREMENTS THAT GATE THE PLAN (no gain themselves):
+- ZERO FLAT-2 (45): the flat cost of a check. PASS flat <= 30 ms = 350 live on code at K >= 12; > 36 ms = no kept rate
+  closes it.
+
+12 GB LINE: no lossy tok/s of my own records. Today's 12 GB exact line is 40.8 tok/s (the likely first, in an 11.35 GB
+footprint). Breakthrough + Fit12 own the line. Items 2, 4 and 9 carry over to 12 GB with unpriced pool effects; DRAFT17
+is in.
+
+NOT ON EITHER LINE (24 GB chat bytes; kept for 24 GB): R15 / R15b (Fri 00:30), the 0.4 gate, the chat route itself
+(PASS, ~88 MB).
+
 ## RAPID SCREENS (Kamen Mon 10-26 ~14:30; RULES.md 'Rapid screening + your hardware only'). Read this first.
 Protocol: every idea gets ONE screen of <= 10 min of machine time (load included) under `peer lock quiet --queue 10m`. Write
 its PASS / KILL line in this table BEFORE the run, log the number after, then take the next idea whatever the result. Size to fit

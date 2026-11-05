@@ -3424,3 +3424,32 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   relative** (the small-scale test gave <= 1.2e-4); FAIL otherwise (then the root cause is incomplete).
 - Run 2 (if >= 5 min remain before 15:00), TF32 on (MLX's default), vs L1-20's log: reproduced = within 2e-3 (MLX is
   deterministic enough that the log is today's TF32 trajectory); else the log isn't reproducible either (record it).
+
+### MTP3BIT (the orchestrator 19:4x; CPU from stored logs, data/mtp_3bit_vs_4bit.txt): does the 3-bit trunk hurt the MTP head's drafting? No, not measurably
+- Public rig for comparison (github.com/crgregersen/m10dis, docs/RESULTS.md, as quoted by the orchestrator): this model's
+  own MTP head on the FP8 model, per-position acceptance at drafts 1-3: natural text 70 / 46 / 26 %, one HumanEval
+  prompt 97 / 96 / 92 % (read as cumulative, P(drafts 1..k all right); conditional below too).
+- Stock head, our 4-bit trunk (D-17 / D-22, D-05's prompts, MTPLX runtime): code conditional 0.98 / 0.97 / 0.95 =
+  cumulative 98 / 95 / 90 %; IFEval 0.69 / 0.60 / 0.59 = 69 / 41 / 24 %; multi 0.77 / 0.70 / 0.65 = 77 / 54 / 35 %. Same as
+  the FP8 rig on code and on natural text.
+- Same head (b3), same 17 prompts, 4-bit REF2b (D-20b) -> 3-bit REF2-T (D-23, the 45 GB default), mtp7 (8-row checks, no
+  cut), C 224, mean kept per check: code 7.24 -> 7.06, math 5.81 -> 5.78, chat 2.59 -> 2.60, agent 3.98 -> 5.19 (3 prompts),
+  all 4.02 -> 4.09. Each trunk drafts against its own greedy text, so the continuations differ; no loss beyond noise.
+- b3 on the 3-bit trunk per position (907 checks): code conditional 0.964 / 0.953 / 0.971 = cumulative 96 / 92 / 89 %;
+  math 93 / 87 / 76 %; chat 69 / 40 / 23 %; agent 87 / 77 / 70 %.
+
+### DRAFTOFF estimate (the orchestrator 19:4x, desk, no build): what it takes to get the drafter off the GPU's critical path
+- On the path now: the drafter's block pass after each verify, ~3.5-4.5 ms of a ~34 ms 45 GB check (ZERO / Fable B);
+  BigMoE's D8-NAX 10.4 -> 5.8 ms per code check, R57_DSUB ~-1 ms more.
+- The only exact overlap is DRAFT-AHEAD (draft check n+1's block during check n's verify, assuming every draft is kept):
+  the patch is exact (DA-1, sticky/draft_ahead.py, 281 / 281 identical); usable on 34 % of code checks, 43 % with the
+  17th draft (DA-0). Ceiling 0.34-0.43 x ~4 ms = ~1.4-1.7 ms per code check (+4-5 % tok/s), less on chat (full blocks rare).
+- It pays only if the speculative pass runs in GPU idle time (SSD waits): it needs >= ~4-5 ms of idle per check now that
+  the drafter is ~4-6 ms (DA-1's "20-33 ms" was at the 10 ms drafter). Without idle both passes are bandwidth-bound and it
+  nets ~0. More idle at 12 GB, so likelier there.
+- Not viable: the drafter on the CPU / ANE in parallel (~30-60 ms per block pass, and it still needs the verify's result).
+- Unmeasured lever: draft ahead at the predicted cut (the engine's confidence cut) instead of at a full block; DA-0's CPU
+  replay can price its hit rate in ~15 min.
+- Build cost: BigMoE's R57_DA wiring (a second command queue so the draft overlaps the verify's waits; discard on a miss)
+  + one timeline measurement of GPU idle per 45 GB check. The surer lever stays a cheaper drafter (D8-NAX, DSUB, 4-bit
+  weights + a short 4-bit-aware fine-tune: D7B-1), which stacks with draft-ahead.

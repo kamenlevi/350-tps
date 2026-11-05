@@ -330,6 +330,8 @@ ABLATIONS["qom_0_live_ball_c208_nw1"] = nw_mask(_NWD + "qom_0_live_ball_c208_nw1
 ABLATIONS["qom_0_live_ball_c208_nw1r1"] = nw_mask(_NWD + "qom_0_live_ball_c208_nw1r1", 1)   # tier 1, fallback: rank-0 experts wait
 ABLATIONS["qom_0_live_ball_nw1"] = nw_mask(_NWD + "qom_0_live_ball_nw1", 1)   # tier 1: nw1 at the published pool (twin qom_0_live_ball)
 ABLATIONS["qom_0_split0.99_live_ball_nw1"] = nw_mask(_NWD + "qom_0_split0.99_live_ball_nw1", 1)   # tier 1: the stack (twin qom_0_split0.99_live_ball)
+ABLATIONS["qom_0_live_ball_c266"] = q1_union(_NWD + "qom_0_live_ball_c266")   # tier 1b: the twin on 266 uniform slots (the engine's by-day base-pool exposure, ZERO 5d)
+ABLATIONS["qom_0_live_ball_c266_nw1"] = nw_mask(_NWD + "qom_0_live_ball_c266_nw1", 1)   # tier 1b: nw1 at 266 slots
 ABLATIONS["qom_0_live_ball_c208_nwz"] = nw_mask(_NWD + "qom_0_live_ball_c208", 1, zero=True)   # self-check i: the twin's masks through the never-wait path
 ABLATIONS["qom_0_live_ball_c208_nw0"] = nw_mask(_NWD + "qom_0_live_ball_c208_nw0", 0)   # self-check ii: lateness 0
 ABLATIONS["qom_0_live_ball_c208_nw2"] = nw_mask(_NWD + "qom_0_live_ball_c208_nw2", 2)   # tier 2: two layers late

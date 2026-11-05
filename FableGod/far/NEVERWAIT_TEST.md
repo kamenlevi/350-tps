@@ -9,7 +9,7 @@ counts: `~/FableGod/zero/late_terms.out` (the 2.3 definition), `late_count_pools
 `~/FableGod/far/`: `far_ckfit.py`, `far_exposed.py`, `far_pairs.py`, `far_warmsplit.py`, `far_defer*.py`.
 
 **Built (Thu 19:0x): `~/FableGod/far/build_1105/`, start at its `INSTALL.md`.** The harness hook of 2.5 as an anchored
-patch with a CPU self-test, the builder of 2.3, the masks of 2.7 (tier 1 and tier 2 but `nwh`), an installer, the GPU
+patch with a CPU self-test, the builder of 2.3, the masks of 2.7 (tier 1, the same pair at 266 slots, tier 2 but `nwh`), an installer, the GPU
 self-check and a read-out with 2.6's lines. Two things the build pins down beyond this text: self-check (ii) has its
 own masks `_c208_nw0` (lateness 0, no tail rule, so `keep` is the twin's exactly) and (i) is the arm `_c208_nwz` (the
 twin's masks through the never-wait path); and the first check's anchor is row a - 1, which a split arm may cut but

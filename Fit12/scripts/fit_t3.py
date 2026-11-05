@@ -85,7 +85,17 @@ ARMS = [("ex", None, {}), ("g1", 1.01, dict(p2_all=True)), ("g0", 0.0, {}), ("t8
         ("t80ck1um3", 0.8, dict(cfmin=0.9, _k2=True, _k1u=int(os.environ.get("F12_K1U_KU", "4")), _m3=True)),   # INFO
         ("t80ck1u", 0.8, dict(cfmin=0.9, _k2=True, _k1u=int(os.environ.get("F12_K1U_KU", "4")))),   # (Tue 10:3x) P1-K1
         ("t80ck2pf", 0.8, dict(cfmin=0.9, _k2=True, _pf2=int(os.environ.get("F12_PF2_B", "6")))),   # (Tue 15:0x) P2-PREFETCH
-        ("t80ck1upf", 0.8, dict(cfmin=0.9, _k2=True, _k1u=int(os.environ.get("F12_K1U_KU", "4")), _pf2=int(os.environ.get("F12_PF2_B", "6"))))]
+        ("t80ck1upf", 0.8, dict(cfmin=0.9, _k2=True, _k1u=int(os.environ.get("F12_K1U_KU", "4")), _pf2=int(os.environ.get("F12_PF2_B", "6")))),
+        # (Thu 5 Nov 20:0x, 12 GB plan lever 1) certificate calibration: t80ck1u's pass 1 on EVERY check (no cf gate), then
+        # the exact check of all rows (G1's form, so the outputs = ex); with F12_CAL=1 each check logs pass 1's per-row
+        # p1 / margin / argmax beside the exact tokens, for an offline replay of any (theta, cfmin, certificate)
+        ("g1k1u", 1.01, dict(p2_all=True, _k2=True, _k1u=int(os.environ.get("F12_K1U_KU", "4")))),
+        # (Thu 5 Nov 20:3x, Breakthrough 19:4x: price pass-1 width with theta) the same with t80ck2's top-2 pass 1, the form
+        # the map's certificate sweep has quality for (top-2 theta 0.95 = 1.22 % code flips, PASS; theta 0.8 = 1.63 %, KILL)
+        ("g1k2", 1.01, dict(p2_all=True, _k2=True)),
+        # (Thu 5 Nov 20:2x, lever 2: the wider pass 1, Breakthrough 19:5x) calibration with a top-k pass 1 (k 3 / 4 / 5)
+        ("g1k3", 1.01, dict(p2_all=True, _k2=True, _topk=3)), ("g1k4", 1.01, dict(p2_all=True, _k2=True, _topk=4)),
+        ("g1k5", 1.01, dict(p2_all=True, _k2=True, _topk=5))]
 if os.environ.get("F12_T3ARMS"):
     want = os.environ["F12_T3ARMS"].split(",")
     ARMS = [a for a in ARMS if a[0] in want]
@@ -159,7 +169,9 @@ def run_prompt(ri, r):                                   # all arms of one promp
         T3._K1U[0] = kw.pop("_k1u", 0)                   # P1-K1: wide pass 1 = top-1 + union members (KU columns)
         T3._M3[0] = kw.pop("_m3", False)                 # M3: wide pass 1 at 3 bits (MSB-3 parts only)
         T3._PF2[0] = kw.pop("_pf2", 0)                   # P2-PREFETCH: late-flagged pass-2 ids in pass 1's base posts
+        T3._TOPK[0] = kw.pop("_topk", 0)                 # (Thu 5 Nov) lever 2: wide pass 1 on ranks 0..k-1 (REF2-T tiers)
         T3.PHLOG[0] = [] if os.environ.get("F12_PHLOG") == "1" else None   # (T3P) per-phase marks
+        T3.CAL[0] = [] if os.environ.get("F12_CAL") == "1" else None       # (Thu 5 Nov) certificate calibration records
         ca = ssd_c()
         dfs0 = _EXT.defer_stats()                        # [rows, waited, late reads, late ids forced to wait]
         try:
@@ -169,7 +181,11 @@ def run_prompt(ri, r):                                   # all arms of one promp
             T3._K1U[0] = 0
             T3._M3[0] = False
             T3._PF2[0] = 0
+            T3._TOPK[0] = 0
             ph, T3.PHLOG[0] = T3.PHLOG[0], None
+            cal, T3.CAL[0] = T3.CAL[0], None
+        if cal is not None:                              # one dict per check: path, d, cf, p1 / m1 / g1 (pass 1), new
+            json.dump(cal, open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}_cal.json"), "w"))
         dfs = [b_ - a_ for a_, b_ in zip(dfs0, _EXT.defer_stats())]
         json.dump(lg, open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}.json"), "w"))
         json.dump([int(t_) for t_ in toks], open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}_toks.json"), "w"))

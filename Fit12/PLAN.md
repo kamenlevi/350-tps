@@ -3284,3 +3284,22 @@ so R-01 should find about the same slots, not ~1 GB more.
   all ranks. Layers 12 and 24 are the hardest, layer 2 the easiest.
 - Reading: Fable A's frontier reproduces on held-out text and is 5-15 % worse on the map's own answers. 0.59 of the weights
   at ~0.7-0.75x MSB-3 is the robust point. "Half the weights at ~1x MSB-3" is ~1.25-1.4x on these rows.
+
+## 12 GB PLAN, LEVER 1 (Thu 5 Nov 19:4x-20:0x; Kamen 19:4x via the orchestrator: 12 GB LOSSY at 90-130 tok/s, then publish)
+- Fit12's section of the 12 GB plan: /Users/kamen/Fit12/PLAN_12GB_90_fit12.md (for Breakthrough's PLAN_12GB_90.md).
+- Measured [K, T3R2's logs]: t80ck1u's 261 ms check at 57 tok/s = draft 13 + pass 1 130 (wait 53, compute 71) + exact
+  passes 105 (46 % of checks) + commit 12. By check mode on full outputs (44.9 tok/s): pass-1-certified checks are 55 %
+  of checks, 41 % of the time, 72 % of the tokens; pass 1 + exact pass 2 28 % / 41 % / 22 %; cf-gated exact checks
+  17 % / 19 % / 6 %.
+- Lever 1 = a sharper certificate (more rows certified at the same divergence count vs REF2-T). Calibration arm g1k1u +
+  F12_CAL=1 built in fit_t3.py / t3_twopass.py (env-gated; off = the unchanged path; backups *.bak_cal); waits for a GPU slot.
+- LEVER 1 RESULT (19:52; /Users/kamen/Fit12/PLAN_12GB_90_fit12.md 'Lever 1 RESULT'): the calibration run (g1k1u + g1k2, 16
+  HumanEval prompts, 640 s, all = ex) and the replay. The certificate is already token-exact (0-1 divergences in ~3,400
+  tokens at every theta / cf), so lever 1 as framed is KILLED; the damage is pass 1's KV (Breakthrough). Calibrated speeds
+  (full outputs, cf 0.9): P1-K1 theta 0.8 / 0.9 / 0.95 = 45.8 / 41.0 / 37.9 tok/s; top-2 = 40.2 / 37.6 / 35.9. The
+  map's code-valid point (top-2 theta 0.95, 1.22 %) is ~36 tok/s on these prompts.
+- LEVER 2 RESULT (20:0x; 'Lever 2 ... RESULT' in /Users/kamen/Fit12/PLAN_12GB_90_fit12.md): the top-k pass-1 form is built
+  (_TOPK; BIGMOE_MAXK=80). top-4 / 5 cannot run as one 16-row pass at 12 GB (union 54-80 experts > C_m 47 slots per layer:
+  engine abort). top-3 (16 / 16 = ex) has a pass 1 of ~207 vs ~170 ms; at theta 0.9 / 0.95, cf 0.9, it runs 34.5 / 33.1
+  tok/s vs top-2 37.6 / 35.9 and P1-K1 41.0 / 37.9. So a wider pass 1 loses speed at 12 GB; the code-valid two-pass ceiling
+  is ~34-38 tok/s on full outputs.

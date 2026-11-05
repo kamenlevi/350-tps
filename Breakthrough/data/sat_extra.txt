@@ -1,0 +1,32 @@
+# Saturday night, the night starting Sat 7 Nov 00:30 (the orchestrator Thu 19:4x; after BigMoE's FAR-G1 and EvalSuite's
+# runner 46; Fable A's T1 runs before this list, from sat_t1.sh): <arm> <est min> <start by HH:MM> <primary twin> <info twins...>
+# 1. FAR's NEVER-WAIT tier 1 + 1b on the code windows (~/FableGod/far/build_1105/INSTALL.md section 3; fri_extra_nw.txt's lines
+#    with Saturday's start-by). Needs install_nw.sh; sat_night.sh drops these lines unless the GPU self-check gave PASS or REPORT.
+#    Read: nw_read.py (VERDICT lines). The nwz self-check arm is left out: the gslot self-check ran first.
+qom_0_live_ball_c208+code 4 09:00 qom_0_live_ball+code
+qom_0_live_ball_c208_nw0+code 4 09:00 qom_0_live_ball_c208+code
+qom_0_live_ball_c208_nw1+code 4 09:00 qom_0_live_ball_c208+code
+qom_0_live_ball_c208_nw1r1+code 4 09:00 qom_0_live_ball_c208+code qom_0_live_ball_c208_nw1+code
+qom_0_live_ball_nw1+code 4 09:00 qom_0_live_ball+code
+qom_0_split0.99_live_ball_nw1+code 4 09:00 qom_0_split0.99_live_ball+code qom_0_live_ball+code
+qom_0_live_ball_c266+code 4 09:05 qom_0_live_ball+code qom_0_live_ball_c208+code
+qom_0_live_ball_c266_nw1+code 4 09:05 qom_0_live_ball_c266+code qom_0_live_ball_c208_nw1+code
+# 2. Step 0 of PLAN_12GB_90.md: the 12 GB two-pass certificate on the code windows (masks scripts/dm_s7/build_p1c.py, in
+#    out/p1c). T3R2's own form first (P1-K1 KU 4, theta 0.8, cf gate 0.9), then theta 0.9 / 0.95, then P1-K2 at 0.8 / 0.9.
+#    Twins on record: p1c_oea_k1_p08 (1.52 %), cert_top5_p09 (0.92 %). Read: code_read.py VERDICT2.
+p1c_oea_k1_ku4_p08_cf09+code 4 09:10 p1c_oea_k1_p08 cert_top5_p09
+p1c_oea_k1_ku4_p09_cf09+code 4 09:10 p1c_oea_k1_ku4_p08_cf09+code p1c_oea_k1_p08
+p1c_oea_k1_ku4_p095_cf09+code 4 09:10 p1c_oea_k1_ku4_p08_cf09+code cert_top5_p09
+p1c_oea_k2_p08_cf09+code 4 09:10 p1c_oea_k1_ku4_p08_cf09+code cert_top5_p09
+p1c_oea_k2_p09_cf09+code 4 09:10 p1c_oea_k2_p08_cf09+code cert_top5_p09
+# 3. Step 0b (Fit12 19:5x: the certificate is token-exact, so the map's damage is pass 1's KV; the route is a wider pass 1).
+#    Goal: the cheapest pass-1 width that passes code.
+#    - Sources topk4 / topk3 run on all 36 windows: the cert gate reads out/topk<k>.json (install_topk34.sh registered them).
+#    - Then the certificate arms on code.
+#    - On record: cert_top5_p09 0.92 % (PASS); cert_top2_p095 1.22 %; cert_top2_p08 1.63 %.
+topk4 7 09:05 topk5 topk2
+cert_top4_p09+code 4 09:15 cert_top5_p09 cert_top2_p09
+cert_top4_p08+code 4 09:15 cert_top4_p09+code cert_top2_p08
+cert_top5_p08+code 4 09:15 cert_top5_p09 cert_top4_p08+code
+topk3 7 09:05 topk4 topk2
+cert_top3_p09+code 4 09:15 cert_top4_p09+code cert_top2_p09

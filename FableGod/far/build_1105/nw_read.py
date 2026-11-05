@@ -8,6 +8,8 @@ Self-checks, from the two self-check arms if they ran on the 12 code windows (el
   (iii) every never-wait run that is present: no harness WARNING on any window, a never-wait record on every window,
         late writes > 0 (0 for nwz).
   A FAIL makes every arm line below INVALID.
+Control: nw0 (if it ran on the 12 windows) against the twin is the split write's bf16 re-rounding alone, and nw1 against
+nw0 is lateness itself; the engine form has the split write too, so the lines stay on nw1 against the twin.
 Arms: for each arm against its own twin, on the 12 code windows' answer rows: all-row top-1 flips vs the baseline argmax
 (the map's standing measure, as ~/Breakthrough/scripts/dm_s7/code_read.py), D = arm - twin in points, the paired McNemar
 counts, and D split by the draft's cf band (>= 0.9 / < 0.9 / no draft; dm_gate's cf of the draft each row verifies).
@@ -16,6 +18,7 @@ Lines (code; T = the twin's flips, D = arm - T):
                      BETWEEN  flips in (1.34, 2.0] or D in (+0.40, +0.80]
                      KILL  flips > 2.0 or D > +0.80, and not clean at the published pool
   pool-conditional PASS: nw1 not PASS at 208 slots but clean (D <= +0.15) at the published pool
+  nw1 at 266 slots (tier 1b, if run): nw1's own lines; 266-290 slots is where the engine's by-day base pool sits
   nw1r1 (rank 0 waits): PASS <= 1.34 % and D <= +0.25; KILL D > +0.60; it ships only if nw1 does not PASS
   the stack (split 0.99 + nw1, published pool): PASS <= 1.34 %
 Usage (BigMoE venv): python -I -B nw_read.py                    # self-checks + tier 1 (skips what has not run)
@@ -76,6 +79,7 @@ def pair(arm, twin, quiet=False):
 T208, NW1, R1 = "qom_0_live_ball_c208+code", "qom_0_live_ball_c208_nw1+code", "qom_0_live_ball_c208_nw1r1+code"
 NWZ, NW0 = "qom_0_live_ball_c208_nwz+code", "qom_0_live_ball_c208_nw0+code"
 TP, NWP = "qom_0_live_ball+code", "qom_0_live_ball_nw1+code"
+T266, NW266 = "qom_0_live_ball_c266+code", "qom_0_live_ball_c266_nw1+code"   # tier 1b: the engine's by-day exposure (ZERO 5d)
 TS, STK = "qom_0_split0.99_live_ball+code", "qom_0_split0.99_live_ball_nw1+code"
 
 def selfcheck():
@@ -125,9 +129,15 @@ if __name__ == "__main__":
         ft = 100 * t[0].mean()
         print(f"  the twin at 208 slots ({T208}): {ft:.2f} % ({int(t[0].sum())}/{len(t[0])})" + (" : OVER the 1.34 % line by itself; read every '+' below against it" if ft > 1.34 else ""))
     a = pair(NW1, T208); p = pair(NWP, TP); r = pair(R1, T208); s = pair(STK, TS)
+    m = pair(NW266, T266, quiet=True)
     if s is not None: pair(STK, TP, quiet=True)
+    c0 = pair(NW0, T208, quiet=True)                             # the control: the split write alone (lateness 0)
+    if c0 is not None and a is not None:
+        print("  control: nw0 writes each late term straight after its own layer's write, so its D is the split write's bf16 "
+              "re-rounding alone; nw1 against nw0 is lateness itself:")
+        pair(NW1, NW0, quiet=True)
     V = []
-    if sc == "FAIL" or any(x is not None and x[4] for x in (a, p, r, s)):
+    if sc == "FAIL" or any(x is not None and x[4] for x in (a, p, r, s, m)):
         V.append("INVALID: a self-check failed or a window carries a harness warning (see above); no arm line below counts until it is fixed")
     clean_pub = p is not None and p[2] <= 0.15
     if a is not None:
@@ -138,10 +148,15 @@ if __name__ == "__main__":
         else: v = "BETWEEN (nw1r1 decides)"
         V.append(f"nw1 at 208 slots: {v}: {f:.2f} %, D {D:+.2f} (PASS <= 1.34 and D <= +0.40; BETWEEN to 2.0 / +0.80)")
     if p is not None: V.append(f"nw1 at the published pool: {'clean' if clean_pub else 'not clean'}: {p[0]:.2f} %, D {p[2]:+.2f} (clean = D <= +0.15)")
+    if m is not None:
+        v = "PASS" + (" (clean)" if m[2] <= 0.15 else "") if (m[0] <= 1.34 and m[2] <= 0.40) else "KILL" if (m[0] > 2.0 or m[2] > 0.80) else "BETWEEN"
+        V.append(f"nw1 at 266 slots (the engine's by-day base-pool exposure by ZERO's estimate; nw1's lines): {v}: {m[0]:.2f} %, D {m[2]:+.2f}")
     if r is not None:
         f, _, D, _, _ = r
         v = "PASS" if (f <= 1.34 and D <= 0.25) else "KILL" if D > 0.60 else "BETWEEN"
         V.append(f"nw1r1 (rank 0 waits): {v}: {f:.2f} %, D {D:+.2f} (PASS <= 1.34 and D <= +0.25; KILL D > +0.60); it ships only if nw1 does not PASS")
     if s is not None: V.append(f"the stack (split 0.99 + nw1, published pool): {'PASS' if s[0] <= 1.34 else 'FAIL'}: {s[0]:.2f} % (PASS <= 1.34), D {s[2]:+.2f} vs split 0.99")
+    if c0 is not None and a is not None:
+        V.append(f"control (not a line): of nw1's D {a[2]:+.2f}, the split write alone (nw0) gives {c0[2]:+.2f}; lateness itself {a[2] - c0[2]:+.2f}")
     for v in V: print("VERDICT " + v)
     if not V: print("VERDICT none: no tier-1 arm has run")

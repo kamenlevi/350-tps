@@ -3308,3 +3308,46 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
   - IFEval 84.0 vs 90.0 (-6.0) and HumanEval+ 80.0 vs 91.7 (-11.7) fail.
   - Math 84 vs 86 PASS; lifetime peak <= 10.84 GB PASS.
   - The v3p freeze is lifted (T0_DONE).
+- Thu 19:4x: PRE-REGISTRATION, Saturday night. The night starts Sat 7 Nov 00:30, after BigMoE's FAR-G1 and EvalSuite's
+  runner 46 (the orchestrator 19:4x). Driver: scripts/dm_s7/sat_night.sh. Hard stop 09:45; no GO handoff.
+  1. **Fable A's T1**: xs64 / xs48 / xs40 / xs32 on code, then xs48 on chat if code leaves room. It runs from
+     sat_t1.sh, a copy of its run_t1.sh where only the times change. Its lines and decide.py are Fable A's
+     (~/FableGod/lossy350a). Checked: the patch is env-gated (DM_XS=1), and it writes only under its run folder.
+  2. **FAR's NEVER-WAIT tier 1 + 1b** on code, after its GPU self-check: c208 twin, nw0, nw1, nw1r1, nw1 at the published
+     pool, split 0.99 + nw1, and the c266 pair. Lines are FAR's INSTALL.md section 4. Its harness patch is installed by
+     hand on Friday after the Friday batch, after review. If it is not installed, or the self-check FAILs, these arms are
+     dropped.
+  3. **Step 0 of PLAN_12GB_90.md**: the 12 GB two-pass certificate on code.
+     - On record [K], NewIdeas' Tue runs, read with VERDICT2:
+
+       | arm | code flips | non-tie | verdict |
+       |---|---|---|---|
+       | `p1c_oea_k1_p08` (P1-K1 pass 1, θ 0.8, no KU cap, no cf gate) | 1.52 % | 1.00 % | BETWEEN, VERDICT2 FAIL |
+       | `p1c_top_k2_p08` | 1.96 % | | |
+       | `p1_oea_k1` (pass 1 on every row) | 4.04 % | | |
+
+     - The masks come from scripts/dm_s7/build_p1c.py. It is NewIdeas' p1_mixed_masks rule plus T3R2's cf gate.
+       It reproduces `p1c_oea_k1_p08` 36/36 windows bit-equal; code: 2,997 rows certified, 2.44 experts per row-layer.
+     - The cf gate sends 332 code rows straight to exact.
+     - Installed with install_c3.sh, ALL OK.
+
+     | arm | what | code rows certified | prediction [G] |
+     |---|---|---|---|
+     | `p1c_oea_k1_ku4_p08_cf09` | T3R2's own form | 84.2 % | 1.4-1.6 % |
+     | `p1c_oea_k1_ku4_p09_cf09` | | 81.9 % | 1.25-1.45 % |
+     | `p1c_oea_k1_ku4_p095_cf09` | | 79.6 % | 1.1-1.3 % |
+     | `p1c_oea_k2_p08_cf09` | 3.97 experts per row-layer | 85.6 % | 1.2-1.5 % |
+     | `p1c_oea_k2_p09_cf09` | | 84.1 % | 1.0-1.3 % |
+
+     - Line (code_read.py VERDICT2): PASS = all-row <= 1.34 % AND non-tie <= 0.87 %.
+     - Decides: the fastest passing form is the 12 GB base for the plan's factors. If no P1 form passes, the base is a
+       top-5 pass 1 (cert_top5_p09, 0.92 %), and Fit12 prices its pass-1 cost.
+- Thu 19:5x: PRE-REGISTRATION, Saturday step 0b. Fit12's replay found the certificate token-exact, so the map's damage is
+  pass 1's KV. Step 0b finds the cheapest pass-1 width that passes code.
+  - Sources topk4 and topk3 run on all 36 windows (registered by install_topk34.sh, CPU test ALL OK).
+  - Then cert_top4_p09, cert_top4_p08, cert_top5_p08 and cert_top3_p09 on code.
+  - Line: VERDICT2 (all-row <= 1.34 % AND non-tie <= 0.87 %).
+  - Predictions [G]: top-4 θ 0.9 0.95-1.2 %; top-4 θ 0.8 1.1-1.4 %; top-5 θ 0.8 1.0-1.25 %; top-3 θ 0.9 1.1-1.4 %.
+  - On record: top-5 θ 0.9 0.92 %, top-2 θ 0.9 1.49 %.
+  - Decides: which width Fit12 builds and prices. Speed for each width comes from Fit12's replay after one calibration
+    run.
