@@ -18,3 +18,8 @@
 == layer 43
   gate_proj index-aligned mean expert holds  1.02 % of the energy (independent: 0.78 %); stacked input-side spectrum top-64/256/1024 of 2560 dims:  4.6 / 15.3 / 50.1 % (isotropic: 2.5 / 10.0 / 40.0 %)
   up_proj   index-aligned mean expert holds  0.78 % of the energy (independent: 0.78 %); stacked input-side spectrum top-64/256/1024 of 2560 dims:  4.5 / 14.9 / 49.6 % (isotropic: 2.5 / 10.0 / 40.0 %)
+  down_proj index-aligned mean expert holds  0.78 % of the energy (independent: 0.78 %); stacked output-side spectrum top-64/256/1024 of 2560 dims:  4.2 / 15.0 / 51.4 % (isotropic: 2.5 / 10.0 / 40.0 %)
+  one expert's gate (640 x 2560): top-16/64/160 singular directions hold  7.6 / 23.0 / 46.4 % (random 640 x 2560: ~4.5 / 16 / 37 %)
+  near-duplicate neurons: each gate row's best |cos| with 31 other experts' 19,840 rows: median 0.087, p99 0.209, share > 0.5 0.01 % (independent ~0.09)
+
+[23 s]
