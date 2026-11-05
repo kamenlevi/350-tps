@@ -16,6 +16,12 @@ ap.add_argument("--gpu", action="store_true")      # Thu 11-05: MLX's CPU qmm is
 ap.add_argument("--freeze-layers", action="store_true")   # grad: only the final norm + the selector get gradients
 ap.add_argument("--data", default="~/Leap/data/l120")       # a folder with only the windows needed (memory)
 ap.add_argument("--freeze-selector", action="store_true")   # train: no selector parameters (memory)
+ap.add_argument("--dp-json", default="")                    # train: save the step-1 parameter change (grad_stats JSON)
+ap.add_argument("--save-after1", default="")                # train: save the weights after step 1 (npz, fp32)
+ap.add_argument("--params", default="")                     # evalp: these weights (npz) -> step 2's batch loss
+ap.add_argument("--only", default="")                       # evalp: load only names with these prefixes (comma list)
+ap.add_argument("--scales", default="1")                    # evalp: start + t * (W - start) for each t (comma list)
+ap.add_argument("--dump", default="")                       # evalp: save the 1-layer forward's intermediates (PATH.t*.npz)
 r = ap.parse_args()
 import mlx.core as mx
 if not r.gpu:
@@ -55,6 +61,49 @@ if r.mode == "grad":                               # Thu 11-05: one batch's loss
     GS.save(os.path.expanduser(r.out), float(l), per, dict(norm=float(norm), mlx_peak_gb=peak, device="gpu" if r.gpu else "cpu"))
     print(f"[ref] grad loss {float(l):.6f} (norm {float(norm):.0f}); {len(per)} parameters; MLX peak {peak:.2f} GB", flush=True)
     sys.exit(0)
+if r.mode == "evalp":                              # Thu 11-05 swap test: step 2's batch loss with the given weights
+    if r.freeze_selector:
+        draft.candidate_selector.freeze()
+    z = np.load(os.path.expanduser(r.params))
+    keys = [k for k in z.files if not r.only or any(k.startswith(p) for p in r.only.split(","))]
+    from mlx.utils import tree_flatten
+    start = {k: v for k, v in tree_flatten(draft.parameters()) if k in keys}
+    ns["make_batch"]([tr[0]], A.pmask)              # step 1's batch: advances the trainer's PM_RNG as in train mode
+    b = ns["make_batch"]([tr[1 % len(tr)]], A.pmask)
+    for t in [float(x) for x in r.scales.split(",")]:   # Thu 11-05: start + t * (W - start), t = 1 -> W
+        draft.load_weights([(k, start[k] + t * (mx.array(z[k]) - start[k])) for k in keys], strict=False)
+        mx.eval(draft.parameters())
+        nrm = max(1.0, float(b[-1].sum()))
+        loss = ns["loss_fn"](b, mx.array(nrm))
+        hctx, upos, anc, tok, tkl, lpl, y, pred, w = b      # the loss_fn terms apart: soft CE vs the selector CE
+        logits, cand, sc = ns["heads"](ns["fwd"](hctx, upos, anc, tok), pred)
+        ce = mx.logsumexp(logits, axis=-1) - (mx.softmax(lpl, axis=-1) * mx.take_along_axis(logits, tkl, axis=-1)).sum(-1)
+        inc = cand == y[..., None]
+        sce = (mx.logsumexp(sc, axis=-1) - (sc * inc).sum(-1)) * inc.any(-1)
+        n_in = float((inc.any(-1) * (w > 0)).sum())
+        mx.eval(loss, ce, sce)
+        if r.dump:                                 # Thu 11-05: the forward's intermediates (1 layer), for the port
+            L, BSz = draft.layers[0], ns["BS"]
+            S_, Aa = anc.shape; U_ = hctx.shape[1]; B_ = S_ * Aa
+            st = {}
+            h = (draft.embed_tokens(tok.reshape(B_, BSz)) * draft.embed_scale).astype(mx.float32); st["h0"] = h
+            qpos = (anc.reshape(B_, 1) + mx.arange(BSz)[None]).reshape(B_, 1, BSz)
+            r_, a_, i_ = upos[:, None, None, :], anc[:, :, None, None], mx.arange(BSz)[None, None, :, None]
+            neg = mx.where((r_ >= 0) & (r_ <= a_ - 1) & ((a_ + i_) - r_ < ns["W"]), 0.0, -1e9).astype(mx.float32)
+            hc = hctx.astype(mx.float32)
+            st["n1"] = L.input_layernorm(h); st["x1"], st["k1"] = L.attention_conv.prepare(st["n1"])
+            st["a1"] = ns["attn"](L.self_attn, st["x1"], hc, upos[:, None, :], qpos, neg, S_, Aa, U_)
+            st["f1"] = L.attention_conv.finish(st["a1"], st["k1"]); st["h1"] = h + st["f1"]
+            st["n2"] = L.post_attention_layernorm(st["h1"]); st["x2"], st["k2"] = L.mlp_conv.prepare(st["n2"])
+            st["m2"] = L.mlp(st["x2"]); st["f2"] = L.mlp_conv.finish(st["m2"], st["k2"]); st["h2"] = st["h1"] + st["f2"]
+            st["hid"] = draft.norm(st["h2"][:, 1:])
+            st["logits4"] = logits.reshape(-1, logits.shape[-1])[:4]
+            mx.eval(st)
+            np.savez(os.path.expanduser(f"{r.dump}.t{t:g}.npz"), **{k_: np.array(v.astype(mx.float32)) for k_, v in st.items()})
+        print(f"[ref] evalp {os.path.basename(r.params)} only={r.only or 'all'} ({len(keys)} tensors) t={t:g}: step-2 "
+              f"batch loss {float(loss):.6f} = ce {float((w * ce).sum()) / nrm:.6f} + sce {float((w * sce).sum()) / nrm:.6f} "
+              f"(rows with the true token in the top 16: {n_in:.0f} of {float((w > 0).sum()):.0f})", flush=True)
+    sys.exit(0)
 if r.mode == "fwd":
     b = ns["make_batch"](tr[:r.groups], A.pmask)
     hctx, upos, anc, tok, tkl, lpl, y, pred, w = b
@@ -80,6 +129,8 @@ else:
     lr_at = lambda s: r.lr * (0.01 + 0.99 * s / warm) if s < warm else \
         r.lr * (0.1 + 0.45 * (1 + math.cos(math.pi * min(1.0, (s - warm) / max(1, steps_total - warm)))))
     losses, gnorms = [], []
+    from mlx.utils import tree_flatten
+    before = {k: np.array(v.astype(mx.float32)) for k, v in tree_flatten(draft.trainable_parameters())} if r.dp_json else None
     for s in range(r.steps):
         items = [tr[(s * A.S + k) % len(tr)] for k in range(A.S)]
         parts = [ns["make_batch"](items[k:k + 1], A.pmask) for k in range(len(items))]
@@ -94,6 +145,16 @@ else:
         opt.learning_rate = lr_at(s)
         opt.update(draft, acc)
         mx.eval(draft.trainable_parameters(), opt.state)
+        if before is not None and s == 0:          # Thu 11-05: the step-1 parameter change, per parameter
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import grad_stats as GS
+            after = dict(tree_flatten(draft.trainable_parameters()))
+            GS.save(os.path.expanduser(r.dp_json), loss, {k: GS.stats(k, np.array(after[k].astype(mx.float32)) - v)
+                                                          for k, v in before.items()})
+            before = None
+        if r.save_after1 and s == 0:               # Thu 11-05: the weights after step 1 (for the swap test)
+            np.savez(os.path.expanduser(r.save_after1),
+                     **{k: np.array(v.astype(mx.float32)) for k, v in tree_flatten(draft.trainable_parameters())})
         losses.append(loss); gnorms.append(float(gn))
         print(f"[ref] step {s + 1}: loss {loss:.6f} grad-norm {float(gn):.4f} lr {lr_at(s):.3e}", flush=True)
     out = dict(losses=np.array(losses), gnorms=np.array(gnorms))

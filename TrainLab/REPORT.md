@@ -3380,3 +3380,47 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   applied over steps (diagnosis 4, running) and gradients at the full scale.
 - Footprints: 3.87-4.91 GB (port), 5.21 GB (MLX side); share lock MEM 5 GB; swap flat. Data: data/port/gradpar2/,
   data/port/data_steps.txt.
+
+### PORT steps FAIL: ROOT CAUSE FOUND (Thu 11-05 11:05-11:20). MLX runs fp32 matmuls as TF32 by default; the port is right.
+- MLX 0.32.2: mlx/include/mlx/utils.h `enable_tf32() { get_var("MLX_ENABLE_TF32", 1) }`, i.e. ON unless
+  MLX_ENABLE_TF32=0 (libmlx also carries M5 "nax" GEMM kernels). Nothing here sets it, so L1-20 (and every MLX run
+  with "fp32 master weights": P-CAP, P-OFF, D-09 ...) trained with TF32 matmuls.
+- Direct test (port/test_mlx_tf32.py, 256 x 2560 @ 2560 x 640, GPU): fp32 matmul error vs float64 4.15e-4 by default,
+  6.5e-7 with MLX_ENABLE_TF32=0. A +-1e-5 relative weight change moves the output ~51x more than the true change by
+  default (both signs), 1.00x with TF32 off.
+- The chain that found it (1 layer, A 8, gsm_0; data/port/{trainpar,dppar,lr0par,swappar,bisect,tf32off}/):
+  - diagnosis 4: 5 optimizer steps, MLX vs port: step 1 equal, step 2 MLX 12.085 vs port 12.332 (the full run's sign).
+  - 5: the step-1 parameter change is the same on both sides (norm 0.004999 each).
+  - 6: with lr 0, step 2 is identical (12.343787 / 12.343735): same batch, same forward.
+  - 7 (swap): each side's forward gives its own number with EITHER side's step-1 weights (MLX 12.0849 / 12.0848, port
+    12.3318 / 12.3318): the forwards differ once weights leave their bf16-exact start.
+  - 8: the gap is in every matmul group (MLX 15-100x the port's per-group effect); the port's change equals the
+    first-order prediction grad . dW (-0.0120 vs -0.0117); MLX's is 22x it. MLX's loss jumps already at t = 0.01 of the
+    step (12.149) and saturates (t = 0.1 -> 3: 12.086 -> 12.082): a discontinuity, all in the soft CE (selector 0).
+  - stage dump: identical weights, MLX vs port, the first linear layer (conv kernel projection) differs 4e-4 at the
+    start and its output moves 20x the port's after the update. That is TF32's error, reshuffled by tiny weight changes.
+- Confirmation with MLX_ENABLE_TF32=0: the jump is gone (t = 0.01: 12.343785; t = 1: 12.332231 vs port 12.331776),
+  and 5 optimizer steps of MLX vs port agree to <= 1.2e-4 (12.748735 / 12.748799, 12.332228 / 12.331774, 11.793780 /
+  11.793807, 11.211055 / 11.211951, 8.971849 / 8.972967), well inside the 2e-3 line.
+- So: the port reproduces the MLX trainer's arithmetic in true fp32. The pre-registered line (L1-20's LOGGED losses)
+  cannot pass without emulating TF32's rounding, and that rounding is noise: in the warm-up (lr 2e-7 .. 4e-6) Adam's
+  steps (~6e-7 .. 1e-5) are below TF32's resolution for typical weights, so MLX's early steps move the model by
+  re-rounding, not by the gradient (here 22x the gradient's effect, in a direction the gradient doesn't predict).
+- The steps check stays FAIL as pre-registered (its reference was TF32). Re-framed validation, PASS at small scale:
+  the port = MLX with TF32 off over 5 steps. Full-scale confirmation (optional): MLX's own trainer for 5 steps of
+  L1-20's recipe with MLX_ENABLE_TF32=0 vs data/port/steps_thu.json (GPU ~30 GB, ~3 min; needs a slot).
+- For MLX training here: MLX_ENABLE_TF32=0 gives true fp32 (speed cost unmeasured). Whether TF32 hurt or helped L1-20's
+  drafter is untested (a TF32-off retrain, ~30 min GPU, is a probe). The Friday P-OFF run keeps the default, so it
+  stays comparable with L1-20 and P-CAP (both TF32).
+- Footprints of all diagnosis runs: 3.4-5.7 GB, one process at a time, share locks MEM 4-5 GB, swap flat.
+
+### PORT full-scale confirmation: pre-registration (Thu 11-05 11:3x, before any run; the orchestrator 11:2x)
+- When: Friday by day right after EvalSuite's runner 45 ends, if it can start by 14:50 (>= 10 min before 15:00);
+  otherwise first on the Fri -> Sat night after FAR-G1 (re-armed then). Runner turns/mlx_fp32_fri.sh (share lock MEM 34
+  GB; gate: no other quiet lock / ticket, no other MEM > 5 GB lock, >= 40 GB available; swap guard +2 GB).
+- What: MLX's own trainer code (port/ref_mlx_steps.py executes sticky/d09_train.py up to its loop: its data, rng, step(),
+  clip, AdamW, schedule), 5 steps of L1-20's recipe, no val (it draws no random numbers).
+- Run 1, MLX_ENABLE_TF32=0, vs the port's steps check (data/port/steps_thu.json): **PASS = every step within 2e-3
+  relative** (the small-scale test gave <= 1.2e-4); FAIL otherwise (then the root cause is incomplete).
+- Run 2 (if >= 5 min remain before 15:00), TF32 on (MLX's default), vs L1-20's log: reproduced = within 2e-3 (MLX is
+  deterministic enough that the log is today's TF32 trajectory); else the log isn't reproducible either (record it).
