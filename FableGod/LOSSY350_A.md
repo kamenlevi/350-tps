@@ -1,4 +1,4 @@
-# LOSSY350-A: the cost of one expert group once lossy is allowed (Fable A, Thu 5 Nov 2026; v1 16:29, v2 16:45, v3 16:55, v4 17:0x EET)
+# LOSSY350-A: the cost of one expert group once lossy is allowed (Fable A, Thu 5 Nov 2026; v1 16:29, v2 16:45, v3 16:55, v4 17:0x, v5 18:4x EET)
 
 Brief: the orchestrator's MISSION LOSSY350-A (Kamen ~15:55: 350 tok/s LOSSY at 45 GB; real thinking, never-tried ideas or a
 broken assumption; kill fast; every idea gets a number or an honest [G]). My wall: the cost of each expert group.
@@ -32,16 +32,17 @@ The unit is "x MSB-3": the same error for the expert at the 3-bit tier that REF2
    pair [K 3c fit]) and on single-row groups (one matrix-unit op per quant group instead of two). It needs the members of
    a quant group stored K-major: a bit shuffle of today's record. Per group, against the hybrid's ~7.8 us:
    **x0.93 / 0.86 / 0.78 / 0.70 / 0.62 at 0.84 / 0.72 / 0.59 / 0.51 / 0.43 of the weights**.
-4. **On code it fits, and it spends the same budget the split form spends [P].** Two quality models, both built on
-   measured map arms, price it (section 1): SWEEP v1.1's KL model (all-row flips) and Fable C's row-class read of today
-   (non-tie flips, convex in the error). On code they agree: half experts on everything add +0.4-0.6 points (room 0.95
-   all-row, 0.66 non-tie); the mild rank plan adds +0.08-0.19. The hard forms are over both chat lines in both models.
-   For the mild forms on chat the models disagree by 4-6x (x48: +0.4 all-row in SWEEP's, +0.1 non-tie in Fable C's), so
-   chat is open only for the mild forms and only if Fable C's read is the right one. By the convex law the mild forms
-   cost 2-3.5x fewer flips per % of expert time than cutting tiles; the hard forms cost more.
+4. **On code it fits, and it spends the same budget the split form spends [P].** Two readings built on measured map
+   arms price it (section 1): SWEEP v1.1's KL model (all-row flips) and the map's uniform neighbour arms read by row
+   class (non-tie flips, close to linear in the block's error energy). They agree within ~1.5x. On code, half experts
+   on everything add +0.4-0.6 points (room 0.95 all-row, 0.66 non-tie) and the mild rank plan +0.1-0.2. On chat only
+   the mildest point (0.84 of the weights) fits, thinly on multi; everything stronger is over both chat bars. Per % of
+   expert time the mild forms cost about what cutting tiles costs on code (0.006-0.010 non-tie points per %, tiles
+   0.007 [K WALL_1105]); the hard forms cost twice that.
 5. **On the check: +2-8 % tok/s raw on code alone, ~+3 % on top of the split form, halved +1-4 % [P].** Experts are
    22-27 ms of today's 90-95 ms [K AUDIT_1105 F2]; alone this takes 1.7-9 ms. Next to split 0.9 (non-tie 0.78 of the
-   0.87 bar [K WALL_1105]) only the mild rank plan fits (+0.08, at the bar); next to split 0.99 (0.51) plan B fits too.
+   0.87 bar [K WALL_1105]) nothing fits; next to split 0.99 (0.51) the mild rank plan fits (+0.11-0.16) and plan B
+   thinly (+0.21-0.30).
 6. **The ceiling of this wall is x1.35 on tok/s at zero expert cost,** so the 3x is not hiding in the cost of a group.
    For the 350 arithmetic: a 30 ms check can afford ~8 ms of experts; the split form alone lands at 10-13 ms, the split
    form and half experts together at 7-9 ms, if code's budget holds both (it holds the split form plus the mild plan).
@@ -90,24 +91,27 @@ Predicted quality [P], two models, each built on measured map arms; added flips 
   r vs MSB-3 costs KL r x 0.0020 / 0.0113 / 0.0128 on the sure rows' ranks 0-1 and (r - 1) x 0.0011 / 0.0065 / 0.0089 on
   ranks 2-9 (the 239-slot measurement; a floor at the 45 GB pool); base 0.0013 / 0.0093 / 0.0101; all-row flips =
   -0.078 + 15.68 sqrt(KL) / 0.420 + 39.04 sqrt(KL) / -0.173 + 36.17 sqrt(KL) (ten arms, rms 0.07 / 0.37 / 0.15).
-- **C = Fable C's row-class read** (`fablec/WALL_1105.md` finding 3, today 16:39): non-tie flips are convex in the block's
-  relative error: top-8 on every row (0.18) costs 0.12 / 0.87 / 0.82, top-5 (0.375) 1.0 / 7.7 / 8.2. I interpolate with
-  that power law (exponent 2.9-3.1) at each arm's relative error, sqrt(error x 0.0657 x the ranks' energy share).
+- **C = the map's uniform neighbour arms, read by row class** (Fable C's convention, `fablec/WALL_1105.md`; computed in
+  `lossy350a/build_1105/predict.py`): non-tie flips are close to linear in the routed block's relative error energy.
+  Slope per unit, code / IFEval / multi: 4.6 / 49.5 / 43.3 (every expert at MSB-3, `t3_all - t4_all`), 6.6 / 59.3 / 48.2
+  (`top_k8`), 7.3 / 54.3 / 58.4 (`topk5`) [K]. An arm at e x MSB-3 on everything therefore costs e x (0.30-0.43) /
+  (3.3-3.9) / (2.9-3.2) non-tie points. (v4 anchored this column on oea_k8, whose error is below plain top-8's; that
+  made the mild arms look 2-6x cheaper on chat than they are.)
 
 | arm | error x MSB-3 | block relative error | S: code / IFEval / multi, all-row | C: code / IFEval / multi, non-tie | expert ms saved |
 |---|---|---|---|---|---|
-| x48 plain | 0.17 | 0.106 | +0.11 / +0.56 / +0.61 | +0.03 / +0.19 / +0.16 | 1.7 |
-| x40 plain | 0.56 | 0.192 | +0.30 / +1.66 / +1.77 | +0.15 / +1.07 / +1.02 | 3.0 |
-| x32 plain | 1.38 | 0.301 | +0.61 / +3.4 / +3.6 | +0.53 / +4.0 / +4.1 | 4.2 |
-| x48 deflated | 0.11 | 0.085 | +0.07 / +0.39 / +0.41 | +0.01 / +0.10 / +0.08 | 1.7 |
-| x40 h32 deflated | 0.68 | 0.211 | +0.35 / +1.95 / +2.07 | +0.19 / +1.4 / +1.4 | 5.4 |
-| x32 h32 deflated | 1.18 | 0.278 | +0.54 / +3.0 / +3.2 | +0.42 / +3.2 / +3.2 | 7.4 |
-| rank plan A (ranks 0-1 x48, 2-4 x40 h40, 5-9 x32 h32) | 0.11 / 0.48 / 1.18 | 0.156 | +0.19 / +1.03 / +1.19 | +0.08 / +0.58 / +0.54 | 4.9 |
-| rank plan B (ranks 0-1 x48 h40, 2-4 x36 h32, 5-9 x28 h24) | 0.23 / 0.92 / 2.10 | 0.214 | +0.32 / +1.80 / +2.03 | +0.20 / +1.47 / +1.43 | 7.1 |
+| x48 plain | 0.17 | 0.106 | +0.11 / +0.56 / +0.61 | +0.05-0.07 / +0.55-0.66 / +0.48-0.54 | 1.7 |
+| x40 plain | 0.56 | 0.192 | +0.30 / +1.66 / +1.77 | +0.17-0.24 / +1.8-2.2 / +1.6-1.8 | 3.0 |
+| x32 plain | 1.38 | 0.301 | +0.61 / +3.4 / +3.6 | +0.41-0.60 / +4.5-5.4 / +3.9-4.4 | 4.2 |
+| x48 deflated | 0.11 | 0.085 | +0.07 / +0.39 / +0.41 | +0.03-0.05 / +0.36-0.43 / +0.31-0.35 | 1.7 |
+| x40 h32 deflated | 0.68 | 0.211 | +0.35 / +1.95 / +2.07 | +0.20-0.29 / +2.2-2.6 / +1.9-2.2 | 5.4 |
+| x32 h32 deflated | 1.18 | 0.278 | +0.54 / +3.0 / +3.2 | +0.35-0.51 / +3.8-4.6 / +3.4-3.7 | 7.4 |
+| rank plan A (ranks 0-1 x48, 2-4 x40 h40, 5-9 x32 h32) | 0.11 / 0.48 / 1.18 | 0.156 | +0.19 / +1.03 / +1.19 | +0.11-0.16 / +1.2-1.4 / +1.1-1.2 | 4.9 |
+| rank plan B (ranks 0-1 x48 h40, 2-4 x36 h32, 5-9 x28 h24) | 0.23 / 0.92 / 2.10 | 0.214 | +0.32 / +1.80 / +2.03 | +0.21-0.30 / +2.3-2.7 / +2.0-2.2 | 7.1 |
 | room above today's preset | | | 0.95 / 1.33 / 0.43 | 0.66 / 1.03 / 0.72 [K WALL_1105: bar 0.87 / 2.22 / 1.63, preset 0.21 / 1.19 / 0.91] | |
 - Code: every arm fits in both models; the split forms sit at +0.30 (0.99) and +0.57 (0.9) non-tie on the same scale.
-- Chat: plan A fits IFEval in both and multi only in C; x48 deflated fits everything in C and is at multi's line in S;
-  the stronger arms are over in both. The models part at the mild end, where S's sqrt(KL) is steep and C's law is flat.
+- Chat: only x48 fits, thinly on multi (C: +0.5-0.7 non-tie against 1.03 / 0.72; S: +0.4-0.6 all-row against 1.33 /
+  0.43). Plan A and everything stronger are over on chat in both readings.
 - The rank weights are measured [K `rank_energy.out`]: ranks 0-1 carry 55.9 % of the routed block's energy, ranks 2-4
   30.0 %, ranks 5-9 14.1 % (router weights 0.198 ... 0.054; output norms fall 35-40 % from rank 0 to rank 9).
 
@@ -118,13 +122,17 @@ Predicted quality [P], two models, each built on measured map arms; added flips 
   `s = abs(x).reshape(..., 40, 64); m = (s >= sort(s, -1)[..., 64 - c][..., None]).reshape(x.shape)`. The router and the
   shared expert keep the full x. The >= 32-row path needs the same mask where the prefill call reads x.
 - Arms, first screen (x only, plain, every rank, no calibration): x48, x40, x32. Whole-expert error 0.17 / 0.56 / 1.38 [K].
-- Predictions [P]: the table above, rows x48 / x40 / x32 plain: code +0.11 / +0.30 / +0.61 all-row (S), +0.03 / +0.15 /
-  +0.53 non-tie (C); chat as tabled.
+- Predictions [P]: the table above, rows x48 / x40 / x32 plain: code +0.11 / +0.30 / +0.61 all-row (S), +0.05-0.07 /
+  +0.17-0.24 / +0.42-0.60 non-tie (C); chat as tabled.
+- **Built 18:4x:** `~/FableGod/lossy350a/build_1105/` holds the patch, a CPU self-test (68 checks PASS) and INSTALL.md
+  with these predictions and lines. The mask sits on the switch's two entry points, not on line 310 alone: the map
+  prefills in 512-row chunks, so nearly every row takes the >= 32-row path, which never reaches line 310.
 - Read each arm by row class (`fablec/wall_class_flips.py`). PASS, in WALL_1105's convention: code all-row <= 1.34 % AND
   non-tie <= 0.87 %. KILL: over either. Chat is recorded as the control; x48 on chat is the arm that says which model
-  holds at the mild end (S: multi +0.6; C: +0.16).
-- The lever is dead if x32 adds more than +1.2 all-row code points (twice S), or x48 more than +0.25: then sparsity error
-  is not priced like the errors both models were built on.
+  holds (S: multi +0.6 all-row; C: +0.5 non-tie).
+- The lever is dead if standalone x32 costs more than 1.03 % non-tie on code (topk5's own cost) or x48 more than 0.21 %
+  (top_k8's own cost); stacked: x32 adds more than +1.2 all-row code points, or x48 more than +0.25. Then sparsity
+  error is not priced like the errors both readings were built on.
 - Second screen if x40 passes on code: the h mask (needs the GLU's three calls separately) and the rank plan
   (two `switch_mlp` calls on rank-sorted `inds`).
 - My odds [G]: x40 code PASS 75 %; x32 code PASS 55 %; x48 inside both chat lines 40 %.
@@ -139,10 +147,10 @@ Predicted quality [P], two models, each built on measured map arms; added flips 
 ## 2. Ranked ideas (numbers first)
 | # | idea | number | status |
 |---|---|---|---|
-| 1 | HALF-K at x40 h32 (deflated) | 0.59 of the weights at 0.65-0.71 x MSB-3 [K]; group cost x0.78 [P]; code +0.19-0.35 points, 5.4 ms [P] | best bet; T1 then T2 |
-| 2 | HALF-K at x32 h32 (deflated) | 0.51 at 1.14-1.22 [K]; group cost x0.70; code +0.42-0.54 points, 7.4 ms [P] | same tests |
-| 3 | the rank plan (mild on ranks 0-1, hard on 5-9) | plan A: 39 % of the weights saved for +0.08-0.19 code points, 4.9 ms, the cheapest point; plan B: 48 % for +0.20-0.32, 7.1 ms. Top-8 routing saves 20 % of the weights at a block error (0.18) between the two plans' (0.16, 0.21) [P on K] | second screen of T1; the form that fits beside the split form |
-| 4 | x48 on every rank | 0.84 at 0.11-0.17 [K]; code +0.01-0.11; chat +0.1 (C) or +0.4-0.6 (S) [P]; 1.7 ms | first arm of T1 (the model check, both domains) |
+| 1 | HALF-K at x40 h32 (deflated) | 0.59 of the weights at 0.65-0.71 x MSB-3 [K]; group cost x0.78 [P]; code +0.2-0.35 points, 5.4 ms [P] | best bet; T1 then T2 |
+| 2 | HALF-K at x32 h32 (deflated) | 0.51 at 1.14-1.22 [K]; group cost x0.70; code +0.4-0.55 points, 7.4 ms [P] | same tests |
+| 3 | the rank plan (mild on ranks 0-1, hard on 5-9) | plan A: 39 % of the weights saved for +0.11-0.19 code points, 4.9 ms, the cheapest point; plan B: 48 % for +0.21-0.32, 7.1 ms. Top-8 routing saves 20 % of the weights at a block error (0.18) between the two plans' (0.16, 0.21) [P on K] | second screen of T1; the form that fits beside the split form |
+| 4 | x48 on every rank | 0.84 at 0.11-0.17 [K]; code +0.03-0.11; chat +0.3-0.7 in both readings [P]; 1.7 ms | first arm of T1 (the model check, both domains) |
 | 5 | deflation of the dominant input directions | -30 % error at equal cost for +0.8 % weights [K]; the one "partial product reused across experts" that works | part of 1-3; needs V for 48 layers (one capture) |
 | 6 | down at half alone (h32) | 0.83 at 0.36 [K] | the first kernel step of 1 |
 

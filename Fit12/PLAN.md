@@ -3261,3 +3261,26 @@ so R-01 should find about the same slots, not ~1 GB more.
     a uniform per-expert error ratio (MSB-2 = 5x MSB-3). Whole-expert is <= 2.0 in all three domains, so the TRELLIS
     FAMILY STOPS. NewIdeas cites these files in its QUEUE 22:4x and the SWEEP (fb39925, 3d45584). It reads the leftover gap
     (KL implies 2.6-3.2 vs 1.1-1.8 here) as partly noise, and asked Breakthrough whether s7_trl and s7_cal touch the same reads.
+
+## HALF-K CHECK (Thu 5 Nov 18:56-19:02; the orchestrator 18:5x: check Fable A's numbers independently)
+- What: Fable A's HALF-K (~/FableGod/LOSSY350_A.md section 1). Per row, deflate the layer's 32 dominant input directions
+  (their response exact); per 64-wide group keep the c_x largest |x_perp| for gate / up and the c_h largest |h| for down.
+  Weights touched 0.68 / 0.59 / 0.51 = x48 h32 / x40 h32 / x32 h32. Fable A: 0.47 / 0.71 / 1.22 x MSB-3, on 40 experts with
+  the basis and held-out rows from one capture.
+- Here (/Users/kamen/Fit12/scripts/fit_halfk_check.py, CPU 5.3 min, swap +0):
+  - All 512 experts at layers 2 / 12 / 24 / 36 / 46. V = top-32 eigenvectors of B10-r's fit rows R0-R7 (uncentered).
+  - Judged on B10-r's held-out R8+R9 and on the map's own answer rows (Breakthrough's xcapture, read-only).
+  - Experts come from my own loader (pread of ~/BigMoE/models/bare; MSB-3 rebuilt as records3 held it). The records3
+    conversion at 10:28 makes fit_q.read refuse, by design. --validate reproduces Wed's records3-based judge ratios
+    (L41 e0, L7 e5) to 4 digits.
+  - Metric: whole-expert error x MSB-3 (MSB-3's own relative error 0.039-0.066, rising with depth).
+- Results, layer mean (range over the 5 layers):
+  | weights touched | arm | held-out R8+R9 | map answer rows | Fable A |
+  | 0.83 | down alone h32 | 0.33 (0.21-0.47) | 0.34 (0.23-0.51) | 0.36 |
+  | 0.68 | x48 h32 | 0.44 (0.28-0.57) | 0.46 (0.31-0.61) | 0.47 |
+  | 0.59 | x40 h32 | 0.70 (0.45-0.80) | 0.75 (0.50-0.86) | 0.71 |
+  | 0.51 | x32 h32 | 1.26 (0.88-1.43) | 1.40 (1.01-1.59) | 1.22 |
+  Plain (no deflation): x40 h32 0.91 / 0.89 (Fable A 0.91); x32 h32 1.80 / 1.76 (1.70). Map ranks 2-9 sit within 0.03 of
+  all ranks. Layers 12 and 24 are the hardest, layer 2 the easiest.
+- Reading: Fable A's frontier reproduces on held-out text and is 5-15 % worse on the map's own answers. 0.59 of the weights
+  at ~0.7-0.75x MSB-3 is the robust point. "Half the weights at ~1x MSB-3" is ~1.25-1.4x on these rows.

@@ -3255,3 +3255,56 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
 - Thu 10:3x (BigMoE's 10:28 lounge note after the conversion): the moved-aside r3_overlay.STALE-before-records3-conversion
   had its index.json renamed to index.json.STALE-row-major-entries-do-not-use, so a reader pointed at it fails loudly (no
   index) instead of decoding converted bytes as row-major. Nothing deleted.
+- Thu 18:58 (the orchestrator 18:5x): PRE-REGISTRATION, Fable C's WALL arms for Friday (~/FableGod/fablec/build_1105,
+  INSTALL.md sections 4-6). They run on the 12 code windows (3,366 rows, 3,316 non-tie), queued right after test 1
+  (data/fri_extra.txt section 2, in place of reach07+code). All are on split 0.99 QOM-KEEP + DRAFT17 at 45 GB:
+
+  | name | arm |
+  |---|---|
+  | K8 | `qom_0_split0.99_k8_live_ball` |
+  | K6 | `qom_0_split0.99_k6_live_ball` |
+  | A, split 0.99 + reach 0.7 | `qom_0_split0.99_r0.7_live_ball` |
+  | A', middle-layer split 0.9 | `qom_0_split0.99_m0.9_live_ball` |
+  | B, A + the z0.999 middle-layer skip | `qom_0_split0.99_r0.7_z0.999_live_ball` |
+  | K4, a probe, last | `qom_0_split0.99_k4_live_ball` |
+
+  - **Lines** (code_read.py VERDICT2): PASS = all-row flips <= 1.34 % AND non-tie flips <= 0.87 %; KILL over either.
+    The code preset is the passing arm with the fewest tiles.
+  - **Fable C's predictions** [G]: K8 / K6 non-tie ~0.7 (all-row ~1.15-1.2); A 0.6-0.9; A' 0.6-0.7; B = A + ~0.1; K4
+    0.9-1.1.
+  - **Anchors** (all-row / non-tie):
+
+    | arm | flips | tiles |
+    |---|---|---|
+    | twin | 0.51 / 0.21 % | |
+    | split 0.99 | 0.92 / 0.51 % | x0.628 |
+    | split 0.9 | 1.31 / 0.78 % | x0.508 |
+
+  - **Install** [K]: scripts/dm_s7/install_fc.sh + test_fc_arms.py, Fable C's copies of install_c3.sh / test_c3_arms.py.
+    Reviewed: only the default dirs and B's skip check differ.
+    - ALL OK for the six arms.
+    - The out/fc snapshots match Fable C's manifest: 216/216 sha256.
+    - B holds 2,215 skipped rows: nothing kept in all of layers 8-35, ranks 0-1 kept elsewhere.
+  - **Read-out** [K]: the non-tie patches are applied to code_read.py and to the map's dm_screen_read.py. Each equals Fable
+    C's patched copy byte for byte. On split 0.99, code_read reproduces Thursday's read:
+    - all-row 0.92 % (31/3366), non-tie 0.51 % (17/3316);
+    - McNemar 23 / 9, z +2.47 (non-tie 14 / 4, z +2.36);
+    - VERDICT2 PASS.
+  - **massB stand-ins**: build_massb.py's PROFILE is now the engine's mean renormalised weight by rank (0.227 ... 0.057). It
+    was cloud3's (0.294 ... 0.010).
+- Thu 18:5x: USES PREDICTION for BigMoE's Friday split A/B (keepset/uses_pred.py; CPU replay, code windows). Distinct
+  experts computed per check, vs qall:
+
+  | pool | s99 | s90 |
+  |---|---|---|
+  | 45 GB C_m | x0.628 | x0.508 |
+  | C 160 | x0.666 | x0.558 |
+  | C 160, full blocks | x0.724 | x0.630 |
+
+  - Drafted code rows with cf >= 0.99: 0.827 of them in the first 32 generated tokens, 0.654 after.
+  - BigMoE 19:2x: its pre-flight "uses" is need.size(), counted before the split's drop (~1.46x my count), so it cannot show
+    the split. Friday's logs count groups computed after the drop and compare them with x0.72 / x0.63.
+- EvalSuite T0 (17:52), on the 12 GB line: **KILL**.
+  - IFEval 84.0 vs 90.0 (-6.0) and HumanEval+ 80.0 vs 91.7 (-11.7) fail.
+  - Math 84 vs 86 PASS; lifetime peak <= 10.84 GB PASS.
+  - The v3p freeze is lifted (T0_DONE).

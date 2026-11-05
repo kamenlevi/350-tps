@@ -2297,3 +2297,65 @@ block 32 (net ~+2 % under this cost model unless the drafter nears the oracle); 
     - Caveat: errors are pooled over all answer rows, while the arms touch gated rows' kept experts (assumed
       proportional).
   - SWEEP v1.3 rank 5 and item 3 updated; the findings note too.
+- Thu 18:5x: SPLIT ARMS READ (test 1, code windows run 10:31-10:33; chat control Friday): code PASS on both
+  (pre-registered Thu 07:3x). Breakthrough's read (2da53f2) gives the same flips.
+  - split_0.99_ball: 0.92 % (prior 0.9-1.2), mean KL 0.0079; vs the twin qom_0_live_ball (0.51 %) McNemar 23 / 9,
+    p 0.02 (+0.41 points).
+  - split_0.9_ball: 1.31 % (prior 1.2-1.5; the line is 1.34), mean KL 0.0133; vs the twin 37 / 10, p 1e-4 (+0.80).
+  - Caveat: split_0.9's mean KL is over code's KL line (0.0082) while its flips pass. Its divergence is tail-heavy, so
+    EvalSuite's same-scores test is the real gate.
+  - The audit's PASS also needs R8 (BigMoE's group-count log: QOM's groups >= 0.85x exact's); BigMoE has the keepset
+    split (Breakthrough 4963da6).
+  - Tiles at the 45 GB pool [P]: x0.628 / x0.508 of QOM-KEEP.
+  - Reader: chat_arm_read.py now handles code-only arms (+code).
+- Thu 19:0x: TRIED housekeeping (the orchestrator 18:5x).
+  - The LOSSY350 block that was appended by hand to TRIED.md (17:0x) now lives in a part, ~/TRIED/orchestrator.md (26
+    lines). tried_merge.py's SESSIONS and TRIED's README list it, so every merge keeps it; re-merged, 26 / 26 present.
+  - Six of those lines had been cut at their first physical line; they were rebuilt from their sources:
+    - WALL-THIN / TIEFLOOR / FLIPMODEL joined from ~/FableGod/fablec/WALL_1105.md;
+    - AUDIT-SPLIT / B2D given their date and source fields;
+    - the TRIED 337 correction reshaped to the README's fields.
+  - The 337 correction (Fable A, held out: energy outside the top 1536 directions 0.13-0.19, not 0.01-0.03) stands
+    as its own line. Leap's original line is Leap's to amend.
+- Thu 19:0x: NEW PRE-REGISTERED ARMS, as their authors wrote them (the orchestrator 18:5x). Lines are quoted from each
+  author's file, written before any run. Several are on hold for Kamen's GPU yes (per their status lines).
+  - Fable C (~/FableGod/fablec/build_1105/INSTALL.md sections 2 / 6; code arms, Friday).
+    - Each arm = qom_0_split0.99_live_ball + one rule; tiles are vs the twin qom_0_live_ball, code / IFEval / multi:
+      - K8: the resident keep only at ranks 2-7 (x0.539 / 0.768 / 0.782).
+      - K6: only at ranks 2-5 (x0.449 / 0.605 / 0.613).
+      - A (r0.7): rows with cf < 0.99 and reach < 0.7 strict.
+      - A' (m0.9): rows with cf in [0.9, 0.99) strict in layers 12-35 (x0.572 / 0.876 / 0.903).
+      - B: A + rows with a real draft cf >= 0.999 keep no routed expert in layers 8-35.
+      - K4: a probe, run last (x0.356 / 0.431 / 0.435).
+    - Lines: PASS = all-row code flips <= 1.34 % AND non-tie <= 0.87 %; KILL = over either; BETWEEN = all-row <= 1.34
+      with non-tie 0.87-1.0. The code preset = the passing arm with the fewest tiles.
+  - FAR never-wait tier 1 (~/FableGod/far/NEVERWAIT_TEST.md section 4).
+    - PASS: nw1 (_c208) <= 1.34 % AND D <= +0.40 points -> build the engine form for the code preset.
+    - Pool-conditional PASS: BETWEEN at _c208 but clean (D <= +0.15) at the published pool.
+    - KILL: nw1 > 2.0 % or D > +0.80 at _c208 AND not clean at the published pool.
+    - The stack split0.99 + nw1 PASS <= 1.34 %; nw1r1 is the fallback (PASS <= 1.34 % and D <= +0.25; KILL D > +0.60).
+  - Fable A T1 input-sparsity arms (~/FableGod/lossy350a/build_1105/INSTALL.md; DM_XS=1):
+    - Arms: xs64 / xs48 / xs40 / xs32, standalone and stacked on qom_0_live_ball.
+    - Identity: xs64 has 0 flips.
+    - Standalone FITS: non-tie <= 0.66 / 1.03 / 0.72 %.
+    - Stacked PASS: all-row <= 1.34 / 5.42 / 3.69 AND non-tie <= 0.87 / 2.22 / 1.63.
+    - Lever dead: standalone xs32 non-tie code > 1.03 % or xs48 > 0.21 %; stacked xs32 > +1.2 all-row code points or
+      xs48 > +0.25.
+  - GOAL INERT (~/FableGod/goal/build_1105/INSTALL.md section 5; engine arms on the 12 HumanEval keys, BigMoE runs them;
+    S = seconds per task, T = tokens per task, arm / control):
+    - CD16 (comments + docstrings kept wholesale, 16 rows): PASS = median S <= 0.90 AND median T <= 1.05 AND verdicts
+      equal on >= 11 / 12 with no net loss above 1; KILL = S >= 0.97, or T >= 1.15, or >= 2 tasks flip to fail. The
+      replay predicts S 0.84.
+    - C16: PASS S <= 0.93, T <= 1.05; KILL S >= 0.98, T >= 1.15, >= 2 flips.
+    - G16 / D16 / the 32-row exact-engine arms / COPYRUN64: as in the file.
+  - FULL (~/FableGod/full/build_1105/INSTALL.md sections 3-4).
+    - T-B1 comment-free arm: PASS = comment tokens <= 2 % AND kept outside the copy run >= x1.15 AND tok/s >= +8 % AND
+      no newly failing task; KILL = kept < x1.05, OR tok/s < +3 %, OR >= 2 new failures. Adoption needs Kamen's yes +
+      decision 4.
+    - T-A1 copy probe: PASS = confirmed >= 0.90 AND (DIRECT or SLOPE) <= 3.0 ms per copied token at W 32 or <= 1.8 at
+      W 64; KILL = confirmed < 0.80, OR every DIRECT / SLOPE at both widths >= 4.5 ms.
+  - ZERO FLAT-2 (~/FableGod/zero/LOSSY350_ZERO.md section 4; <= 10 min GPU after the native conversion, every owned lever
+    on): PASS flat <= 30 ms (350 live on code at K >= 12); BETWEEN 30-36 (needs K >= 15-18); KILL flat > 36 ms.
+  - Fable B FAST-TAX (att_single + gdn_inproj on in the FAST preset; ~/FableGod/fableb/LOSSY350_B.md section 4):
+    predicted -2.4 to -2.9 ms per check. Its INSTALL and lines are not written yet (build_1105 has check_fasttax.py /
+    fasttax_aba.sh); to be added when Fable B files them.

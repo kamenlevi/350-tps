@@ -542,6 +542,10 @@ if FAST:                                                 # EvalSuite's install_g
                     assert qm[2] is not None and qm[2].shape[0] == M, ("R57_QOM_SPLIT: the rows' cf", M)
                     cf_ = mx.where(qm[1].reshape(M), qm[2].reshape(M), float("nan"))
                     kq, _, _ = QK.qom_keep_mx(ids_r, sc.reshape(M, K), cf_, sm >= 0, split=QSPLIT)
+                if FG.get("qcnt") is not None:           # Thu 19:0x (the split check): per layer call, lazily, the uses kept,
+                    s2_ = mx.sort(mx.where(kq, sm, sm[:, :1]).reshape(-1))   # the loaded uses dropped and the GROUPS COMPUTED
+                    f2_ = mx.concatenate([mx.array([True]), s2_[1:] != s2_[:-1]])   # (distinct base slots after the drop: the
+                    FG["qcnt"].append(mx.stack([kq.sum(), ((sm >= 0) & ~kq).sum(), (f2_ & (s2_ >= 0)).sum()]))   # GEMMs that run)
                 sm = mx.where(kq, sm, sm[:, :1])         # a dropped use reads the row's rank-0 slot (always loaded), weight 0
                 sc = mx.where(kq, sc.reshape(M, K), mx.zeros_like(sc.reshape(M, K)))
             y2 = TG.tier_glu_phase(x2, t["base"], t["sideP"], sm, sl, phase, 2, plan=_BT3.PLAN)
@@ -946,6 +950,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         res0 = np.array([BS.ext.lookup(L, list(range(512))) for L in range(NL)], np.int32)   # pools at loop start
     out, cyc, ck_t, kept, sm, wl, cut, drf = [tok], [], [], [], [], [], False, []
     lh_ = []                                             # R57_LOGHASH: per check, the verify logits' hash
+    qc_ = []                                             # per check (QOM arms): [uses kept, loaded uses dropped, groups computed,
+                                                         # strict rows (cf >= R57_QOM_SPLIT)] (Thu 19:0x, the split check)
     rows_, cb_, bld_, wt_, wsf_ = [], [], [], [], []     # per check: verified rows, SSD bytes (the per-row cost split, 11-01
                                                          # lead), graph-build s, eval-wait s (A6 / K-80's split), warm-split flag
     WSPL = []                                            # this run's warm-split samples
@@ -974,7 +980,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             cyc.append(c0 - c_prev)
         c_prev = c0
         ref2.remove()
-        fk_ = sq_ = qcf_ = None                          # R57_FAST: this check's keep mask / U3's sure rows (DFlash2 only)
+        fk_ = sq_ = qcf_ = qcl_ = None                   # R57_FAST: this check's keep mask / U3's sure rows (DFlash2 only)
         wsp = WARMSPLIT and not mtp and len(kept) >= 2 and len(kept) % WARMSPLIT == 0   # a warm-split sample (16 rows)
         if mtp:
             if pend is not None:                         # the last check's kept rows -> the head's history
@@ -1083,7 +1089,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         FG.update(on=fk_ is not None or sq_ is not None, keep=mx.array(fk_) if fk_ is not None else None,   # R57_FAST
                   sure=mx.array(sq_) if sq_ is not None else None, sure_np=sq_, t3=bool(fz and fz.get("t3")),   # (in the graph)
                   cold=bool(fz and fz.get("cold")) and sq_ is not None, qom=bool(fz and fz.get("qom")) and sq_ is not None,
-                  qcf=mx.array(qcf_) if qcf_ is not None else None)
+                  qcf=mx.array(qcf_) if qcf_ is not None else None,
+                  qcnt=(qcl_ := [] if (fz and fz.get("qom") and sq_ is not None) else None))   # the real check's counters only
         if PREROUTE and not mtp:                         # R57_PREROUTE: this check's capture; EvalSuite's block records
             PR.update(on=True, cur=None, y={}, blk={}, cap={}, dump=[] if PRDUMP else None)   # each layer's true top-10
             EM.STATE.capture = {}
@@ -1091,7 +1098,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             with ref2.verify_scope(model):
                 lg = model(mx.array([[tok] + dr]), cache=cache)
         finally:
-            FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, cold=False, qom=False, qcf=None, chk=FG["chk"] + 1)
+            FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, cold=False, qom=False, qcf=None, qcnt=None,
+                      chk=FG["chk"] + 1)
             PR["on"] = False
         cb = time.perf_counter()                         # graph built: the sync-free gate waits on each layer's router ids
         TAP["on"] = False
@@ -1137,6 +1145,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         mx.async_eval(states(cache))                     # SB: the commit replay submitted alone
         c2 = time.perf_counter()
         sm.append(stats() - s0)
+        qc_.append(([int(x_) for x_ in np.array(mx.stack(qcl_).sum(axis=0))] if qcl_ else [0, 0, 0]) +   # QOM counters
+                   [int(((qcf_ >= QSPLIT) & sq_).sum()) if (QSPLIT is not None and qcf_ is not None and sq_ is not None) else 0])
         rows_.append(len(dr) + 1); cb_.append(disk_read_bytes() - b0_)
         ck_t.append(c2 - c1); kept.append(k + 1); wl.append(c2 - c0)
         if STALL:
@@ -1214,6 +1224,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                 pc=dict(rows=rows_, kept=kept, ck=[1e3 * x for x in ck_t], drf=[1e3 * x for x in drf[:len(ck_t)]],
                         miss=sm[:, 0].tolist(), io=(1e3 * sm[:, 1]).tolist(), svc=(1e3 * sm[:, 2]).tolist(), mb=[x / 1e6 for x in cb_],
                         uses=sm[:, 4].tolist(), stl=sm[:, 5].tolist(),   # C3-R8: expert groups and stalled layer calls per check
+                        qc=qc_,                  # QOM arms: [uses kept, loaded uses dropped, groups computed, strict rows] per check
                         bld=[1e3 * x for x in bld_], wt=[1e3 * x for x in wt_], ws=wsf_), wspl=WSPL,
                 tpsw=sum(kept[2:]) / max(sum(wl[2:]), 1e-9), cut=cut, bad=bad, stall=stall,   # tpsw: steady state, checks >= 2
                 copy=dict(cst, ms=round(1e3 * cst["ms"], 2)) if cg is not None else None,

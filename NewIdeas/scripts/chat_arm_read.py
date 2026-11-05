@@ -33,7 +33,9 @@ INFOS = {"qom_0.3_live_c147_bonus3g": ("qom_0.5_live_c147_bonus5g", "qom_0_live_
          "qom_0_split0.9_live_bq": ("qom_0_live_bq", "qom_0_split0.99_live_bq"),
          "qom_0_split0.99_live_bq": ("qom_0_live_bq", "qom_0_split0.9_live_bq"),
          "qom_0_split0.9_live_ball": ("qom_0_live_ball", "qom_0_live_bq", "qom_0_split0.99_live_ball"),
-         "qom_0_split0.99_live_ball": ("qom_0_live_ball", "qom_0_live_bq", "qom_0_split0.9_live_ball")}
+         "qom_0_split0.99_live_ball": ("qom_0_live_ball", "qom_0_live_bq", "qom_0_split0.9_live_ball"),
+         "qom_0_split0.9_live_ball+code": ("qom_0_live_ball+code", "qom_0_live_bq", "qom_0_split0.99_live_ball+code"),
+         "qom_0_split0.99_live_ball+code": ("qom_0_live_ball+code", "qom_0_live_bq", "qom_0_split0.9_live_ball+code")}
 INFO = INFOS.get(ARM, ("qom_0.5_live_bonus5g", "qom_0.5_live_c164", "qom_0.5_live"))
 DST = os.path.expanduser("~/NewIdeas/data/ledger/chat_arm_read" + ("" if len(sys.argv) < 2 else "_" + ARM) + ".txt")
 
@@ -49,8 +51,10 @@ def rows(name):
 def summary(A):
     out = {}
     for d in DOMS:
-        x = np.concatenate([v[1] for v in A.values() if v[0] == d])
-        out[d] = (100 * np.nanmean(x[:, 2]), float(np.nanmean(x[:, 0])), len(x), sum(1 for v in A.values() if v[0] == d))
+        xs = [v[1] for v in A.values() if v[0] == d]
+        if not xs: out[d] = (float('nan'), float('nan'), 0, 0); continue        # Thu 18:5x: a domain not run (e.g. +code)
+        x = np.concatenate(xs)
+        out[d] = (100 * np.nanmean(x[:, 2]), float(np.nanmean(x[:, 0])), len(x), len(xs))
     return out
 
 
@@ -81,8 +85,9 @@ def main():
         L += ["| domain | flips % | line | verdict | prediction (pre-registered) | mean KL | rows / windows |", "|---|---|---|---|---|---|---|"]
         for d in DOMS:
             f, k, n, w = S[d]
+            if n == 0: L.append(f"| {d} | not run | {LINE[d]} | - | {PRED[d]} | - | 0 |"); continue
             L.append(f"| {d} | {f:.2f} | {LINE[d]} | {verdict(d, f)} | {PRED[d]} | {k:.4f} | {n} / {w} |")
-        allpass = all(verdict(d, S[d][0]) == "PASS" for d in DOMS)
+        allpass = all(verdict(d, S[d][0]) == "PASS" for d in DOMS if S[d][2])
         if ARM in ("qom_0.5_u8_live_c147_bonus5g", "qom_0.5_u8_reach0.5_live_c147_bonus5g"):   # amendment Thu 07:1x
             R = summary(rows("qom_0.5_live_c147_bonus5g"))
             g5 = all(S[d][0] <= R[d][0] + 0.5 for d in DOMS); g13 = all(S[d][0] <= 1.3 * R[d][0] for d in DOMS)
@@ -96,8 +101,8 @@ def main():
         B = rows(nm)
         if B is None: L.append(f"| {nm} | missing | | | |"); continue
         S2 = summary(B)
-        pc = "; ".join(f"{d} {x[0]} / {x[1]} / p {x[2]:.2g}" for d in DOMS for x in [mcnemar(A, B, d)]) if A else "-"
-        L.append(f"| {nm} | " + " | ".join(f"{S2[d][0]:.2f} / {S2[d][1]:.4f}" for d in DOMS) + f" | {pc} |")
+        pc = "; ".join(f"{d} {x[0]} / {x[1]} / p {x[2]:.2g}" for d in DOMS if S2[d][2] for x in [mcnemar(A, B, d)]) if A else "-"
+        L.append(f"| {nm} | " + " | ".join((f"{S2[d][0]:.2f} / {S2[d][1]:.4f}" if S2[d][2] else "-") for d in DOMS) + f" | {pc} |")
     os.makedirs(os.path.dirname(DST), exist_ok=True)
     open(DST, "w").write("\n".join(L) + "\n"); print("\n".join(L))
 

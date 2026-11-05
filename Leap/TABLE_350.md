@@ -6794,6 +6794,27 @@ shapes, since latency does not depend on the values.
     bitwise.
   - BigMoE 14:5x: **C1 never ran** (the DAY9 night ticket was dropped at its 05:30 NOTAFTER; only smokes ran). So
     Friday's phase-R NAX arm (N) is the first real C1, and the NATIVE-FRI predictions rest on kernel numbers only.
+- **AMENDMENT (Thu 2026-11-05 19:0x, before arming; the orchestrator 15:5x asked whether NATIVE-FRI is still needed):**
+  - Why the design changes:
+    - BigMoE converted records3 in place on Thu 10:28 (native+p11+pad), so the row-major phase (D, N) can no longer run.
+    - Exactness is already covered: EvalSuite's NAX6 Part 2 PASS 14:47 (NAX6-N on the converted store: live loop == AR
+      36 / 36, AR == Part 1's row-major NAX6 rows) and its 10:50 bridge (ref2tnaxn == ref2tnax on 3 rows; check 2 for
+      the 3c-N path). That is Nc == N, and Dc == D through 3c-N == 3c.
+> (a quote from the project owner, kept private)
+      and BigMoE's Friday ticket times no NAX arm (its fexr is 3c-N, timing unused).
+  - **Phase C only:** Dc / Nc / Nc / Dc on the converted store.
+    - Dc = the 45 GB default (3c-N, OOO two phases); Nc = + R57_NAX=1 (NAX6-N, nax_native).
+    - 14 ref14 prompts (dkv_thu.sh's keys), C 224 (else 208 / 192 by NO-SWAP), C45_ALARM 900.
+    - BigMoE's c45 runner and a frozen copy of its screen with OUT -> ~/Leap/data/natfri/r57; scripts/natfri_c.sh.
+    - It runs in a quiet turn after BigMoE's Friday ticket, ~30 min (4 arms x ~7 min, from BigMoE's dkvt_224: 411 s).
+  - **Lines (amended):** #3's value = Nc vs Dc, pair-mean geo steady tok/s (tpsw) over the prompts both passes kept:
+    PASS >= +6 %, KILL < +2 %, BETWEEN in between.
+    - D became Dc because Dc is the default Nc would replace. The old diagnostic Dc vs D was -2..+3 %.
+  - **Tokens:** every Dc prompt == REF2-T (ref14 gate+t, prefix), else a bug. Nc pass 1 == pass 2 (NAX determinism),
+    else VOID.
+  - **VOID:** fewer than 12 prompts in both passes of either arm.
+  - **Prediction:** Nc vs Dc +8-14 % (the old Nc vs D prediction; 3c-N is 4-7 % slower than 3c on the expert call, against
+    p11 / pad gains). PASS 55 %.
 - **v4 (post-hoc, Wed 14:5x; bitwise == v2 by construction and on 96 / 96 reads: mixed, written, inject):**
   - v2 breakdown at NP 20 (share lock): K1 29.4 us per read, K2 2.6, K3 22.7.
   - Changes: K1's A builders load the next group's h / w_norm / bo one group ahead. K2 runs one threadgroup per row and

@@ -15,6 +15,25 @@ Cost model [K FULL.md table, "tonight + Thu", code FAST at 45 GB]: fixed per che
 flat in rows [K C0: every dense piece flat 1-16 rows]; per verified row c = (experts 22 + exposed SSD 12) / 9.84 = 3.46 ms.
 On the lattice's checks this gives 77.1 ms and 122 tok/s at kept 9.38 (the live default keeps ~10.5 and runs 110-117 [K]).
 
+## Corrections after the build (Thu 5 Nov 19:0x; read from the code while writing build_1105, which supersedes the rows below)
+
+- **Row 1 is att_single alone, -2.4 ms.** `gdn_inproj` cannot run in the FAST all-in arm: ref2's `_InProjPad` concatenates
+  the four GDN projections' packs as stored, and DENSE-N-RAM (R57_DNR=1, in that arm) has already replaced two of them by
+  4-D native copies. K-83's exact `gdn_inproj_x`, on in the default, already holds most of R-68's saving. So "-2.4 to -2.9"
+  reads -2.4, and the sums "-4 to -6 ms" read about -4 to -5 [K ref2.py 1009-1045, 288-312; r57_screen.py 706-712, 729-731].
+- **att_single does not drop the AR classes or the key buckets.** It replaces MTPLX's 12 head-chunk calls by one fused
+  SDPA per attention call; the class re-runs and bucket pads stay, and below 512 keys its bits equal REF2-T's
+  [K ref2.py 1229-1285]. A FAST attention switch that does drop them exists too (F1, `fatt_verify`, fs4: TRIED 484), built
+  for long contexts and in no BigMoE arm.
+- **Row 5 is not untried.** The screened verify head is built: SVH, ref2 `screened_head`, FR-Spec top-98,304 + 4,096 session
+  ids, -0.79 ms per check, PASS on wiring and speed (TRIED 1215), in no BigMoE arm. My replay only adds the outside-the-list
+  rates of smaller lists.
+- **Row 2, lazy commit, from the code:** 35 pure-GDN layers x 3.15 MB of fp32 state = 110 MB. Per 16-row check and layer
+  today's protocol makes 1.75 state reads + 1.75 writes + 0.76 replay kernels, the lazy one 1.00 + 1.00 + 0, for 3.9 more
+  recurrence steps [P fuzz at 24 % full accepts]. Expected -1.4 ms per code check (-0.8 to -2.0) [P/G]. The design changed:
+  the pending rows travel as a third state leaf, because MTPLX's snapshots are views and its restores are clones.
+- Build, checks and arms: `build_1105/INSTALL.md`.
+
 ## 0. Verdict
 
 1. **No lossy lever on this wall reaches x1.3 on the code line. I looked for one and killed each candidate with a number.**

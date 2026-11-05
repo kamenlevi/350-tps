@@ -7,7 +7,7 @@ Usage: python3 -I tried_merge.py [~/TRIED]"""
 import collections, os, re, sys
 
 D = os.path.expanduser(sys.argv[1] if len(sys.argv) > 1 else "~/TRIED")
-SESSIONS = ["leap", "bigmoe", "evalsuite", "breakthrough", "moonshots", "fit12", "newideas", "mtphead"]
+SESSIONS = ["leap", "bigmoe", "evalsuite", "breakthrough", "moonshots", "fit12", "newideas", "mtphead", "orchestrator"]
 WALLS = ["SSD", "bytes", "fixed-cost", "drafter", "quality", "memory", "prefill", "exactness", "other"]
 VERDICTS = ["ADOPTED", "PASS", "BETWEEN", "PARKED", "KILL"]
 SYN = {"ssd": "SSD", "bytes": "bytes", "fixed-cost": "fixed-cost", "fixed": "fixed-cost", "check": "fixed-cost",

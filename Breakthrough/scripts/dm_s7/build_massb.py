@@ -20,7 +20,7 @@ ROUT = os.path.expanduser("~/FableGod/decision_map/out/routing")
 args = [a for a in sys.argv[1:] if not a.startswith("--")]; XCAP = "--xcap" in sys.argv; PARTIAL = "--partial" in sys.argv
 NOSTAND = "--no-standins" in sys.argv   # variant (test): the block = the realized rows only
 FLOOR = "--as-written" not in sys.argv   # Fable C's ruling 3 (default): ranks 0-1 kept per row, then the budget
-PROFILE = np.array([0.294, 0.193, 0.143, 0.109, 0.084, 0.064, 0.048, 0.033, 0.021, 0.010], np.float32)   # cloud3 P2 section 4
+PROFILE = np.array([0.227, 0.150, 0.117, 0.097, 0.084, 0.075, 0.069, 0.064, 0.060, 0.057], np.float32)   # the engine's mean renormalised top-10 weight by rank (the orchestrator Thu 18:5x; was cloud3 P2 section 4's 0.294 ... 0.010)
 src, out = os.path.expanduser(args[0]), os.path.expanduser(args[1]); os.makedirs(out, exist_ok=True)
 names = sorted(f for f in os.listdir(MS) if f.endswith(".npz"))
 st = {}

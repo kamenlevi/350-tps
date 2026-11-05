@@ -108,6 +108,9 @@ secs = {b: pair(b, lambda r: r["n"] / r["tps"]) for b in B}
 def per_check(t, f):   # mean over the run's checks of f(check row)
     xs = [x for e in chk[t] if not e.get("paused") for x in f(e)]
     return S.mean(xs) if xs else float("nan")
+def grp(t):   # groups computed per check: QOM arms count the distinct base slots after QOM-KEEP's drop (qc[2], Thu 19:0x);
+    q = per_check(t, lambda e: [c[2] for c in e.get("qc", []) if c[2] > 0])   # 'uses' is the loader's need.size(), counted
+    return q if q == q else per_check(t, lambda e: e.get("uses", []))       # before that drop (the pre-flight's 3,739 vs 3,730)
 def ratio(b, d, a="qall", agg=g):
     ks = [k for k in d[b] if k in d[a]]
     return (agg([d[b][k] / d[a][k] for k in ks]), len(ks)) if ks else (float("nan"), 0)
@@ -117,7 +120,8 @@ for b in B:
     n1, n2 = len(runs[f"f{b}"]), len(runs[f"f{b}b"])
     if not tps[b]:
         L.append(f"{b:6s} MISSING (passes {n1} / {n2})"); continue
-    ug = [per_check(t, lambda e: e.get("uses", [])) for t in (f"f{b}", f"f{b}b") if chk[t]]
+    ug = [grp(t) for t in (f"f{b}", f"f{b}b") if chk[t]]
+    stc = [per_check(t, lambda e: [c[3] for c in e.get("qc", [])]) for t in (f"f{b}", f"f{b}b") if chk[t]]
     sl = [per_check(t, lambda e: e.get("stl", [])) for t in (f"f{b}", f"f{b}b") if chk[t]]
     rx = [r.get("rlx") for t in (f"f{b}", f"f{b}b") for r in runs[t].values() if r.get("rlx")]
     sp = [r.get("spn") for t in (f"f{b}", f"f{b}b") for r in runs[t].values() if r.get("spn")]
@@ -125,7 +129,11 @@ for b in B:
              f"{g([r['tpsw'] for k, r in runs[f'f{b}'].items() if ok(f'f{b}', k)]):.1f} / "
              f"{g([r['tpsw'] for k, r in runs[f'f{b}b'].items() if ok(f'f{b}b', k)]):.1f}); kept per check "
              f"{g(list(kept[b].values())):.2f}; tokens per task {S.median(ntok[b].values()):.0f}; s per task "
-             f"{S.median(secs[b].values()):.2f}; groups (uses) per check {S.mean(ug) if ug else float('nan'):.0f}; stalled "
+             f"{S.median(secs[b].values()):.2f}; " +
+             ("groups computed" if b == "u3c" or any(c[2] > 0 for t in (f"f{b}", f"f{b}b") for e in chk[t] for c in e.get("qc", []))
+              else "uses posted (pre-drop; the relaxed copy has no QOM counters)") +
+             f" per check {S.mean(ug) if ug else float('nan'):.0f}" +
+             (f" (strict rows per check {S.mean(stc):.1f})" if stc and S.mean(stc) > 0 else "") + "; stalled "
              f"layer calls per check {S.mean(sl) if sl else float('nan'):.1f}" +
              (f"; relaxed accepts {sum(x['relaxed'] for x in rx)}" if rx else "") +
              (f"; span: rows {sum(x['rows'] for x in sp)}, span rows {sum(x['span_rows'] for x in sp)}, relaxed "
@@ -143,8 +151,15 @@ v = ("MISSING" if n_ == 0 else "KILL" if s_ >= 0.97 or t_ >= 1.15 else
 L.append(f"Verdict rule C (pre-registered): {v}; s per task {s_:.3f}x, tokens per task {t_:.3f}x vs qall (medians of per-prompt "
          f"ratios over {n_})")
 ex = [per_check("fexr", lambda e: e.get("uses", []))] if chk["fexr"] else []
+gq = {b: [grp(t) for t in (f"f{b}", f"f{b}b") if chk[t]] for b in ("qall", "s99", "s90")}
+for b in ("s99", "s90"):
+    st = [per_check(t, lambda e: [c[3] for c in e.get("qc", [])]) for t in (f"f{b}", f"f{b}b") if chk[t]]
+    if gq[b] and gq["qall"]:
+        L.append(f"split {b} engaged: strict rows per check {S.mean(st) if st else float('nan'):.1f}; groups computed "
+                 f"{S.mean(gq[b]):.0f} vs qall {S.mean(gq['qall']):.0f} = {S.mean(gq[b]) / S.mean(gq['qall']):.3f}x "
+                 f"(Breakthrough's replay: x0.72 / x0.63 at C 160 on full blocks, x0.67 / x0.56 live-cut)")
 for b in ("qall", "s99", "s90"):
-    ug = [per_check(t, lambda e: e.get("uses", [])) for t in (f"f{b}", f"f{b}b") if chk[t]]
+    ug = gq[b]
     if ug and ex:
         L.append(f"C3-R8 groups per check: {b} {S.mean(ug):.0f} vs exact {ex[0]:.0f} = {S.mean(ug) / ex[0]:.3f}x (audit: >= 0.85x)")
 if not ex:

@@ -1975,3 +1975,5 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 22:41:38 SCR trl judge end (rc 0): 4 layer files in /Users/kamen/Fit12/data/trl_judge
 22:45:01 SCR trl map judge start: fit_trl_judge_map.py 7,18,30,41 (xcapture rows, NewIdeas 22:33)
 22:46:09 SCR trl map judge end (rc 0)
+18:56:34 SCR halfk start: fit_halfk_check.py 2,12,24,36,46 (the orchestrator 18:5x; swap 8573.44 MB)
+19:01:54 SCR halfk end (rc 0)

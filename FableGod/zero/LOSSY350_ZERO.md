@@ -130,6 +130,14 @@ C0-style split (GDN, HC reads, attention, router / shared / tail, head, draft, c
 - **KILL: flat > 36 ms with every owned lever on.** No kept the chain allows closes it (K >= 18.4 at e 0.9);
   state the code line's ceiling as ~300 and stop spending on tiles for speed.
 - It also sizes each flat term for the next cut, which no map arm does.
+- **Built Thu 19:0x, not yet run** (`build_1105/`, INSTALL.md there; owner Leap or BigMoE, ~2-3 min GPU per arm, two arms,
+  MEM 32-40 GB by the C ladder): BigMoE's own `run()` at its HEAD with every check held to 2 rows, Friday's all-in
+  levers + the split 0.9, pools put back before each pass so the checks miss nothing, Leap's C0 probe for the split and
+  the row slope. FLAT = median start-to-start cycle - 2 x the warm row slope. The CPU dry-run (43 checks) runs the real
+  patched loop on a stub engine. Two things the build turned up [K by reading the code]: (1) the prefill adopts the
+  prompt's experts over the pools (`ext.adopt`), so a repeated prompt starts as cold as the first: any "warm repeat"
+  measurement needs the pools put back; (2) BigMoE's Thu 19:0x per-check QOM counters are read from the GPU right after
+  the commit submit, in QOM arms only: that read waits for the commit replay.
 
 The SSD term's own test is FAR's (`qom_nw1` on the map + the oracle-prewarmed A/B). My inputs to that spec, sent to
 FAR 16:5x: (1) the decisive arm's cold set from 208 uniform slots (`qom_nw1_c208`), the mask-pool arm beside it;
