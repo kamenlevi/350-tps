@@ -3351,3 +3351,11 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
   - On record: top-5 θ 0.9 0.92 %, top-2 θ 0.9 1.49 %.
   - Decides: which width Fit12 builds and prices. Speed for each width comes from Fit12's replay after one calibration
     run.
+- Thu 20:0x: AMENDMENT before any run, Saturday step 0 / 0b PRUNED.
+  - Fit12 (calibrated, full outputs, cf 0.9): top-3 is slower (34.5 / 33.1 tok/s at θ 0.9 / 0.95). Top-4 / top-5 cannot
+    run at 16 rows: the union overflows the 47-slot pool and the engine aborts.
+  - Every two-pass point except P1-K1 at θ 0.8 (45.8) is at or under the exact mode (40.8).
+  - Only `p1c_oea_k1_ku4_p08_cf09+code` runs, with its line unchanged (VERDICT2). It decides whether the x1.12 FAST point
+    is code-valid.
+  - Dropped, not run: θ 0.9 / 0.95, both P1-K2 arms, topk3 / topk4 and the four width arms. The orchestrator asked for
+    the same at 20:0x.

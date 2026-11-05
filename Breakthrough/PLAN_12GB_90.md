@@ -40,6 +40,27 @@ The exposed SSD wait is ~128 ms, 49 % of the check. It reads 1.23 GB per check a
   - Fit12 builds the engine form (ranks 0-4 in pass 1) and prices it from one calibration run.
 - **Levers 1 and 3 apply to the exact base unchanged.** They come first now.
 
+## Update Thu 20:0x: the two-pass FAST route is closed at 12 GB, except T3R2's own point
+
+- **A wider pass 1 is slower** (Fit12, `~/Fit12/data/scr/t3cal`; full outputs, cf 0.9). Top-3 runs 34.5 / 33.1 tok/s at
+  θ 0.9 / 0.95, with pass 1 at ~207 ms.
+- **Top-4 / top-5 cannot run as one pass.** At 16 rows their union overflows the pool: "54 experts > C=47 at layer 0",
+  and the engine aborts. The workarounds (two 8-row calls, or widening only the low-mass rows) add pass-1 cost to a mode
+  that is already at or below exact.
+- **So every two-pass point except P1-K1 at θ 0.8 (45.8, x1.12 over exact) is no faster than the exact mode.**
+  - Saturday keeps one arm: T3R2's own form, `p1c_oea_k1_ku4_p08_cf09` (KU 4, cf gate 0.9).
+  - If it passes VERDICT2, the x1.12 is real. If it fails, the FAST route at 12 GB is closed.
+  - The other step 0 / 0b arms were dropped before running. topk3 / topk4 stay registered; they are harmless.
+- **The plan is now levers 1 and 3 on the exact mode** (49.9 tok/s on the shared text, 40.8 on full outputs).
+  - Lever 1: kept per check. The first test is Breakthrough's CPU replay on Friday: copy spans and today's kept per check on
+    them, over T3R2's prompts.
+  - Lever 3: bytes and compute per check. The rank-0 residency replay, and Leap's kernels.
+- **Map screens for lever 3** (lossy byte cuts on the exact mode):
+  - `topk8` (ranks 8-9 dropped, ~-20 % of tail loads) is already in Friday's queue (36 windows).
+  - One-pass QOM-KEEP at 12 GB's 47-slot pool (the 45 GB FAST rule, no exact pass) is not queued. Its code flips should
+    fall between QOM-KEEP at 147 slots (1.07 %, PASS) and P1-K2 with no residents (`p1_oea_k2`, 2.50 %, KILL). A guess
+    is 1.6-2.2 %, likely KILL; its mask is buildable with the keepset replay if lever 3 needs it.
+
 ## Step 0: the 57 is not yet a code-valid base
 
 T3R2 certifies at θ 0.8 behind a P1-K1 pass 1: only the block's rank-0 union, at most 4 experts per row. The map's

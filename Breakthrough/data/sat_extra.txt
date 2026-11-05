@@ -14,19 +14,10 @@ qom_0_live_ball_c266_nw1+code 4 09:05 qom_0_live_ball_c266+code qom_0_live_ball_
 # 2. Step 0 of PLAN_12GB_90.md: the 12 GB two-pass certificate on the code windows (masks scripts/dm_s7/build_p1c.py, in
 #    out/p1c). T3R2's own form first (P1-K1 KU 4, theta 0.8, cf gate 0.9), then theta 0.9 / 0.95, then P1-K2 at 0.8 / 0.9.
 #    Twins on record: p1c_oea_k1_p08 (1.52 %), cert_top5_p09 (0.92 %). Read: code_read.py VERDICT2.
+#    PRUNED Thu 20:0x (Fit12's calibrated speeds, full outputs, cf 0.9): only T3R2's own form at theta 0.8 (45.8 tok/s) is
+#    faster than the exact mode (t80ck2, 40.8). These run no faster than exact, so they were dropped before running:
+#    - theta 0.9 / 0.95 (41.0 / 37.9);
+#    - P1-K2 (top-2-like, <= 40.2);
+#    - step 0b's widths: top-3 34.5 / 33.1; top-4 / 5 overflow the 47-slot pool at 16 rows and abort.
+#    One arm decides: is the x1.12 FAST point code-valid?
 p1c_oea_k1_ku4_p08_cf09+code 4 09:10 p1c_oea_k1_p08 cert_top5_p09
-p1c_oea_k1_ku4_p09_cf09+code 4 09:10 p1c_oea_k1_ku4_p08_cf09+code p1c_oea_k1_p08
-p1c_oea_k1_ku4_p095_cf09+code 4 09:10 p1c_oea_k1_ku4_p08_cf09+code cert_top5_p09
-p1c_oea_k2_p08_cf09+code 4 09:10 p1c_oea_k1_ku4_p08_cf09+code cert_top5_p09
-p1c_oea_k2_p09_cf09+code 4 09:10 p1c_oea_k2_p08_cf09+code cert_top5_p09
-# 3. Step 0b (Fit12 19:5x: the certificate is token-exact, so the map's damage is pass 1's KV; the route is a wider pass 1).
-#    Goal: the cheapest pass-1 width that passes code.
-#    - Sources topk4 / topk3 run on all 36 windows: the cert gate reads out/topk<k>.json (install_topk34.sh registered them).
-#    - Then the certificate arms on code.
-#    - On record: cert_top5_p09 0.92 % (PASS); cert_top2_p095 1.22 %; cert_top2_p08 1.63 %.
-topk4 7 09:05 topk5 topk2
-cert_top4_p09+code 4 09:15 cert_top5_p09 cert_top2_p09
-cert_top4_p08+code 4 09:15 cert_top4_p09+code cert_top2_p08
-cert_top5_p08+code 4 09:15 cert_top5_p09 cert_top4_p08+code
-topk3 7 09:05 topk4 topk2
-cert_top3_p09+code 4 09:15 cert_top4_p09+code cert_top2_p09
