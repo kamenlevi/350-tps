@@ -38,6 +38,11 @@ convention (11-bit parts, best RAM split). Flips are measured on the decision ma
 | 8 | plane-aware prefetch, row 7 | engine reads -5-9 % | - | none (prefetch only) | no | an engine arm (BigMoE) |
 | 9 | gate-mass-adaptive tiers, row 9; trunk diet, row 6 | ~x0.9 / ~x0.96 | - | small, unknown | no | gate masses / a map arm; low priority |
 
+Fable C's audit (Thu 07:05, ~/FableGod/fablec/AUDIT_1105.md item 5) on ranks 3-4:
+- quality: R15 expected +0.2-0.4 points on chat (PASS ~70 %); R15b's multi margin is ~0.1 point (PASS ~50 %);
+- speed: the raw byte cuts are worth only +2-4 % chat tok/s at 24 GB, since SSD is ~6 of ~70 ms per chat check.
+The verdict lines were amended to the audit's before any run (QUEUE Thu 07:1x).
+
 CLOSED (no store build, no disk):
 - The trellis family (rows 1-3: TRL-2, the 2.40 b mix, TRL-3). Screen 7 KILL: 1.45 / 9.54 / 10.44 % in-frame,
   re-derived by Breakthrough. Fit12's judge on the map's own inputs shows the inputs do not explain the miss.

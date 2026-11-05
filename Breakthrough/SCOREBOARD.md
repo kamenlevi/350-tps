@@ -3154,3 +3154,23 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
   - REPORT_P2 section 4 (one window per domain) said 0.000 for rank 0 and 0.000-0.002 for rank 1. On the 36 windows the
     half-union budget does drop rank 0 sometimes and rank 1 a few percent. Flagged for Fable C's audit; it is not a blocker,
     and the arm runs as defined.
+- PRE-REGISTRATION Thu 07:1x (copied from NewIdeas' amended QUEUE Thu 07:0x / 07:1x, 5f97c1c; masks 3894480; the order is
+  Fable C's audit: R15 first, then R15b), before any run.
+  - C3-R15 = qom_0.5_u8_live_c147_bonus5g: the measured chat route with its unsure rows at top-8 + union members + resident.
+  - C3-R15b = qom_0.5_u8_reach0.5_live_c147_bonus5g: R15 + REACH-CUT 0.5 (unsure rows with reach < 0.5 go to top-2 +
+    members + resident).
+  - Built with NewIdeas' dm_oea_masks.py (qom_<thr>_u<k>[_reach<tau>]) + Fable C's bonus gate at 0.5 (proxy g), exactly as
+    the route, so each differs from it by its cut alone. This is not the _bq form Cloud3's request named.
+  - NewIdeas' bit-checks (check_r15.log): u10 rebuilds the route's base 36/36; u8 drops only ranks 8-9; the reach cut keeps
+    ranks 0-1; both gates drop only, on the route's 165 rows. The u8 base moves 7,724 sure rows (smaller unions, a lighter
+    LRU pool), so neither arm is drops-only against the route.
+  - Lines (Fable C's amendment):
+    - PASS = under 1.34 / 5.42 / 3.69 on every domain AND within +0.5 points of the route's 0.71 / 4.30 / 2.73;
+    - KILL = IFEval or multi over its line;
+    - otherwise BETWEEN. Cloud3's 1.3x guard is printed for information.
+  - Twins: the route qom_0.5_live_c147_bonus5g (primary); R15b also against R15. NewIdeas reads them with chat_arm_read.py,
+    which writes into its repo, so NewIdeas runs it.
+  - Install 07:14 (install_c3.sh with C3_SRC = NewIdeas' masks; snapshots in out/ni with sha256; test 8/8):
+    - the PERT is exactly {rmask, renorm False};
+    - 36 windows, byte-equal to the source, with routing shapes;
+    - ranks 0-1 kept on every row.

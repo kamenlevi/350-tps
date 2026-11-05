@@ -6,6 +6,7 @@
 - Best case (estimate): ~350 tok/s
 
 ## Dated findings (newest first)
+- 2026-11-05 07:20: [Cloud Fable 3's strict expert table, re-priced; a split form keeps its compute cut at today's bytes](FableGod/findings/2026-11-05_0720_cloud3-repriced-split-form.md). Audit of the overnight cloud run: x2.5-3.3 the bytes, +4-13 % on code; map test pending.
 - 2026-11-04 22:40: [Near + far draft forecasting for MoE expert caching](FableGod/findings/2026-11-04_2240_near-far-expert-forecasting.md). Four new measurements, including the SSD wait law; CPU replays, GPU test pending.
 - 2026-11-04 22:28: [Trellis-coded experts miss on chat by more than their MSE predicts; the family is closed for this model](FableGod/findings/2026-11-04_2228_trellis_mse_miss.md).
 - 2026-11-04 22:16: [A chat route that keeps quality at the 24 GB split](FableGod/findings/2026-11-04_2216_chat_route_24gb.md).

@@ -17,8 +17,10 @@ ARM = sys.argv[1] if len(sys.argv) > 1 else "qom_0.5_live_c147_bonus5g"
 PREDS = {"qom_0.5_live_c147_bonus5g": {"code": "~0.7", "ifeval": "~4.6", "multi": "~3.0"},
          "qom_0.3_live_c147_bonus3g": {"code": "0.66-0.88", "ifeval": "4.5-6.9", "multi": "2.9-4.8"},
          "qom_0.3_live_c147_bonus4g": {"code": "0.7-0.8", "ifeval": "4.9-5.5", "multi": "3.2-3.8"},
-         "qom_0.5_u8_live_c147_bonus5g": {"code": "<= ~0.81 (C3)", "ifeval": "<= ~4.40 (C3)", "multi": "<= ~2.83 (C3)"},
-         "qom_0.5_u8_reach0.5_live_c147_bonus5g": {"code": "~0.74 (C3)", "ifeval": "~4.65 (C3)", "multi": "~3.27 (C3)"}}
+         "qom_0.5_u8_live_c147_bonus5g": {"code": "C3 <= 0.81; FC +0.2-0.4", "ifeval": "C3 <= 4.40; FC 4.5-4.7",
+                                          "multi": "C3 <= 2.83; FC 2.9-3.1"},
+         "qom_0.5_u8_reach0.5_live_c147_bonus5g": {"code": "C3 ~0.74", "ifeval": "C3 ~4.65; FC ~4.95",
+                                                   "multi": "C3 ~3.27; FC ~3.6"}}
 PRED = PREDS.get(ARM, {d: "-" for d in ("code", "ifeval", "multi")})
 INFOS = {"qom_0.3_live_c147_bonus3g": ("qom_0.5_live_c147_bonus5g", "qom_0_live_bq_c147_t3", "qom_0_live"),
          "qom_0.3_live_c147_bonus4g": ("qom_0.3_live_c147_bonus3g", "qom_0.5_live_c147_bonus5g"),
@@ -73,6 +75,12 @@ def main():
             f, k, n, w = S[d]
             L.append(f"| {d} | {f:.2f} | {LINE[d]} | {verdict(d, f)} | {PRED[d]} | {k:.4f} | {n} / {w} |")
         allpass = all(verdict(d, S[d][0]) == "PASS" for d in DOMS)
+        if ARM in ("qom_0.5_u8_live_c147_bonus5g", "qom_0.5_u8_reach0.5_live_c147_bonus5g"):   # amendment Thu 07:1x
+            R = summary(rows("qom_0.5_live_c147_bonus5g"))
+            g5 = all(S[d][0] <= R[d][0] + 0.5 for d in DOMS); g13 = all(S[d][0] <= 1.3 * R[d][0] for d in DOMS)
+            kill = any(verdict(d, S[d][0]) != "PASS" for d in ("ifeval", "multi"))
+            L.append(f"amended verdict (Fable C's lines): {'KILL' if kill else ('PASS' if allpass and g5 else 'BETWEEN')} "
+                     f"(within +0.5 of the route: {g5}; Cloud3's 1.3x guard, information: {g13})")
         L.append(f"pre-registered verdict: {'PASS on every domain -> the chat route holds at 24 GB' if allpass else 'not PASS on every domain (see rows)'}")
     L += ["", "| arm (information) | code flips % / KL | ifeval | multi | paired vs " + ARM + " (b arm-only flips / c / p) |",
           "|---|---|---|---|---|"]

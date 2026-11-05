@@ -7,8 +7,9 @@ import filecmp, os, sys
 import numpy as np
 import dm_ablations as A
 import dm_common as C
-SRC = os.path.expanduser("~/FableGod/cloud3/live/cloud3/masks")
-SNAP = os.path.expanduser("~/FableGod/decision_map/out/c3")
+SRC = os.path.expanduser(os.environ.get("C3_SRC", "~/FableGod/cloud3/live/cloud3/masks"))
+SNAP = os.path.expanduser(os.environ.get("C3_SNAP", "~/FableGod/decision_map/out/c3"))
+R01 = os.environ.get("TEST_R01") == "1"   # also: ranks 0-1 kept on every row (NewIdeas' QOM arms; not the top-1 band arms)
 ROUT = os.path.expanduser("~/FableGod/decision_map/out/routing")
 bad = []
 def ok(c, m):
@@ -23,6 +24,8 @@ for arm in sys.argv[1:]:
     names = sorted(f for f in os.listdir(d) if f.endswith(".npz"))
     same = sum(filecmp.cmp(os.path.join(d, n), os.path.join(SRC, arm, n), shallow=False) for n in names)
     shp = sum(np.load(os.path.join(d, n))["keep"].shape == np.load(os.path.join(ROUT, n))["ids"].shape for n in names)
-    ok(len(names) == 36 and same == 36 and shp == 36, f"{arm}: 36 windows, {same}/36 byte-equal to cloud3's source, {shp}/36 routing shapes")
+    ok(len(names) == 36 and same == 36 and shp == 36, f"{arm}: 36 windows, {same}/36 byte-equal to the source, {shp}/36 routing shapes")
+    r0 = sum(bool(np.load(os.path.join(d, n))["keep"][..., :2 if R01 else 1].all()) for n in names)
+    ok(r0 == 36, f"{arm}: rank 0{'-1' if R01 else ''} kept on every row in {r0}/36 windows")
 print("ALL OK" if not bad else f"FAILED: {len(bad)}", flush=True)
 sys.exit(1 if bad else 0)
