@@ -97,9 +97,10 @@ if [ -n "$NATFRI_REPORT_ONLY" ]; then report "${1:?C}"; exit $?; fi
 A=${NATFRI_AVAIL:-$(avail_gb)}
 CC=${NATFRI_C:-}
 if [ -z "$CC" ]; then
-  for c in 224:44.3 208:42.2 192:40.0 176:37.9 160:35.7 144:33.6 128:31.4; do awk -v a="$A" -v n="${c#*:}" 'BEGIN {exit !(n <= a)}' && { CC=${c%%:*}; break; }; done
+  # NATFRI_MARGIN (Fri 01:5x, after run 1's swap guard at C 224 with 0.5 GB to spare): GB kept beyond the rung's need
+  for c in 224:44.3 208:42.2 192:40.0 176:37.9 160:35.7 144:33.6 128:31.4; do awk -v a="$A" -v n="${c#*:}" -v m="${NATFRI_MARGIN:-0}" 'BEGIN {exit !(n + m <= a)}' && { CC=${c%%:*}; break; }; done
 fi
-[ -z "$CC" ] && { say "NO-SWAP $A GB < 31.4: nothing fits, nothing runs"; exit 0; }
+[ -z "$CC" ] && { say "NO-SWAP $A GB < 31.4 + margin ${NATFRI_MARGIN:-0}: nothing fits, nothing runs"; exit 0; }
 SRC=$HOME/BigMoE/scripts/r57_screen.py
 FS="$D/snap/r57_screen_natfri.py"; RUN="$D/snap/c45_runner_natfri.sh"
 ANCHOR='OUT = os.path.expanduser("~/BigMoE/data/r57"); os.makedirs(OUT, exist_ok=True)'

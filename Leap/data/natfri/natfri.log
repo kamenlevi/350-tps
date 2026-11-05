@@ -19,3 +19,7 @@ nfdcb: no screen output
 Verdict (pre-registered Thu 19:0x: PASS Nc / Dc >= +6 %, KILL < +2 %, else BETWEEN; BUG / VOID rules): VOID (nfdc: 0 prompts; nfnc: 0 prompts; nfncb: 0 prompts; nfdcb: 0 prompts)
 11-06 01:33:17 report rc=0 (/Users/kamen/Leap/data/natfri/natfri_report.txt)
 11-06 01:33:17 NATIVE-FRI phase C end
+11-06 01:49:32 NATIVE-FRI phase C start (pid 28548, NO-SWAP 46 GB -> C 208, swap 10.8401 GB); screen f6808e2783446cc83f6f12f50cbb2f8c (BigMoE 462be24), runner b75e126643001201d6e8975c6174e22a
+11-06 01:49:32 DRY: C45_SCREEN=/Users/kamen/Leap/data/natfri/snap/r57_screen_natfri.py C45_OUT=/Users/kamen/Leap/data/natfri R57_KEYS=<14 ref14> C45_REFTOK=/Users/kamen/BigMoE/data/d45/ref14_tokens.json:gate+t C45_ALARM=900 MG=4
+11-06 01:49:32 DRY: C45_ARMS="nfdc_208:208 nfnc_208:208:R57_NAX=1,R57_REFTOK= nfncb_208:208:R57_NAX=1,R57_REFTOK= nfdcb_208:208" /bin/bash /Users/kamen/Leap/data/natfri/snap/c45_runner_natfri.sh   (then the report)
+11-06 01:49:32 NO-SWAP 34 GB < 31.4 + margin 3: nothing fits, nothing runs

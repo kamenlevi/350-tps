@@ -16,9 +16,14 @@
   - Without the draft, the dense part is ~44.6 ms. ZERO's model of today's engine said ~47 ms; the measurement agrees.
 - So what [P]:
   - At 12 kept per check, the fixed cost alone caps code at 12 / 54 ms = ~220 tok/s, even with zero expert cost. Today's
-    owned levers cannot reach Kamen's 250-330 tok/s line on code at 45 GB.
-  - Suppose the expert part reaches ZERO's stacked target of 0.77-0.9 ms per kept token (~2.2 today). Then 250 tok/s at 12 kept
-    needs a fixed cost <= ~37 ms, and 330 needs <= ~26 ms. At 54 ms, that same expert target gives ~190 tok/s.
+    owned levers cannot reach the 250-330 tok/s target on code at 45 GB.
+  - Both parts have to fall, and neither reaches the target alone:
+    - Today's expert cost is the measured 3.0 ms per added row; ZERO's model had said ~2.2 ms per kept token. At ~3 ms,
+      250 tok/s at 12 kept would need a fixed cost <= ~12 ms.
+    - Suppose the expert part reaches ZERO's split-form target (0.77-0.9 ms per kept token on NAX6-NH). Then 250 tok/s needs
+      a fixed cost <= ~37 ms, and 330 needs <= ~26 ms. At 54 ms, that same expert target gives ~190 tok/s.
+  - For scale: FLAT-2's real-block passes ran ~104.5 ms per check at 14.4 kept, ~138 tok/s, with a few misses. That was one
+    HumanEval prompt (#68), a workload that prompt copying flatters.
   - No single piece explains the gap: GDN, HC reads, attention, router + shared and the CPU graph build all have to shrink.
   - Leap's order: lazy commit, the HC reads, GDN, fewer syncs per layer; plus caching, compiling or overlapping the 13.4 ms
     CPU graph build.
