@@ -61,6 +61,20 @@ The exposed SSD wait is ~128 ms, 49 % of the check. It reads 1.23 GB per check a
     fall between QOM-KEEP at 147 slots (1.07 %, PASS) and P1-K2 with no residents (`p1_oea_k2`, 2.50 %, KILL). A guess
     is 1.6-2.2 %, likely KILL; its mask is buildable with the keepset replay if lever 3 needs it.
 
+## Update Fri 04:0x: lever 1's copy part (CPU replay; SCOREBOARD "RESULT, LEVER 1 CPU REPLAY")
+
+- **Copy at the check's own width is KILLED.** On Fit12's c51 logs (16 prompts, 343 checks reproduced exactly), the
+  oracle tree gains only +4.6 % kept per check, and every realizable switch is at or below today's 10.08. DFlash2
+  already drafts copied text up to its 15-draft cap.
+- **The lead is a wider copy check.** Use a 32-row copy check when the last 8 tokens match an earlier 8-gram (CW8), and
+  the drafter's 16-row check otherwise.
+  - Kept per check: 12.21 (x1.21). Rows per kept token: 1.64 vs 1.59 (+3 %).
+  - It pays only if a 32-row check costs well under 1.21x a 16-row one in the exact mode. At 1.1x it gives ~x1.1
+    [P, halved].
+  - The next test is Fit12's: time 16- vs 32-row checks in t80ck2, on copy rows.
+- **The drafter side of lever 1 is parked.** MTP Head reports P-OFF has no effect. So lever 1 now rests on the wide copy
+  check and INERT.
+
 ## Step 0: the 57 is not yet a code-valid base
 
 T3R2 certifies at θ 0.8 behind a P1-K1 pass 1: only the block's rank-0 union, at most 4 experts per row. The map's

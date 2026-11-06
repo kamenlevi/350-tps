@@ -3411,3 +3411,46 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
       count, engine side).
 - Fri 04:01: FAR's NEVER-WAIT harness patch INSTALLED (install_nw.sh exit 0, after review; HANDOVER Fri 04:01). Saturday's
   tier 1 + 1b lines are unchanged; they run after the GPU self-check passes (PASS or REPORT).
+- Fri 04:0x: PRE-REGISTRATION, LEVER 1 CPU REPLAY (PLAN_12GB_90 lever 1; the orchestrator Thu 20:0x: "kept per check").
+  - **Data**: Fit12's calibration run c51 (`~/Fit12/data/scr/t3cal`, read-only), T3R2's 16 HumanEval prompts.
+    - DFlash2's 15 drafts are logged per check. The outputs equal the exact tokens. Each output is capped at 256 tokens.
+    - Prompt ids come from `~/EvalSuite/data/items/dec_humaneval.jsonl`.
+    - Totals: 343 checks, 3,456 tokens; today's kept per check is 10.08.
+  - **Method** (scripts/lever1_copy_replay.py, CPU, seconds):
+    - Kept = 1 + the drafts' matched prefix. This must reproduce the logged kept on every check.
+    - The copy draft is prompt lookup: the latest earlier occurrence of the longest suffix n-gram (n 8..1) in prompt +
+      output so far, then the 15 tokens after it.
+    - Off the logged starts, the drafter is taken to run to its next logged divergence.
+    - The walks:
+      - (A) today's: it must reproduce 343 checks;
+      - (B) the tree: max(drafter, copy) per check, 31 rows, an upper bound;
+      - (C) a realizable switch: copy when its n-gram match is >= N tokens (N 2 / 3 / 4 / 6), else the drafter;
+      - (E) as B with copy checks 32 rows wide (31 copy drafts).
+  - **Prediction** [G]: B +10-25 % kept per check over 10.08; the best C +3-10 %. The drafter already copies: the
+    signature and docstring checks keep 16.
+  - **Lines** (kept per check, 16 rows):
+    - PASS = the best C >= +10 % (then a timing probe in Fit12's harness);
+    - KILL = B < +10 % (copy adds nothing over DFlash2 on code at 12 GB).
+- RESULT, LEVER 1 CPU REPLAY (Fri 04:0x) [P, CPU; data data/lever1/replay_g1k2.json + .log, scripts/lever1_copy_replay.py].
+  - The replay reproduces all 343 logged checks exactly (0 mismatches). Today's kept per check is 10.08.
+
+  | walk | checks | kept per check | vs today | rows per kept token |
+  |---|---|---|---|---|
+  | A, today (DFlash2, 16 rows) | 343 | 10.08 | x1.000 | 1.59 |
+  | B, tree max(drafter, copy), 31 rows | 328 | 10.54 | x1.046 | 2.94 |
+  | C3 / C4 / C6, copy if n-gram >= 3 / 4 / 6 (16 rows) | 359 / 350 / 343 | 9.63 / 9.87 / 10.08 | x0.955 / 0.980 / 1.000 | 1.66 / 1.62 / 1.59 |
+  | E, tree with a 31-draft copy branch, 47 rows | 274 | 12.61 | x1.252 | 3.73 |
+  | CW6 (post-hoc), a 32-row copy check if n-gram >= 6, else the drafter | 284 | 12.17 | x1.208 | 1.65 |
+  | **CW8 (post-hoc)**, the same at n-gram >= 8 | **283** | **12.21** | **x1.212** | **1.64** |
+
+  - **Copy at the check's own width (16 rows) is KILLED.** The oracle B is +4.6 %, under the +10 % line, and every switch
+    is at or below today. DFlash2 already drafts the copied text: the copy runs that fit in 15 drafts, it gets right.
+  - **The gain is in the width cap.** Long copy runs (re-emitted signatures and docstrings) go past the drafter's 15
+    drafts. A 32-row copy check on long n-gram matches (CW8, ~25 % of checks) cuts checks by 17 % for +3 % rows per kept
+    token.
+    - This is a post-hoc LEAD, not a PASS: the pre-registered C line failed.
+    - It counts only if a 32-row check costs well under 1.21x a 16-row one in the 12 GB exact mode. 1.1x would give ~x1.1
+      [P, halved].
+    - The next test is Fit12's: time 16- vs 32-row checks in t80ck2, on copy rows.
+  - **Caveat**: outputs are capped at 256 tokens, which favours the copy-rich start of each answer. The drafter's run
+    off the logged starts is approximated (to its next logged divergence).

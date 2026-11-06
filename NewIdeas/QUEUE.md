@@ -24,14 +24,21 @@ MEASURED (quality measured; speed measured or priced):
    Speed [P, Fable C's audit model]: expert tiles x0.63 / x0.51 -> the 22-27 ms expert
    term on HumanEval code saves 9-14 ms of ~90 = +11-19 % raw, ~+5-9 % after the audit's halving. Engine A/B + R8:
    BigMoE Fri. Leap's FLAT-2 found R57_QOM_SPLIT inert under OOO-1C (its QOM-SPLIT-1C fix: GPU check queued).
+   ENGINE A/B [K, BigMoE 725ed10, C 224, one-call path, 12 HumanEval]: NOT PASS (line: >= +8 % AND kept within 1 %).
+   The split engaged: groups x0.625 / x0.494. Clean first passes: check + commit 98.8 -> 92.9 / 93.7 ms (-6 / -5 %).
+   Kept per check fell 4.2 / 1.7 %, so kept per ms nets ~0 to +1.5 %. The middle passes were heat-disturbed (-21 %).
+   PARKED Fri 04:2x (NewIdeas' call; the orchestrator asked): R57_QOM_SPLIT leaves the FAST all-in. Re-test only
+   split 0.99 vs qall, after the FLAT cuts bring the cycle to <= ~80 ms. The tile price above was ~2-3x too high:
+   37-51 % fewer groups cut only 5-6 ms. Leap's step 0 puts the experts at 57 ms of GPU at 16 rows (11.1 at 2 rows),
+   so their time is mostly per-row work, not per-group weight reads.
 3. DRAFT17 (45 / 24 / 12): in the stack. Code bytes [P] x0.706 at 24 GB, x0.742 at 12 GB (HumanEval-style windows);
    quality PASS [K].
 
 PRE-REGISTERED, NOT RUN (by expected gain on 45 GB code; lines in QUEUE Thu 19:0x unless noted):
 4. FAR never-wait nw1 (45). [P] median check 88 -> 72-76 ms on HumanEval code = +16-22 %. Map arm, then the engine form.
 5. MEASURED Fri 02:0x-02:13 [K, code windows, Fable C's VERDICT2 lines]: no gain beyond item 2. K8 PASS 1.19 / 0.69 %
-   (all-row / non-tie) at x0.539 tiles; K6 1.49 / 0.97, A 1.40 / 0.87, A' 1.40 / 0.81, B 1.87 / 1.21: KILL. K4 (probe)
-   not run yet. By Fable C's rule (the passing arm with the fewest tiles) the code preset stays split 0.9 (x0.508);
+   (all-row / non-tie) at x0.539 tiles; K6 1.49 / 0.97, A 1.40 / 0.87, A' 1.40 / 0.81, B 1.87 / 1.21: KILL. K4 (probe,
+   03:41) KILL 2.02 / 1.42. By Fable C's rule (the passing arm with the fewest tiles) the code preset stays split 0.9 (x0.508);
    the frontier at the bar is x0.51-0.54 of the twin's tiles. (Was: K6 [G] +14-20 % raw.)
 6. GOAL INERT CD16 (45). [P, lexer replay] S 0.84 = tok/s x1.15 on the 12 HumanEval keys. Flattered by comment and
    docstring copying; C16 / G16 / D16 are the milder forms. MBPP has no engine set yet.
@@ -55,6 +62,10 @@ MEASUREMENTS THAT GATE THE PLAN (no gain themselves):
   So the order for the 45 GB line is: fixed-cost cuts first (Leap's list from FLAT-2: lazy commit, the HC reads
   11.0 ms, GDN 15.7 ms, fewer syncs per layer), QOM-SPLIT-1C second, then kept-rate items (4, 6, 7). The +x figures
   above hold only on top of those.
+  CORRECTION Fri 04:2x: the split live does NOT give ~1.5 ms per row. The engine A/B cut only 5-6 ms per check
+  (item 2). At 3.0 ms per row (16 rows = 48 ms), 250 needs FLAT <= 8 / 12 / 20 ms at K 14 / 15 / 17 per 16-row
+  check. A per-row cut has to come
+  from the expert kernel's per-row work (Leap's step 0 part B bench prices it), not from fewer groups.
 
 12 GB LINE: no lossy tok/s of my own records. Today's 12 GB exact line is 40.8 tok/s (the likely first, in an 11.35 GB
 footprint). Breakthrough + Fit12 own the line. Items 2, 4 and 9 carry over to 12 GB with unpriced pool effects; DRAFT17
@@ -62,6 +73,9 @@ is in.
 
 NOT ON EITHER LINE (24 GB chat bytes; kept for 24 GB): R15 / R15b (Fri 00:30), the 0.4 gate, the chat route itself
 (PASS, ~88 MB).
+- R15 [K, Fri 03:45]: PASS by the amended lines. Flips 0.65 / 4.39 / 2.76 % vs the route's 0.71 / 4.30 / 2.73;
+  paired p 0.83 / 0.84 / 1. Unsure rows at top-8 join the 24 GB chat route. Bytes [P, r15_price.txt]: x0.88 / 0.78 /
+  0.73 (Cloud3 x0.93 / 0.81 / 0.82). R15b qualified (multi 2.76 <= 3.19) but the runner hit its 14-run cap: Saturday.
 
 ## RAPID SCREENS (Kamen Mon 10-26 ~14:30; RULES.md 'Rapid screening + your hardware only'). Read this first.
 Protocol: every idea gets ONE screen of <= 10 min of machine time (load included) under `peer lock quiet --queue 10m`. Write
