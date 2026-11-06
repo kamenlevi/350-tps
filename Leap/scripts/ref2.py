@@ -65,6 +65,15 @@ What changes (monkeypatches on MTPLX, read-only):
     nax_native, no hybrid; TABLE_350 'FAST-NAX'): U3's sure rows and QOM's drops on NAX6-N's one-call (scripts/ooo1cq.py:
     late groups keyed by sidecar state too, a dropped group's rows are zeros, each pair writes its own sidecar entry).
     COUNTS nax_1cq. GPU checks: scripts/ooo1cq_check.py.
+  - QOM-SPLIT-1C (Fri 2026-11-06, FAST, off by default; CFG["qom_split"] = REF2_QOM_SPLIT, else R57_QOM_SPLIT, as a
+    float T; "" / "off" = off; TABLE_350 'QOM-SPLIT-1C'): Breakthrough's qom_keep_mx split on the one-call. A strict row
+    (QOM-sure, draft cf >= T, t["qom"][2]) keeps no resident expert, so its optional uses are dropped BEFORE the post:
+    the row's rank-0 id (a required use, read anyway) at weight 0. Other rows keep the bit-21 post. Both one-call forms
+    (3c / 3c-N QOM, NAX6-N 1C-Q); no kernel change. COUNTS qom_split. Before it, R57_QOM_SPLIT did nothing here.
+  - QCNT_1C (Fri 2026-11-06): set ref2.QCNT_1C = [] and every one-call appends, lazily (graph arrays, no sync),
+    int32 [uses kept, uses dropped, groups computed, uses the split dropped]. Groups = distinct base slots after the
+    drop over the call's rows (the union per block). A dropped pair reads its row's rank-0 slot (3c QOM, the split) or
+    is -2 (NAX6-N 1C-Q). Unset (None): nothing is added to the graph.
   - OOO-1C (Wed 2026-11-04, exact, off by default; CFG["ooo_1c"] or REF2_OOO_1C=1): BigMoE's OOO in ONE expert call per
     MoE layer (scripts/ooo1c.py): the late pairs go last in the grid and resolve their slots inside kernel A from the
     loader's release region (coherent(system) polls of BigMoE's coherent-spin layout; no ext change). On BigMoE's 3c path
@@ -189,13 +198,16 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "hc8_v": int(os.environ.get("REF2_HC8_V", "4")),
        "ooo_1c": os.environ.get("REF2_OOO_1C") == "1", "small_native": os.environ.get("REF2_SMALL_NATIVE") == "1",
        "nax_1cq": os.environ.get("REF2_NAX_1CQ") == "1",
+       "qom_split": (lambda v: None if v in ("", "off") else float(v))(
+           os.environ.get("REF2_QOM_SPLIT", os.environ.get("R57_QOM_SPLIT", ""))),   # QOM-SPLIT-1C (Fri 11-06)
        "hc_pend_mlp": os.environ.get("REF2_HC_PEND") == "1",
        "screened_head": os.environ.get("REF2_SCREENED_HEAD") == "1",
        "screened_head_n": int(os.environ.get("REF2_SCREENED_HEAD_N", "98304"))}
 _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
               kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
-              fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0, ooo_1c_qom=0, nax_1cq=0)
+              fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0, ooo_1c_qom=0, nax_1cq=0, qom_split=0)
+QCNT_1C = None                                       # Fri 11-06: a list -> each one-call's post-drop work (see the notes)
 _ROWS = [R]                                          # F1-R8: the real rows of the attention call being built (_att)
 _ORIG = {}
 _WCAT = {}
@@ -776,11 +788,24 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
     qm = t.get("qom")                                # QOM-OOO (Wed 17:1x): QOM's optional uses (BigMoE _ooo_call_t3);
     if qm is not None and ((nax and not qn) or nlz is None):   # QOM: the 3c / 3c-N one-call, or NAX6-N's with FAST-NAX
         return None                                  # (QOM rides on U3's t3)
+    sdrop = None
+    if qm is not None and CFG["qom_split"] is not None:   # QOM-SPLIT-1C (Fri 11-06): a strict row (QOM-sure, cf >= T) keeps
+        if qm[2] is None or qm[2].size != M:              # no resident expert (qom_keep_mx's split), so its optional uses
+            raise RuntimeError("REF2: the QOM split needs each row's draft cf in t['qom'][2]")   # drop before the post
+        sdrop = qm[0].reshape(M, K) & (qm[1].reshape(M) & (qm[2].reshape(M) >= CFG["qom_split"]))[:, None]
     gate, L = bm["gate"], bm["L"]
     BT.OOO_STATS["calls"] += 1
     COUNTS["ooo_1c"] += 1
-    ids_p = ids if qm is None else mx.where(qm[0].reshape(ids.shape), ids.astype(mx.int32) | (1 << 21),
-                                            ids.astype(mx.int32))   # QOM: optional uses marked for the loader only
+    if sdrop is None:
+        ids_p = ids if qm is None else mx.where(qm[0].reshape(ids.shape), ids.astype(mx.int32) | (1 << 21),
+                                                ids.astype(mx.int32))   # QOM: optional uses marked for the loader only
+        ids_k = ids.reshape(M, K)
+    else:                                            # the split: a strict row's optional use takes its row's rank-0 id (a
+        idm = ids.reshape(M, K).astype(mx.int32)     # required use, read anyway) at weight 0; other optional uses: bit 21
+        ids_k = mx.where(sdrop, idm[:, :1], idm)
+        ids_p = mx.where(qm[0].reshape(M, K) & ~sdrop, ids_k | (1 << 21), ids_k).reshape(ids.shape)
+        sc = mx.where(sdrop.reshape(sc.shape), mx.zeros_like(sc), sc)
+        COUNTS["qom_split"] += 1
     dep_m, n_m = post(L, ids_p)
     pre_m = dep_m[1:1 + n_m].reshape(M, K)
     if qm is not None:
@@ -814,18 +839,39 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
             COUNTS["nax_1cq"] += 1
         else:
             f1c = OC.tier_glu_nax6n_1c if native else OC.tier_glu_nax6_1c
-        y, _, _ = f1c(xin, t["base"], t["sideP"], pre_m, pre_l, ids.reshape(M, K), PLAN, gate.region, offs, gate.status)
+        y, rs_m, _ = f1c(xin, t["base"], t["sideP"], pre_m, pre_l, ids_k, PLAN, gate.region, offs, gate.status)
         COUNTS["nax6_ooo"] += 1
+        if QCNT_1C is not None:
+            _qcnt_1c(rs_m, M, K, sdrop)
         return TG.combine_phase(y.reshape(M * K, -1), y.reshape(M * K, -1), mx.ones((M, K), mx.int32),
                                 sc.reshape(-1, K)).reshape(*x.shape[:-1], -1)
     f1c = OC.tier_glu_3cn_1c if native else OC.tier_glu_3c_1c
     if qm is not None:                               # QOM-OOO: dropped optional uses (-2) read rank 0's slot at weight 0
         f1q = OC.tier_glu_3cn_1c if native else OC.tier_glu_3c_1c
-        y, _, _ = f1q(xin, t["base"], t["sideP"], pre_m, pre_l, PLAN, gate.region, offs, gate.status,
-                      sc.reshape(-1, K), qom=True)
+        y, rs_m, _ = f1q(xin, t["base"], t["sideP"], pre_m, pre_l, PLAN, gate.region, offs, gate.status,
+                         sc.reshape(-1, K), qom=True)
+        if QCNT_1C is not None:
+            _qcnt_1c(rs_m, M, K, sdrop)
         return y.reshape(*x.shape[:-1], -1)
-    y, _, _ = f1c(xin, t["base"], t["sideP"], pre_m, pre_l, PLAN, gate.region, offs, gate.status, sc.reshape(-1, K))
+    y, rs_m, _ = f1c(xin, t["base"], t["sideP"], pre_m, pre_l, PLAN, gate.region, offs, gate.status, sc.reshape(-1, K))
+    if QCNT_1C is not None:
+        _qcnt_1c(rs_m, M, K, sdrop)
     return y.reshape(*x.shape[:-1], -1)
+
+def _qcnt_1c(rs_m, M, K, sdrop):
+    """QCNT_1C (Fri 11-06, the orchestrator for BigMoE's C3-R8): one one-call's post-drop work, lazily (no sync): int32
+    [uses kept, uses dropped, groups computed = distinct base slots after the drop over the call's rows, uses the split
+    dropped]. A dropped pair holds its row's rank-0 slot (3c QOM, the split) or -2 (NAX6-N 1C-Q); rank 0 is always kept.
+    Same count as r57_screen's qcnt[2] on the two phases (sort, distinct, >= 0)."""
+    assert rs_m.size == M * K, (rs_m.shape, M, K)
+    rs = rs_m.reshape(M, K)
+    r0 = rs[:, :1]
+    dr = mx.concatenate([mx.zeros((M, 1), mx.bool_), (rs[:, 1:] < 0) | (rs[:, 1:] == r0)], axis=1)
+    s2 = mx.sort(mx.where(dr, r0, rs).reshape(-1))
+    f2 = mx.concatenate([mx.array([True]), s2[1:] != s2[:-1]])
+    i32 = lambda a: a.astype(mx.int32)
+    QCNT_1C.append(mx.stack([i32((~dr).sum()), i32(dr.sum()), i32((f2 & (s2 >= 0)).sum()),
+                             i32(sdrop.sum()) if sdrop is not None else mx.array(0, mx.int32)]))
 
 def _ooo_nax6(x, ids, bm, t, post, sc, shared):
     """C1: bigmoe.tier._ooo_call (BigMoE's OOO at e3210bf) with NAX6 in both phases: the resident pairs during the loader

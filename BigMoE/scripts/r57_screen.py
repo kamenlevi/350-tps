@@ -426,6 +426,8 @@ FG = dict(on=False, keep=None, sure=None, sure_np=None, t3=False,   # R57_FAST: 
 # QOM's own gate). Unset = today's QOM-KEEP, the same call as before.
 QSPLIT = float(os.environ["R57_QOM_SPLIT"]) if os.environ.get("R57_QOM_SPLIT") else None
 assert QSPLIT is None or FAST == "QOM", "R57_QOM_SPLIT is a QOM-KEEP option (R57_FAST=QOM)"
+QC1C = os.environ.get("R57_QCNT1C") == "1"              # Leap's ref2.QCNT_1C (eb43fcc2): per one-call [kept, dropped, groups, split
+assert not QC1C or hasattr(ref2, "QCNT_1C"), "R57_QCNT1C needs Leap's ref2 eb43fcc2 or later"   # drops]; a sort per call
 if QSPLIT is not None:
     import inspect as _insp
     assert "split" in _insp.signature(QK.qom_keep_mx).parameters, "R57_QOM_SPLIT needs Breakthrough's keepset 4963da6 or later"
@@ -950,6 +952,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         res0 = np.array([BS.ext.lookup(L, list(range(512))) for L in range(NL)], np.int32)   # pools at loop start
     out, cyc, ck_t, kept, sm, wl, cut, drf = [tok], [], [], [], [], [], False, []
     lh_ = []                                             # R57_LOGHASH: per check, the verify logits' hash
+    q1c_ = []                                            # per check, R57_QCNT1C=1: ref2's one-call counters summed over the layers
+                                                         # [kept, dropped, groups computed, split drops] (Leap QOM-SPLIT-1C, Fri 02:58)
     qc_ = []                                             # per check (QOM arms): [uses kept, loaded uses dropped, groups computed,
                                                          # strict rows (cf >= R57_QOM_SPLIT)] (Thu 19:0x, the split check)
     rows_, cb_, bld_, wt_, wsf_ = [], [], [], [], []     # per check: verified rows, SSD bytes (the per-row cost split, 11-01
@@ -980,7 +984,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             cyc.append(c0 - c_prev)
         c_prev = c0
         ref2.remove()
-        fk_ = sq_ = qcf_ = qcl_ = None                   # R57_FAST: this check's keep mask / U3's sure rows (DFlash2 only)
+        fk_ = sq_ = qcf_ = qcl_ = q1l_ = None            # R57_FAST: this check's keep mask / U3's sure rows (DFlash2 only)
         wsp = WARMSPLIT and not mtp and len(kept) >= 2 and len(kept) % WARMSPLIT == 0   # a warm-split sample (16 rows)
         if mtp:
             if pend is not None:                         # the last check's kept rows -> the head's history
@@ -1094,6 +1098,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         if PREROUTE and not mtp:                         # R57_PREROUTE: this check's capture; EvalSuite's block records
             PR.update(on=True, cur=None, y={}, blk={}, cap={}, dump=[] if PRDUMP else None)   # each layer's true top-10
             EM.STATE.capture = {}
+        if QC1C:
+            ref2.QCNT_1C = []                            # R57_QCNT1C: this real check's one-call counters (Leap's ref2 eb43fcc2)
         try:
             with ref2.verify_scope(model):
                 lg = model(mx.array([[tok] + dr]), cache=cache)
@@ -1101,6 +1107,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, cold=False, qom=False, qcf=None, qcnt=None,
                       chk=FG["chk"] + 1)
             PR["on"] = False
+            if QC1C:
+                q1l_, ref2.QCNT_1C = ref2.QCNT_1C, None
         cb = time.perf_counter()                         # graph built: the sync-free gate waits on each layer's router ids
         TAP["on"] = False
         am = mx.argmax(lg[0], axis=-1)
@@ -1147,6 +1155,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         sm.append(stats() - s0)
         qc_.append(([int(x_) for x_ in np.array(mx.stack(qcl_).sum(axis=0))] if qcl_ else [0, 0, 0]) +   # QOM counters
                    [int(((qcf_ >= QSPLIT) & sq_).sum()) if (QSPLIT is not None and qcf_ is not None and sq_ is not None) else 0])
+        q1c_.append([int(x_) for x_ in np.array(mx.stack(q1l_).sum(axis=0))] if q1l_ else [0, 0, 0, 0])   # R57_QCNT1C, per check
         rows_.append(len(dr) + 1); cb_.append(disk_read_bytes() - b0_)
         ck_t.append(c2 - c1); kept.append(k + 1); wl.append(c2 - c0)
         if STALL:
@@ -1224,7 +1233,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                 pc=dict(rows=rows_, kept=kept, ck=[1e3 * x for x in ck_t], drf=[1e3 * x for x in drf[:len(ck_t)]],
                         miss=sm[:, 0].tolist(), io=(1e3 * sm[:, 1]).tolist(), svc=(1e3 * sm[:, 2]).tolist(), mb=[x / 1e6 for x in cb_],
                         uses=sm[:, 4].tolist(), stl=sm[:, 5].tolist(),   # C3-R8: expert groups and stalled layer calls per check
-                        qc=qc_,                  # QOM arms: [uses kept, loaded uses dropped, groups computed, strict rows] per check
+                        qc=qc_, q1c=q1c_,        # QOM arms: [uses kept, loaded uses dropped, groups computed, strict rows] per check
                         bld=[1e3 * x for x in bld_], wt=[1e3 * x for x in wt_], ws=wsf_), wspl=WSPL,
                 tpsw=sum(kept[2:]) / max(sum(wl[2:]), 1e-9), cut=cut, bad=bad, stall=stall,   # tpsw: steady state, checks >= 2
                 copy=dict(cst, ms=round(1e3 * cst["ms"], 2)) if cg is not None else None,

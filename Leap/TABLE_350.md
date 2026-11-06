@@ -6852,6 +6852,20 @@ shapes, since latency does not depend on the values.
   - FLAT-2 then ran at C 224 with 48.2 GB (3.9 GB to spare) with no swap growth. So the ladder's ~4 GB headroom is not
     enough at the top rung; the re-run keeps >= 3 GB beyond the ladder's need.
   - No verdict yet; the re-run is placed by the orchestrator.
+- **RUN 2 (Fri 2026-11-06 02:58-03:22, C 192, quiet; after MTP Head's L1-20, with the QOM-SPLIT-1C check first in the same turn): PASS.**
+  - NO-SWAP 44.4 GB with margin 3 -> C 192 (needs 40.0). Every arm: lifetime peak 38.1 GB. Swap flat (10.73 -> 10.12 GB).
+  - Arms: nfdc 272 s, nfnc 411 s, nfncb 263 s, nfdcb 452 s. Arms 2 and 4 followed a 10 s SSD cool-down (68-69 C > 66 C).
+  - Tokens: both Dc passes == REF2-T on 14 / 14 prompts. Nc pass 1 == pass 2 on 14 / 14. Not a bug, not VOID: 13 prompts
+    were kept in both passes, and VOID is < 12.
+  - **Steady tok/s (tpsw, pair means, geo over 13 prompts): Dc 46.75, Nc 49.86 -> Nc / Dc = 1.0665 (+6.7 %). PASS
+    (>= +6 %).**
+    - It is under the predicted +8-14 % and 0.7 points over the line.
+    - The order effect was Dc -2.1 % and Nc +0.2 % (pass 2 / pass 1); the A-B-B-A pair means cancel linear drift.
+  - Per domain Nc / Dc: humaneval +3.6 % (4), math500 +6.9 % (3), gsm8k +7.1 % (1), ifeval +13.8 % (2), multi +8.0 % (2),
+    agent +1.5 % (1).
+> (a quote from the project owner, kept private)
+    switch to make.
+  - Data: data/natfri/natfri_report.txt, c45.log, natfri.log, nf*_192.txt, r57/; the frozen screen and runner are in snap/.
 
 ## OOO-1C: one-call OOO on the NAX path (Leap, pre-registered Wed 2026-11-04 15:2x; BUILD_DAY #5, the orchestrator 15:0x; BigMoE 15:1x: "build it as a patch in your copies")
 - **Why:** OOO pays two expert calls per MoE layer: phase 1 on the resident pairs, the loader's spin, then phase 2 on the
@@ -8069,6 +8083,21 @@ screen); GPU tests small, on share locks.
   - GPU check per call against BigMoE's two phases with the split (REF2_OOO_1C off), same loader state, bitwise.
   - The one difference: strict rows' dropped uses no longer touch the loader, so cache histories can drift. That is fine on the
     FAST track, which is certified under >= 2 histories.
+- The orchestrator 01:3x: go, built that way, including the post-drop counter BigMoE needs for C3-R8 / "groups computed".
+- RESULT (Fri 2026-11-06 02:58, first in Leap's NATIVE-FRI quiet turn): PASS, and LIVE. scripts/ref2.py = md5 eb43fcc2 (was FAST-NAX eda11b8b), with the split off by default.
+  - Check (scripts/qomsplit_check.py drives `_ooo_1c_call` itself; layers 20 / 44, 16 rows, K 10, T 0.9, 8 sure rows, 4 of them strict):
+    - (s) split on == Breakthrough's qom_keep_mx(split=0.9), bit for bit, on 3c-N 1C QOM and NAX6-N 1C-Q, including late releases.
+      - 416 split drops in all, 281 of them on resident experts (uses the split removes that plain qall would keep).
+      - Posted ids and bit-21 flags were correct, with no timeouts.
+    - (o) split off == live FAST-NAX bitwise, with and without QOM, and with the counter on.
+    - The counters matched the reference's keep mask in every call.
+    - ref2.self_test passed after the install.
+  - Data: data/qomsplit_check.txt and data/qomsplit_check.log.
+  - API: R57_QOM_SPLIT=T now also acts on the one-call path. REF2_QOM_SPLIT overrides it; "" or "off" means off.
+  - Counter: ref2.QCNT_1C = [] (None = off). Each one-call appends int32 [kept, dropped, groups, split_drops], with:
+    - groups = distinct base slots after the drop over the call's rows (the union per check block);
+    - ref2.COUNTS["qom_split"] = the calls where the split acted.
+  - BigMoE was told at 03:0x. Their qall / s99 / s90 chunk re-arms on the one-call path after NATIVE-FRI and must end by 10:15.
 
 ## FLAT-2 RESULT: zero's fixed-cost measurement (Leap ran it, Fri 2026-11-06 01:33-01:37, C 224, quiet lock): KILL
 - Lines (zero, LOSSY350_ZERO.md section 4): FLAT = the steady 2-row cycle minus 2 x the row sweep's warm slope.

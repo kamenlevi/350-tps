@@ -3332,7 +3332,7 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
 > (a quote from the project owner, kept private)
   comparable with L1-20.
 
-### P-OFF 60K RESULT (Fri 11-06 00:52): BETWEEN. Code walk kept per check 9.68 vs L1-20's 9.57 (+0.11; PASS >= +0.18, KILL <= +0.05)
+### P-OFF 60K RESULT (Fri 11-06 00:52): BETWEEN. Code walk kept per check 9.68 vs L1-20's 9.57 (+0.11; PASS >= +0.18, KILL <= +0.05). After SEED (Fri 02:57): NO EFFECT, since one reseed alone moves code by 0.16
 - Run: turns/poff_fri.sh, quiet lock granted Thu 23:45:06. sticky/poff_train.py from L1-20 (l120_ft), 1 epoch of
   ext/poff/train60 (369 windows: L1-20's + the 260 off-policy ones; 1,453 train groups, 82,406 anchors), L1-20's recipe
   (lr 2e-5, S 4, A 64, micro 1, bs 32, pmask 0.5), MLX's default TF32 like L1-20.
@@ -3377,6 +3377,34 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
 - For the TF32-off probe: if |dcode| or |dmath| >= 0.10, one run per arm can't separate TF32 from noise. It is
   re-priced with seeds before it runs.
 - Void if the run doesn't finish all 201 steps (cap, guard or the 10:12 stop).
+
+#### RESULT (Fri 11-06 02:13-02:57): |dcode| 0.16, |dmath| 0.01. P-OFF's +0.11 is within one seed difference: NO EFFECT
+- Valid: all 201 steps ("DONE: saved ... 32.5 min of training, 201 steps"). The quiet lock was granted at 02:13:45
+  (#1 in the queue, 15 s wait) and released at 02:57:28. Footprint 35.4 GB (MLX peak 33.7 active + 2.2 cache); walk
+  5.8 GB. Swap flat (11,004 -> 10,988 MB).
+- Walk (sticky/d02b_walk.py, the default code + math sets, ext/seed/l120_s1.safetensors):
+
+  | | code checks | code kept per check | code per-token rate | math checks | math kept per check | math per-token rate |
+  |---|---|---|---|---|---|---|
+  | L1-20 (seed 0) | 666 | 9.57 | 0.9239 | 2,046 | 7.00 | 0.8707 |
+  | seed 1 | 655 | 9.73 | 0.9260 | 2,047 | 6.99 | 0.8701 |
+  | P-OFF 60K | 658 | 9.68 | 0.9270 | | | |
+
+  dcode = +0.16, dmath = -0.01. The walk header's "L1-20" is fixed text; the numbers differ from L1-20's, so the
+  seed-1 weights were the ones walked.
+- VAL (the same 24 groups, on-path top-1, depths 1-16): seed 1 vs L1-20 ranges -0.027 to +0.005 (mean -0.0055).
+  P-OFF's ranged -0.021 to +0.003 (mean -0.0083). P-OFF's VAL drops are the size of a reseed's.
+- Reading (as pre-registered): |dcode| 0.16 >= 0.11, so P-OFF's +0.11 reads as no effect. The 160K version isn't worth
+  a slot on this evidence: parked.
+- Scale (one sample only): code (24 samples, ~660 checks) moves ~0.16 per retrain; math (60 samples, ~2,050 checks)
+  moves 0.01. So a single-run code delta below ~0.3 can't be told from retrain noise; that includes P-CAP's +0.18. Math
+  is the steadier read; P-CAP's math -0.08 is 8x this sample, but it is still one sample.
+- TF32-off probe, re-priced because |dcode| >= 0.10: one run per arm can't be read on code. It would need >= 2 seeds
+  per arm (~4 x 35 min GPU + walks), with math as the primary measure. TF32's rounding is noise, not a bias, so the
+  expected effect on kept rate is small. The retrain is parked. TF32 off stays the rule where port parity matters; the
+  full-scale confirmation (5 steps) runs as planned.
+- Data: data/seed_l120.log, seed_lock.log, seed_train.log, seed_walk.log, d02b_walk_seed1.txt. The weights
+  (ext/seed/l120_s1.safetensors) are not in git.
 
 ### PORT walk footprint re-measure: pre-registration (Wed 11-04 23:4x, before the run)
 - Why: the 21:0x math walk peaked at 5.97 GB (section 'PORT walk validated'), over my 4 GB rule for port tests. The fix
