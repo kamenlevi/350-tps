@@ -204,9 +204,9 @@ fast() {        # tag, keys, label: one stack process (all its keys), under this
   python3 - "$AF/${tag}_runs.json" <<'ENG' >> "$LOG" 2>&1 || { say "stack $3: QOM not engaged on code: VOID: runner stops"; exit 5; }
 import json, sys
 runs = json.load(open(sys.argv[1]))
-code = [r for r in runs if str(r.get("key", "")).startswith("humaneval/")]
+code = [r for r in runs if str(r.get("key", "")).startswith(("humaneval/", "mbpp/"))]
 qom = [r["key"] for r in code if (r.get("pf") or {}).get("qom_opt", 0) > 0]
-print(f"engaged: QOM optional uses on {len(qom)} of {len(code)} HumanEval runs; types "
+print(f"engaged: QOM optional uses on {len(qom)} of {len(code)} code (HumanEval / MBPP) runs; types "
       f"{sorted({str(r.get('type')) for r in runs})}; inert {sum(1 for r in runs if r.get('inert'))}, relaxed "
       f"{sum(1 for r in runs if r.get('rlx'))}, span {sum(1 for r in runs if r.get('spn'))} runs")
 sys.exit(0 if len(qom) == len(code) else 1)

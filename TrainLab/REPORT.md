@@ -3518,6 +3518,29 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
     09:44 in its step 1 (no lock).
   - turns/mlx_fp32_fri4.sh takes runner 48's pid when armed (09:46:01). Log data/port/fp32_fri4.log.
 
+#### RESULT (Fri 11-06 11:28:37-11:30:27): PASS on both runs. The root cause holds at full scale.
+- Slot: runner 48 ended at 11:24:03. The gate cleared at 11:28:36 (NO-SWAP 47 GB). Shared lock MEM 37 GB, ~2 min.
+  Footprints 32.4 / 32.5 GB. Swap flat (14,504 -> 14,480 MB).
+- Run 1, MLX_ENABLE_TF32=0, MLX's own trainer code vs the port's steps check (data/port/steps_thu.json):
+
+  | step | port | MLX, TF32 off | rel |
+  |---|---|---|---|
+  | 1 | 5.343394 | 5.342842 | 1.03e-4 |
+  | 2 | 4.851293 | 4.858737 | 1.53e-3 |
+  | 3 | 4.978863 | 4.971444 | 1.49e-3 |
+  | 4 | 4.796092 | 4.796075 | 3.6e-6 |
+  | 5 | 3.777776 | 3.773581 | 1.11e-3 |
+
+  Max 1.53e-3 is inside the 2e-3 line, so PASS. It is ~10x the 1-layer test's 1.2e-4: at 5 layers, A 64 and an active
+  selector, bf16 roundings and top-16 near-ties add up (diagnosis 2b's ~1e-2 per-gradient level). No systematic sign.
+- Run 2, MLX's default TF32, vs L1-20's logged losses: 5.343977 / 4.695799 / 4.796175 / 4.645471 / 3.723465, equal to
+  the log at every step (rel 0). MLX's TF32 trajectory is deterministic, and the log reproduces.
+- TF32 on vs off, same code and data: steps 2-5 differ by -3.4 / -3.5 / -3.1 / -1.3 %. That is the original 'PORT
+  steps FAIL' gap, now shown at full scale on MLX alone.
+- So: the PyTorch port equals MLX's trainer in true fp32 at full scale. MLX's default TF32 explains the whole FAIL.
+  L1-20 (and every MLX run here) trained with TF32, and that is reproducible. The TF32-off retrain stays parked (SEED).
+- Data: data/port/fp32_fri4.log, steps_mlx_{fp32,tf32}.{json,log}.
+
 ### MTP3BIT (the orchestrator 19:4x; CPU from stored logs, data/mtp_3bit_vs_4bit.txt): does the 3-bit trunk hurt the MTP head's drafting? No, not measurably
 - Public rig for comparison (github.com/crgregersen/m10dis, docs/RESULTS.md, as quoted by the orchestrator): this model's
   own MTP head on the FP8 model, per-position acceptance at drafts 1-3: natural text 70 / 46 / 26 %, one HumanEval

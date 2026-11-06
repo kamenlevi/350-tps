@@ -34,6 +34,11 @@ MEASURED (quality measured; speed measured or priced):
      HumanEval. The gate causes it, not HC8 (arm A: 2 in 732 agent tokens; exact: 0). Agent turns run EXACT until plain
      FAST passes the agent bar (EvalSuite's next slot). Agent turns are 92-94 % prefill (AT14), so B gave them only ~+9 %
      per turn.
+     AGENTFAST FAIL [K, EvalSuite 11:24, day48_runner.log]: plain FAST (no relax gate) on NAX6-N, 17 long agent turns x 2
+     orders: 85 blunders in 19,749 tokens (~43 per 10K, worse than B's 22.6; 75 inside the written code); 8.1 % of
+     tokens off the reference's top token. Short edits are clean; the long writes carry it (write12-14 at 16-20 %
+     deviation, up to 16 blunders per turn). The two orders are token-identical on only 3 of 17 turns, several diverging
+     by token 1-6. So agent turns stay EXACT. A cause bisect is ordered (GPU ORDER).
    - CHAT: the EXACT launch. Chat's FAST is the tested E without HC8 (HC8 code-only): (i) a per-launch profile with
      R57_HC8 off, or (ii) BigMoE's request-boundary swap, bit-checked. "Chat without R1" (HC8 on, no relax gate) is
      untested, so it does not ship.
@@ -194,12 +199,22 @@ ends it by the next item's start.
      NAX6-N (env 6c08636, R57_QOM_SETS with agentlong; the orchestrator 08:1x). Start by 12:30 so it ends by 15:00. If it cannot start by 12:30,
      it runs Saturday by day as the only big job. It ranks last today: agent turns are 92-94 % prefill, so it decides
      only a few % per agent turn, and agent turns default to EXACT, so the publish does not wait on it.
+  5. (Fri 11:2x) The agent-FAST cause bisect on write12-14, scored by EvalSuite's replay scorer, one lever off per arm:
+     QOM-KEEP first, then DRAFT17's bonus row, HC8, FAST-NAX's base, and the long-context pieces (DKV / att_single past
+     512 keys). Prior: QOM-KEEP, the only history-dependent lever (the orders diverge by token 1-6). Sharp test: without
+     QOM-KEEP the two orders should be token-identical. Line for that arm: blunders <= 20 % of plain FAST's on the same
+     turns = it carries it; >= 50 % = not the main cause. Today if it can start by 14:15, else Saturday by day as the
+     only big job.
 - Tonight, Sat 00:30 -> ~10:00:
   1. BigMoE's stacked FAST palindrome on 12 HumanEval: today's all-in vs all-in + every lever that passes today
      (FAST-NAX, DN-KS, CD16, FASTTAX att_single, lazy commit if wanted), plus FAR-G1. FAST-NAX is in (its BETWEEN on
      record). Plus one SPLIT-NAX arm (stack + split 0.99, ~7 min; speed only, outside the gated
      stack; item 2). BigMoE writes the winning stack's env to ~/BigMoE/data/stack/stack_env.txt for EvalSuite.
-  2. EvalSuite (the orchestrator's order, Fri 10:5x): the stack same-scores (~1.5 h, 2 orders) -> the drift top-up
+  2. Env rule for tonight's gate (NewIdeas Fri 11:2x, after the agent FAIL): QOM on the code sets only
+     (R57_QOM_SETS=humaneval,mbpp). Math rows stay as certified (B without QOM): math answers average ~670 tokens, and a
+     first-time QOM on math could sink the one gate. Chat rows run a separate launch, stack minus HC8 + E (R1 0.5) with
+     no QOM, as E was certified, or are skipped (chat stays EXACT).
+     EvalSuite (the orchestrator's order, Fri 10:5x): the stack same-scores (~1.5 h, 2 orders) -> the drift top-up
      (~1.5 h) -> MBPP decision 4 for CD16 (~1.2 h: NAX6-N reference on the walk's 100 MBPP tasks, then the stack with
      CD16 in 2 orders). Details of the first two follow. ONE same-scores run (decision 4 vs REF2-T) on exactly that stack, code and math on the CODE profile
      (stack + B with HC8), plus the code drift top-up (40 HumanEval+ problems, >= 1K tokens, ~1.5 h; PASS = blunders

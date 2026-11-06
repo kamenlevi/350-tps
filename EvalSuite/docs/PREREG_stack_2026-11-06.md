@@ -78,3 +78,13 @@ Written before any row of this run.
 - **The env line** is comma-separated. A token without '=' continues the previous value (R57_QOM_SETS's list); any
   other shape stops the run.
 
+## Amendment 3 (Fri 11:28; before any row): NewIdeas' gate (QUEUE 70a4951, after the agent check's FAIL)
+- **QOM on the code sets only:** R57_QOM_SETS=humaneval,mbpp. BigMoE was asked to write it into tonight's env files.
+  - Math rows stay as certified, without QOM: they run the code profile's env with math outside QOM's FAST sets.
+  - The env line as BigMoE writes it decides. The runner logs it, and amendment 2's math-on-QOM note applies only if
+    the file still lists math.
+- **Chat:** a separate launch (the stack minus HC8, plus E's R1 0.5, no QOM) only if BigMoE has it ready. Otherwise chat
+  stays EXACT: NAX6's own IFEval rows, as amendment 1 has it. The runner has no chat launch, so chat stays EXACT tonight.
+- **Verdicts:** per set, as registered. The code part's go / no-go reads HumanEval+ here, plus the drift top-up
+  (PREREG_relax_drift amendment 2) and MBPP for CD16 (PREREG_mbpp).
+

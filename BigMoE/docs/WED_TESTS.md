@@ -362,3 +362,11 @@ C 224 (NO-SWAP 49 GB), 12 HumanEval, A-B-B-A, no freezes, qall drift -1.2 %.
 - The kept change comes from the base: NAX6-N is a certified exact reference with its own numerics.
 - tok/s already nets it.
 - Proposed for tonight's stack, with EvalSuite's same-scores as the gate (the orchestrator decides).
+
+### Fri 11:25: both pre-flights VOID (my own race), re-armed as one chain
+
+The D7BNAX_32=1 re-run (pf3) and never-wait bit check 4 (pf4) waited separately for the same clear Mac. They passed their
+3 clear polls together and started at 11:25:06: 2 x ~31 GB, swap 11.5 -> 14.6 GB. The swap guard stopped f3k and f4n after
+~27 s, and f3r and f4k never started (0 / 2 each). No result. Fix: scripts/pf_chain.sh runs them in sequence, and both
+scripts look again 20 s after their share lock (any > 5 GB job or NO-SWAP < 40 GB: release and wait). Tonight's env files
+also take NewIdeas' gate rule (QUEUE 70a4951): R57_QOM_SETS=humaneval,mbpp.

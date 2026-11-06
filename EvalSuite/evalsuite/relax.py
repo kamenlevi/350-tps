@@ -37,7 +37,8 @@ PAUSE = os.path.expanduser("~/.local/share/quiet/PAUSE")
 FAN_CAP = os.path.expanduser("~/.local/share/quiet/FAN_CAP")
 OOO_ENV = {"BIGMOE_TIER": "4433333333", "BIGMOE_TIER_GLU": "3c", "BIGMOE_TIER_CL": "112", "BIGMOE_TIER_COMBINE": "1",
            "BIGMOE_OOO": "1"}
-SETS = ("math", "ifeval", "humaneval", "multi", "agent", "humanevalx", "agentlong")   # + the drift re-check's (Fri)
+SETS = ("math", "ifeval", "humaneval", "multi", "agent", "humanevalx", "agentlong",   # + the drift re-check's (Fri)
+        "humanevalt")                                                               # + its code-only top-up (amend. 2)
 
 
 def S_(thr=None, copy=False, rules=(), loop=None, union=False):
@@ -52,7 +53,8 @@ ARMS = {                                                 # PLAN_relax sec 9 (clo
     "control": dict(hc8=False, sets={s: OFF for s in SETS}),
     "A": dict(hc8=False, sets=dict(humaneval=S_(**G99), math=S_(**G99), agent=S_(**G99))),            # the gate alone
     "B": dict(hc8=True, sets=dict(humaneval=S_(**G99, loop=R2), math=S_(**G99), agent=S_(**G99),       # the mode
-                                  humanevalx=S_(**G99, loop=R2), agentlong=S_(**G99))),   # PREREG_relax_drift
+                                  humanevalx=S_(**G99, loop=R2), agentlong=S_(**G99),     # PREREG_relax_drift
+                                  humanevalt=S_(**G99, loop=R2))),                        # its amendment 2
     "E": dict(hc8=False, sets=dict(ifeval=S_(rules=[R1]), multi=S_(rules=[R1]))),                     # chat R1
     "E8": dict(hc8=True, sets=dict(ifeval=S_(rules=[R1]), multi=S_(rules=[R1]))),                     # E + HC8 (Fri)
     "F": dict(hc8=False, sets=dict(ifeval=S_(rules=[R1, R2]), multi=S_(rules=[R1, R2]))),             # + R2

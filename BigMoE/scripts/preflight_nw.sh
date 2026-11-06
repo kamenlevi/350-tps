@@ -12,10 +12,13 @@ nsw() { vm_stat | awk '/page size of/ {ps=$8} /^Pages (free|speculative|purgeabl
 busy() { [ "$(ps -axo rss= | awk '$1 > 5000000' | wc -l | tr -d ' ')" -gt 0 ] || [ "$(nsw)" -lt 40 ] \
   || peer ls 2>/dev/null | grep -qE 'benchmarking: quiet lock|waiting for a quiet window' \
   || peer ls 2>/dev/null | grep -E 'shared run' | grep -qE 'MEM ([5-9]|[1-9][0-9]+) GB'; }
-nc=0; while [ $nc -lt 3 ]; do if busy; then nc=0; else nc=$((nc + 1)); fi
-  [ "$(date +%H%M)" -ge 1415 ] && { say "SKIPPED: not clear by 14:15"; exit 0; }; [ $nc -lt 3 ] && sleep 30; done
-peer lock share 12m --cpu 300 --gpu 100 "BigMoE pre-flight: NEVER-WAIT bit check 4 (2 prompts, CAP 32, C 160), MEM 36 GB" >> "$LOG" 2>&1 \
-  || { say "share lock refused"; exit 0; }
+big() { [ "$(ps -axo rss= | awk '$1 > 5000000' | wc -l | tr -d ' ')" -gt 0 ] || [ "$(nsw)" -lt 40 ]; }
+while :; do nc=0; while [ $nc -lt 3 ]; do if busy; then nc=0; else nc=$((nc + 1)); fi
+    [ "$(date +%H%M)" -ge 1415 ] && { say "SKIPPED: not clear by 14:15"; exit 0; }; [ $nc -lt 3 ] && sleep 30; done
+  peer lock share 12m --cpu 300 --gpu 100 "BigMoE pre-flight: NEVER-WAIT bit check 4 (2 prompts, CAP 32, C 160), MEM 36 GB" >> "$LOG" 2>&1 \
+    || { say "share lock refused"; exit 0; }
+  sleep 20; big || break   # Fri 11:25: two waiters on one clear Mac started together (2 x 31 GB, swap +3 GB): look again
+  peer unlock >> "$LOG" 2>&1; say "a big job started beside us after the lock: back to waiting"; done
 trap 'peer unlock >> "$LOG" 2>&1' EXIT
 cp scripts/r57_screen_fast.py data/r57/snap/r57_screen_pf4.py && cp scripts/relax_delta.py scripts/relax_span.py scripts/inert_span.py \
   data/r57/snap/ && cp scripts/c45_runner.sh data/r57/snap/c45_runner_pf4.sh || exit 2
