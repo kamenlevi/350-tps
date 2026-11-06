@@ -170,3 +170,26 @@ rule: tokens per check, time per check from the table above, and divergences vs 
   window opened at 23:30, so it may run before 06:00 in a GPU gap. Re-armed as task b6utph004 with NOT_BEFORE = Fri 23:34
   (same gate: 10 clear minutes); /Users/kamen/Fit12/data/scr/ex16/WAIT (NewIdeas may touch it to keep the slot for later)
   blocks the gate like HOLD.
+
+## 12GB-CLEAN RESULT (Sat 7 Nov 00:3x; ex16 ran 00:28:27-00:32:42 under a quiet lock, rc 0, swap flat 6742 MB, 16 / 16 counted)
+- The 12 GB VERIFIED-GREEDY loop (arm ex; not exact) alone in its own process, all 16 HumanEval prompts, greedy, cap 256:
+  **18.42 tok/s decode, geometric mean** (pooled 18.47: 3,456 tokens in 187.11 s; min 17.16 on /16, max 20.30 on /156).
+  End to end with prefill (3.4-5.2 s per prompt of 103-367 tokens): 13.66 (geometric mean).
+- Lifetime peak phys_footprint of the process (RUSAGE_INFO_V4): **11.144 GB = 10.379 GiB**, under the 12 GB line (valid);
+  10.583 GB after load.
+- Settings (the engine's lines verbatim in /Users/kamen/Fit12/data/scr/ex16/ex16_report.txt): tier plan 4433333333 (ranks
+  0-1 at 4 bits, 2-9 at 3 bits MSB-3), C_m 47 / C_l 32 expert slots per layer (9 %), pools 6.03 GB, HC 8, embedding 4-bit
+  g64, engine v3p (bt_b12 8db71cc537); late MSB-3 ranks (2, 10) apply to one-row calls only, verify calls of 2-4 rows wait
+  for all ten ranks; drafter DFlash2 L1-20 at 4 bits (0.928 GB), 15 drafts per check, SW 2048.
+- Per check (343 checks): 10.08 tokens kept, 11.2 ms draft + 533.7 ms verify, 4.42 GB of the process's own SSD reads.
+- Decode tok/s per prompt: /156 20.30, /42 19.19, /68 17.49, /91 18.26, /16 17.16, /6 18.86, /79 17.95, /19 19.97,
+  /161 18.42, /17 18.51, /56 17.43, /141 18.17, /101 19.19, /63 18.65, /114 17.75, /77 17.80 (the harness's own print
+  differs by 0.01 on four prompts: rounding of the decode seconds; same geometric mean).
+- Validity: rc 0, a 'done' line, no PAUSE interval (nothing re-run or excluded), no Error / Traceback, swap flat, GPU 0 %
+  at the start under the quiet lock (NewIdeas' slot: after BigMoE's 200 STACK and Leap's slot, before runner 49). Outputs
+  token-identical (count + sha) to kp2's ex arm on 16 / 16, from a different process, arm mix and cache history.
+- Against the earlier mix: kp2 18.38 on all 16 (share lock, six-arm process, two prompts disturbed) / 18.58 on its 14
+  clean prompts; T3R 18.42 (8 prompts); T3t 18.9 (4 prompts). The release number is 18.42 (geometric mean) / 18.47
+  (pooled) at 11.144 GB; the six-arm process's 11.39 GB held the other arms' state too.
+- Data: /Users/kamen/Fit12/data/scr/ex16 (ex16.txt, ex16_report.txt / .json, MANIFEST.txt with shasums + ENV, per-prompt
+  _ex / _ex_toks / _ex_ph json). Sent to the orchestrator 00:3x.

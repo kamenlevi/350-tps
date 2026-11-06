@@ -211,3 +211,4 @@ M5 Pro. Taken from HANDOVER.md, LEDGER.md, FINDINGS.md and DESIGN_*.md (line num
 - Sat 11-07 00:2x: MATCH g2 at 16 rows (exact copy check) on the FAST stack: clean, and +5.6 % with ship B's span rule as stackb (span relaxed only 21 / 5,900 rows, so the gain is g2's); stackb at C 256 = 144.9 tok/s, 42.8 GB peak (FINAL, quality gate pending). Data data/sat, docs/WED_TESTS.md.
 - Sat 11-07 00:2x: T16 (GOAL's guarded INERT, top-3 at 0.1 p1) on MBPP12: BETWEEN (1 flip mbpp/319 in pair 2; tokens x1.088; K x1.035): not in the stack. Data data/sat/mbpp_forms.json.
 - Sat 11-07 00:2x: C 256 vs C 224: stack +2.9 % (KILL by 0.1 pt), stackb +3.4 % (PASS), peaks 42.7-42.8 GB. Data data/sat.
+- Sat 11-07 00:40: S2 (R57_SBN=2 + D7BNAX_32=2 + DSUB + SVH, Leap) on stackb at C 256: PASS +3.1 % (146.8 vs 142.4 tok/s), cycle -1.3 ms; tokens differ (floor B1-vs-B2 7/12 under QOM), so S2 joins S4's gate. Data data/s2.

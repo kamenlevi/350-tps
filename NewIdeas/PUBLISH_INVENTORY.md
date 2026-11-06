@@ -50,7 +50,8 @@ To fix before the freeze (NewIdeas):
 |---|---|---|---|---|---|
 | 45 GB | EXACT (NAX6-N) | ref14, 13-14 prompts | 49.9 [K, quiet, C 192, NATIVE-FRI run 2] | certified exact reference (Part 1 + 2 PASS, Thu 5 Nov) | stands |
 | 45 GB | FAST (FAST-NAX all-in) | 12 HumanEval | 113.9 [K, quiet, C 224, palindrome] | same-scores: tonight's run on the stack | pending tonight |
-| 45 GB | FAST stack (+ DN-KS, lazy, D7BNAX_32, att_single; no CD16) | 12 HumanEval | ~128-130 [P]; measured tonight | same-scores + 2 long-code top-ups tonight | pending tonight |
+| 45 GB | FAST stack (+ DN-KS, lazy, D7BNAX_32, att_single; no CD16) | 12 HumanEval | 132.6 [K, quiet, C 224, palindrome, Sat 00:2x] | same-scores (runner 49 gates stackb, below) | measured |
+| 45 GB | FAST stackb (the stack + B's comment rule + g2 copy) at C 256 | 12 HumanEval | 144.9 [K, quiet, palindrome 145.5 / 144.3, lifetime peak 42.8 GB; +46 % vs qall 99.1] | runner 49's same-scores + 2 long-code top-ups (at C 160 / 192: more QOM skipping than C 256, so conservative); CERT at the release C | pending runner 49 |
 | 45 GB | FAST + RELAX B (code and math answers) | HumanEval+ / math | x1.49 / x1.32 vs the exact control [K, paired, C 160] | decision 4 PASS; drift PASS as registered | stands; tonight's top-up can roll it back |
 | 45 GB | chat | IFEval | E x1.46 [K, paired] | E PASS alone; E + HC8 KILL (84 vs 90) | ships EXACT until E runs without HC8 |
 | 45 GB | agent turns | 17 long agent turns | - | AGENTFAST FAIL (85 blunders; QOM-KEEP carries it) | ships EXACT (stated limit) |

@@ -26,6 +26,57 @@ KREP = int(os.environ.get("STEPB_KREP", "3"))            # kernel-level forwards
 DPROBE = os.environ.get("STEPB_DRAFT") == "1"           # step B: the drafter's propose profiled once per probe (a cache copy)
 DENSE = int(os.environ.get("STEPB_DENSE", "0"))         # step B gap hunt: N unsynced 16-row forwards with the experts stubbed
 FULL = int(os.environ.get("STEPB_FULL", "0"))           # ... and N with the real experts (warm, after one loading forward)
+ABL = os.environ.get("STEPB_ABL", "")                    # S2b step 1 (Sat 00:5x): in-situ unsynced price per dense piece: the
+ABL_N = int(os.environ.get("STEPB_ABL_N", "12"))         # dense-only 16-row forward with one piece stubbed per variant
+ABL_R = int(os.environ.get("STEPB_ABL_R", "5"))          # (hcr / hcra / hcrm / hcw / inproj / att / gdn / moe / ple), rounds
+S2C = int(os.environ.get("STEPB_S2C", "0"))              # S2c step 1: N forwards per variant at a real check (own block alone,
+
+
+class _SkipRest(Exception):                              # alternating with the previous checks' blocks)
+    pass
+
+
+def _flat(mx, o):
+    """the mx arrays inside o (array / list / tuple / dict values), in order"""
+    if isinstance(o, mx.array):
+        return [o]
+    if isinstance(o, (list, tuple)):
+        return [a for x in o for a in _flat(mx, x)]
+    if isinstance(o, dict):
+        return [a for x in o.values() for a in _flat(mx, x)]
+    return []
+
+
+def _rewrap(mx, o, deps):
+    """o's structure with every array made to depend on deps (mx.depends: no compute, an edge in the graph)"""
+    if isinstance(o, mx.array):
+        return mx.depends(o, deps) if deps else o
+    if isinstance(o, tuple):
+        return tuple(_rewrap(mx, x, deps) for x in o)
+    if isinstance(o, list):
+        return [_rewrap(mx, x, deps) for x in o]
+    return o
+
+
+def _memo(mx, fn, ids, store=None):
+    """S2b's stub: the first call per (instance, input shapes) runs fn and keeps its evaluated outputs; later calls return
+    them depending on every input array (upstream work stays in the graph, fn's own kernels are gone). ids: the
+    instances to stub when fn is a method (others pass through); None for a module function."""
+    store = {} if store is None else store
+
+    def w(*a, **kw):
+        if ids is not None and (not a or id(a[0]) not in ids):
+            return fn(*a, **kw)
+        ins = _flat(mx, list(a[1:] if ids is not None else a)) + _flat(mx, kw)
+        key = (id(a[0]) if ids is not None else 0, tuple(tuple(x.shape) for x in ins))
+        if key not in store:
+            o = fn(*a, **kw)
+            mx.eval(_flat(mx, o))
+            store[key] = o
+            return o
+        return _rewrap(mx, store[key], ins)
+    w.__wrapped__ = fn
+    return w
 
 
 def sync_ms(mx, clock=time.perf_counter, n=300):
@@ -56,6 +107,7 @@ class Hooks:
     def new_pass(self, mode, at=()):
         assert mode in ("meas", "stage", "probe"), mode
         self.mode, self.at, self.full, self.t_commit0, self.rec = mode, set(at), None, None, self._blank()
+        self.blocks = []                                 # S2C: the last checks' (rows, masks), for the alternating forwards
 
     def take(self):
         r, self.rec = self.rec, self._blank()
@@ -121,6 +173,10 @@ class Hooks:
         n = len(L["kept"]) + 1                           # this check, 1-based
         if self.mode == "probe" and n in self.at and not L.get("mtp"):
             self.rec["probes"].append(self._probe(L, n))
+        if S2C and self.mode == "probe" and not L.get("mtp"):   # after the probe: the probe check sees only earlier blocks
+            cp = lambda a: None if a is None else np.array(a, copy=True)
+            self.blocks = (getattr(self, "blocks", []) + [([L["tok"]] + list(L["dr"]),
+                                                           (cp(L.get("fk_")), cp(L.get("sq_")), cp(L.get("qcf_"))))])[-3:]
         self.t_commit0 = self.clock()
 
     def after_commit(self, L):
@@ -391,6 +447,117 @@ class Hooks:
                 t_.__call__ = c_
         return out
 
+    # ------------------------------------------------------------ S2c step 1: a real check's block, alone vs alternating
+    def _s2c_probe(self, fwd, real, rmask):
+        """At a real check (Sat 00:5x; NewIdeas' S2c line): S2C unsynced forwards (each ends in its eval, as the loop's
+        check does) of (same) the check's own block, (alt2) alternating with the previous check's block, (alt3) cycling
+        the last three checks' blocks, (same2) its own again (drift). Each forward rolls the cache back to this check's
+        start, so only the rows (tokens, hence routed experts) differ. Unix stamps for the GPU sampler."""
+        out = dict(rows=len(real), prev=[len(b[0]) for b in self.blocks])
+        me = (real, rmask)
+
+        def run(seq, label):
+            ws, bs, who, ms = [], [], [], []
+            t0 = time.time()
+            for i in range(S2C):
+                rows_, m_ = seq[i % len(seq)]
+                _, r_ = fwd(rows_, m_)
+                ws.append(r_["wall"]); bs.append(r_["build"]); who.append(i % len(seq)); ms.append(r_["miss"])
+            out[label] = dict(wall=ws, build=bs, who=who, miss=ms, t_start=t0, t_end=time.time())
+
+        run([me], "same")
+        if self.blocks:
+            run([self.blocks[-1], me], "alt2")
+        if len(self.blocks) >= 2:
+            run([self.blocks[-2], self.blocks[-1], me], "alt3")
+        run([me], "same2")
+        return out
+
+    # ------------------------------------------------------------ S2b step 1: in-situ price per dense piece (ablation)
+    def _abl_probe(self, fwd, tok, dr_, m_):
+        """The stashed 16-row block, dense-only (every expert call returns zeros, as DENSE), ABL_R rounds; in each round
+        every variant (base + the ABL list) runs 2 warm-up forwards and ABL_N unsynced timed ones. A variant stubs its
+        pieces: the first call per (instance, input shapes) runs the real piece once and keeps its evaluated outputs;
+        later calls return those outputs wrapped in mx.depends on every input array (so no upstream work is dropped),
+        i.e. the piece's own kernels are gone and nothing else changes. The wall delta vs base = the piece's in-situ cost
+        (valid while the forward stays GPU-bound: compare build vs wall). Unix stamps per window for the sampler."""
+        ns = self.ns
+        mx, lay, Q = ns["mx"], ns["lay"], ns["Q"]
+
+        def memo(fn, ids):
+            return _memo(mx, fn, ids)
+
+        gl = [l for l in lay if l.is_linear]
+        al = [l for l in lay if not l.is_linear]
+        ipr = [l.linear_attn.in_proj_fused for l in gl if getattr(l.linear_attn, "in_proj_fused", None) is not None]
+        pl = [l.ple for l in lay if "ple" in l]
+
+        def cls(objs):
+            return ("cls", {type(o) for o in objs}, {id(o) for o in objs})
+
+        V = {"hcr": [cls([l.attn_hyper_connection for l in lay] + [l.mlp_hyper_connection for l in lay])],
+             "hcra": [cls([l.attn_hyper_connection for l in lay])],
+             "hcrm": [cls([l.mlp_hyper_connection for l in lay])],
+             "hcw": [("mod", Q, "_hyper_residual_write")],
+             "inproj": [cls(ipr)] if ipr else [],
+             "att": [cls([l.self_attn for l in al])],
+             "gdn": [cls([l.linear_attn for l in gl])],
+             "moe": [cls([l.mlp for l in lay])],
+             "ple": [cls(pl)] if pl else []}
+        names = ["base"] + [v for v in ABL.split(",") if v in V and V[v]]
+
+        def install(specs):
+            sv = []
+            for sp in specs:
+                if sp[0] == "cls":
+                    for T_ in sp[1]:
+                        sv.append((T_, "__call__", T_.__call__, "__call__" in vars(T_)))
+                        T_.__call__ = memo(T_.__call__, sp[2])
+                else:
+                    _, obj, name = sp
+                    sv.append((obj, name, getattr(obj, name), name in vars(obj)))
+                    setattr(obj, name, memo(getattr(obj, name), None))
+            return sv
+
+        def uninstall(sv):
+            for obj, name, old, own in reversed(sv):
+                if own:
+                    setattr(obj, name, old)
+                else:
+                    delattr(obj, name)
+
+        T_x = {type(l.mlp.switch_mlp) for l in lay}
+        saved_x = [(t_, t_.__call__) for t_ in T_x]
+
+        def zstub(self_, x, indices, *a, **kw):
+            return mx.zeros(x.shape[:-1] + (x.shape[-1],), x.dtype)
+
+        out = {v: dict(wall=[], build=[], win=[]) for v in names}
+        out["_meta"] = dict(names=names, n=ABL_N, rounds=ABL_R, rows=len(dr_) + 1, gdn=len(gl), att=len(al), inproj=len(ipr),
+                            ple=len(pl))
+        try:
+            for t_ in T_x:
+                t_.__call__ = zstub
+            for _ in range(ABL_R):
+                for v in names:
+                    sv = install(V.get(v, []))
+                    try:
+                        fwd([tok] + dr_, m_)                 # fills the variant's memo (real pieces, evaluated)
+                        fwd([tok] + dr_, m_)
+                        t0 = time.time()
+                        for _ in range(ABL_N):
+                            _, r_ = fwd([tok] + dr_, m_)
+                            out[v]["wall"].append(r_["wall"]); out[v]["build"].append(r_["build"])
+                        out[v]["win"].append((t0, time.time()))
+                    finally:
+                        uninstall(sv)
+        except Exception as e:
+            out["_meta"]["error"] = repr(e)[:300]
+        finally:
+            for t_, c_ in saved_x:
+                t_.__call__ = c_
+        return out
+
     # ------------------------------------------------------------ the probe
     def _probe(self, L, n):
         ns, clock, SEG = self.ns, self.clock, self.SEG
@@ -453,6 +620,9 @@ class Hooks:
                 r_["equal"] = eq(lg_, lg_ref)
                 w.append(r_)
             res["warm"] = w
+            if S2C and len(real) > 2:                    # S2c step 1 at a real check: its own block back to back, then
+                res["s2c"] = self._s2c_probe(fwd, real, rmask)   # alternating with the previous checks' blocks
+                raise _SkipRest
             if not self.dot["res"] or self.dot["rows"] != len(real):
                 self.dot.update(on=self.dot.get("done2") is None, rows=len(real))
             res["synced_real"] = fwd(real, rmask, True)[1]
@@ -469,11 +639,13 @@ class Hooks:
                 KB.K["cap"], KB.K["caps"] = False, []
                 res["k_real"].append(rk)
             sw, f = {}, self.full
-            if (DENSE or FULL) and f is not None and len(f["dr"]) + 1 >= 16:   # the gap hunt, first (small pools: no sweep)
+            if (DENSE or FULL or ABL) and f is not None and len(f["dr"]) + 1 >= 16:   # the gap hunt, first (no sweep)
                 if FULL:                                 # the real check at 16 rows, warm
                     res["full16"] = self._dense_probe(fwd, L["tok"], *self.masks_for(16, fz), stubbed=False, n=FULL)
                 if DENSE:                                # the dense pass alone (experts stubbed)
                     res["dense16"] = self._dense_probe(fwd, L["tok"], *self.masks_for(16, fz))
+                if ABL:                                  # S2b step 1: one dense piece stubbed per variant
+                    res["abl"] = self._abl_probe(fwd, L["tok"], *self.masks_for(16, fz))
                 f = None
             if f is not None:
                 tok = L["tok"]
@@ -500,6 +672,8 @@ class Hooks:
             res["sweep"] = sw
             if DPROBE:
                 res["draft"] = self._draft_probe(L)
+        except _SkipRest:
+            pass
         except Exception as e:                           # a failed probe must not cost the pass: put the check back
             res["error"] = repr(e)
             self.rec["errors"].append(f"probe at check {n}: {e!r}")

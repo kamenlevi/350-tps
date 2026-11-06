@@ -11,6 +11,23 @@
 ## flattered by prompt copying (its answers re-emit the prompt's signature and docstring), so code gains are given per set.
 Tags: [K] = measured, [P] = priced from measured parts, [G] = a guess. 45 = the 45 GB line, 12 = the 12 GB line.
 
+TONIGHT'S MEASURED 45 GB CODE NUMBER, Sat 00:2x (pending the same-scores gate, runner 49): 144.9 tok/s [K, BigMoE
+data/sat/sat_report.txt, 7bc69bb; re-derived by NewIdeas]. This is stackb at C 256 (the stack + B's shipped rule +
+R57_COPY=g2), quiet, 12 HumanEval, palindrome passes 145.5 / 144.3, kept 11.34 per check (cycle ~78 ms), lifetime peak 42.8 GB.
+- Arms at C 224 (geo steady over 12):
+  - qall 99.1.
+  - stack 132.6: +33.8 % vs qall, PASS.
+  - stackb 140.1: +5.6 % vs the stack (140.1 / 132.6 = x1.057), PASS. Relaxed accepts were 0, so the gain is g2's copy
+    (the draft changed at 422 positions; HumanEval flatters copying).
+  - stackr 145.3 / stackrm 144.6: +9.5 / +9.0 %, SPEED ONLY (C's failed form). Adding g2 to stackr gained nothing.
+- C 256: stackb 144.9 (+3.4 %, 42.8 GB, PASS); the stack 136.5 (+2.9 %, KILL by its +3 % line).
+- T16: MBPP12 BETWEEN (mbpp/319 flipped in pair 2; tokens x1.088), so no stackt.
+- Never-wait ceiling PASS: cold16 - warm16 is a median 18.5 ms per check over 58 samples. That is the most any SSD-wait
+  lever can win.
+- The gate: runner 49 gates code_env (stackb) at its own C (160 or 192, by free memory). QOM skips more at a smaller C, so
+  a PASS there is conservative for C 256, but CERT should run the release C.
+- Against Kamen's publish trigger: 144.9 vs 250-330 (x1.7-2.3 to go). Against Saturday's 200: x1.38 to go, i.e. a ~57 ms
+  cycle at kept 11.34.
 VOID Fri 16:0x (CD16 is KILL on quality, see item 6): the 157.9 below includes CD16, so it is not a publishable number.
 The valid line stays 113.9 [K] (FAST-NAX, pending the gate); tonight's palindrome measures the stack without CD16 (~128-130 [P]).
 WAS: TODAY'S MEASURED 45 GB CODE NUMBER, UPDATED Fri 15:5x (pending tonight's gate): 157.9 tok/s [K, BigMoE
@@ -51,6 +68,13 @@ evening, measured and gated, workload named; then publish). Built levers that ca
 | S2 small built items (the orchestrator's sweep): D7BNAX_32=2 (-0.75 ms per cycle; code tokens identical to =1), DSUB (-1.0 ms per propose), SVH (-0.79 ms per check), plus Leap's glue fix | per item | x1.04-1.08 [P: -3..-6 ms] | kernel-only / bitwise on code (D7BNAX_32=2); SVH is FAST | DSUB and SVH live only in ~/Leap/data/r57_session_vocab.diff; they need wiring Saturday |
 | C 256 | C | x1.03-1.05 [P] | none needed | a REGULAR arm tonight (the orchestrator Fri 21:1x): peak ~43.2 GB [P] = 38.9 at C 224 + 32 x 0.134, inside the 45 GB lifetime line; needs NO-SWAP >= 47.2 GB at grant, else C 224; line PASS >= +3 % vs the same arm at C 224 AND lifetime peak <= 45.0 GB |
 
+- RESULT Sat 00:2x: 144.9 [K] (stackb at C 256). What can still stack by Saturday evening [P]:
+  - S2: -1.3..-3.6 ms per cycle in Leap's loop, i.e. x1.02-1.05 on the ~78 ms 12-HE cycle.
+  - S1 NW v3: at most the ~7 ms of gate service per check, x1.10. The never-wait ceiling is 18.5 ms.
+  - S3: parked.
+  - Total: ~147-167 on HE-12, gated.
+  - 200 needs ~21.6 ms off the cycle: all of the 18.5 ms never-wait ceiling plus S2. NW v3 targets ~7 of those 18.5 ms.
+    So 200 is out of reach tonight; Saturday's honest number is ~150-165 if S1 passes.
 - Stacked product [P], REVISED Fri 21:2x (no MATCH-32, no G16 / D16, gap x1.03-1.05): base 131-137 x (relax v2
   1.08-1.15 OR T16 1.04) x MATCH-16 1.03 x Leap's items 1.02-1.06 x C 256 1.03-1.05 x gap 1.03-1.05 = ~151-191 on
   HumanEval-12. 200 is OUT OF REACH on priced factors. Only the open GPU-idle lead or an unpriced find could close it.
@@ -352,8 +376,8 @@ ends it by the next item's start.
   4. Breakthrough's map, nw3 first (S1's input): beside runner 49 under a share lock if memory allows, else right
      after it. Then step 0, then T1 (xs has no engine kernel yet). The 24 GB arms move to Sunday night.
   5. EvalSuite's CERT reference decodes (~1.5 h, NAX6-N): right after runner 49, beside the map if memory allows.
-  6. S1-S3 (S0 is OUT, Fri 23:5x), each as soon as its input is in: S2 after Leap's smoke, S1 after nw3's code verdict,
-     S3 when Leap's Python-floor build lands. One quiet A/B each (~10-15 min) at the next chunk boundary of EvalSuite's
+  6. S1 and S2, each as soon as its input is in (S0 is OUT, Fri 23:5x; S3 is PARKED, Sat 00:2x). S2's input is in
+     (Leap's smoke PASS); S1 follows nw3's code verdict. One quiet A/B each (~10-15 min) at the next chunk boundary of EvalSuite's
      runs (no preemption mid-chunk). They go ahead of CERT's reference decodes and T1.
   7. S4 (the short gate, ~1.5-2 h) once S0-S3 are decided, by 16:00 at the latest; S5 after it; FREEZE ~20:00; CERT
      after the freeze.
@@ -395,16 +419,62 @@ ends it by the next item's start.
       5.7 ms (50.1 -> 44.3). Kept per check is unchanged (scheduling only). S2 = R57_SBN=2 + D7BNAX_32=2 + DSUB / SVH:
       the diff ~/Leap/data/s2wire/r57_s2.diff applies clean on r57 fa8bee48. Leap compile-checks and smokes it after
       BigMoE's lock (~00:54). Then BigMoE's quiet A/B (12 HumanEval palindrome vs code_env) in the next slot.
+      SMOKE PASS Sat 00:1x (Leap): 2 prompts, 517 tokens, rc 0. svh_calls 69 == head2s 69, chk_out 0, dsub_extra 3 ==
+      svh_extra 3; footprint peak 38.6 GB. Leap's repeat of SB 2 vs SB 4 gave -1.3..-2.0 ms, so the range with 23:4x's run is
+      -1.3..-3.6 ms per 16-row cycle. BigMoE's A/B (stackb at C 256 vs + S2) settles it. It takes the next quiet slot:
+      before runner 49 if BigMoE is ready, else runner 49's first chunk boundary (45-min chunks).
+  S2b. ENGINE ITEMS WITH NUMBERS (the orchestrator Sat 00:3x: "combine what we have"; sources: Fable B's DENSE_REBUILD.md
+      sections 2, 0b and 5, and kernels/eprep.py). Leap builds and benches; BigMoE runs one bundle A/B. Prices are per
+      16-row check [P, Fable B's fill model]. Fable B's own small-kernel prices ran ~2x high on Friday (section 0b), so
+      plan on about half.
+      | item | price | Leap's bench line (in situ, chained, 16 rows, C 224, stack env) |
+      |---|---|---|
+      | f. the two folds (NEW; Fable B section 2, "not run yet" in 0b): GDN a\|b into in_proj's stream (tiles 512-514), attention k\|v into q's (tiles 384-415); no new kernel, no K split | -1.6 / -1.1 | PASS >= 50 % of the price, KILL < 25 %; record bitwise vs the stack |
+      | e. expert id / mask glue (kernels/eprep.py: compiles, 4,000 cases, 0 differ) | -0.6..-0.8 | same line |
+      | b. k3c up mix to ~220 GB/s (3.8 MB at 137-143 today; the 16-load tail is the suspect) | -0.9 | same line |
+      | d. attention's ~25 other launches per layer after att_single | -0.5 | same line |
+      | a. HC reads' in-loop excess: 8.6 ms in situ vs 5.95 chained, ~2.6 ms with no owner | locator first | PASS = a chained replay of one whole read inside a layer names >= 1.5 ms of it, with a fix by ~12:00 |
+      | c. in_proj 210 -> 240 GB/s via nt 2 | -0.5 | doubtful: Leap's Fri-morning verdict (0b) says nt 2 / 4 do not help in_proj at ks 2. Only a new idea revives it |
+      - Bundle A/B (BigMoE, quiet, 12 HumanEval palindrome at C 256, vs the then-current stack, i.e. stackb + S2 (+ S1 if
+        in)): PASS >= +3 %, KILL < +1 %. If tokens are equal on 12 / 12, no gate is needed; else the bundle joins S4's gate.
+      - Priced total: f 2.7 + e 0.7 + b 0.9 + d 0.5 = ~4.8 ms, ~2.4 at the usual haircut; a adds up to 2.6 if found.
+        That is +3-10 % on the ~78 ms cycle.
+      - Fit: Leap builds on the CPU now. Per-piece benches take short quiet slots at EvalSuite's chunk boundaries. The
+        bundle A/B lands by ~12:00, and the last call is 14:00 so S4 can start by 16:00. Anything later is post-freeze.
+      - Bigger pieces NOT reachable by the freeze:
+        - The launch count, ~3,000 launches x 1.6 us = ~4.8 ms per check. It needs a fused layer kernel.
+        - The never-wait ceiling's remainder, ~11 of 18.5 ms: read time on the critical path, which needs fewer cold bytes.
+        - K: nothing ready. The drafter retrains are inside noise (K_PLAN_1106: P-CAP +0.18, P-OFF +0.11, a reseed moves
+          0.16), T16 is BETWEEN, and 32-row checks need <= 0.9 ms per row.
+      - The router on qmm16c8 (-0.6) stays parked: it can flip routes on near-ties.
+      - Count S2b at [G] until Leap's step 1: a ~5-min quiet in-situ pricing of the HC / k3c / in_proj / attention
+        pieces, unsynced. Leap warns the HC "excess" rests on synced per-piece timing and may mostly vanish.
+  S2c. IN-LOOP EXCESS (Leap's lead from tonight's 132 checks, the orchestrator Sat 00:4x; possibly bigger than S1 + S2).
+      Leap's fit: check + commit = 57.9 + 0.76 x gate service (r 0.77). So at zero service a real 16-row check + commit
+      costs ~58 ms, but the same forward run back to back is ~45 ms and the commit ~0.5 ms. That leaves ~11-13 ms per
+      check of in-loop excess: -12 ms on a ~78 ms cycle is ~+18 % [P].
+      - Step 1 (Leap, quiet, ~5-10 min, right after S2b's step 1): a harness runs a real check's own block back to back
+        and in the loop (unsynced, 16 rows, C 224, stack env). PASS = the excess reproduces at >= 8 ms per check AND a named
+        mechanism holds >= 6 ms of it. KILL = the unsynced excess is < 4 ms; then the fit's intercept is not a removable
+        excess.
+      - Step 2 (BigMoE, if a fix exists by ~13:00): an engine A/B, quiet, 12 HumanEval palindrome at C 256 vs the
+        then-current stack. PASS >= +6 % (half the price), KILL < +2 %. Equal tokens mean no gate; otherwise it joins S4.
+        Last call 14:00, then post-freeze.
+      - The same fit prices S1's ceiling at ~0.76 x gate service: ~3 ms on tonight's warm prompt, ~10.6 ms at ~14 ms of
+        service. BigMoE's NW v3 A/B tests it on the 12-prompt set.
   (Map order, re-timed Fri 23:3x: nw3 first (S1's input), then step 0, then T1 (xs has no engine kernel yet, so it
   cannot ship Saturday). The 24 GB arms move to Sunday night.)
-  S3. THE PYTHON FLOOR (the orchestrator Fri 23:5x; Leap prices and builds). Leap's warm 16-row forward (gap_night.txt
-      lines 23-24, re-derived by NewIdeas): wall 46.06 ms = graph build 40.33 + 5.73; GPU ~41.3 ms. With the experts
-      stubbed: build 16.21, GPU ~20.7. So the expert path costs 24.1 ms of Python build (0.50 ms per layer), and once
-      S1 / S2 cut GPU time, the check sits on ~40 ms of Python. Lever: graph reuse or mx.compile for the expert path
-      (CPU work now; one quiet A/B when built).
-      - Exactness: graph reuse alone keeps the bits (token equality, no gate). mx.compile's fusion can change rounding,
-        so a compiled form joins S4's gate.
-      - It also sets S1's ceiling: NW v3 helps only down to the Python floor unless S3 lands too (Leap prices both).
+  S3. PARKED Sat 00:2x (the orchestrator and Leap). Leap measured it directly at SB 2: the Python thread uses 38.9-40.9 ms
+      of CPU per 66.5-68.7 ms cycle.
+      - Where it goes: graph build 15.2-16.2 (the expert calls are 3.75-3.97 of it, 0.08 ms per layer; dense + glue
+        11.5-12.2), Metal encoding inside mx.async_eval 18.0-19.3, and draft + commit + loop ~5.5.
+      - The cycle is GPU-bound (~96 % busy), ~27 ms above the ~40 ms CPU floor.
+      - An expert-glue compile wins <= 3-4 ms, and only once GPU time per cycle nears ~45 ms. A later CPU lever is fewer
+        dispatches (encode ~19 + dense build ~12), which also cuts GPU time.
+      - Order: S1 before S3. NW v3's ~7 ms of gate service per check sits inside the gap, so the floor does not limit it.
+      - WITHDRAWN: my Fri 23:5x line said "the expert path costs 24.1 ms of Python". The FULL vs DENSE build gap in
+        gap_night.txt is Metal encoding plus back-pressure from the busy GPU, not Python. I re-did the subtraction but
+        never checked what the "build" timer measures; Python time needs thread CPU time.
   S3b. Tonight's leftovers, only if the relaunched ticket misses them: T16 (MBPP12 pair, then stackt), C 256 (if NO-SWAP
       was short), MATCH-16 (if its 2-prompt check failed).
   S4. A short gate on the final stack (EvalSuite designs "short"): HumanEval 60 + math 50 in 2 orders, MBPP if T16 is

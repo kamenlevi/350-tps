@@ -1992,3 +1992,4 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 12:59:03 SCR kp2 start: fit_t3.py kp2 arms ex,t80ck2,exd,t80ck2a,t80ck2n,t80ck2f F12_KPORTS=1, 16 HumanEval prompts (45 GB free, swap 11991 MB)
 13:17:31 SCR kp2 end (rc 0, 1105 s, swap 11927 MB): 96 arm outputs
 00:28:27 SCR ex16 start: fit_t3.py ex16 arm ex ALONE (12GB-CLEAN, verified greedy), 16 HumanEval prompts, quiet lock (47 GB free, swap 6742 MB, GPU 0%)
+00:32:42 SCR ex16 end (rc 0, 255 s, swap 6742 MB): 16 prompt outputs

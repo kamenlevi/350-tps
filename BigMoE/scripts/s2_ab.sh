@@ -1,14 +1,14 @@
 #!/bin/bash
-# Sat 7 Nov (NewIdeas QUEUE S2; Leap's smoke PASSED 00:3x): S2 vs code_env (stackb) on the 12 HumanEval, quiet, C 224,
-# palindrome b1 / s1 / s2 / b2. On scripts/r57_screen_fast.py with Leap's S2 diff (97a23bf), the outside code frozen at the start.
+# Sat 7 Nov (NewIdeas QUEUE S2, 00:4x; Leap's smoke PASSED 00:3x): S2 vs code_env (stackb) on the 12 HumanEval, quiet, C 256
+# (stackb's shipping C: its C 256 line PASSed), palindrome b1 / s1 / s2 / b2. On scripts/r57_screen_fast.py with Leap's S2 diff
+# (97a23bf), the outside code frozen at the start. Needs NO-SWAP >= 47.2 GB (C 256's peak 42.8 + 4), else not run.
 #   B  = stackb = the stack + ship B span (R57_RELAX_SPAN=1, R57_RELAX_SPAN_RULE=R2:2:0.25) + MATCH g2 at 16 rows (code_env)
 #   S2 = B + R57_SBN=2 (submit every 2 layers: Leap's glue fix) + D7BNAX_32=2 (single 32-row draft kernel) + R57_DSUB=1 (the
 #        drafter's screened head) + R57_SVH=1 (the screened verifier head: FAST) [R57_SV_CHECK=1 for the smoke counters]
-# Line (pre-registered Sat 00:3x, before arming; NewIdeas' [P] +2-5 %): pair-mean geo steady tok/s, S2 vs B:
-#   PASS >= +2 %, KILL < -1 %, else BETWEEN. Kept per check, tokens per task and lifetime peaks beside.
-#   Tokens: per prompt, S2's passes vs B's (and B1 vs B2 as the floor). All 12 identical in both pairs -> "no gate needed"
-#   (NewIdeas' rule); otherwise S2 joins S4's gate (EvalSuite). FAST outputs can differ run to run under QOM, so B1 vs B2 is
-#   printed beside as the floor.
+# Line (NewIdeas Sat 00:4x, pre-registered before arming): pair-mean geo steady tok/s, S2 vs B:
+#   PASS >= +2 %, KILL < 0 %, else BETWEEN. Tokens: per prompt, S2's passes vs B's (B1 vs B2 printed as the floor: QOM's outputs
+#   can differ run to run). Equal on all 12 in both pairs -> no gate needed; otherwise S2 joins S4's gate (EvalSuite).
+#   Beside: the median cycle ms per arm and S2 - B (Leap's range -1.3..-3.6 ms), kept per check, tokens per task, lifetime peaks.
 # usage: NOTAFTER=hh:mm WAITMEM=44 NOWAIT45=1 GAP0=0 GAP=0 MARGIN=4 bash scripts/turn45.sh 33 20 "..." /bin/bash scripts/s2_ab.sh
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 cd "${S2_ROOT:-$HOME/BigMoE}" || exit 1
@@ -18,8 +18,8 @@ say() { echo "$(date '+%m-%d %H:%M:%S') $*" >> "$LOG"; }
 PY=${S2_PY:-$HOME/BigMoE/.venv/bin/python}
 avail_gb() { vm_stat | awk '/page size of/ {ps=$8} /^Pages (free|speculative|purgeable):/ || /^File-backed pages:/ {v=$NF; sub("[.]","",v); s+=v} END {printf "%.1f", s*ps/1e9}'; }
 A=${S2_AVAIL:-$(avail_gb)}
-awk -v a="$A" 'BEGIN {exit !(a >= 44.0)}' || { say "NO-SWAP $A GB < 44: C 224 does not fit, not run"; exit 0; }
-CC=224
+awk -v a="$A" 'BEGIN {exit !(a >= 47.2)}' || { say "NO-SWAP $A GB < 47.2: C 256 does not fit, not run"; exit 0; }
+CC=256
 FZ="$PWD/data/r57/snap/frozen_s2"; rm -rf "$FZ"; mkdir -p "$FZ"
 cp scripts/r57_screen_fast.py data/r57/snap/r57_screen_s2.py && cp scripts/relax_delta.py scripts/relax_span.py scripts/inert_span.py \
   data/r57/snap/ && cp scripts/c45_runner.sh data/r57/snap/c45_runner_s2.sh || exit 2
@@ -101,8 +101,12 @@ for b, ps in P.items():
              f"{S.median(pm(ps, lambda r: r['n']).values()) if pm(ps, lambda r: r['n']) else float('nan'):.0f}; lifetime peak "
              f"{max([peak.get(f'{t}_{C}', 0.0) for t in ps]) or float('nan'):.1f} GB")
 r_, n_ = ratio(pm(P["S2"], lambda r: r["tpsw"]), pm(P["B (stackb)"], lambda r: r["tpsw"]))
-v = "MISSING" if n_ == 0 else "PASS" if r_ >= 1.02 else "KILL" if r_ < 0.99 else "BETWEEN"
-L.append(f"Verdict S2 (pre-registered Sat 00:3x): {v}: {100 * (r_ - 1):+.1f} % vs B (stackb) over {n_} (PASS >= +2 %, KILL < -1 %)")
+v = "MISSING" if n_ == 0 else "PASS" if r_ >= 1.02 else "KILL" if r_ < 1.00 else "BETWEEN"
+L.append(f"Verdict S2 (pre-registered NewIdeas Sat 00:4x): {v}: {100 * (r_ - 1):+.1f} % vs B (stackb) over {n_} (PASS >= +2 %, KILL < 0 %)")
+cyc = {b: S.median([r["cyc"] for t in ps for k, r in runs[t].items() if ok(t, k) and isinstance(r.get("cyc"), (int, float))] or [float("nan")])
+       for b, ps in P.items()}
+L.append(f"median cycle per run: B {cyc['B (stackb)']:.1f} ms, S2 {cyc['S2']:.1f} ms, S2 - B {cyc['S2'] - cyc['B (stackb)']:+.1f} ms "
+         f"(Leap's range -1.3..-3.6)")
 same = lambda a, b: sum(1 for k in toks[a] if k in toks[b] and toks[a][k] == toks[b][k])
 pairs = (("s2b1", "s2s1"), ("s2b2", "s2s2"))
 ident = all(same(a, b) == 12 for a, b in pairs)

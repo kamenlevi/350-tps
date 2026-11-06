@@ -55,6 +55,44 @@ def main(argv):
                 print(f"      check+commit by rows: <= 16: {med(lo):.2f} ms (n {len(lo)}), 17-32: {med(hi):.2f} ms (n {len(hi)}); "
                       f"rows of the 17-32 checks {sorted(set(r_ for r_ in rows if r_ > 16))}")
             for pr in r.get("probes") or []:
+                ab = pr.get("abl")
+                if ab:                                   # S2b step 1: the in-situ price per dense piece (flat2_probe._abl_probe)
+                    meta = ab.get("_meta") or {}
+
+                    def busy(wins):
+                        if not len(samp):
+                            return float("nan")
+                        m = np.zeros(len(samp), bool)
+                        for a_, b_ in wins:
+                            m |= (samp[:, 0] >= a_) & (samp[:, 0] <= b_)
+                        m &= samp[:, 1] >= 0
+                        return float(samp[m, 1].mean()) if m.any() else float("nan")
+
+                    print(f"    ABL (S2b step 1) at check {pr['check']}: {meta.get('rows')} rows dense-only, {meta.get('rounds')} rounds x "
+                          f"{meta.get('n')} forwards per variant; GDN {meta.get('gdn')} / attention {meta.get('att')} layers, in_proj objects "
+                          f"{meta.get('inproj')}, PLE {meta.get('ple')}{'; ERROR ' + meta['error'] if meta.get('error') else ''}")
+                    bw = med(ab["base"]["wall"])
+                    bu = busy(ab["base"]["win"])
+                    for v in meta.get("names", []):
+                        d_ = ab[v]
+                        w_, b_ = med(d_["wall"]), med(d_["build"])
+                        u_ = busy(d_["win"])
+                        print(f"      {v:7s} wall {w_:6.2f} ms (build {b_:5.2f}{', CPU-bound' if b_ > 0.9 * w_ else ''}): piece = {bw - w_:+6.2f} ms "
+                              f"of wall; GPU busy {u_:3.0f} % -> GPU {u_ / 100 * w_:5.2f} ms, piece = {bu / 100 * bw - u_ / 100 * w_:+6.2f} ms of GPU")
+                s2 = pr.get("s2c")
+                if s2:                                   # S2c step 1: the check's own block alone vs alternating blocks
+                    print(f"    S2C at check {pr['check']} ({s2['rows']} rows; previous blocks {s2['prev']} rows):")
+                    for lab in ("same", "alt2", "alt3", "same2"):
+                        d_ = s2.get(lab)
+                        if not d_:
+                            continue
+                        pos = sorted(set(d_["who"]))
+                        parts = []
+                        for p_ in pos:
+                            ii = [i for i, x in enumerate(d_["who"]) if x == p_]
+                            parts.append(f"block {p_}: wall {med([d_['wall'][i] for i in ii[1:]]):.2f} (build "
+                                         f"{med([d_['build'][i] for i in ii[1:]]):.2f}), misses {sum(d_['miss'][i] for i in ii):.0f}")
+                        print(f"      {lab:5s} ({len(d_['wall'])} forwards; the first per block dropped): " + "; ".join(parts))
                 for key_ in ("full16", "dense16"):
                     dn = pr.get(key_)
                     if not dn:

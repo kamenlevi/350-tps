@@ -3321,3 +3321,6 @@ so R-01 should find about the same slots, not ~1 GB more.
   chain: per-prompt decode tok/s + geometric mean, its own lifetime peak footprint, the engine's settings. Runner, gate,
   report and validity: /Users/kamen/Fit12/PLAN_12GB_90_fit12.md '12GB-CLEAN'. Armed 21:37 (ex16.sh).
 - Re-armed Fri 23:34 for the first clear gap (the window opened at 23:30; ex16.sh task b6utph004; WAIT file = NewIdeas' hold).
+- 12GB-CLEAN RESULT (Sat 00:3x): 18.42 tok/s decode, geometric mean over all 16 HumanEval prompts (pooled 18.47); lifetime
+  peak 11.144 GB = 10.38 GiB; alone in its process, quiet lock, rc 0, no PAUSE, outputs = kp2's ex 16 / 16. Verified
+  greedy, not exact. Details: /Users/kamen/Fit12/PLAN_12GB_90_fit12.md '12GB-CLEAN RESULT'.

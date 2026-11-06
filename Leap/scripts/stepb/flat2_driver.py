@@ -189,6 +189,8 @@ def main(ns, cfg, info, hooks=None, prewarm=True):
             side += [("meas", "real-block pass 1 (discarded)", (), cfg["real_cap"])]
             side += [("meas", f"real-block pass {j + 2}", (), cfg["real_cap"]) for j in range(cfg["real"])]
             side += [("stage", "real-block commit pass", (), cfg["real_cap"])]
+            if flat2_probe.S2C:                          # S2c step 1 (Sat 00:5x): a real check's own block, alone vs alternating
+                side += [("probe", "real-block probe pass (S2c)", (int(os.environ.get("STEPB_S2C_AT", "6")),), cfg["real_cap"])]
         for mode, label, at, rc_ in side:
             if el() > HARD - 60:
                 say(f"  time budget: {label} skipped")

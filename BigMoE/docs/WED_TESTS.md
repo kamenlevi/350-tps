@@ -476,3 +476,20 @@ Lines pre-registered in the script header before arming (NewIdeas 4b2c45c / 21:5
   vs live 28 per check.
 - **A void first try, 23:42.** A ticket started at 23:42 ran 0 arms (c45_runner's deadline compared HHMM across midnight;
   fixed 4ef9bb2). It is recorded as VOID, and part B was stopped before it read the void flags.
+
+### Sat 00:33-00:40: S2 A/B at C 256 (scripts/s2_ab.sh, data/s2; quiet, no freeze): PASS +3.1 %, tokens differ -> S4's gate
+
+S2 = Leap's glue (R57_SBN=2: submit every 2 layers) + D7BNAX_32=2 + R57_DSUB=1 + R57_SVH=1 on stackb (code_env). Line (NewIdeas
+Sat 00:4x, pre-registered): PASS >= +2 %, KILL < 0 %; tokens equal on all 12 -> no gate, else S4's gate.
+
+| arm (12 HumanEval, C 256) | geo steady tok/s (passes) | kept / check | median cycle | lifetime peak |
+|---|---|---|---|---|
+| B = stackb | 142.4 (139.9, 144.6) | 11.28 | 79.2 ms | 42.5 GB |
+| S2 | 146.8 (144.5, 148.8) | 11.38 | 77.9 ms | 42.8 GB |
+
+- Verdict: **PASS, +3.1 %**. The cycle is 1.3 ms shorter, at the low end of Leap's -1.3..-3.6 ms.
+- Tokens identical per prompt: S2 vs B 7 and 10 of 12. The floor is B1 vs B2 at 7 of 12 (S2 vs S2: 9), so under QOM at C 256
+  the outputs differ run to run, and the token route cannot clear S2. By the rule, S2 joins S4's gate: env file
+  data/stack/stackb_s2_env.txt.
+- SESSION-VOCAB counters: chk_out 0, svh_extra 3 == dsub_extra 3; svh_calls 273 / 270 per pass.
+- New best: **stackb + S2 at C 256, 146.8 tok/s** (peak 42.8 GB), pending EvalSuite's gate.
