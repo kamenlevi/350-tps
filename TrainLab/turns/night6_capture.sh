@@ -27,7 +27,7 @@ for t in 1 2 3 4; do
   [ $(date +%s) -ge $END ] && { say "06:00: no new ticket"; break; }
   [ $(df -g $HOME | awk 'NR==2 {print $4}') -ge 114 ] || { say "free disk under 114 GB: stopping"; break; }
   say "DLOG: $2 answer tokens so far (min language $1); ticket $t"
-> (a quote from the project owner, kept private)
+  PEER_QUEUE_TIMEOUT=21600 peer lock quiet --queue 30m "MTP Head DLOG: drafter training data capture (Kamen's go 19:5x): 125B de/ru/ja answers + taps / top-32, ~41 GB, no timing (turn64)" >> $LOG 2>&1 || exit 1
   [ $(date +%s) -ge $((END + 1800)) ] && { peer unlock > /dev/null 2>&1; say "granted after 06:30: released unused"; break; }
   N=$(wc -l < logs/turn_job.out)
   ./run_locked.sh 30 turns/turn64.sh

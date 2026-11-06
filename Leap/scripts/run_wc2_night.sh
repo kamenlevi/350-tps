@@ -40,7 +40,7 @@ if [ -z "$WC2_NOW" ]; then
     sleep 30
   done
 else
-> (a quote from the project owner, kept private)
+  say "runner up (pid $$), NOW mode (orchestrator 18:5x: Kamen's plan change; Kamen on the Mac, background load recorded)"
 fi
 while [ -e $Q/PAUSE ] || [ -e $Q/HOLD ]; do sleep 60; done
 say "queueing a quiet lock"

@@ -11,7 +11,7 @@
 # shared_cat + draft_fused + ref2 att_rope / idx_prep / hc_write; its every-token check, in place of Leap's runner 61); A2
 # c45_Cr = the control again (the one controlled OOO A/B: A-L-B-K-A2 puts B in the middle, L and K next to it); then
 # C45_PRIOR=1's P c45p_C (SEED45: ext/build_prior's BIGMOE_EVICT_PRIOR=30, LRU + popularity prior, each prompt's prior held
-> (a quote from the project owner, kept private)
+# out: data/seed45/prior45.npz; residency only; on OOO, vs B); then C45_BIG's c45o_C (Kamen 15:22 "Yes, try ~50 GB", via
 # the orchestrator: the default at C ~300 / ~320). Every later C of the list: c45o_C only (sizing on the default).
 # Each run logs per check: demand SSD busy, gate service on misses, draft ms (NewIdeas 11:5x: SSD- or compute-bound at
 # each C), and per kept token: SSD MB + misses. Every token checked against S45-T's REF2-T reference
@@ -54,7 +54,10 @@ one() {  # one C TAG ENV...: a run at C if NO-SWAP fits its peak + MG (default 4
     [ $((w % 12)) = 0 ] && { keepalive || { say "lost the lock in the pause before $tag: stop"; return 1; }; }
   done
   [ $w -gt 0 ] && say "PAUSE cleared after $((w * 10)) s"
-  if [ -n "$C45_DEADLINE" ] && [ "$(date +%H%M)" -ge "$C45_DEADLINE" ]; then say "$tag: past $C45_DEADLINE, stop (a run must end before 12:00)"; return 1; fi
+  # Fri 23:4x fix: HHMM compared across midnight (a 23:42 start with deadline 0042 read as past it, part A VOID). Now
+  # wrap-aware: past = now is within the 12 h after the deadline's clock time (runs are shorter than 12 h).
+  if [ -n "$C45_DEADLINE" ] && [ $(( (10#$(date +%H) * 60 + 10#$(date +%M) - 10#${C45_DEADLINE:0:2} * 60 - 10#${C45_DEADLINE:2:2} + 1440) % 1440 )) -lt 720 ]; then
+    say "$tag: past $C45_DEADLINE, stop (a run must end before 12:00)"; return 1; fi
   keepalive || { say "lost the lock before $tag: stop"; return 1; }
   ssd_wait 66
   if awk -v s="$(swap_gb)" -v r0="$SWAP_RUN0" 'BEGIN { exit !(s - r0 > 2) }'; then
@@ -109,7 +112,7 @@ for C in ${1:-224 240 256 272}; do
       [ $? = 1 ] && break
     fi
     rc=0
-> (a quote from the project owner, kept private)
+    for CB in $C45_BIG; do                                   # Kamen 15:22 "Yes, try ~50 GB": the default at C ~300 / ~320 if
       one $CB c45o_$CB; rc=$?                                # NO-SWAP >= peak + 4 GB (52 / 55 GB), else skipped
       [ $rc = 1 ] && break
     done

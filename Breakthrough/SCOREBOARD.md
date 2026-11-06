@@ -16,7 +16,7 @@ outputs in `data/`. Everything else is measured by the sibling sessions (sources
 | (the older M4 mini, if it counts) | 16 GB | 120 GB/s rated | ~2.8 GB/s (256 GB) | about the same as the M6 |
 | An 8 GB Mac (M1/M2/M3 base; Apple has sold no 8 GB Mac since late 2024) | 8 GB | 68-100 GB/s | ~1.5-2.9 GB/s (256 GB) | 75 GB/s, 1.4 GB/s |
 
-> (a quote from the project owner, kept private)
+Kamen's answer (2026-10-19 evening): "the cheapest Mac mini" = the base Mac mini, 16 GB / 256 GB, with the current base
 chip, i.e. the M6 row above (memory bandwidth still to be looked up). Its 256 GB disk must also hold the model:
 **~100 GB of model files at most.** Today's pack needs ~105 GB (trunk incl. experts 71.7 GB, n-gram table 32.0 GB, MTP
 head 1.7 GB); with ~3.25-bit experts and the dense diet it is ~85 GB, and the 4-bit n-gram table is the next big item.
@@ -154,7 +154,7 @@ lists the other walls (the drafter must itself emit 1000 tok/s, i.e. a block or 
 
 ## 7. Leaderboard (every idea is scored on these four numbers)
 
-Quality follows the orchestrator's suite (`~/.local/share/pacer/briefs/quality_suite.md`): prefill-only KLD and
+Quality follows the orchestrator's suite (`~/.local/share/usage-pace/briefs/quality_suite.md`): prefill-only KLD and
 top-1 agreement on the reference's own outputs, letter-probability MMLU-Pro/GPQA, small paired decode sets, judged
 against a same-weights floor and an accepted anchor (TOST +-2 points).
 
@@ -1690,7 +1690,7 @@ from the environment, default 4096 (the same comparison as fd405861fa: default b
 C_m points, no refill) for the Eval suite's agent-process re-test (PASS: 29 / 29 = b12llff and lifetime <= 11.95 GB);
 the short-row cost (+9.5 / +34 %, R-41E) goes into decision 5's description for Kamen.
 
-> (a quote from the project owner, kept private)
+DECISION 5 ADOPTED (Kamen Sat 10-31 11:1x, via the orchestrator, verbatim "Yes, adopt it"): fold-fast is bt_b12's default.
 LIVE SWAP 11:22:49: scripts/bt_b12.py = cf8bd7840a = 677c6558b6 + B12_MODE (default fast = b12llff3's fold-fast: FOLD_AW 1,
 C_m per prompt at the FFX points 2700:60,8600:60,16500:56,32800:47, PFR_MIN 512, PFR_GRID balanced; exact = fold-exact,
 the bit-exact mode: AW 0, CM 0, PFR_MIN 4096, grid keep; each variable still overrides) + engine v3p (= v3o + Fit12's R-53
@@ -3566,3 +3566,12 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
     - chat: IFEval / multi D +1 to +3 points; VERDICT2 FAIL likely at 208 slots, a coin toss at the published pool;
     - the control: D within +-0.15 on code.
   - Saturday's list: the 8 leftover 24 GB arms moved to data/sun_extra.txt (Sunday night; NewIdeas 6fd0224).
+
+- Fri 23:4x: NW3 RE-TIMED (NewIdeas 7e74d6c: Kamen opened the window at 23:30). The lines and predictions above are unchanged.
+  - New order: nw3's 3 code arms (the control, 208 slots, the published pool) run first in the map, right after
+    EvalSuite's runner 49. They cannot run beside it: runner 49 declares MEM 46 GB, the map 18 GB, and that plus 8 GB is
+    over 64 GB.
+  - Then EvalSuite's CERT reference decodes, then the rest: nw3's 2 x 36-window arms (chat on record), step 0, the
+    2-min NW self-check (record only; nw3's control arm checks the patched path on the GPU), then T1.
+  - Driver: scripts/dm_s7/nw3_first.sh. The runner now keeps its share lock between arms (S67_KEEPLOCK=1), so EvalSuite's
+    runner 53 cannot start in the gap between two code arms.

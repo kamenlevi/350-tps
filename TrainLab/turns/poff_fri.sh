@@ -11,7 +11,7 @@
 #     checkpoints). This replaces turns/poff_t.sh, which takes a share lock that would overwrite the quiet one.
 # Run attached (run_in_background) so the lock sees the process. Logs: data/poff_fri.log, data/poff_train.log,
 # data/poff_walk.log.
-> (a quote from the project owner, kept private)
+# Amendment Thu 11-05 23:2x (the orchestrator, Kamen 23:1x: "start the night now"): the start moves to Thu 23:45. T0 ended
 # Thu 17:53; only Leap's FAST-NAX share check (~23:25-23:40) is ahead; BigMoE queues behind us at 23:47. Steps unchanged.
 cd ~/TrainLab || exit 1
 log() { echo "[$(date '+%a %H:%M:%S')] $*"; }
@@ -23,7 +23,7 @@ TARGET=$(date -j -f "%Y-%m-%d %H:%M" "$START" +%s)
 log "1. waiting for $START ($(( (TARGET - $(date +%s)) / 60 )) min)"
 while [ "$(date +%s)" -lt "$TARGET" ]; do sleep 60; done
 log "2. queueing a quiet ticket (waits for T0's end and a drained Mac; leaves the queue after 3 h)"
-> (a quote from the project owner, kept private)
+PEER_QUEUE_TIMEOUT=10800 peer lock quiet --queue 90m "MEM 34 GB: MTP Head P-OFF 60K training + code walk (~65 min; Kamen 23:1x: the night starts now, first in line)" > data/poff_fri_lock.log 2>&1
 rc=$?
 log "ticket rc=$rc: $(tail -1 data/poff_fri_lock.log)"
 if [ $rc -ne 0 ] || ! grep -q "quiet lock held" data/poff_fri_lock.log; then log "NO GRANT: stop (ask the orchestrator)"; exit 4; fi

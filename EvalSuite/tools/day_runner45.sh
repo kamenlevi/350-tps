@@ -1,6 +1,6 @@
 #!/bin/bash
 # EvalSuite runner 45, Fri 2026-11-06 (attached to a live evalsuite session): RELAX's Friday checks
-> (a quote from the project owner, kept private)
+# (docs/PREREG_relax_drift_2026-11-05.md; Kamen Thu 08:52 "Ship after the check", via the orchestrator).
 # 1. The drift re-check: the night's arm B (Q1-UNION cf 0.9 + copy + the comment rule + HC8) on results/drift/keys_B.txt
 #    (121: humanevalx 104 + agentlong 17), into results/relax_B/ beside the night's 124 rows. Then REF2-T's replay of the
 #    new checks, tools/relax_report.py --arms B -> results/relax_drift_report.txt (the pooled long-code drift line), and

@@ -170,5 +170,5 @@ c = verdict.get("chat (ifeval + multi)")
 if c:
     v = "PASS" if c[0.25] >= 0.30 else "KILL" if c[0.1] < 0.10 else "BETWEEN"
     say(f"\nR-61N verdict on chat (PASS: MOD +30 % at rho 0.25; KILL: MOD under +10 % at rho 0.1): {v} "
-> (a quote from the project owner, kept private)
+        f"(rho 0.25 {c[0.25]:+.0%}, rho 0.1 {c[0.1]:+.0%}); NON-exact: adopting any rule is Kamen's call after a quality test")
 open(os.path.join(OUT, f"chatnt_b{BS}.txt"), "w").write("\n".join(lines) + "\n")

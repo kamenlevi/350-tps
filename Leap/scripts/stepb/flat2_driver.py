@@ -9,6 +9,9 @@ import traceback
 
 import flat2_core
 import flat2_probe
+import xpt                                               # STEPB_XPT=1: the Python thread's time per real check (Leap, Fri 23:5x)
+
+XPT_ON = os.environ.get("STEPB_XPT") == "1"
 
 TC = 1e-9                                                # the cut t: below any cf (top-1 of 16 candidates >= 1 / 16), so the
                                                          # block is never cut short of its first draft; maxd 1 then keeps one
@@ -44,6 +47,15 @@ def one_pass(ns, H, ids, arm, fset, mode, label, at=(), real_cap=0):
     ns["F2ON"][0] = mode != "meas"
     del ns["F2C"][:]                                     # run() stamps each cycle's start and the loop's end here
     t_, cap0 = clock(), ns["CAP"]
+    xp_ = bool(XPT_ON and real_cap)
+    prof = None
+    if xp_:
+        xpt.reset()
+        xpt.ON[0] = True
+        if os.environ.get("STEPB_XPT_PROF") == "1":     # cProfile of the real pass (the calling thread; ~2x slower: shares
+            import cProfile                              # only, not times)
+            prof = cProfile.Profile()
+            prof.enable()
     try:
         if real_cap:
             ns["CAP"] = real_cap
@@ -52,6 +64,21 @@ def one_pass(ns, H, ids, arm, fset, mode, label, at=(), real_cap=0):
             r = ns["run"](ids, arm, None, "dfl", False, 1, fset, TC)
     finally:
         ns["F2ON"][0], ns["CAP"] = False, cap0
+        xpt.ON[0] = False
+        if prof is not None:
+            prof.disable()
+            try:
+                import io
+                import pstats
+                s_ = io.StringIO()
+                st_p = pstats.Stats(prof, stream=s_)
+                st_p.sort_stats("tottime").print_stats(45)
+                st_p.sort_stats("cumulative").print_stats(45)
+                fn_ = os.path.join(ns["OUT"], os.environ.get("FLAT2_TAG", "flat2") + "_prof.txt")
+                with open(fn_, "a") as f_:
+                    f_.write(f"\n===== {label} ({mode}, real_cap {real_cap})\n" + s_.getvalue())
+            except Exception as e:
+                say(f"  XPT profile not written: {e!r}")
     try:
         pools = H.pool_snapshot()                        # what the next pass's prewarm puts back
     except Exception as e:
@@ -64,6 +91,10 @@ def one_pass(ns, H, ids, arm, fset, mode, label, at=(), real_cap=0):
     period = [1e3 * (b_ - a_) for a_, b_ in zip(st_, st_[1:])] if len(st_) == n + 1 else None
     if period is None:
         hk["errors"].append(f"cycle stamps {len(st_)} for {n} checks: cycles fall back to draft + check + commit submit")
+    if xp_:
+        e_ = xpt.attach(pc, st_)
+        if e_:
+            hk["errors"].append(e_)
     z = sum(1 for i in range(n) if pc["miss"][i] == 0 and pc["stl"][i] == 0)
     cy = [period[i] if period else pc["drf"][i] + pc["ck"][i] for i in flat2_core.select(pc, rows=None if real_cap else flat2_core.ROWS)]
     pw = hk["prewarm"]
@@ -102,6 +133,9 @@ def main(ns, cfg, info, hooks=None, prewarm=True):
     assert not (ns["CHATSW"] and typ == "chat"), f"{cfg['key']} is a chat prompt: FLAT-2 measures the DFlash2 loop, pick code"
     d4 = ns["DRAFT4"]
     ns["draft"] = d4 if d4 is not None and typ == "code" else ns["DRAFT16"]   # as the harness picks it (D7B=code: 4-bit)
+    if XPT_ON:
+        xpt.install(ns)
+        say("  XPT on: real-block passes log the trunk's layer calls, the expert calls and mx.async_eval (wall + thread CPU)")
     arm = ns["ARMS_"][0]
     ns["CAP"] = cfg["cap"]
     say(f"  prompt {cfg['key']} ({len(ids)} tokens, type {typ}, drafter {'D7b 4-bit' if ns['draft'] is d4 else 'bf16'}), arm "

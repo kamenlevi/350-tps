@@ -1,7 +1,7 @@
 # RELAX ship mode, Friday's checks: the long-code drift re-check and E8 (Fri 2026-11-06; rows 03:54 – 08:00)
 
 Pre-registration: `docs/PREREG_relax_drift_2026-11-05.md` (a692f0f, Thu 08:29) and its amendment 1 (7fed202, Thu 09:03).
-> (a quote from the project owner, kept private)
+Both were written before any row. Kamen, Thu 08:52, via the orchestrator: "Ship after the check".
 - **The night (RESULT_relax, 8797f54):** ship (B on code + E on chat) was BETWEEN. Decision 4 passed, but two of
   mission 7's bars failed thinly:
   - 1 agent blunder, in a description;

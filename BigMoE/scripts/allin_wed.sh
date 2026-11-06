@@ -1,5 +1,5 @@
 #!/bin/bash
-> (a quote from the project owner, kept private)
+# ALL-IN FAST, code (Kamen Wed 15:0x via the orchestrator: "i know there is a way to at least 300 tps on fast mode"): today's
 # builds stacked on U3C, measured once against U3C on the 12 HumanEval at C 224, all arms on ext/build_l2 (one binary):
 #   allin = U3C len (R57_FAST=U3C + R57_U3C_LEN=1) + D7b's 4-bit drafter on code (R57_D7B=code) + HC8-1P v4 (R57_HC8=1,
 #           REF2_HC8_FAST=1: 8-bit trunk mixers, the one-pass read) + DENSE-N-RAM (R57_DNR=1) + hc_b (R57_HCB=1; idle under

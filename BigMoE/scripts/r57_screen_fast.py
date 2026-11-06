@@ -30,7 +30,7 @@ os.environ.setdefault("HF_HUB_OFFLINE", "1")
 _D45 = os.environ.get("R57_PRESET") == "45" and os.environ.get("R57_D45", "1") == "1"
 if _D45:
     os.environ.setdefault("R57_CHATSW", "1")
-> (a quote from the project owner, kept private)
+CHATSW = os.environ.get("R57_CHATSW") == "1"            # Kamen 11-02 ~10:1x "Yes, 1-3": MTP Head's chat switch (D-23d PASS, exact;
 if CHATSW:                                               # ~/TrainLab/INTEGRATION_CHATSWITCH.md): prompts the type rule calls chat
     os.environ["TL_INFER"] = "1"                         # draft on the 125B's MTP head (d22 b5, K15, cut t, early exit); code /
     os.environ.pop("BIGMOE_MTP_STREAM", None)            # math / agent stay on DFlash2. Head resident (D-20 / D-23d); TL_INFER:
@@ -276,7 +276,7 @@ PRD = dict(n=0, L=[], chk=[], row=[], X=[], Y=[])        # R57_PR_DUMP: this run
 #          each id to the LRU front in order), up to the pool size C_m; the 4-bit ranks' ones into the LSB sidecar up to C_l
 A6 = set(filter(None, os.environ.get("R57_A6", "").replace("+", ",").split(",")))   # '+' too: c45_runner's arm lists split on ','
 A6_POOLS = int(os.environ.get("R57_A6_POOLS", "24"))
-# WARMSPLIT (NewIdeas 11-02 07:3x, Monday night; lead ~/.local/share/pacer/leads/2026-11-01_per_row_cost_opus.md step 1):
+# WARMSPLIT (NewIdeas 11-02 07:3x, Monday night; lead ~/.local/share/usage-pace/leads/2026-11-01_per_row_cost_opus.md step 1):
 # R57_WARMSPLIT=N: every Nth check from the 3rd drafts all 15 (a 16-row check) and, before the real one, runs the identical
 # input cold at 16 rows (rolled back), then warm (all its experts now resident) at 1 / 4 / 8 / 16 rows, each rolled back.
 # Warm slope = the GPU-only cost per row; cold 16 - warm 16 = the SSD's exposed share. The real check then commits as
@@ -816,7 +816,16 @@ HEADC = os.environ.get("R57_HEADC") == "1"              # Leap 1e0676d (BP-7, ex
 if HEADC:                                                # (-0.56 ms per propose; falls back for a non-4-bit / native head or
     sys.path.insert(0, os.path.expanduser("~/Leap/scripts"))   # > 16 rows). Not yet smoked: next slot.
     import d7b_nax as _D7N
+SV = None                                                # SESSION-VOCAB (Leap ~/Leap/scripts/session_vocab.py): one session-id
+if os.environ.get("R57_SVH") == "1" or os.environ.get("R57_DSUB") == "1":   # feed for SVH (R57_SVH=1: the screened VERIFIER
+    sys.path.insert(0, os.path.expanduser("~/Leap/scripts"))                 # head, ref2 CFG screened_head, FAST) and BP-9
+    import session_vocab as _SVM                                              # (R57_DSUB=1: the drafter's screened head on
+    SV = _SVM.SessionVocab(model.language_model.lm_head, svh=os.environ.get("R57_SVH") == "1",   # qmm16c, exact-safe; it
+                           dsub=os.environ.get("R57_DSUB") == "1",                              # supersedes R57_HEADC);
+                           check=os.environ.get("R57_SV_CHECK") == "1")                         # R57_SV_CHECK=1: smoke counters
 def head2s(hid):
+    if SV is not None and SV.dsub:                       # BP-9: the drafter's head over FR-Spec 98,304 + the session's ids
+        return SV.head2s(draft, hid)
     lg = _D7N.head_logits(draft, hid) if HEADC else draft.compute_logits(hid)
     B, s = 128, lg.shape
     blk = lg.reshape(*s[:-1], s[-1] // B, B)
@@ -877,10 +886,11 @@ class MTPHead:                                           # the chat switch's dra
 _midloop = Q._prefill_midloop_eval_layers
 SB_LO = 1 if os.environ.get("R57_SB1") == "1" else 2     # Leap's C0 timeline (11-02): 1-row checks build their graph without the
                                                          # midloop async_eval (warm 48 vs 44 ms at 2 rows); R57_SB1=1 = from 1 row
+SBN = int(os.environ.get("R57_SBN", "4") or "4")         # Leap S2 (Sat): submit every SBN layers on SB's 2-16-row checks (4 = today)
 def ref_on(on):
     if on:
         ref2.apply()
-        Q._prefill_midloop_eval_layers = lambda rows: _midloop(rows) or (4 if SB_LO <= int(rows) <= 16 else 0)   # SB
+        Q._prefill_midloop_eval_layers = lambda rows: _midloop(rows) or (SBN if SB_LO <= int(rows) <= 16 else 0)   # SB
     else:
         ref2.remove()
         Q._prefill_midloop_eval_layers = _midloop
@@ -927,6 +937,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
     cold_ = bool(FAST and (FASTARMS[FAST].get(fset) or {}).get("cold")) and not mtp
     if cold_:                                            # U3C: the prompt's own footprint per layer, during its prefill
         FG["cap"] = np.zeros((48, 512), bool)
+    if SV is not None:                                   # SESSION-VOCAB: this prompt's ids join both subsets (before the prefill:
+        SV.new_prompt(ids)                               # a short last prefill chunk takes SVH's <= 16-row path too)
     cache, last, T, ws = prefill(ids, mtp)
     if cold_:
         cap_, FG["cap"] = FG["cap"], None
@@ -944,6 +956,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         ctx = T[start:P]
     a = P
     tok = int(mx.argmax(last).item())
+    if SV is not None:
+        SV.committed([tok])
     set_arm(arm)
     a6 = {}                                              # A6's pre-loop steps (outside the decode clock), in this order
     R_ = R if (cg is not None or (INERT is not None and INERT["rows"] > 16)) else 16                     # R57_ROWS=32 only where the copy runs (MATCH 2.5), 16 elsewhere
@@ -1349,6 +1363,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                 new = new[:j + 1]
                 break
         out += new
+        if SV is not None:                               # SESSION-VOCAB: the committed ids (kept drafts + the target's token)
+            SV.committed(new)
         if scan is not None:
             scan.feed("".join(_TKZ.decode([int(x)]) for x in new))
         if sscan is not None:                            # R57_RELAX_SPAN: the committed tokens join the tagger's text
@@ -1658,4 +1674,6 @@ try:                                                     # never let the side lo
         json.dump(PRALL, open(os.path.join(OUT, f"{TAG}_preroute.json"), "w"))
 except Exception as e:
     say(f"  checks.json / runs.json not written: {e}")
+if SV is not None:                                       # SESSION-VOCAB: the smoke's counters (svh_calls ~ checks; head2s ==
+    say(f"SESSION-VOCAB {SV.report()}")                  # proposes; chk_out ~0 with R57_SV_CHECK=1; dsub_extra == svh_extra)
 open(os.path.join(OUT, f"{TAG}_screen.txt"), "w").write("\n".join(lines) + "\n")

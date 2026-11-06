@@ -166,3 +166,7 @@ rule: tokens per check, time per check from the table above, and divergences vs 
   engine's settings lines verbatim (tier plan, C_m / C_l, pools, HC, late ranks), and any voided prompt.
 - No pass / fail line: a measurement. Validity: every counted prompt PAUSE-free (a paused prompt is re-run once, then left
   out and named); the lifetime peak must be under 12 GB (the line); rc 0 and a 'done' line.
+- AMENDMENT Fri 23:34 (the slot only; arm, prompts, settings, report and validity unchanged): the orchestrator 23:3x: the
+  window opened at 23:30, so it may run before 06:00 in a GPU gap. Re-armed as task b6utph004 with NOT_BEFORE = Fri 23:34
+  (same gate: 10 clear minutes); /Users/kamen/Fit12/data/scr/ex16/WAIT (NewIdeas may touch it to keep the slot for later)
+  blocks the gate like HOLD.

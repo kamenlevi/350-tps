@@ -1,4 +1,4 @@
-> (a quote from the project owner, kept private)
+"""DAY9 report (BigMoE, Mon 2026-11-02; ~/FableGod/DAY9_2026-11-02.md + Kamen's "Yes, 1-3"): reads r57_screen's JSON side
 files (data/r57/<tag>_{runs,checks,tokens,warmsplit}.json) of the DAY9 arms and prints one block per group with its line:
 - B2 (condition 9): C 300 / 320 vs C 256 (tonight's c1d_256, else C50's c45l_256 text): steady tok/s, lifetime peak, SSD MB
   and misses per kept token, every token == REF2-T
@@ -100,7 +100,7 @@ for C in ("300", "320"):
         + (f"; vs C {SUF}: steady {100 * (a['tpsw'] / base['tpsw'] - 1):+.1f} %, MB per kept token "
            f"{100 * (a['mb'] / base['mb'] - 1):+.1f} %" if base else ""))
 # ---------------------------------------------------------------- the chat switch
-> (a quote from the project owner, kept private)
+say("\n== chat switch (Kamen 'Yes, 1-3'): A = the default (DFlash2), B = R57_CHATSW=1, C " + SUF)
 A, B = {r["key"]: r for r in runs(f"chA_{SUF}")}, {r["key"]: r for r in runs(f"chB_{SUF}")}
 if A and B:
     ea, eb = tok_check(f"chA_{SUF}", REFCH), tok_check(f"chB_{SUF}", REFCH)

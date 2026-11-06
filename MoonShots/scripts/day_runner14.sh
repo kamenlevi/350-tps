@@ -1,5 +1,5 @@
 #!/bin/sh
-# MoonShots day_runner14 (Wed 10-21 daytime, account-1): one quiet lock for the round-32 GPU tests, in value order.
+# MoonShots day_runner14 (Wed 10-21 daytime, claudesub): one quiet lock for the round-32 GPU tests, in value order.
 # Same discipline as day_runner13 (memory guard, active_at keepalive, a single unlock at the end). Launch it from the
 # session WHILE holding the granted quiet lock; its first job reuses it ("lock already held").
 # Results: ~/MoonShots/data/day14/*.txt, one line per job in summary.txt.

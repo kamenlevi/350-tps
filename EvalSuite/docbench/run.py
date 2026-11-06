@@ -23,8 +23,8 @@ CONFIGS = {
     "9b-q4mixed": dict(path=Q95, bits=4, recipe="mixed_4_6",
                        note="in memory from BF16, mlx_lm mixed_4_6 (6-bit v_proj / down_proj in some layers, lm_head)"),
     "27b-q4": dict(path="mlx-community/Qwen3.5-27B-4bit", note="as published (affine 4-bit g64)"),
-> (a quote from the project owner, kept private)
-> (a quote from the project owner, kept private)
+    "36-35b-a3b-q4": dict(path=f"{LMS}/Qwen3.6-35B-A3B-MLX-4bit", note="Kamen's LM Studio model, as is (bonus)"),
+    "38-27b-q6": dict(path=f"{LMS}/Qwen3.8-27B-MLX-6bit", note="Kamen's LM Studio model, as is (affine 6-bit g64)"),
     "38-27b-q4": dict(path=f"{LMS}/Qwen3.8-27B-MLX-6bit", requant=4,
                       note="in memory from the 6-bit: dequantize, then affine 4-bit g64 (one extra rounding step "
                            "compared with a 4-bit made from BF16)"),

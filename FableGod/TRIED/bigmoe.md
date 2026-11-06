@@ -208,3 +208,6 @@ M5 Pro. Taken from HANDOVER.md, LEDGER.md, FINDINGS.md and DESIGN_*.md (line num
 - Fri 11-06 15:40: NEVER-WAIT v1 (Leap ref2 + r57 side) engine A/B vs the stack at C 224, 12 HumanEval, palindrome: KILL -2.8 % (per check +6.5 ms; 37 misses/check, stalled calls unchanged). Not in the gated stack. Data data/fday, docs/WED_TESTS.md.
 - Fri 11-06 15:40: SPLIT-NAX (stack + R57_QOM_SPLIT=0.99, NewIdeas) vs the stack at C 224, 12 HumanEval, palindrome: KILL -1.3 %, kept -5.7 %. Data data/fday.
 - Fri 11-06 15:51: CD16 (R57_INERT=CD16, comment rows kept unverified) on GOAL's MBPP12: speed PASS (K x1.45, +23.7 % tok/s, tokens x1.02) but quality KILL: tests 11/12 -> 8/12, 3 flips per pass pair (drafter comment loops accepted). Data data/fday, docs/WED_TESTS.md.
+- Sat 11-07 00:2x: MATCH g2 at 16 rows (exact copy check) on the FAST stack: clean, and +5.6 % with ship B's span rule as stackb (span relaxed only 21 / 5,900 rows, so the gain is g2's); stackb at C 256 = 144.9 tok/s, 42.8 GB peak (FINAL, quality gate pending). Data data/sat, docs/WED_TESTS.md.
+- Sat 11-07 00:2x: T16 (GOAL's guarded INERT, top-3 at 0.1 p1) on MBPP12: BETWEEN (1 flip mbpp/319 in pair 2; tokens x1.088; K x1.035): not in the stack. Data data/sat/mbpp_forms.json.
+- Sat 11-07 00:2x: C 256 vs C 224: stack +2.9 % (KILL by 0.1 pt), stackb +3.4 % (PASS), peaks 42.7-42.8 GB. Data data/sat.

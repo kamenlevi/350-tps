@@ -1,6 +1,6 @@
 # MISSION 28: THE TREE WALL. Make exact branching cheap, so the check can try the MTP head's top 3 at the hard positions.
 
-> (a quote from the project owner, kept private)
+(Draft by the orchestrator, approved by Kamen Mon 2 Nov 2026 21:1x: "local should get b". The earlier mission 28 text, "the draft, hidden", is saved as MISSION_DRAFT_HIDDEN_LATER.md for after Tuesday's drafter results.)
 
 **Why.**
 - **Tokens kept per check multiplies every line.** 350 needs ~12.5-13 kept per 16-row check. Today it's ~10.5 on code and only 2.0-2.5 on chat.

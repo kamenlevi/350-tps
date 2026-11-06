@@ -1,4 +1,4 @@
-# MoonShots FINDINGS (night 10-20 -> 10-21, account-1; details and data paths in IDEAS.md rounds 32-32i)
+# MoonShots FINDINGS (night 10-20 -> 10-21, claudesub; details and data paths in IDEAS.md rounds 32-32i)
 
 ## Delivered (main track, 3-bit tier engine)
 - records3 converter + verifier (BigMoE converted all 48 layers with it); one-dispatch 3b rebuild (bitwise, 1.3-1.7x).

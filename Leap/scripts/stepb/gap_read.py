@@ -36,6 +36,19 @@ def main(argv):
                     f"{med(pc['wt']):.2f}), misses {sum(pc['miss']):.0f}; GPU busy {u:.0f} % over "
                     f"{(t1 - t0) if t0 else float('nan'):.1f} s")
             print(line)
+            if "ck_lw" in pc and n > 1:                  # XPT (xpt.py): the Python thread per check, checks 2.. (medians)
+                m_ = {k: med(pc[k][1:]) for k in pc if k[:3] in ("ck_", "cm_", "cy_")}
+                xn = max(1.0, m_["ck_xn"])
+                print(f"      XPT check forward ({m_['ck_rows']:.0f} rows): 48 layer calls wall {m_['ck_lw']:.2f} / CPU {m_['ck_lc']:.2f} ms "
+                      f"({m_['ck_lw'] / 48:.3f} / {m_['ck_lc'] / 48:.3f} per layer); inside them the expert calls wall {m_['ck_xw']:.2f} / CPU "
+                      f"{m_['ck_xc']:.2f} ms ({xn:.0f} calls: {m_['ck_xw'] / xn:.3f} / {m_['ck_xc'] / xn:.3f} per call), the rest (dense + glue) "
+                      f"wall {m_['ck_lw'] - m_['ck_xw']:.2f} / CPU {m_['ck_lc'] - m_['ck_xc']:.2f}; async_eval in its loop wall "
+                      f"{m_['ck_aw']:.2f} / CPU {m_['ck_ac']:.2f} ms; engine build {med(pc['bld'][1:]):.2f}")
+                print(f"      XPT cycle: the Python thread's CPU {m_.get('cy_cpu', float('nan')):.2f} ms of {m_.get('cy_wall', float('nan')):.2f} ms "
+                      f"wall (draft + check + commit + loop): the floor if the GPU and every wait were free")
+                print(f"      XPT commit ({m_['cm_f']:.0f} forwards): layers wall {m_['cm_lw']:.2f} / CPU {m_['cm_lc']:.2f}, experts wall "
+                      f"{m_['cm_xw']:.2f} / CPU {m_['cm_xc']:.2f}, async_eval wall {m_['cm_aw']:.2f} / CPU {m_['cm_ac']:.2f}; every "
+                      f"async_eval of the cycle wall {m_['cy_aw']:.2f} / CPU {m_['cy_ac']:.2f} ms")
             if max(rows) > 16:
                 lo = [pc["ck"][i] for i in range(n) if rows[i] <= 16]
                 hi = [pc["ck"][i] for i in range(n) if rows[i] > 16]

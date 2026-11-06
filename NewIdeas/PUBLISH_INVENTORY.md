@@ -86,10 +86,12 @@ The public findings notes (~/FableGod/findings/) are the changelog; the 12 GB no
 
 ## 4. Freeze and nights (UPDATED Fri 21:3x: Kamen wants everything finished by Sunday and published by Tuesday at the latest)
 
-- Fri night (from ~00:30, after the HOLD): the stack palindrome (+ T16 / B's rule / C 256 arms) -> Leap's 6-min idle
-  check -> EvalSuite's gate on the winner + both long-code top-ups + MBPP -> the map (T1, nw3).
-- Saturday by day: S0 async post (if the idle check shows >= ~8 ms per check), S1 NW v3 (map arm, then the engine
-  A/B), S2 small built items, S3 leftovers, S4 short gate, S5 the final number in the evening.
+- Fri night (window open from 23:30, re-timed Fri 23:3x): the stack palindrome (+ T16 / B's rule / C 256 arms) ->
+  Leap's 5-min idle check -> Fit12's clean 12 GB run (or earlier, if it fits first) -> EvalSuite's gate on the winner
+  + both long-code top-ups + MBPP -> the map (nw3 first) and CERT's reference decodes.
+- Saturday, each slot as soon as its input is in: S0 async post (if the idle check shows >= ~8 ms per check), S1 NW v3
+  (map arm, then the engine A/B), S2 small built items, S3 leftovers, S4 short gate (by 16:00 at the latest), S5 the
+  final number in the evening.
 - FREEZE Saturday ~20:00: the S5 config is the release config. Anything after that is post-release research.
 - Saturday night (Sun ~01:30-10:00): CERT, the release certificate on the frozen config. HumanEval+ 164, math 100 and
   MBPP 100 in 2 orders; IFEval only if a chat FAST profile ships. Plus the final quiet speed numbers per workload

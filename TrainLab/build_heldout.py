@@ -1,5 +1,5 @@
 """TrainLab extra held-out segments (1365 + 1 tokens each, frozen ids): multilingual (bg, fr, de from the Eval suite's
-raw documents, middle windows) and chat (a account-1 Claude Code transcript; training uses only the main account's).
+raw documents, middle windows) and chat (a claudesub Claude Code transcript; training uses only the main account's).
 Writes data/heldout_extra_ids.npz. The exact reference for them is computed on the GPU by train35.py (ref_extra.npz)."""
 import glob, os, sys
 import numpy as np
@@ -16,7 +16,7 @@ for lang, f in [("multi_bg", "doc_bg_wikipedia.txt"), ("multi_fr", "doc_fr_monte
     mid = len(ids) // 2
     out[lang] = np.array(ids[mid:mid + N], np.int32)
 B.H = os.path.expanduser("~")
-fs = sorted(glob.glob(os.path.expanduser("~/.claude-account-1/projects/*/*.jsonl")), key=os.path.getsize)
+fs = sorted(glob.glob(os.path.expanduser("~/.claude-subscription/projects/*/*.jsonl")), key=os.path.getsize)
 orig = B.glob.glob
 B.glob.glob = lambda p, **k: [fs[len(fs) // 2]] if p.endswith("projects/*/*.jsonl") else orig(p, **k)
 docs = [d for d in B.chat_docs()]

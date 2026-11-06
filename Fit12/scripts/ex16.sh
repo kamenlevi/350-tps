@@ -13,6 +13,8 @@
 # quiet lock). Then a 25-min quiet lock (queue wait <= 60 min, else back to the gate) and an idle GPU. Starts by DEADLINE (arg 3,
 # default "2026-11-07 18:00") or not at all. Stops on swap +1 GB, 30 min, or DEADLINE + 30 min. Writes $O/DONE at the end
 # (rc, times), for CERT's runner to wait on. Run ATTACHED (Bash run_in_background). Usage: sh ex16.sh [NB] [CLEAR] [DL]
+# Fri 23:3x RE-ARMED with NB = now (the orchestrator 23:3x: Kamen opened the window; it may run before 06:00 in a GPU gap
+# NewIdeas places it in). $O/WAIT (NewIdeas may touch it to keep the slot for later) blocks the gate like HOLD does.
 F=/Users/kamen/Fit12; PY=/Users/kamen/BigMoE/.venv/bin/python; LOG=$F/logs/summary.txt; O=$F/data/scr/ex16
 K=humaneval/HumanEval; Q=/Users/kamen/.local/share/quiet; PAUSEF=$Q/PAUSE; HOLDF=$Q/HOLD; HEALTH=$Q/HEALTH.md
 NB=$(date -j -f "%Y-%m-%d %H:%M" "${1:-2026-11-07 06:00}" +%s) || exit 9
@@ -29,11 +31,11 @@ gpu() { peer top 2>/dev/null | head -1 | grep -o 'GPU [0-9]*%' | grep -o '[0-9]*
 act() { grep -q '^\*\*Verdict: ACT' "$HEALTH" 2>/dev/null; }
 ramp() { pgrep -f '^/bin/zsh [^ ]*soft_end\.sh' >/dev/null; }
 lid_closed() { ioreg -r -k AppleClamshellState -d 4 2>/dev/null | grep -m1 '"AppleClamshellState"' | grep -q Yes; }
-blocked() { [ -e "$PAUSEF" ] || [ -e "$HOLDF" ] || act || ramp || lid_closed; }
+blocked() { [ -e "$PAUSEF" ] || [ -e "$HOLDF" ] || [ -e "$O/WAIT" ] || act || ramp || lid_closed; }
 cd $F || exit 9
 mkdir -p $O
 rm -f $O/DONE
-log "ex16 armed: not before $(date -r $NB '+%a %H:%M'), $CLR clear minutes (1 with $O/GO), start by $(date -r $DL '+%a %H:%M')"
+log "ex16 armed: not before $(date -r $NB '+%a %H:%M'), $CLR clear minutes (1 with $O/GO; held while $O/WAIT exists), start by $(date -r $DL '+%a %H:%M')"
 while :; do
   clear=0
   while [ "$(date +%s)" -lt "$DL" ]; do

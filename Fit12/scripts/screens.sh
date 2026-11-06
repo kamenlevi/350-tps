@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fit12 rapid-screen runner (Mon 26 Oct 2026; pacer RULES.md 'Rapid screening'): the screens in $SCREENS, one after
+# Fit12 rapid-screen runner (Mon 26 Oct 2026; usage-pace RULES.md 'Rapid screening'): the screens in $SCREENS, one after
 # another, each under its own 10-min quiet lock taken here; run detached (nohup, ppid 1). Pass / kill lines are written
 # first in ~/Fit12/PLAN.md. Before an arm: no PAUSE, SSD <= 66 C, enough lock left; after each grant the GPU must be idle
 # (else unlock, wait 2 min, re-queue; 3 tries). During an arm: SSD >= 73 C, swap +2 GB, a lost lock or 600 s stop it; a

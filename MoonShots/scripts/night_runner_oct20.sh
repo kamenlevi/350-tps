@@ -1,5 +1,5 @@
 #!/bin/sh
-# MoonShots night runner, night of Oct 19-20 (Plan B GPU line 03:10-07:00; see ~/.local/share/pacer/night_plan.md).
+# MoonShots night runner, night of Oct 19-20 (Plan B GPU line 03:10-07:00; see ~/.local/share/usage-pace/night_plan.md).
 # Waits until 03:10, then per job: `peer lock quiet --queue 90m`, >= 85 % free memory and no other > 8 GB process,
 # active_at keepalive every 3 min (job stopped if the lock is lost), hard per-job limit, no job starts after 06:45.
 # Jobs: MTP depth 1-5 with committed history on 6 prompts at 17 GB and 34 GB (BIGMOE_MAXK=60; depth 2 vs 3 was

@@ -165,7 +165,7 @@ Quality evidence for a lower-byte expert format: 125B GSM8K-150 with top-2 ranks
 (planes125, plan 4433333333): 146/150 vs eager 147; answers equal eager 147/150, the same as the v2a-vs-eager noise arm,
 at −18 % expert bytes. The MSB/LSB plane files (67 GB) were deleted at 12:56.
 
-## Round 32 prior-art pass (2026-10-20 ~21:45, account-1; agent sweep, 2026 entries partly abstract-only)
+## Round 32 prior-art pass (2026-10-20 ~21:45, claudesub; agent sweep, 2026 entries partly abstract-only)
 - Low-bit self-spec of the same model: QSpec 2410.11305 (W4A4 draft / W4A16 verify, dense, ~1.6x), ML-SpecQD 2503.13565
   (MXFP4 copy drafts BF16, 2-2.7x, dense CPU), 2505.22179 (2.78x 70B), **MoE-SpeQ 2511.14102** (INT4 copy of the experts
   resident in VRAM drafts, target experts over PCIe: closest to "resident low-bit drafter + streamed verifier"; separate

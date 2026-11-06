@@ -1,4 +1,4 @@
-> (a quote from the project owner, kept private)
+"""R57_INERT (GOAL session, Thu 2026-11-05; the orchestrator 18:1x, Kamen: "build everything so we get actual numbers"):
 acceptance on rows whose draft sits in text the tests never execute, for r57_screen_rlx.py's verify step.
 Copy this file to ~/BigMoE/scripts/; patch: apply_inert.py beside it. Design and numbers: ~/FableGod/goal/LOSSY350_GOAL.md.
 

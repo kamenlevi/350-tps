@@ -1,4 +1,4 @@
-# MoonShots PLAN (2026-10-21 00:10; account-1; reviewed by the orchestrator; goals in ~/.local/share/pacer/STATE.md)
+# MoonShots PLAN (2026-10-21 00:10; claudesub; reviewed by the orchestrator; goals in ~/.local/share/usage-pace/STATE.md)
 Tonight (silent until 08:45: CPU 1-2 cores, GPU tests <= 1-2 min, no timings):
 1. DONE: out-of-order experts bitwise + integration proposal (patches/planes_engine/OOO_PROPOSAL.md: post_ids one-line
    dep change, split post/spin, tier_call sketch) -> hand to BigMoE with bench_split numbers Wednesday.

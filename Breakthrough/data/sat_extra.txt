@@ -1,3 +1,5 @@
+# SUPERSEDED Fri 23:4x: sat_night.sh was stopped (NewIdeas 7e74d6c re-timed the night). nw3_first.sh + data/nw3_code_extra.txt
+# run nw3's 3 code arms after EvalSuite's runner 49; the 36-window nw3 arms, step 0 and T1 follow CERT's reference decodes.
 # Saturday night, the night starting Sat 7 Nov 00:30 (the orchestrator Thu 19:4x; after BigMoE's FAR-G1 and EvalSuite's
 # runner 46; Fable A's T1 runs before this list, from sat_t1.sh): <arm> <est min> <start by HH:MM> <primary twin> <info twins...>
 # 1. FAR's NEVER-WAIT tier 1 + 1b on the code windows (~/FableGod/far/build_1105/INSTALL.md section 3; fri_extra_nw.txt's lines

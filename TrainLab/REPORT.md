@@ -1761,7 +1761,7 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   ~1-3 % of a check at 45 GB, because the verify dominates the cycle. A 32K vocab covers only 0.53 of the multilingual
   answers' tokens, so chat would lose drafts. KILL at the desk; no GPU run.
 
-> (a quote from the project owner, kept private)
+## E5 DFlash-X: DFlash2 borrowing the 125B's experts (MTP Head, Sun 11-01 night; Fable MISSION 3 sec 4 / MISSION 4 E5; Kamen ~21:00 "Yes, tonight only")
 - Build (sticky/e5x.py, e5_train.py): L1-20's body frozen; after drafter layer i the block's hidden state is normed and projected
   (in_i, identity init) into the 125B's MoE input at tap layer T_i (5/15/25/35/45), routed by the 125B's 8-bit router over the
   224 experts most used there in Breakthrough's expA traces (a stand-in for the C 224 pool), top-1, and the frozen 4-bit expert's
@@ -2094,7 +2094,7 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   (BIGMOE_TIER_CL = 112 C / 192), and lowers the rows further if the loaded base pool is smaller. Rows and pool sizes change
   only speed: the 125B's tokens and logged rows are the same (exact verify).
 
-> (a quote from the project owner, kept private)
+## K-HEAD: certificate distillation (Fable FLOOR_125B.md 3.6) -- pre-registration (written before any run, Mon 11-02 11:24; Kamen "Yes, queue both", relayed by the orchestrator before 11:24; after E2's first verdict)
 - Why: the realizable gate (top-2 on rows where DFlash2's cf >= 0.999) covers 48.9 % of code rows at 0 top-2 flips (Fable:
   47.7 % on all rows); the cheap pass's own certificate (p1 under top-2 >= 0.99) covers 73.1 % at 0 flips but is known only
   after the pass. A small head on what the drafter knows before the check, trained to predict the certificate (not the
@@ -2912,7 +2912,7 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   0.9258), and so does R exact + dW in bf16: rounding costs nothing.
 - Footprint 3.57 GB (MEM 4 GB declared), 593 s. Sent to BigMoE with the input (r57_screen.py:582 after :578) and the bias.
 
-> (a quote from the project owner, kept private)
+## RERANK-0: how much kept a better pick among DFlash2's candidates could give (the orchestrator 15:0x on Kamen's "at least 300 tps on fast mode": item 1) -- pre-registration (written before any run, Wed 11-04 15:09)
 - Data: the TOP16 walks (data/d02b_walk_kw_{code,ifeval,multi}.npz: L1-20 at HPD-0's anchors, block 16; per check the 16
   candidates and the teacher-forced selector softmax at each of the 15 depths; the 125B's tokens).
 - Simulated at the same anchors (no anchor shift): kept per check = 1 + the leading run of right picks, for: the official pick
@@ -3035,7 +3035,7 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   The trade improves as the cycle shrinks (at 50 ms, -4.1 ms is 8 %). A 4-bit-aware fine-tune (~1 h GPU, ~11 GB) is
   what would remove the kept loss.
 
-> (a quote from the project owner, kept private)
+## P-CAP: does drafter CAPACITY move kept at today's data? (the orchestrator 17:5x with Kamen's go: "Day for me is until at least 3 o'clock ... you can run tests for the work"; probe 1 of notes/DRAFTER_PLAN_1104.md) -- pre-registration (written before any training, Wed 11-04 17:58)
 - Why: the plan's probes decide whether a cloud drafter build can pass ~12 kept per 16-row check (Kamen's 95-96 % per
   token). Data at DFlash2's size adds +0.13 kept per doubling (D-09 + E2/D2). Capacity is the untested input.
 - Method (published: block expansion, LLaMA Pro, Wu et al. 2024): incoai's DFlash2 grows from 5 to 10 layers. After each
@@ -3089,7 +3089,7 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   it needs the D-22 trainer extended to a block loss (~1 h build).
 - The GPU slot goes to P-OFF (below), which tests the data lever with the corpus Kamen approved at 17:5x.
 
-> (a quote from the project owner, kept private)
+## P-OFF: does OFF-POLICY code data (the 125B's prefill of public code) move kept like on-policy data? (probe 2 of notes/DRAFTER_PLAN_1104.md; Kamen's download OK 17:5x, verbatim "1 - i approve it") -- pre-registration (written before any extraction or training, Wed 11-04 18:04)
 - Why: data at DFlash2's size adds +0.10-0.13 kept per doubling ON-policy (D-09 + E2/D2). On-policy tokens cost the
   125B's decode (~50-110 tok/s). Off-policy prefill costs ~300-690 tok/s, so it is the only cheap route to 20-100M
   tokens for a cloud build.
@@ -3329,7 +3329,7 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
 - The training folder is built: ext/poff/train60 = L1-20's 109 windows + the 260 off-policy windows (60,162 assistant
   tokens). The training (turns/poff_t.sh, ~55 min + walk, MEM 34 GB) needs a Thursday slot from the orchestrator.
 - Slot (Thu 11-05 23:2x; lines and steps unchanged): turns/poff_fri.sh queues its quiet ticket at Thu 23:45, not Fri
-> (a quote from the project owner, kept private)
+  00:30 (the orchestrator, after Kamen's 23:1x "start the night now"). MLX's default TF32 stays on, so the result is
   comparable with L1-20.
 
 ### P-OFF 60K RESULT (Fri 11-06 00:52): BETWEEN. Code walk kept per check 9.68 vs L1-20's 9.57 (+0.11; PASS >= +0.18, KILL <= +0.05). After SEED (Fri 02:57): NO EFFECT, since one reseed alone moves code by 0.16

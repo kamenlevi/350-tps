@@ -25,7 +25,7 @@ for any "go", a 125B plan with its rented-GPU cost (Kamen's call; never an actio
 ## Method
 - Model, held-out segments and reference: NewIdeas' defer35 harness (frozen prose / GSM8K / code segments, 1365 tokens,
   ref_1365.npz), so zero-shot numbers must reproduce defer35's (verified bitwise on a tiny random model: exact, late,
-  late_w1, half, half_w2). Extra held-out: Bulgarian, French, German documents (Eval suite raw docs), a account-1 chat.
+  late_w1, half, half_w2). Extra held-out: Bulgarian, French, German documents (Eval suite raw docs), a claudesub chat.
 - Training text: data/train_tokens.npy, 4.7M tokens (Claude Code transcripts 2.0M, Python 1.5M, multilingual
   Wikipedia 0.6M in 10 languages, research notes 0.2M, Swift 0.2M, GSM8K items outside the held-out 200-399 0.2M).
 - Loss: forward KL(teacher || student) on the teacher's top-64 + tail; teacher online (exact flow, LoRA off, Metal GDN).

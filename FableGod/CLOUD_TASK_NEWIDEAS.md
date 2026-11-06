@@ -2,7 +2,7 @@
 
 A closed thinking task, and a creative one. Don't use the web; think. You know this engine from tasks 1-15.
 
-> (a quote from the project owner, kept private)
+**Why.** Kamen's verdict on this week: "most of our latest changes have been things done before, and we havent innovated anything". He's right: what we adopted is careful engineering of published ideas. Your ladder (task 15) says 350 is decided by three pieces:
 1. **The SSD stack:** -23 of the -48 ms. Exposed SSD is ~22 ms if R-57's look-ahead fails at 45 GB.
 2. **The dense pass:** exact stops at ~24-26 ms against ~14 ms of floors. The remainder is ~1,000 kernel boundaries and dependent chains per check.
 3. **Kept per check:** ~10.5 on code (12-13 at the drafter ceiling) and ~2.4 on chat, where the 125B is unsure on 55-58 % of rows and the token after a hard one is usually hard too.

@@ -1,10 +1,10 @@
 #!/bin/bash
-> (a quote from the project owner, kept private)
+# DAY9 night turn (Mon 2 -> Tue 3 Nov). The orchestrator 10:1x relayed Kamen's "Yes, 1-3"; at 10:3x it relayed "run all 9 tests"
 # (~/FableGod/DAY9_2026-11-02.md). ONE quiet ticket after night_apps.sh closes Chrome / Spotify / Steam (~01:xx, expect
 # NO-SWAP ~51-52 GB), done before ~07:00 (no run starts after 06:50). Each arm runs in its own process. Each runs only if
 # NO-SWAP >= its peak + MG (c45_runner one()). Groups:
 #   1. condition 9 B2: C 300 / 320 with per-layer sizes (gates 52 / 55 GB); every token vs REF2-T
-> (a quote from the project owner, kept private)
+#   2. the chat switch (Kamen "Yes, 1-3"): A = the default (DFlash2 everywhere), B = R57_CHATSW=1. Prompts: D-23d's 19 chat
 #      prompts + 2 agent. (a) every token == D-23d's (REF2-T loop), (b) B's lifetime peak with both drafters <= 45 GB,
 #      (c) B vs A chat tok/s at C 256
 #   3. C1 = NAX6 live (DAY9 #4; Leap 101573d): default vs NAX vs NAX again (determinism: NAX is its own reference). The warm

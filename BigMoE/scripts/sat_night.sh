@@ -1,5 +1,5 @@
 #!/bin/bash
-> (a quote from the project owner, kept private)
+# Sat 7 Nov 00:30: the '200 STACK' night (Kamen Fri 21:0x: ">= 200 tok/s lossy at 45 GB by tomorrow", quality-gated, then publish;
 # NewIdeas QUEUE ae954df / 4b2c45c + Fri 21:3x-21:5x; the orchestrator Fri 21:2x). Arms on scripts/r57_screen_fast.py (the merged
 # FAST screen; qall = its flags off), the outside code frozen at the start. Phases, in this order:
 #   0. MATCH's copy check at 16 rows (R57_COPY=g2: an exact copy check, never run under R57_FAST before): a 2-prompt check of
@@ -50,17 +50,28 @@ CC=; for c in 224:44.0 208:41.9 192:39.7 176:37.6 160:35.4; do fits ${c#*:} && {
 C256=; [ "$CC" = 224 ] && fits 47.2 && C256=256          # C 256's peak ~43.2 GB (38.9 + 32 x 0.134) + 4
 T16=; [ -f data/sat/T16_OK ] && grep -q '"T16"' scripts/inert_span.py && T16=1
 SHIPB=; [ -f data/sat/SHIPB_OK ] && SHIPB=1                # NewIdeas' call on the orchestrator's option (2)
+# Fri 23:4x (the orchestrator): SN_PART=A runs phases 0-1 now, at the C that fits (cache-independent: MATCH-16's check, T16's
+# quality pair); SN_PART=B runs phases 2-4 + the report, ONLY at C 224 (its turn45 waits for NO-SWAP >= 44 before queueing),
+# on part A's frozen snapshot and part A's results (data/sat/part_a.env). Unset = all phases in one ticket.
+PART=${SN_PART:-AB}
+[ "$PART" = B ] && [ "$CC" != 224 ] && { say "part B: the palindrome needs C 224, NO-SWAP $A GB < 44: not run";
+  peer say --to "AI/LLM project recommendations" "BigMoE part B: NO-SWAP $A GB < 44 at the grant: the C 224 palindrome did not run; free memory and I re-arm" >/dev/null 2>&1; exit 0; }
+FZ="$PWD/data/r57/snap/frozen_sat"
+if [ "$PART" = B ] && [ -s data/sat/part_a.env ] && [ -d "$FZ/Leap_scripts" ] && [ -s data/r57/snap/r57_screen_sat.py ]; then
+  say "part B: reusing part A's frozen snapshot ($FZ) and screen copy"
+else
 cp scripts/r57_screen_fast.py data/r57/snap/r57_screen_sat.py && cp scripts/relax_delta.py scripts/relax_span.py scripts/inert_span.py \
   data/r57/snap/ && cp scripts/c45_runner.sh data/r57/snap/c45_runner_sat.sh || exit 2
 # Fri 09:4x (EvalSuite's warning: the screen loads LIVE outside code): freeze it for every arm of tonight's run. Copies of Leap's
 # scripts + third_party, TrainLab's sticky and Breakthrough's keepset; the snapshot screen points at the copies.
-FZ="$PWD/data/r57/snap/frozen_sat"; rm -rf "$FZ"; mkdir -p "$FZ"
+rm -rf "$FZ"; mkdir -p "$FZ"
 [ -n "$SN_DRYRUN" ] || { cp -R "$HOME/Leap/scripts" "$FZ/Leap_scripts" && cp -R "$HOME/Leap/third_party" "$FZ/Leap_third_party" \
   && cp -R "$HOME/TrainLab/sticky" "$FZ/TrainLab_sticky" && cp -R "$HOME/Breakthrough/keepset" "$FZ/Breakthrough_keepset" || exit 2; }
 find "$FZ" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null
 sed -i '' -e "s#\"~/Leap/scripts\"#\"$FZ/Leap_scripts\"#g" -e "s#\"~/Leap/third_party\"#\"$FZ/Leap_third_party\"#g" \
   -e "s#\"~/TrainLab/sticky\"#\"$FZ/TrainLab_sticky\"#g" -e "s#\"/Users/kamen/Breakthrough/keepset\"#\"$FZ/Breakthrough_keepset\"#g" \
   data/r57/snap/r57_screen_sat.py
+fi
 LIVE0=$(md5 -q "$HOME/Leap/scripts/ref2.py" "$HOME/Leap/scripts/d7b_nax.py" "$HOME/Breakthrough/keepset/qom_keep.py" | tr '\n' ' ')
 say "frozen outside code in $FZ ($(grep -c frozen_sat data/r57/snap/r57_screen_sat.py) screen paths): ref2 / d7b_nax / qom_keep md5 $LIVE0; inert_span md5 $(md5 -q data/r57/snap/inert_span.py)"
 RUN="/bin/bash data/r57/snap/c45_runner_sat.sh"
@@ -79,10 +90,21 @@ envf() { printf '%s\n' "# Sat 7 Nov $2 (BigMoE sat_night.sh, $HEAD): screen scri
   "$3,R57_QOM_SETS=humaneval,mbpp" > "data/stack/$1_env.txt"; }   # QOM on the code sets only (NewIdeas 70a4951)
 envf stack "stacked FAST" "$QA,$STACK"
 envf stackr "stacked FAST + relax v2 for CODE" "$QA,$STACKR"
-rm -f data/stack/stackrm_env.txt data/stack/stackt_env.txt data/stack/stackg_env.txt data/sat/mbpp_forms.json data/sat/winner.txt
-for t in pfg mq mt mtb mqb stq sts str srm stt stb stqm stbb sttb srmb strb stsb stqb snw; do rm -f data/r57/${t}_${CC}_* data/sat/${t}_${CC}.txt; done
-for t in sh wh whb shb; do rm -f data/r57/${t}_256_* data/sat/${t}_256.txt; done
+if [ "$PART" != B ]; then
+  rm -f data/sat/part_a.env data/sat/mbpp_forms.json
+  for t in pfg mq mt mtb mqb; do rm -f data/r57/${t}_${CC}_* data/sat/${t}_${CC}.txt; done
+fi
+if [ "$PART" != A ]; then
+  rm -f data/stack/stackrm_env.txt data/stack/stackt_env.txt data/stack/stackg_env.txt data/stack/stackb_env.txt data/sat/winner.txt
+  for t in stq sts str srm stt stb stqm stbb sttb srmb strb stsb stqb snw; do rm -f data/r57/${t}_${CC}_* data/sat/${t}_${CC}.txt; done
+  for t in sh wh whb shb; do rm -f data/r57/${t}_256_* data/sat/${t}_256.txt; done
+fi
 say "200 STACK start (pid $$, NO-SWAP $A GB -> C $CC, C 256 ${C256:-off (needs 47.2 GB)}, T16 ${T16:-off (no data/sat/T16_OK or no T16 in inert_span.py)}, deadline $C45_DEADLINE, stack '$STACK')"
+if [ "$PART" = B ]; then                                  # part B: part A's results
+  G2=; TP=; C1=
+  [ -s data/sat/part_a.env ] && . data/sat/part_a.env
+  say "part B (C $CC): part A's results: MATCH g2 ${G2:-not clean or not run}, T16 PASS ${TP:-no} (part A at C ${C1:-?})"
+else
 # 0. MATCH's copy check at 16 rows under R57_FAST: a 2-prompt check of stackr + g2
 R57_KEYS="humaneval/HumanEval/68,humaneval/HumanEval/16" C45_CAP=32 C45_ARMS="pfg_$CC:$CC:$RR,R57_COPY=g2" $RUN
 n=$(grep -o '"key"' "data/r57/pfg_${CC}_runs.json" 2>/dev/null | wc -l | tr -d ' ')
@@ -101,6 +123,9 @@ if [ -n "$T16" ]; then
   [ "$PK" = T16 ] && TP=1
 fi
 say "T16: $([ -z "$T16" ] && echo "not run (not cleared by 23:45): no stackt" || { [ -n "$TP" ] && echo "MBPP12 PASS: stackt runs" || echo "MBPP12 not PASS: no stackt"; })"
+printf 'G2=%s\nTP=%s\nC1=%s\n' "$G2" "$TP" "$CC" > data/sat/part_a.env
+fi
+[ "$PART" = A ] && { say "part A end (MATCH g2 ${G2:-0}, T16 PASS ${TP:-0}, C $CC): part B runs the palindrome at C 224"; exit 0; }
 SRM="$RR,R57_COPY=g2"
 STT="$QAC,$STACK,R57_INERT=T16,R57_INERT_LOG=$PWD/data/sat/stt_inert.jsonl${G2:+,R57_COPY=g2}"
 [ -n "$G2" ] && envf stackrm "stacked FAST + relax v2 + MATCH g2 at 16 rows for CODE" "$QA,$STACKR,R57_COPY=g2"
@@ -223,11 +248,13 @@ L = [f"200 STACK, C {C} (data/sat): MATCH g2 pre-check {'CLEAN' if g2 else 'NOT 
      f"{sorted(hit) or 'none'}"]
 try:
     mf = json.load(open("data/sat/mbpp_forms.json"))
-    for f_ in [k for k in ("T16", "G16", "D16") if k in mf]:
-        x = mf[f_]
+    for f_ in ([mf["form"]] if "form" in mf else [k for k in ("T16", "G16", "D16") if k in mf]):   # flat (T16 reader) or keyed
+        x = mf if "form" in mf else mf[f_]
         L.append(f"MBPP12 {f_} vs qall (GOAL's line): {x.get('verdict', 'MISSING')}: median S {x.get('S', float('nan')):.3f}, T "
-                 f"{x.get('T', float('nan')):.3f}, verdicts equal {x.get('equal')} / {x.get('tasks')}, flips to fail "
-                 f"{x.get('flips') or 'none'}, tests passed {x.get('passed')} vs qall {mf.get('control_passed')}")
+                 f"{x.get('T', float('nan')):.3f}, " + (f"pairs {[(p_['pair'], p_['equal'], p_['flips']) for p_ in x['pairs']]}, K ratio "
+                 f"{x.get('K', float('nan')):.3f}, tests passed {x.get('arm_passed')} vs qall {x.get('control_passed')}" if "pairs" in x else
+                 f"verdicts equal {x.get('equal')} / {x.get('tasks')}, flips to fail {x.get('flips') or 'none'}, tests passed "
+                 f"{x.get('passed')} vs qall {mf.get('control_passed')}"))
 except (OSError, ValueError):
     L.append("MBPP12 T16: not run (no data/sat/mbpp_forms.json)")
 for b, ps in P.items():

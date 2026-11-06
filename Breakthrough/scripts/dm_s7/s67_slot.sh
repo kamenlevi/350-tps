@@ -39,6 +39,9 @@
 # Read-outs: NewIdeas' map_kl.py (read-only use; prints) for screens 6 + 7 vs C; dm_screen_read.py for 6 vs C, and --null
 # (+0.1 points vs the ungated twin, BYTES10.md:255-260) for 1(b) vs q1u_0.9_live and 1(c) vs qom_0.5_live.
 # Override the clock at arming: S67_START / S67_LASTGO / S67_DEADLINE = "YYYY-mm-dd HH:MM:SS".
+# S67_KEEPLOCK=1 (Fri 2026-11-06 23:4x, nw3_first.sh): keep the share lock from one arm to the next (the next arm's lock
+# renews it), so another session's runner cannot start in the few seconds between arms; it is released whenever the runner
+# waits (a guard, no arm to pick, a lock not granted), after a stopped arm and when the batch is over. Unset: as before.
 DM=~/FableGod/decision_map; PY=~/BigMoE/.venv/bin/python; LOG=~/Breakthrough/data/s67_slot.log; Q=$HOME/.local/share/quiet
 ARMS="qom_0_live_ball_c147_t3 s7_ref s7_ref3 s7_cal s7_cal_all q1u_0.9_live_bonus9g qom_0.5_live_bonus5g s7_trl"   # DENSE-3 off tonight (the orchestrator 19:5x)
 D3=qom_0_live_ball_c147_t3+dense3; D3SHA=ec71be4478bc606f   # Leap's dense3.py as smoked (17:00)
@@ -123,12 +126,13 @@ readouts() {   # $1 = interim (the first wait for the TRL store; the orchestrato
 }
 while [ $(date +%s) -lt $START ]; do sleep 30; done
 cd $DM || exit 1
-need=3; runs=0; last=; interim=0; final=0; grep -q "^\[s67\] read-outs (interim) done" $LOG && interim=1
+need=3; runs=0; last=; interim=0; final=0; HELD=; grep -q "^\[s67\] read-outs (interim) done" $LOG && interim=1
 while :; do
   [ $final = 0 ] && [ -z "$(btodo)" ] && { final=1; say "the scheduled arms are done"; readouts final; }
   [ $(date +%s) -ge $LASTGO ] && { say "LASTGO $(date -r $LASTGO +%H:%M): no new arm; left: $(todo)"; break; }
   pick_next
   if [ -z "$PICK" ]; then
+    [ -n "$HELD" ] && { peer unlock >> $LOG 2>&1; HELD=; say "lock released (no arm to pick now)"; }
     if [ $TRLWAIT = 1 ]; then
       if [ "$last" != trl ]; then
         say "waiting for Fit12's TRL store (s7_trl); no lock held, so MTP Head's jobs may take the GPU meanwhile"
@@ -140,11 +144,13 @@ while :; do
     [ -n "$(todo)" ] && say "nothing left to run (past its time, or its WHEN condition said no); left: $(todo)"; break
   fi
   w=$(why_not)
-  if [ -n "$w" ]; then need=3; [ "$w" != "$last" ] && say "waiting: $w"; last=$w; sleep 10; continue; fi
+  if [ -n "$w" ]; then
+    [ -n "$HELD" ] && { peer unlock >> $LOG 2>&1; HELD=; say "lock released (waiting)"; }
+    need=3; [ "$w" != "$last" ] && say "waiting: $w"; last=$w; sleep 10; continue; fi
   need=$((need - 1)); [ $need -gt 0 ] && { sleep 10; continue; }
   last=; runs=$((runs + 1)); [ $runs -gt ${S67_MAXRUNS:-40} ] && { say "${S67_MAXRUNS:-40} runs used; left: $(todo)"; break; }   # Fri 04:0x: was 14, which ended Friday's 20-arm list at 03:45 with 8 arms left
   peer lock share $(( 3 * $(est $PICK) + 10 ))m --cpu 200 --gpu 100 "Breakthrough map screens 6 + 7 + 1(b)/(c) (the orchestrator 14:3x / 15:3x): MEM 18 GB (flips / KL, no timing): $PICK" >> $LOG 2>&1 \
-    || { say "share lock not granted"; need=3; sleep 30; continue; }
+    || { [ -n "$HELD" ] && { peer unlock >> $LOG 2>&1; HELD=; }; say "share lock not granted"; need=3; sleep 30; continue; }
   S0=$(swap_mb); say "go $PICK (est $(est $PICK) min; NO-SWAP $(noswap) GB, swap $S0 MB)"
   [ "$PICK" = "$D3" ] && say "Leap's dense3.py sha256 $(shasum -a 256 ~/Leap/scripts/dense3.py | cut -c1-16) (smoked: $D3SHA)"
   # cwd = the session folder (Wed 18:1x): fanwatch and quiet_window.sh freeze research jobs by working folder, and
@@ -162,11 +168,13 @@ while :; do
     if [ -n "$w" ]; then bad=$((bad + 1)); else bad=0; fi
     [ $bad -ge 3 ] && { stopped="$w"; stop_run $P; break; }
   done
-  wait $P 2>/dev/null; rc=$?; peer unlock >> $LOG 2>&1
+  wait $P 2>/dev/null; rc=$?
+  if [ -n "$S67_KEEPLOCK" ] && [ -z "$stopped" ]; then HELD=1; else peer unlock >> $LOG 2>&1; HELD=; fi
   if [ -n "$stopped" ]; then need=3; say "stopped $PICK for: $stopped"; else need=1; fi
-  say "$PICK ended (rc $rc, $([ "$(nwin $PICK)" = "$(expect $PICK)" ] && echo "done, $(expect $PICK) windows" || echo 'NOT done')); left: $(todo); unlocked"
+  say "$PICK ended (rc $rc, $([ "$(nwin $PICK)" = "$(expect $PICK)" ] && echo "done, $(expect $PICK) windows" || echo 'NOT done')); left: $(todo); $([ -n "$HELD" ] && echo "lock kept for the next arm" || echo unlocked)"
   [ $(date +%s) -ge $DEADLINE ] && break
 done
+[ -n "$HELD" ] && { peer unlock >> $LOG 2>&1; HELD=; say "lock released (batch over)"; }
 say "batch over; left: $(todo)"
 [ $final = 0 ] && readouts final
 xs=$(for a in $(xarms); do [ "$(nwin $a)" = "$(expect $a)" ] && echo -n "$a "; done)

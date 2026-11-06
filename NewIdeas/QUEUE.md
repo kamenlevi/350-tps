@@ -60,7 +60,7 @@ evening, measured and gated, workload named; then publish). Built levers that ca
   61-78.5). So the levers left are the expert path's bytes / streaming rate and the waits; C 256 measures the waits
   tonight.
 - Not stackable (KILLed today): CD16 (MBPP quality), never-wait and SPLIT-NAX (engine). Not built: bigger drafters.
-- ARMED Fri 21:2x (BigMoE ee1faec, ticket bas0fbhp9, waits on the HOLD, window 00:30-06:00; dry-run end to end):
+- ARMED Fri 21:2x (BigMoE ee1faec, ticket bas0fbhp9; RE-TIMED Fri 23:3x: starts now, window open; dry-run end to end):
   MATCH-16 2-prompt check -> T16 MBPP12 pair (GOAL's line in sat_mbpp_verdicts.py) -> palindrome qall / stack / stackr /
   stackrm (both SPEED ONLY) / stackt / stackb / qallm / mirror (13 passes) -> C 256 stack + winner -> ceiling. ~45 of
   65 min. code_env = the fastest PASSING of {stackt, stackb}, else the stack. Reports: data/sat/sat_report.txt; envs in
@@ -329,12 +329,44 @@ ends it by the next item's start.
   2. EvalSuite, 16:15-16:55: the MBPP check's NAX6-N reference on the 100 MBPP tasks (exact, no stack env), chunked to
      end by 16:55. The stack + CD16 arms stay tonight.
   3. Fit12's 10-min kp2 only if EvalSuite's build is not ready; else the next window.
-- HOLD Fri 21:17 (Kamen is using the laptop): no GPU runs and no locks. The orchestrator's gate lifts it from 00:30 once
-  the Mac has been idle 10 min, so tonight may start late; BigMoE's NOTAFTER moves to ~06:00. Tonight's chain may run
-  on into Saturday, which is likely open all day.
+- (Superseded) HOLD Fri 21:17-23:30.
+- WINDOW OPEN Fri 23:30 (Kamen 23:2x, via the orchestrator: start now and keep going until he stops it on Saturday;
+  HOLD moved aside, PAUSE cleared, fans 6500 / 7000 when hot). RE-TIMED by NewIdeas Fri 23:3x: no 00:30 / 06:00 / 10:00
+  gates. Each item starts when the one before it ends:
+  0. BigMoE's 200-STACK ticket (quiet, ~45-65 min), now.
+     23:42: it ran 0 arms and exited (pid 41994; no sat_report). c45's deadline check compares HHMM without the date:
+     "mtb_192: past 0042, stop" at 23:42:48. Part A: MATCH g2 ran 0 / 2, T16 MBPP12 had 0 tasks, PICK none. NO-SWAP read
+     40.6 GB (C 192). VOID. BigMoE had already fixed it (4ef9bb2: a wrap-aware check; NO-SWAP read after the quiet
+     grant) and RELAUNCHED at 23:49:58 (task bduyhhrad): NO-SWAP 49.5 GB -> C 224, C 256 ON, T16 on; quiet to ~00:54,
+     report ~00:35. No gap, so nw3 stays after runner 49 (the offer to Breakthrough was retracted 23:50). Leap's S0 run
+     ended before 23:50, with no BigMoE arm beside it.
+  1. Leap's ~5-min C 224 GPU-idle run (its waiter keys on BigMoE's end). It decides S0.
+     1b. (Fri 23:58, Leap asked, NewIdeas agreed) Leap's ~6-min quiet slot right after BigMoE's lock is released:
+         STEPB_XPT (the expert path's Python ms per layer, plus thread CPU, at SB 2 and SB 4; the S3 input and the S1 /
+         S3 order) and the 2-prompt smoke of the S2 diff (SVH and DSUB have never run inside r57). MEM ~39 GB, C 224.
+  2. Fit12's 12GB-CLEAN (quiet, alone, ~8 min): re-armed 23:34 without the 06:00 floor. NewIdeas touched its GO file at
+     23:58, so it starts after 1 clear min, after Leap's slot.
+  3. EvalSuite's runner 49 (~4 h: same-scores on BigMoE's code_env, both drift top-ups, MBPP coverage): it starts once
+     the "Verdict stacked FAST" line is in BigMoE's sat_report, Leap's run is done and Fit12's DONE file exists, or 30
+     min after the verdict line at the latest. If Fit12 missed its gap, it takes the gap after runner 49.
+  4. Breakthrough's map, nw3 first (S1's input): beside runner 49 under a share lock if memory allows, else right
+     after it. Then step 0, then T1 (xs has no engine kernel yet). The 24 GB arms move to Sunday night.
+  5. EvalSuite's CERT reference decodes (~1.5 h, NAX6-N): right after runner 49, beside the map if memory allows.
+  6. S1-S3 (S0 is OUT, Fri 23:5x), each as soon as its input is in: S2 after Leap's smoke, S1 after nw3's code verdict,
+     S3 when Leap's Python-floor build lands. One quiet A/B each (~10-15 min) at the next chunk boundary of EvalSuite's
+     runs (no preemption mid-chunk). They go ahead of CERT's reference decodes and T1.
+  7. S4 (the short gate, ~1.5-2 h) once S0-S3 are decided, by 16:00 at the latest; S5 after it; FREEZE ~20:00; CERT
+     after the freeze.
+  Share jobs (MTP Head's every-position walks for GOAL, ~25 min, 6 GB) run beside runner 49 or the map (peak + 8 GB
+  free), never beside a quiet run. Disk floor 100 GB (105 GB free at 23:30): run df before writing any new big file.
 - SATURDAY DAY WINDOW (NewIdeas Fri 21:2x, the orchestrator asked; order by expected gain; every lossy piece is gated
   before it ships):
-  S0. (the orchestrator Fri 21:2x, on top) The ASYNC POST. The check's graph build (59.6 of 68.8 ms) includes the gate's
+  S0. OUT (NewIdeas Fri 23:5x, agreeing with the orchestrator's route). Leap's C 224 run (23:43-23:49, stack env, real
+      16-row loop, 3 passes x 11 steady checks, kept ~14.3): submitting every 4 layers (SB 4, today's default) leaves
+      8.1-11.1 ms of GPU idle per cycle (median 8.4; cycle 70.5-72.2 ms). SB 2 leaves 2.5-3.6 ms and cuts the cycle
+      71.1 -> 68.5 ms. Once S2 ships SB 2, what is left is under the 8 ms bar. [K, Leap; NewIdeas could not re-derive the
+      in-cycle busy %: the two saved real runs carry the same env, and per-check times are not stored.]
+      Was: (the orchestrator Fri 21:2x, on top) The ASYNC POST. The check's graph build (59.6 of 68.8 ms) includes the gate's
       per-layer wait for router ids, so Python blocks once per layer. If the GPU idles there, that is ~10-19 ms per
       check, +14-30 % [P].
       - Leap's 6-min C 224 GPU-busy run after BigMoE's ticket decides it: idle >= ~8 ms per check -> BigMoE + Leap build
@@ -354,15 +386,27 @@ ends it by the next item's start.
         pools on all 36 windows (chat on the record).
       - Lines per pool: PASS = VERDICT2 code AND D vs nw1 <= +0.40 (clean <= +0.15); BETWEEN to 2.0 % / +0.80; KILL
         above. A failed bound is not a KILL of (b): the engine's NWCNT then says how much of the bound it meets.
-      - Prediction [G, Breakthrough]: code D +0.2..+0.5 (PASS 55 %). If the night doesn't reach it by 09:15, it runs in
-        Saturday's day window.
+      - Prediction [G, Breakthrough]: code D +0.2..+0.5 (PASS 55 %). Re-timed Fri 23:3x: first in the map, beside
+        runner 49 if memory allows, else right after it.
   S2. Leap's glue fix (submit every 2 layers instead of 4; its in-process A/B runs in tonight's 6-min slot) plus
       whatever cycle items Leap installs by noon (expert id glue, HC reads, GDN step). One quiet A/B. Bitwise-equal
       tokens mean no gate is needed; otherwise they join S4's gate. [P] +2-5 %.
-  (Map order, NewIdeas Fri 21:2x: tonight's Breakthrough map runs T1 (xs) and then nw3, if prepped. The 24 GB arms yield
-  to Saturday's S-items and move to Sunday night.)
-  S3. Tonight's leftovers: T16 (if it missed 23:45: MBPP12 pair, then stackt), C 256 (if NO-SWAP was short), MATCH-16
-      (if its 2-prompt check failed).
+      MEASURED Fri 23:4x (Leap's loop): SB 2 cuts the C 224 cycle 71.1 -> 68.5 ms (-2.6 ms, ~+3.8 %), and 2-row checks by
+      5.7 ms (50.1 -> 44.3). Kept per check is unchanged (scheduling only). S2 = R57_SBN=2 + D7BNAX_32=2 + DSUB / SVH:
+      the diff ~/Leap/data/s2wire/r57_s2.diff applies clean on r57 fa8bee48. Leap compile-checks and smokes it after
+      BigMoE's lock (~00:54). Then BigMoE's quiet A/B (12 HumanEval palindrome vs code_env) in the next slot.
+  (Map order, re-timed Fri 23:3x: nw3 first (S1's input), then step 0, then T1 (xs has no engine kernel yet, so it
+  cannot ship Saturday). The 24 GB arms move to Sunday night.)
+  S3. THE PYTHON FLOOR (the orchestrator Fri 23:5x; Leap prices and builds). Leap's warm 16-row forward (gap_night.txt
+      lines 23-24, re-derived by NewIdeas): wall 46.06 ms = graph build 40.33 + 5.73; GPU ~41.3 ms. With the experts
+      stubbed: build 16.21, GPU ~20.7. So the expert path costs 24.1 ms of Python build (0.50 ms per layer), and once
+      S1 / S2 cut GPU time, the check sits on ~40 ms of Python. Lever: graph reuse or mx.compile for the expert path
+      (CPU work now; one quiet A/B when built).
+      - Exactness: graph reuse alone keeps the bits (token equality, no gate). mx.compile's fusion can change rounding,
+        so a compiled form joins S4's gate.
+      - It also sets S1's ceiling: NW v3 helps only down to the Python floor unless S3 lands too (Leap prices both).
+  S3b. Tonight's leftovers, only if the relaunched ticket misses them: T16 (MBPP12 pair, then stackt), C 256 (if NO-SWAP
+      was short), MATCH-16 (if its 2-prompt check failed).
   S4. A short gate on the final stack (EvalSuite designs "short"): HumanEval 60 + math 50 in 2 orders, MBPP if T16 is
       in, and the 41-problem long-code top-up (blunders).
   S4 stays SHORT on Saturday (EvalSuite docs/PREREG_s4_2026-11-07.md, ~1.5-2 h): it decides Kamen's Saturday number.
@@ -379,20 +423,20 @@ ends it by the next item's start.
           AND p >= 0.05; long-code <= 1 blunder per 10K. Reports go to results/cert/CERT_*.txt.
         - GPU: ~1.5 h of NAX6-N reference decodes (154 rows) + ~3.5 h of CERT (364 rows x 2 orders ~2.3 h + long-code
           41 ~1.2 h).
-        - Slots (NewIdeas): the reference decodes run SATURDAY MORNING, right after tonight's chain, while S0 is built
-          on the CPU; they do not depend on the config. CERT runs Saturday night. No IFEval: chat ships EXACT.
+        - Slots (re-timed Fri 23:3x): the reference decodes run right after runner 49, with no DONE / 10:00 gate; they
+          do not depend on the config. CERT runs Saturday night. No IFEval: chat ships EXACT.
         - BigMoE maps 'mathx' in SETOF (dec_mathx).
-  12GB-CLEAN ARMED (Fit12 ex16.sh): from Sat 06:00 it starts after 10 clear min (no quiet lock / ticket, no >5 GB lock,
-      no PAUSE / HOLD), ~8 min quiet, then writes ~/Fit12/data/scr/ex16/DONE; deadline Sat 18:00. CERT's reference
-      decodes gate on that DONE file (or start by 10:00 if it is absent).
+  12GB-CLEAN ARMED (Fit12 ex16.sh): ~8 min quiet, then it writes ~/Fit12/data/scr/ex16/DONE; deadline Sat 18:00.
+      Re-timed Fri 23:3x: right after Leap's C 224 run, before runner 49 (WINDOW OPEN item 2); the 06:00 floor and
+      the 10:00 gate are gone.
   12GB-CLEAN (the orchestrator Fri 21:3x; Fit12 runs it): the 12 GB verified-greedy loop ALONE on all 16 prompts, quiet,
       ~5 min, with its own lifetime peak footprint (Fit12's harness). Slot: Saturday morning, first after tonight's chain,
       just before CERT's reference decodes.
   S5. Saturday evening: the final measured number. 12 HumanEval palindrome at C 256 (if it passed) on the final stack,
       MBPP12 speed, and lifetime footprints.
-- Tonight, Sat 00:30 -> ~10:00:
+- Tonight (re-timed Fri 23:3x: from now, in the WINDOW OPEN order above; details of each item below):
   0. (Fri 21:2x) Right after BigMoE's ticket, before EvalSuite's runner 49: Leap's ~5-min C 224 run (does the GPU idle
-     between layers while the expert path blocks the forward?). EvalSuite starts ~5-8 min later.
+     between layers while the expert path blocks the forward?). Then Fit12's clean 12 GB run, then EvalSuite.
   1. BigMoE's stacked FAST palindrome on 12 HumanEval: today's all-in vs all-in + every lever that passes today
      (FAST-NAX, DN-KS, CD16, FASTTAX att_single, lazy commit if wanted), plus FAR-G1. FAST-NAX is in (its BETWEEN on
      record). Plus one SPLIT-NAX arm (stack + split 0.99, ~7 min; speed only, outside the gated

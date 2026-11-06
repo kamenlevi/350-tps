@@ -902,9 +902,12 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
         k_ = NW["k"]                                 # (post slot -1, not QOM's optional use) runs one layer late
         NW["k"] = k_ + 1
         COUNTS["nw_calls"] += 1
-        late = (pre_m.reshape(M, K) == -1)
-        if qm is not None:
-            late = late & ~qm[0].reshape(M, K)
+        cold = (pre_m.reshape(M, K) == -1)
+        late = cold
+        dropo = None
+        if qm is not None:                           # NW v3 (Fri 21:2x): a cold OPTIONAL use is dropped now (weight 0), never
+            dropo = cold & qm[0].reshape(M, K)       # waited for (v1 left it at -1, so the call still waited on the release,
+            late = cold & ~qm[0].reshape(M, K)       # which lands with the layer's demand reads: BigMoE's KILL, stalls unchanged)
         fz = _nw_force().get(k_)
         if fz:                                       # test only: forced groups are late whatever their residency
             late = late | mx.any(ids_k.reshape(M, K, 1).astype(mx.int32) == mx.array(list(fz), mx.int32).reshape(1, 1, -1),
@@ -916,13 +919,16 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
             late = late & rk
         sc2 = sc.reshape(M, K)
         lw = mx.where(late, sc2, mx.zeros_like(sc2))
-        pm_late = mx.where(late, pre_m.reshape(M, K), 0).reshape(pre_m.shape)
-        pre_m = mx.where(late, 0, pre_m.reshape(M, K)).reshape(pre_m.shape).astype(pre_m.dtype)   # any valid slot, weight 0
-        sc = mx.where(late, mx.zeros_like(sc2), sc2).reshape(sc.shape)
+        skip = late if dropo is None else (late | dropo)
+        fill = -2 if (nax and qn) else 0             # NW v2 (Fri 09:4x): FAST-NAX's 1C-Q skips -2 pairs (zero rows, no read);
+        pm_late = mx.where(late, pre_m.reshape(M, K), fill).reshape(pre_m.shape)   # 3c-N's QOM path reads rank 0's slot for
+        pre_m = mx.where(skip, fill, pre_m.reshape(M, K)).reshape(pre_m.shape).astype(pre_m.dtype)   # -2: slot 0 there
+        sc = mx.where(skip, mx.zeros_like(sc2), sc2).reshape(sc.shape)
         if R4:
             lr = late[:, :R4]
             pl_late = mx.where(lr, pre_l.reshape(M, R4), -2).astype(pre_l.dtype).reshape(pre_l.shape)
-            pre_l = mx.where(lr, -2, pre_l.reshape(M, R4)).astype(pre_l.dtype).reshape(pre_l.shape)   # U3's no-LSB path
+            cl = (pre_l.reshape(M, R4) == -1) & ~lr      # NW v3: a cold LSB sidecar of a resident base runs 3-bit now (U3's -2)
+            pre_l = mx.where(lr | cl, -2, pre_l.reshape(M, R4)).astype(pre_l.dtype).reshape(pre_l.shape)
         else:
             pl_late = pre_l
         if NWCNT is not None:                        # [late groups, late uses, late mass, layer-47 drops, layer-47 stalls, forced]
@@ -932,7 +938,9 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
             NWCNT.append(mx.stack([f32(ng), f32(late.sum()), f32(lw.sum()),
                                    f32(late.sum()) * (1.0 if k_ >= NW_LAST else 0.0),
                                    f32(stall.sum()) if stall is not None else mx.array(0.0),
-                                   f32(mx.array(len(fz) if fz else 0))]))
+                                   f32(mx.array(len(fz) if fz else 0)),
+                                   f32(dropo.sum()) if dropo is not None else mx.array(0.0),   # v3: optional uses dropped now
+                                   f32(cl.sum()) if R4 else mx.array(0.0)]))   # v3: cold sidecars run 3-bit
     tb, tsp = t["base"], t["sideP"]
     OC = _ooo1c()
     if nax:

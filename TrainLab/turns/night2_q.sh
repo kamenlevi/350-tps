@@ -1,5 +1,5 @@
 #!/bin/sh
-# MTP Head night queue 2 (Sun 11-01, orchestrator 01:0x: account-2 reset, hold off; night = big tests, 45 GB route first).
+# MTP Head night queue 2 (Sun 11-01, orchestrator 01:0x: claudesub2 reset, hold off; night = big tests, 45 GB route first).
 # The shipped-line A-B-A redo of D-22 (turn53: b3 vs the head installed untrained, H50 stack, the largest C that fits),
 # adapt mode then the fixed 7-draft chain. On 10-31 02:01-02:04 all seven grants found NO-SWAP short after the 30 s
 # settle and were released within seconds; now a short grant waits 15 min before the next ticket. Up to 4 tickets per

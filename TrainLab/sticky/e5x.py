@@ -1,4 +1,4 @@
-> (a quote from the project owner, kept private)
+"""E5 DFlash-X (MTP Head, Sun 11-01 night; Fable ~/FableGod/FINDINGS.md MISSION 3 sec 4 + MISSION 4 E5; Kamen ~21:00 "Yes,
 tonight only" via the orchestrator): DFlash2 L1-20's body, frozen, borrowing one of the 125B's own experts at each layer.
 After drafter layer i (i = 0..4, paired with the 125B's tap layer T_i = 5 / 15 / 25 / 35 / 45, the layers whose streams
 DFlash2 already reads through fc), every block position's hidden state h is normed and projected (in_i, 2560 x 2560,

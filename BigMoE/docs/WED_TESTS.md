@@ -145,7 +145,7 @@ started on Breakthrough's "map batch done" (log data/morning_1104.log):
   then l2c / l2f / l2f2 / l2c2 (14 prompts) + traced l2ct / l2ft (W1B's six). Line (pre-registered ~15:0x, before any run):
   KEEP if every token == REF2-T AND stall per check <= -20 % AND >= +3 % geo steady; KILL if < +1 % or the next-demand
   penalty > 0.05 ms per burst; else BETWEEN. Stage 2 = SAMELAYER-T's trained forecast (weights asked of MTP Head).
-> (a quote from the project owner, kept private)
+- **ALL-IN FAST for code (Kamen 15:0x via the orchestrator: "i know there is a way to at least 300 tps on fast mode"):**
   r57_screen switches R57_HC8 (Leap's hc8r.hc8_install + ref2 hc8_fast, v4), R57_DNR (ref2.dense_native_convert) and
   R57_HCB (ref2 hc_b), each off unless set. scripts/allin_wed.sh at C 224 on the 12 HumanEval, all arms on ext/build_l2:
   u3c (U3C len) / allin (+ D7b code drafter + HC8 + DENSE-N-RAM + hc_b) / allinf (allin + lever 2) / allin2 / u3c2, then a
@@ -451,3 +451,28 @@ split per check (medians, checks >= 2): graph build (it includes the sync-free g
 66.1 ms (+6.5), eval wait 7.5 -> 7.3, gate service 14.0 -> 15.6, SSD io 11.3 -> 12.8, misses 37 -> 39. No wait disappeared; the
 per-layer pipeline got 6.5 ms slower. In the ext the release is per layer call, after all of that call's non-optional reads
 land; an optional-only miss is never read (-2) but resolves with that release.
+
+### Sat 7 Nov 23:50-00:23: the 200 STACK night (scripts/sat_night.sh, data/sat; quiet, C 224, no freeze)
+
+Lines pre-registered in the script header before arming (NewIdeas 4b2c45c / 21:5x, the orchestrator 21:2x-21:4x).
+
+| arm (12 HumanEval, pair-mean geo steady) | tok/s | vs the stack | kept / check | lifetime peak | verdict |
+|---|---|---|---|---|---|
+| qall | 99.1 | | 10.45 | 39.1 GB | (noise floor +1.0 %) |
+| stack (FAST-NAX + DN-KS + GDN lazy + D7BNAX_32 + FAST-tax) | 132.6 | | 10.48 | 38.5 GB | headline PASS: +33.8 % vs qall |
+| stackr (relax v2, DELTA) | 145.3 | +9.5 % | 11.64 | 38.7 GB | PASS on speed; SPEED ONLY (relaxes code tokens) |
+| stackrm (stackr + MATCH g2 at 16 rows) | 144.6 | +9.0 % | 11.74 | 38.5 GB | PASS on speed; SPEED ONLY |
+| stackb (stack + ship B span R2:2:0.25 + g2) | 140.1 | +5.6 % | 11.33 | 39.4 GB | PASS (>= +2 %): code_env |
+| stack at C 256 | 136.5 | +2.9 % vs C 224 | 10.39 | 42.7 GB | C 256 KILL (< +3 %) |
+| stackb at C 256 | 144.9 | +3.4 % vs C 224 | 11.34 | 42.8 GB | C 256 PASS (>= +3 % AND <= 45.0 GB) |
+
+- **FINAL stacked number (quality gate pending: EvalSuite same-scores on stackb):** stackb at C 256, 144.9 tok/s geo steady on
+  the 12 HumanEval, lifetime peak phys_footprint 42.8 GB.
+- **MATCH g2 at 16 rows:** its first GPU run under R57_FAST, a 2-prompt check, was clean. stackb's gain is almost all g2: ship
+  B's span rule relaxed only 21 rows of ~5,900 (span stats). Copy counters: positions ~5,400, used 3,044, accepted 2,888.
+- **T16 MBPP12 (GOAL's line): BETWEEN.** Pair 1 had all 12 verdicts equal. Pair 2 flipped mbpp/319 to fail. Median tokens per
+  task x1.088 (> 1.05). K ratio 1.035. Rows open 2,288, kept whole 0; the guard audit found every accept inside the rule. No stackt.
+- **Never-wait ceiling (R57_WARMSPLIT=4): PASS.** Median cold16 - warm16 is 18.5 ms over 58 samples vs S 9.7 ms; sample misses 46
+  vs live 28 per check.
+- **A void first try, 23:42.** A ticket started at 23:42 ran 0 arms (c45_runner's deadline compared HHMM across midnight;
+  fixed 4ef9bb2). It is recorded as VOID, and part B was stopped before it read the void flags.

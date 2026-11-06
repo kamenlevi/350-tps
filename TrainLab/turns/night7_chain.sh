@@ -1,5 +1,5 @@
 #!/bin/sh
-> (a quote from the project owner, kept private)
+# MTP Head night chain (Sun 11-01 -> Mon), replaces night5_chain + night6_capture (Kamen 20:2x "Yes, move it up": DLOG runs
 # third, right after D-23c, ahead of M-16 / r36 / runner 62). The session's only lock user.
 # 1. From 23:00: ONE quiet FIFO ticket of 100 min (behind BigMoE's C45): turns/turn65.sh = D-23c v2 then the DLOG capture
 #    with the time left; released early when DLOG reaches 30K answer tokens per language.
@@ -40,7 +40,7 @@ while [ $(date +%s) -lt $NIGHT ]; do sleep 20; done
 # 23:00), at the latest 23:00:45, ahead of M-16 (23:01) and r36 (23:05)
 while [ $(date +%s) -lt $((NIGHT + 45)) ] && [ "$(other)" -eq 0 ]; do sleep 2; done
 say "queueing at $(date +%H:%M:%S) ($(other) other quiet tickets in line or held)"
-> (a quote from the project owner, kept private)
+PEER_QUEUE_TIMEOUT=21600 peer lock quiet --queue 100m "MTP Head: D-23c (MTP K15 + cut vs the default, ~30 min) then DLOG drafter data capture (Kamen's go: 125B de/ru/ja answers + taps / top-32), ~42 GB, no timing" >> $LOG 2>&1 || exit 1
 say "granted; D-23c then DLOG (turn65)"
 ./run_locked.sh 100 turns/turn65.sh
 set -- $(tot); say "ticket 1 done: DLOG $2 answer tokens (min language $1)"
@@ -71,7 +71,7 @@ for t in 2 3 4 5; do
   [ "$1" -ge 30000 ] && { say "DLOG target reached ($2 answer tokens): done"; break; }
   [ $(df -g $HOME | awk 'NR==2 {print $4}') -ge 114 ] || { say "free disk under 114 GB: stopping"; break; }
   say "DLOG top-up: $2 answer tokens so far (min language $1); ticket $t"
-> (a quote from the project owner, kept private)
+  PEER_QUEUE_TIMEOUT=21600 peer lock quiet --queue 30m "MTP Head DLOG top-up: drafter training data capture (Kamen's go), ~41 GB, no timing (turn64)" >> $LOG 2>&1 || exit 1
   N=$(wc -l < logs/turn_job.out)
   ./run_locked.sh 30 turns/turn64.sh
   tail -n +$((N + 1)) logs/turn_job.out | grep -q "Traceback\|DLOG-ONPATH-FAIL" && { say "DLOG failed (see logs/turn_job.out): stopping"; exit 1; }

@@ -1,4 +1,4 @@
-> (a quote from the project owner, kept private)
+"""L1-27 (Leap, Sat 2026-10-24; Kamen's "mend to fit the GPU" item a): 4-bit weights fed to the M5's tensor units AS
 4-bit. The installed SDK's matmul2d takes bfloat x uint4b_format -> float (MPPTensorOpsMatMul2d.h); MLX's affine codes
 are unsigned 0..15, packed two per byte low nibble first. So per 64-value group: one matmul2d of the x rows (bf16,
 tensor_inline) with the expert's packed codes (uint4b_format, tensor_inline over the raw buffer) into a float cooperative

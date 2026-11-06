@@ -1,5 +1,5 @@
 #!/bin/bash
-> (a quote from the project owner, kept private)
+# Fri 6 Nov (the orchestrator 07:2x, Kamen "we MUST ... get to 300"): GPU pre-flight of the levers merged into
 # scripts/r57_screen_fast.py (the relaxed copy + GOAL's INERT + MoonShots' relax v2 + FULL's NOCOM / COPYPROBE + Fable B's
 # FAST-tax; FAST-NAX via Leap's ref2 eb43fcc2), for tonight's stacked FAST headline. Two prompts (HumanEval/68 + ifeval/1220)
 # at CAP 32, C 160 uniform, under a share lock "MEM 36 GB", once no quiet lock and no other > 5 GB job runs, start by 14:15.

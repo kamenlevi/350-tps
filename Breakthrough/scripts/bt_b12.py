@@ -74,7 +74,7 @@ pinned from MoonShots). Levers, each an env switch so the suite can run B12 minu
                         (ALLWAIT inside spec125.generate) and B12_FOLD_CM=1 or "n:C_m" points (C_m per prompt: default
                         points 2700:64,8600:60,16500:56,32800:47, linear between, rounded down; needs v3m; a short
                         prompt then takes PFR only when its C_m changes). Off: B12_FOLD_PFR / _ROWS / _MOV = 0.
-> (a quote from the project owner, kept private)
+  B12_MODE=fast | exact (default fast since decision 5, Kamen 10-31 11:1x: "Yes, adopt it") fast = fold-fast as the
                         Eval suite's b12llff3 ran it (same scores, lifetime 11.51 GB on the 29-row agent process, ~6 %
                         faster answers, ~27 % faster long prompts; NOT bit-exact): ALLWAIT inside the decode (B12_FOLD_AW 1),
                         C_m per prompt at the FFX points 2700:60,8600:60,16500:56,32800:47 (B12_FOLD_CM), PFR on prompts
@@ -121,7 +121,7 @@ AW_N = [0]                                  # trunk layer calls that took the AL
 FOLD = [os.environ.get("B12_FOLD", "1") == "1"]   # B12_FOLD (default on since R-41: its exact pieces; see the docs)
 
 
-> (a quote from the project owner, kept private)
+MODE = os.environ.get("B12_MODE", "fast")   # decision 5 (Kamen 10-31): fold-fast by default; "exact" = fold-exact
 assert MODE in ("fast", "exact"), f"B12_MODE={MODE}: fast or exact"
 _FAST = MODE == "fast"
 _FOLD_ON = {"PFR": "1", "ROWS": "1", "MOV": "1", "AW": "1" if _FAST else "0",   # exact pieces always on; fast adds

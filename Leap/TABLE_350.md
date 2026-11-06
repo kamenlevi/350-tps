@@ -232,7 +232,7 @@ Tags: **published** = shown elsewhere, untested here; **here** = measured on thi
   - Pruning barely shrinks a check's bytes (distinct experts per layer, 16 rows: 72 -> 63-68; 54-57 with top-8). Its
     value is residency.
   - At 45 GB the whole 256-pool at 3.5 b (~30 GB) is resident: zero misses.
-> (a quote from the project owner, kept private)
+  - **CLOSED (22:39): Kamen (relayed by the orchestrator at ~22:38) rejected pruning ("No I don't want to use half of the experts").** All 512
     experts per layer stay; no pruning or merging. The residency lesson carries over to all-expert methods below.
 - **All 512 experts at 24 GB (22:41; scripts/resid27.py; same traces and replay):**
   - Misses per token, code, 16-row checks:
@@ -498,7 +498,7 @@ Tags: **published** = shown elsewhere, untested here; **here** = measured on thi
     small model nor an affordable tree extracts it.
 
 ## L1-23 (Leap, pre-registered 20:26; MoonShots' L1-01b): bit-exact 16-row kernels for the 125B's dense layers
-> (a quote from the project owner, kept private)
+- **Why:** Kamen (~20:00): "make the kernel allow for 95+ percent of the hardware". MoonShots measured the 125B's dense
   shapes (data/b8mr/denseinv.txt). A bit-exact 16-row check today chunks its rows (12 + 4 for the 4-bit shapes, 5s for
   the bf16 hyper-connection mixers), because MLX's kernels change numerics with the row count. Its dense layers take
   ~57 ms (4-bit ~37.5, bf16 ~17.5, 8-bit ~1.7), against a ~12 ms floor and ~16 ms for 1-row decode. Exactness costs
@@ -637,7 +637,7 @@ Tags: **published** = shown elsewhere, untested here; **here** = measured on thi
     parts (attention, GDN core, routing, glue) are not measured here.
   - Rounding changes once, for decode and verify together.
 
-> (a quote from the project owner, kept private)
+## L1-26 (Leap, pre-registered 23:26; Kamen's "mend to fit the GPU" item a): a fragment-native 4-bit weight layout
 - **Why:** L1-24 / L1-25. The 16-row paths are ALU-bound on unpacking.
   - qmm16c's lane reads 8-byte pieces of 4 weight rows per 64-value group.
   - It spends 3 ops (shift, mask, or 0x4300) per 4-bit value to make a bf16 operand.
@@ -700,7 +700,7 @@ Tags: **published** = shown elsewhere, untested here; **here** = measured on thi
 - Item (b), the drafter on the Neural Engine, is KILLED on arithmetic. Drafting is 3-8 % of a check and has to wait for
   the check's result (prior art: Mirror-SD 2510.13161).
 
-> (a quote from the project owner, kept private)
+## L1-27 (Leap, pre-registered 23:36; Kamen's "mend" item a): 4-bit weights fed to the tensor units AS 4-bit
 - **Why:** L1-24 / L1-26. The few-row paths are ALU-bound on unpacking: experts reach 82 % of the floor with the
   native layout, the dense shapes 77-86 %.
   - The installed SDK (26.5; MPPTensorOpsMatMul2d.h) lists **bfloat x uint4b_format -> float** for matmul2d.
@@ -3156,7 +3156,7 @@ Data: data/b5_slice.txt (timings, 20 checks per variant), data/b5_gpu.txt (trace
     - BigMoE (engine owner) gets the finding: its shipped plain-path gather costs ~8 ms per layer-call in
       allocations. For its own stock paths a reused scratch buffer (no clear_cache) may be a cheap exact win too;
       that is BigMoE's to screen.
-> (a quote from the project owner, kept private)
+- **R-50b (Kamen via the orchestrator, Thu 20:5x: "did you test it", i.e. does R-50 carry over to the 45 GB setup;
   pre-registered Thu 21:02; scripts/r50b_screen.py, runner_r27.sh after runner 26, ~2 min):** warm 16-row checks,
   gather vs slot, at the 45 GB line's REF2 configuration (C 192), with the needed experts resident.
   - Setup: no drafter; REF2 + SB on; PF1 for prefills only.
@@ -3399,7 +3399,7 @@ R-59 at C 224, warm 16-row REF2b check, ms per check (x its bytes floor at 280 G
     cycle at C 224.
   - Exact-safe if qmmg's per-output accumulation order is kept: only memory access changes, e.g. more loads in flight.
     A candidate kernel row, after R-62 / R-61.
-> (a quote from the project owner, kept private)
+- **HOLD (Kamen 11:5x, "Hold it for now"):** no runs and no locks until he lifts it (PAUSE / HOLD kept by
   hold_guard.sh). Reading, planning and writing only.
 - **R-62 RESULT (Sat 19:58, runner 52, Kamen's 19:55-20:45 hour; shared GPU, rough; data/r62_att16.txt): BETWEEN.** One
   SDPA call per layer is 2.1-2.8x faster than MTPLX's 12 head chunks, but bit-identical only below 512 keys.
@@ -4404,7 +4404,7 @@ R-59 at C 224, warm 16-row REF2b check, ms per check (x its bytes floor at 280 G
   cycle's excess, the miss burst 58-73 % of the cold ones', the drafter's window 18-23 % of all three. A6 goes to
   BigMoE by cause.
 
-> (a quote from the project owner, kept private)
+## DAY9 (Kamen Mon 10:3x: "run all 9 tests"; ~/FableGod/DAY9_2026-11-02.md): Leap's items, pre-registered Mon 10:59 EET
 - **C0 / NEW-2 timeline (condition 5; scripts/c0_timeline.py):** BigMoE's r57_screen.py (e3210bf, the 45 GB default:
   R57_PRESET=45 = REF2-T + gate + t 0.3 + OOO + TIER_COMBINE + K-73) with probes. At checks 1, 2, 5, 10, 15, 30 the cache
   is rolled back (mtplx rollback_after_verify) and the check re-run:
@@ -6036,7 +6036,7 @@ shapes, since latency does not depend on the values.
     420 s, each killed at its cap, lock 11 min.
   - **Deviation from the S pre-registration (forced by the cap):** 12 s phases instead of 20, and a 45 s warm-up
     instead of 60; still 3 rounds of {a4x4, q4, a4x4 + q4}, each between alone phases.
-> (a quote from the project owner, kept private)
+  - **Second deviation (the orchestrator 18:5x, Kamen's plan change: "small breakthrough tests run NOW, not
     overnight"):** the night runner was stopped (19:00). The run goes now (`WC2_NOW=1`), by day, under a quiet lock
     with Kamen on the Mac (PowerPoint, Chrome, Spotify). The order became M-28 -> Fit12 -> WC2: Fit12 was granted at
     19:00:53 while no ticket of mine was in yet.
@@ -6800,7 +6800,7 @@ shapes, since latency does not depend on the values.
     - Exactness is already covered: EvalSuite's NAX6 Part 2 PASS 14:47 (NAX6-N on the converted store: live loop == AR
       36 / 36, AR == Part 1's row-major NAX6 rows) and its 10:50 bridge (ref2tnaxn == ref2tnax on 3 rows; check 2 for
       the 3c-N path). That is Nc == N, and Dc == D through 3c-N == 3c.
-> (a quote from the project owner, kept private)
+    - The speed line is not covered. Kamen's 15:0x decision moves R57_PRESET=45 to NAX6-N only "if NATIVE-FRI passes",
       and BigMoE's Friday ticket times no NAX arm (its fexr is 3c-N, timing unused).
   - **Phase C only:** Dc / Nc / Nc / Dc on the converted store.
     - Dc = the 45 GB default (3c-N, OOO two phases); Nc = + R57_NAX=1 (NAX6-N, nax_native).
@@ -6863,7 +6863,7 @@ shapes, since latency does not depend on the values.
     - The order effect was Dc -2.1 % and Nc +0.2 % (pass 2 / pass 1); the A-B-B-A pair means cancel linear drift.
   - Per domain Nc / Dc: humaneval +3.6 % (4), math500 +6.9 % (3), gsm8k +7.1 % (1), ifeval +13.8 % (2), multi +8.0 % (2),
     agent +1.5 % (1).
-> (a quote from the project owner, kept private)
+  - Meaning: Kamen's Thu 15:0x condition ("R57_PRESET=45 to NAX6-N if NATIVE-FRI passes") is met. That is BigMoE's
     switch to make.
   - Data: data/natfri/natfri_report.txt, c45.log, natfri.log, nf*_192.txt, r57/; the frozen screen and runner are in snap/.
 
@@ -8654,6 +8654,18 @@ screen); GPU tests small, on share locks.
     - Report the NWCNT fields (late / dropped-optional / 3-bit sidecars per check).
   - Quality: v3 adds lossy parts beyond nw1's map PASS (cold optional uses dropped now, cold sidecars 3-bit). NewIdeas
     decides whether they need their own map arm or a short same-scores check on code, planned in the same window.
+- **NEVER-WAIT v3 INSTALLED, OFF by default (Fri 23:4x; Kamen opened the window at 23:30, so this landed before BigMoE's
+  night ticket instead of after it; no engine process was running).**
+  - Bit check 1 (share lock, 23:4x): qomsplit_check.py with REF2_PATH = data/nw3/ref2_cand.py PASS.
+    - (o): v3 with NW off == live, bitwise, for QOM and non-QOM calls in both one-call forms (3c-N, NAX6-N 1C-Q),
+      layers 20 and 44, with QCNT_1C equal.
+    - (s): the split rule's reference PASS, 416 split drops exercised.
+    - Data: data/qomsplit_check.txt.
+  - nw_check on v3 (Fri 21:16, before the HOLD): (w) warm == off, (f) FORCE == reference, (c) cold == reference and
+    (l) layer 47 all PASS (data/nw_check.txt).
+  - Install: atomic (temp + mv). scripts/ref2.py 84d0ab40 -> dcd5f4f8, backup in data/nw3/ref2_before.py. ref2.apply()
+    + self_test all True. NW_ON False, CFG neverwait False. REF2_NEVERWAIT=1 arms it.
+  - Every changed line is inside `if nw:` (nw = NW_ON and CFG["neverwait"]), so the off path is today's code.
 - **NEVER-WAIT v3 quality / speed gates (NewIdeas 21:4x, QUEUE dc9aff8 S1).**
   - Its own map arm first: Breakthrough preps nw3 tonight on the CPU. Cold sidecars at 3 bits (LSB-on-miss) are a new
     lossy path; the worst-case bound (every rank 0-1 term of unsure rows at 3 bits) stands in if residency can't be
@@ -8662,3 +8674,114 @@ screen); GPU tests small, on share locks.
     reports NWCNT (3-bit sidecars, optional uses dropped, late groups per check).
   - Note: BigMoE's 'stalled calls' counts calls that issued a read, not waits.
   - Adoption: map PASS + S4's short same-scores gate.
+
+## GPU IDLE AT 16 ROWS + SB CADENCE: S0's input, S2's glue fix (Leap, Fri 2026-11-06 23:43-23:49, quiet locks)
+Question (the orchestrator 21:3x; NewIdeas' S0 bar): on the stack env, is the GPU idle >= ~8 ms per 16-row check? If so,
+the fully async post (S0) is Saturday's top build. Also S2's glue fix: SB cadence, submit every 2 layers vs 4.
+- **Env:** BASE + R57_NAX=1 REF2_NAX_1CQ=1 REF2_DN_KS=1 REF2_GDN_LAZY=1 D7BNAX_32=1 R57_FASTTAX=1 (run_stepb arm bstackF).
+  The ioreg "Device Utilization %" sampler (scripts/stepb/gpu_util_sampler.sh) ticked every 46 ms.
+- **Method note:** a pass's average GPU busy includes its prefill. The 12 checks of a 160-token real pass take ~0.85 s of
+  a ~7.1 s pass, so the per-pass averages (35-40 %) say nothing about checks. The numbers below average the samples over
+  each pass's last 0.73-0.80 s, which holds the 11 steady checks. There the raw samples read 58-100 %, against the 0 %
+  gap seen before the decode starts.
+- "Busy" counts any resident kernel, including expert kernels spinning on the gate's release. "Idle" means no work queued.
+
+**Real 16-row loop, C 224 (FLAT2_REAL: the engine's own blocks, rows 13-16, kept ~14.3; 3 measured passes per arm):**
+
+| arm | pass | draft ms | check+commit ms | cycle ms | GPU busy (steady) | GPU idle per cycle |
+|---|---|---|---|---|---|---|
+| SB 4 (today) | real 2 | 8.03 | 63.03 (build 55.42, wait 6.50) | 71.06 | 88.6 % (17 samples) | 8.1 ms |
+| SB 4 | real 3 | 8.00 | 62.48 (build 54.81, wait 6.36) | 70.48 | 88.1 % (17) | 8.4 ms |
+| SB 4 | commit pass | 7.57 | 64.63 (build 54.22, wait 6.39) | 72.20 | 84.6 % (19) | 11.1 ms |
+| SB 2 (STEPB_SB_N=2) | real 2 | 7.83 | 60.66 (build 54.54, wait 5.63) | 68.49 | 96.3 % (16) | 2.5 ms |
+| SB 2 | real 3 | 7.96 | 59.98 (build 53.05, wait 5.47) | 67.94 | 96.1 % (16) | 2.7 ms |
+| SB 2 | commit pass | 7.49 | 61.13 (build 52.85, wait 5.43) | 68.62 | 94.8 % (16) | 3.6 ms |
+
+- **SB 4 to SB 2:** the cycle is -2.6 ms (-2.57 / -2.54 / -3.58), and idle drops from 8.1-11.1 to 2.5-3.6 ms per cycle.
+  - Tokens look unchanged: kept per check is identical between the arms in all 4 real passes (FAST varies across
+    passes with cache state, not between the arms).
+  - On this prompt that is ~199-205 tok/s (SB 4) vs ~207-212 tok/s (SB 2), from kept / cycle. One prompt; not a benchmark.
+- **2-row checks, in-process TOGGLE (C 208, 10 passes, ns:STEPB_SBN = 4 | 2; zero-miss checks):**
+  - Paired check+commit B - A: -5.64 / -7.57 / -5.79 / -5.60 ms, **median -5.71 ms**. Cycles ~50.1 (SB 4) vs ~44.3 (SB 2).
+  - Separate processes at C 224 agree: check+commit 46.45 / 46.24 (SB 4) vs 40.16 / 39.69 (SB 2).
+  - At 2 rows the steady GPU busy is 80.8 % (SB 4) vs 67.9 % (SB 2). SB 2 is shorter but less busy, so at SB 4 ~10 ms
+    per 2-row cycle is spin, not useful work.
+- **Warm 16-row forward, back to back (FULL16 probe, 60 unsynced forwards):**
+
+  | where | wall ms | GPU ms (busy %) | Python build ms |
+  |---|---|---|---|
+  | C 224 SB 4 | 45.80 | ~40.2 (88 %) | 40.21 |
+  | C 224 SB 2 | 44.59 | ~36.8 (82 %) | 39.98 |
+  | C 208 | 46.06 | ~41.3 (90 %) | 40.33 |
+
+  - DENSE-ONLY (experts stubbed): wall 22.68, GPU ~20.5 (90 %), build 15.78 ms.
+  - ~~So the expert call adds ~24 ms of Python per 16-row forward (~0.5 ms per layer).~~ **CORRECTED Sat 00:2x by XPT
+    (next section):** the expert call is ~0.08 ms of Python per layer. The FULL vs DENSE build gap is Metal encoding plus
+    waiting on the busy GPU inside mx.async_eval.
+- **Verdict.**
+  - S0 (fully async post): 8.1-11.1 ms of idle exists today, but SB 2 alone recovers it down to ~3 ms per cycle, below
+    the 8 ms bar. Not worth building after SB 2.
+  - S2: R57_SBN=2 is the glue fix (scheduling only; S2's A/B confirms the speed and token equality).
+  - With SB 2 the 16-row cycle is ~96 % GPU-busy. What remains is GPU work plus spin on the gate's release (gate
+    service 4-18 ms per check in these passes), which is S1's (NW v3) target.
+- **Wiring for S2:** ~/Leap/data/s2wire/r57_s2.diff, against BigMoE's r57_screen.py fa8bee48 (applies clean), all off by
+  default. BigMoE applies it.
+  - R57_SBN=N replaces the literal 4 in ref_on's midloop lambda.
+  - R57_SVH=1 / R57_DSUB=1 / R57_SV_CHECK=1: the SESSION-VOCAB hooks from data/r57_session_vocab.diff (Wed), re-based.
+  - Smoke copy with outputs in ~/Leap: data/s2wire/r57_s2_smoke.py. Compile check and smoke after BigMoE's lock.
+- **Data:** data/stepb/gap_night.txt; data/stepb/gpu_util_night.txt (C 208 run + TOGGLE) and gpu_util_real.txt (C 224);
+  out/stepb_bstackF_208_night*, stepb_togs_208_sbn*, stepb_bstackF_224_real* / _real2*.
+  - The 23:43 C 208 run measured 2-row FLAT passes and probes only: the waiter did not set STEPB_REAL. Corrected by
+    the 23:46-23:49 C 224 real runs.
+
+## XPT: the Python thread per real 16-row check, the cycle floor, and the S2 smoke (Leap, Sat 2026-11-07 00:23-00:27, quiet lock)
+The orchestrator asked (Fri 23:5x) for the expert path's Python ms per layer at SB 2 in the steady window, so NewIdeas can
+order S3 (the CPU-side lever) against S1, and for NW v3's ceiling priced against the Python floor. NewIdeas gave the slot.
+- **Tool:** STEPB_XPT=1 (scripts/stepb/xpt.py; unit test scripts/stepb/test_xpt.py PASS). On real-block passes only, it
+  wraps three call sites, recording wall (perf_counter) and thread CPU (time.thread_time) for each:
+  - the trunk's DecoderLayer.__call__;
+  - the expert call, type(l.mlp.switch_mlp).__call__;
+  - mx.async_eval.
+  - It also stamps thread CPU at each of run()'s F2C cycle stamps.
+  - Calls are binned into cycles by those stamps, in entry order. Overhead ~0.4 ms per forward.
+- **Env:** C 224, the stack (run_stepb arm bstackF), FLAT2_REAL passes (rows 12-16, kept 14.4).
+  - The 3 steady passes per arm are real pass 2, real pass 3 and the commit pass.
+  - Values are per-check medians over checks 2-12.
+
+| arm | pass | cycle wall | Python CPU per cycle | layer calls wall / CPU | expert calls (48) CPU | async_eval wall / CPU | engine build |
+|---|---|---|---|---|---|---|---|
+| SB 2 | real 2 | 68.72 | 40.94 | 16.20 / 16.16 | 3.97 | 37.50 / 18.89 | 54.30 |
+| SB 2 | real 3 | 68.00 | 38.91 | 15.24 / 15.24 | 3.75 | 37.36 / 18.02 | 52.93 |
+| SB 2 | commit | 66.52 | 40.15 | 16.10 / 16.10 | 3.91 | 34.90 / 19.29 | 51.91 |
+| SB 4 | real 2 | 70.51 | 39.86 | 15.66 / 15.64 | 3.80 | 38.42 / 17.20 | 54.81 |
+| SB 4 | real 3 | 69.99 | 39.72 | 15.50 / 15.50 | 3.82 | 37.09 / 17.25 | 53.94 |
+| SB 4 | commit | 67.79 | 39.37 | 15.53 / 15.53 | 3.77 | 36.35 / 17.23 | 51.94 |
+
+- **The Python thread's CPU per cycle is 38.9-40.9 ms (SB 2)**, against a 66.5-68.7 ms cycle. Where it goes:
+  - The graph build (48 layer calls, wall ≈ CPU: no waits there): 15.2-16.2 ms. Of that, the expert calls are 3.75-3.97 ms
+    (**0.08 ms per layer**), and the dense + glue part is ~12.
+  - Metal encoding inside mx.async_eval: 18-19.3 ms CPU.
+  - Draft, commit and the loop: ~5.5 ms.
+- **The waiting is inside mx.async_eval:** wall 35-37.5 ms vs CPU 18-19, so the thread waits ~16-19 ms per check there.
+  This is back-pressure from the GPU, which is ~96 % busy at SB 2 (previous section). A further ~5.5 ms is the final
+  wait after the build.
+- **The cycle floor is ~40 ms of CPU**, so today's GPU-bound cycle (~65.5 ms busy) sits ~25-27 ms above it.
+  - NW v3 (S1) priced against the floor: its target, the spin on gate releases (median gate service ~7 ms per check), fits
+    inside that margin, so it is not floor-limited. Price it as GPU time.
+  - S3 (CPU-side): the expert glue's Python is only ~3.9 ms per forward, so compiling it is worth at most ~3-4 ms of CPU,
+    and only once GPU time per cycle nears ~40-45 ms. The larger CPU items are encoding (~19) and the dense graph build
+    (~12); fewer dispatches cut those and GPU time together. **Order: S1 before S3; S3 parked.**
+- **SB 2 vs SB 4 in this slot:** cycle -1.8 / -2.0 / -1.3 ms; with the 23:4x runs, -1.3..-3.6 ms per 16-row cycle. At SB 2
+  async_eval's CPU is ~+1.5 ms (twice the submits) and its wait is lower.
+- **cProfile (STEPB_XPT_PROF=1, out/stepb_bstackF_224_xptp_prof.txt):** the pass profile is dominated by each pass's
+  prefill. prefill_call takes 5.5 of 6.8 s, and BigMoE's tier _read_rebuilt alone 3.1 s (48 calls, 65 ms each: the
+  prompt's expert reads). So it does not separate the decode; XPT does.
+- **S2 smoke PASS** (data/s2wire/r57_s2_smoke.py = BigMoE's r57 fa8bee48 + data/s2wire/r57_s2.diff, outputs in
+  data/s2wire/r57/).
+  - Env: the stack + R57_SVH=1 R57_DSUB=1 R57_SV_CHECK=1 R57_SBN=2 D7BNAX_32=2, C 224, 2 prompts. 517 tokens, rc 0,
+    footprint peak 38.6 GB.
+  - SESSION-VOCAB {prompts 2, committed 517, head2s 69, chk_rows 1104, chk_out 0, svh_extra 3, svh_calls 69, dsub_extra 3}:
+    svh_calls == head2s (checks == proposes), chk_out 0, dsub_extra == svh_extra, all as pre-registered (SESSION-VOCAB, Wed).
+  - BigMoE applied the diff in its r57_screen_fast.py (97a23bf). S2's speed + token-equality A/B is BigMoE's.
+- **Data:** data/stepb/gap_xpt.txt, gpu_util_xpt.txt; out/stepb_bstackF_224_xpt2* / xpt4* / xptp* (+ _prof.txt);
+  data/s2wire/s2smoke.log, data/s2wire/r57/s2smoke_*.

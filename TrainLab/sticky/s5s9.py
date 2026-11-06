@@ -106,6 +106,6 @@ for a in arms:                                       # R-26 / R-31 (REPORT 'R-26
         verdict.append(f"{'R-26' if a[0] == 'q' else 'R-31'} {NAME[a]}: the strict rules {'PASS' if strict[a] else 'FAIL'} in "
                        f"the parts run ({', '.join(p[3:] for p in parts)}; fixed top-8 failed ifeval, code and multi at x2.23 "
                        f"of v3){'; v3 in this run: ' + ('PASS' if strict.get(V3) else 'FAIL') if v3_src == 'this run' else ''}")
-> (a quote from the project owner, kept private)
+out += ["VERDICT (pre-registered; adopting any piece is Kamen's call):"] + [f"  {v}" for v in verdict]
 print("\n".join(out))
 open(f"{D}/s5s9_{SUF}.txt", "w").write("\n".join(out) + "\n")

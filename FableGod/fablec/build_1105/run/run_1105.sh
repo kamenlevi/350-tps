@@ -71,8 +71,8 @@ guarded() {   # guarded <name> <est min> <command ...>: 0 = the command ran to i
 }
 # THE GO GATE (Thu 18:4x): the Fable sessions' standing rule is no GPU, and it is Kamen's to lift. This script does nothing
 # unless $R/KAMEN_YES exists; that file is written only after Kamen's own yes has arrived (directly, or relayed by the
-> (a quote from the project owner, kept private)
-> (a quote from the project owner, kept private)
+# orchestrator as "Kamen: yes"). Without it: one log line, exit 3, no lock, no process.
+[ -f "$R/KAMEN_YES" ] || { say "ON HOLD: no $R/KAMEN_YES (the GPU part waits for Kamen's yes); nothing started"; exit 3; }
 trap 'peer unlock >> $LOG 2>&1' EXIT
 trap 'say "interrupted"; [ -n "$P" ] && stop_run $P; exit 1' INT TERM HUP
 say "armed: smoke, control, then $ARMS (+code); NO-SWAP >= $NOSWAP_MIN GB to start, swap +$SWAP_MAX_MB MB ends the batch; last start $(date -r $LASTGO '+%a %H:%M'), hard stop $(date -r $DEADLINE '+%a %H:%M'); BIGMOE_EXT_BUILD=$BIGMOE_EXT_BUILD"

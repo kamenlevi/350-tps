@@ -1,4 +1,4 @@
-> (a quote from the project owner, kept private)
+"""DLOG capture (MTP Head, Sun 11-01; Kamen 19:5x via the orchestrator: "Yes, start it" = log drafter training data from the
 125B's runs, MTP Head leads). Fable's E0 / E1 (~/FableGod/FINDINGS.md, MISSION 4 sec 4): the 125B's OWN answers in de / ru /
 ja, logged from the 45 GB default's own live loop, every verified row's training data kept for free.
 Harness = D-23's (sticky/d23c_mtptrunc.py with D23_NEWDEF=0, i.e. D-23's pre-OOO preset: REF2-T tiers 4433333333 / 3c, C_l 112,

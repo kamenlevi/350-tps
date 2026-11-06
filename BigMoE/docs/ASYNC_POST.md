@@ -85,3 +85,24 @@ A per-layer completion callback in the ext is not needed: the loader thread is a
 **KILL:** the bit check differs, or tok/s < +2 %.
 
 **BETWEEN:** otherwise. Kept per check and tokens per task are reported beside.
+
+## 6. Result (Fri 23:5x, Leap's measurement; this replaces the section 1 guess)
+
+- **Python is building, not waiting.** Measured at C 224 on the stack env (real 16-row loop, 3 passes x 11 steady checks): a
+  warm 16-row forward spends 40.2 ms in Python's graph build vs 15.8 ms for the dense part alone, i.e. ~0.5 ms of Python per
+  layer in the expert call on the gated path, with no misses. The "~45-50 ms blocked" reading in section 1 was wrong.
+- **The GPU idle comes from the mid-loop submit cadence.** Today's SB submits every 4 layers on 2-16-row checks
+  (`Q._prefill_midloop_eval_layers` -> 4) and leaves 8.1-11.1 ms of GPU idle per cycle (median 8.4).
+- **SB 2 recovers most of it.** Submitting every 2 layers cuts the idle to 2.5-3.6 ms and the cycle by ~2.6 ms
+  (71.1 / 70.5 / 72.2 -> 68.5 / 67.9 / 68.6 ms), with kept per check identical in all 4 real passes. At 2 rows: -5.71 ms per check.
+- **So S0's rebuild is not needed.** The idle is reached by a scheduling knob, R57_SBN (Leap's S2 diff, applied to
+  scripts/r57_screen_fast.py; default 4 = today, bitwise). The locator (scripts/s0_locate.sh) stays available.
+- **The A/B moves to S2** (Leap's glue A/B, its own line). On ~2.6 ms of a ~70 ms cycle (~+3.7 %), section 5's PASS
+  (>= +5 %) would most likely not be met.
+- **Where the Python thread's time goes** (Leap's XPT, Sat 00:3x: per-call wall and thread-CPU on the real 16-row loop, SB 2,
+  3 steady passes; ~/Leap/data/stepb/gap_xpt.txt). The thread uses ~40 ms of CPU per ~68 ms cycle:
+  - graph build across the 48 layer calls: 15-16 ms, of which the expert call (route / post / one-call) is only 3.75-3.97 ms
+    (0.08 ms per layer);
+  - mx.async_eval: 35-37.5 ms wall, of which 18-19 ms is CPU encoding and ~16-19 ms is waiting inside async_eval for the GPU
+    (back-pressure; the GPU is ~96 % busy at SB 2).
+  The thread never waits on the router. GPU time is the lever (S1); the Python floor (encoding + build) is S3's.

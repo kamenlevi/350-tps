@@ -19,14 +19,14 @@ Run `taskpolicy -b python3 ~/BigMoE/ops/health_review.py` (read-only facts), the
    killed runners (kill only your own; tell the owner otherwise). **CPU-only jobs above 4 cores (400 %).**
 4. **GPU queue (`peer ls`):** a frozen waiter at the head, a quiet lock held with nothing on the GPU while others wait
    (RULES.md "CPU jobs vs the GPU queue"), a lock held by a session that is gone.
-5. Fix what is clearly inside ~/.local/share/pacer/RULES.md; tell the owner with `peer send <name> "..."`.
+5. Fix what is clearly inside ~/.local/share/usage-pace/RULES.md; tell the owner with `peer send <name> "..."`.
 6. Append ONE line to ~/.local/share/quiet/health_reviews.log:
    `YYYY-MM-DD HH:MM EET <OK|WATCH|ACT>: temps, fans, swap, disk, monitor alive; research/GPU queue; actions.`
    (run `date` first; the facts script prints the time)
 7. Message the orchestrator ONLY for an ACT verdict, a hardware risk, or a decision only Kamen can make. Everything else
    stays in the log. Its address changes when the Claude app restarts (20139.sock died 10-25 10:25): SendMessage to the
-   address `~/.local/share/pacer/orch_addr.sh` prints (looked up by session id; 42262 died at the 10-30 00:40
+   address `~/.local/share/usage-pace/orch_addr.sh` prints (looked up by session id; 42262 died at the 10-30 00:40
    restart, then 7333). Two main sessions are named "AI/LLM project recommendations" (7366 is NOT it), so `peer show` /
    `peer send` by that name can reach the wrong one; owner notes that aren't urgent go to that same uds address.
 
-Pacing: `pacer check --session bigmoe --account sub`.
+Pacing: `usage-pace check --session bigmoe --account sub`.
