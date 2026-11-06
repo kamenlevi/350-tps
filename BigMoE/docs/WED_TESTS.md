@@ -405,3 +405,41 @@ Indicative only (one cold pass each, CAP 32, C 160, 3 min apart, no palindrome):
 f5v = the stack + CD16 + R57_NEVERWAIT=1 + REF2_NEVERWAIT=1 + R57_QCNT1C=1 (tonight's snv env; the counter + never-wait pair was
 the one combination check 4 did not run), 2 prompts, CAP 32, C 160: ran 2 / 2, no error lines. Both per-check counters are
 written for all 19 checks (q1c and nw). NWCNT sums: late groups 4094, late uses 7746, last-layer late uses 82, stalls 25.
+
+### Fri 15:40: day run at C 224: NEVER-WAIT KILL, SPLIT-NAX KILL (scripts/fri_day.sh, data/fday)
+
+Kamen extended the big-test window to 17:00; NewIdeas ordered this run first. Palindrome on the 12 HumanEval: stack / ssp / snv /
+snvb / sspb / stsb, quiet lock, C 224 (NO-SWAP 44.9 GB; peaks 38.4-38.9 GB), ~92-97 s per pass, no pass overlapped a freeze.
+Lines pre-registered by NewIdeas (Fri 10:1x / 13:5x): net pair-mean geo steady tok/s vs the stack, PASS >= +8 %, KILL < +3 %.
+
+| arm | geo steady tok/s (passes) | vs stack | kept per check | verdict |
+|---|---|---|---|---|
+| stack | 157.9 (157.2, 158.1) | | 12.58 | |
+| SPLIT-NAX (stack + R57_QOM_SPLIT=0.99) | 155.8 (156.4, 154.6) | -1.3 % | 11.87 (-5.7 %) | KILL |
+| NEVER-WAIT (stack + R57_NEVERWAIT + REF2_NEVERWAIT) | 153.5 (153.2, 152.3) | -2.8 % | 13.16 (+4.6 %) | KILL |
+
+Per check (checks >= 2, medians), stack vs never-wait: check 68.8 vs 75.3 ms, gate service 14.0 vs 15.6 ms, misses 37 vs 39,
+stalled layer calls 17 vs 17, eval wait 7.5 vs 7.3 ms. Never-wait counters per check: late groups 24, late uses 57, late
+mass 6.3, last-layer late uses 0, stalls 0. Read: at C 224 the stack misses only ~37 experts per check, the stalled layer
+calls did not drop, and the late work added ~6.5 ms per check. NewIdeas' +10-15 % assumed ~13.5-15 ms of misses per check.
+Both arms leave tonight's palindrome; never-wait does not join the gated stack. The MBPP12 pair failed at once (rc=127: the
+c45 runner splits arm envs on commas, so R57_QOM_SETS=humaneval,mbpp broke). It was re-run with the sets in the environment
+(scripts/fri_mbpp.sh).
+
+### Fri 15:51: MBPP12 CD16 pair (GOAL's line): speed PASS, quality KILL (3 of 12 tasks flip to fail)
+
+scripts/fri_mbpp.sh: qall vs qall + R57_INERT=CD16 on GOAL's 12 MBPP (mbpp12_1106/MBPP12.md), CAP 384, C 224, palindrome mq / mc /
+mcb / mqb, R57_QOM_SETS=humaneval,mbpp, quiet lock, no cuts, no freeze.
+
+| | qall | qall + CD16 | ratio | GOAL's line |
+|---|---|---|---|---|
+| geo steady tok/s | 71.3 (70.2, 72.5) | 88.2 (88.9, 85.7) | +23.7 % | |
+| kept per check | 6.48 | 9.38 | K x1.449 | PASS >= 1.30 |
+| tokens per task | | | x1.020 | PASS <= 1.05 |
+| tests passed (EvalSuite mbpp_score.py) | 11 / 12, both passes | 8 / 12, both passes | 3 flips per pass pair | KILL at >= 2 flips |
+
+Flips pass -> fail: pass 1 mbpp/16, 296, 319; pass 2 mbpp/16, 268, 319 (data/fday/mbpp12_verdicts.json). INERT counters: rows
+open 1236 / 1096 (> 0, as GOAL's line asks). The answers show why: CD16 keeps comment rows whatever the 125B says, and the
+drafter's comments loop ("the string, the string, ...") until the answer is spent (mbpp/16), or the code it writes after its
+own comments differs (mbpp/319). **Verdict: KILL on quality** (speed PASS). CD16 is in tonight's STACK and in the env files
+EvalSuite gates; that decision went to NewIdeas at once.

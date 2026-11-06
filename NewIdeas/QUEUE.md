@@ -11,6 +11,17 @@
 ## flattered by prompt copying (its answers re-emit the prompt's signature and docstring), so code gains are given per set.
 Tags: [K] = measured, [P] = priced from measured parts, [G] = a guess. 45 = the 45 GB line, 12 = the 12 GB line.
 
+VOID Fri 16:0x (CD16 is KILL on quality, see item 6): the 157.9 below includes CD16, so it is not a publishable number.
+The valid line stays 113.9 [K] (FAST-NAX, pending the gate); tonight's palindrome measures the stack without CD16 (~128-130 [P]).
+WAS: TODAY'S MEASURED 45 GB CODE NUMBER, UPDATED Fri 15:5x (pending tonight's gate): 157.9 tok/s [K, BigMoE
+data/fday/fday_report.txt, b3b1e68; re-derived by NewIdeas]. This is the stack, quiet, 12 HumanEval, C 224, palindrome
+passes 157.2 / 158.1, kept 12.58 per check, check 68.8 ms, cycle ~80 ms. The stack is the FAST all-in + FAST-NAX + DN-KS
++ lazy GDN commit + D7BNAX_32 + CD16 + att_single (no relax gate).
+- That is +38.6 % over this morning's 113.9. Most of it is K: 10.36 -> 12.58 (x1.21, CD16), and the cycle went ~91 -> ~80.
+- CD16 accepts comment and docstring text wholesale, and HumanEval's docstrings copy the prompt, so HumanEval flatters it
+  more than average code. Its quality gate is tonight (EvalSuite's MBPP decision 4 + the stack same-scores); MBPP's
+  engine speed is GOAL's MBPP12 pair (re-run ~16:00).
+The earlier line, kept for the record:
 TODAY'S MEASURED 45 GB CODE NUMBER (pending the same-scores gate): 113.9 tok/s [K, BigMoE data/fnx/fnx_report.txt;
 re-derived by NewIdeas Fri 08:1x]. That is the FAST all-in + FAST-NAX on 12 HumanEval, C 224, the steady-state geo mean,
 A-B-B-A (passes 112.7 / 115.0), with no freezes.
@@ -19,7 +30,8 @@ A-B-B-A (passes 112.7 / 115.0), with no freezes.
   (the orchestrator's call: the kept drop is NAX6-N's own numerics, and the tok/s includes it). Its gate is the
   same-scores run.
 - HumanEval is flattered by prompt copying.
-- Against Kamen's publish trigger (lossy, code): 45 GB 113.9 vs 250-330 (x2.2-2.9 to go; tonight's stack priced ~128);
+- Against Kamen's publish trigger (lossy, code): 45 GB 113.9 [K] (the stack without CD16 ~128-130 [P], measured tonight) vs
+  250-330 (x2.0-2.9 to go);
   12 GB code-valid ~36 [P] vs 90-130 (x2.5-3.6 to go). The 12 GB EXACT loop is 18.4-18.9 (not 40.8; see 12 GB LINE).
 
 MEASURED (quality measured; speed measured or priced):
@@ -91,6 +103,9 @@ MEASURED (quality measured; speed measured or priced):
    - Speed only tonight: it does not enter tonight's gated stack. If PASS, its own same-scores run (code + math on the
      CODE profile; the map never checked math) takes EvalSuite's next slot. No share-lock proof of concept today: rough
      numbers would not decide anything.
+   SPLIT-NAX KILL [K, BigMoE Fri 15:4x, data/fday]: -1.3 % vs the stack (155.8 vs 157.9 tok/s), kept -5.7 % (11.87 vs
+   12.58). Fewer groups did not pay on FAST-NAX either: the kept loss alone is about what the bytes save. The split
+   family is closed on this stack. Deeper group cuts (split 0.9, K8, MASSB-0.5) would lose more kept.
 3. DRAFT17 (45 / 24 / 12): in the stack. Code bytes [P] x0.706 at 24 GB, x0.742 at 12 GB (HumanEval-style windows);
    quality PASS [K].
 
@@ -104,6 +119,12 @@ PRE-REGISTERED, NOT RUN (by expected gain on 45 GB code; lines in QUEUE Thu 19:0
    - Next (NewIdeas Fri 13:4x): one "stack + NW" arm in tonight's palindrome, speed only and outside the gated stack.
      Pre-registered line: net tok/s vs the stack PASS >= +8 %, KILL < +3 %. [P] the misses are ~13.5-15 ms per check,
      so +10-15 %.
+   ENGINE KILL [K, BigMoE Fri 15:4x, data/fday, C 224, quiet, 12 HumanEval palindrome]: -2.8 % vs the stack (153.5 vs
+   157.9 tok/s), kept +4.6 %. Per check: check 68.8 -> 75.3 ms, gate service 14.0 -> 15.6, misses 37 -> 39, stalled layer
+   calls 17 -> 17. The NW counters show 24 late groups and 57 late uses per check, with 0 stalls of its own.
+   - My +10-15 % was wrong. I priced it from the 13.5-15 ms gate service, which is a spin bound that OOO already
+     overlaps. NW removed no stalled calls and added ~6.5 ms of late work. At C 224 there is little wait to remove.
+   - NW stays out of tonight's gate. The per-set NW gate (BigMoE ebf9bbd) stays in the code, unused.
    - If it and SPLIT-NAX both pass, ONE same-scores run covers stack + split 0.99 + NW (the map passed that
      combination).
 5. MEASURED Fri 02:0x-02:13 [K, code windows, Fable C's VERDICT2 lines]: no gain beyond item 2. K8 PASS 1.19 / 0.69 %
@@ -111,6 +132,12 @@ PRE-REGISTERED, NOT RUN (by expected gain on 45 GB code; lines in QUEUE Thu 19:0
    03:41) KILL 2.02 / 1.42. By Fable C's rule (the passing arm with the fewest tiles) the code preset stays split 0.9 (x0.508);
    the frontier at the bar is x0.51-0.54 of the twin's tiles. (Was: K6 [G] +14-20 % raw.)
 6. GOAL INERT CD16 (45). [P, lexer replay] S 0.84 = tok/s x1.15 on the 12 HumanEval keys. Flattered by comment and
+   KILL ON QUALITY [K, BigMoE Fri 16:0x, GOAL's MBPP12 pair, C 224, CAP 384, data/fday/mbpp12_verdicts.json]: qall passes
+   11/12 MBPP tests in both passes, qall + CD16 8/12 in both: 3 flips per pass pair against GOAL's line of 2. Speed passed
+   (K x1.449, 71.3 -> 88.2 tok/s, +23.7 %). The cause is visible in the answers: CD16 keeps comment rows whatever the 125B
+   says, so the drafter loops in comments until the answer is spent (mbpp/16) or writes different code after its own
+   comments (319). DROPPED from tonight's stack (NewIdeas Fri 16:0x, on BigMoE's recommendation). GOAL's milder forms
+   (G16, then D16) wait for a later night.
    docstring copying; C16 / G16 / D16 are the milder forms. MBPP has no engine set yet.
 7. FULL comment-free code mode (45). Line tok/s >= +8 % (HumanEval-style; a product choice, Kamen's yes). FULL's copy
    probe prices wide copy passes; their gain is HumanEval-specific (copied rows are 61-68 % of HE answer tokens).
@@ -146,7 +173,7 @@ MEASUREMENTS THAT GATE THE PLAN (no gain themselves):
   | piece (ms per check) | FAST-NAX run [K] | + new base | budget | gap | next levers |
   |---|---|---|---|---|---|
   | dense GPU (flat in rows) | ~33-36 [K, probes] | ~25-28 [K, -8.2: DN-KS + att_single] | 12 | -13..-16 | Chained 16-row kernels now sum 19.6 (in_proj 4.1, HC reads 5.9, GDN step 2.1, out / o_proj 1.8, ...). Next: HC reads -1..-2, GDN step -1, expert id glue -1, in_proj ks 2 -0.5, router -0.5. 12 needs ~250 GB/s and ~1/3 of the kernels; Leap's realistic target is 16-20 |
-  | misses (the GPU's spin on them) | ~13.5-15 [K] (35-37 per check; SSD busy 11.6-13.4) | same | ~0 | -13.5..-15 | never-wait (item 4): ref2 side built + bit-checked, live off (Leap, TABLE_350 'NEVER-WAIT in ref2's one-call'); its map arm runs first in tonight's map. Then prefetch |
+  | misses (the GPU's spin on them) | ~13.5-15 [K] gate service (35-37 per check) | same | ~0 | NOT removable by NW | CORRECTED Fri 15:5x: never-wait's engine arm removed no stalled calls (17 -> 17) and added ~6.5 ms (engine KILL). The service is mostly overlapped at C 224; the removable wait is small and unmeasured |
   | experts + commit + rest | ~28-32 [K, the check's remainder] | same | ~30 (25 + 4.7 left over) | ~0 | FAST-NAX ~25 at 16 rows all-resident [K] |
   | draft (the loop's) | 10.1 [K] | ~8.1 [K, D17-NAX -2.0] | 5 | -3 | QMM32 -0.44 per propose [K bench]; the small 17-row calls + concats -0.5..-0.8 |
   | cycle | 89.3-90.1 [K] | ~79-80 [P] | 46.7 | x0.59 | |
@@ -156,6 +183,12 @@ MEASUREMENTS THAT GATE THE PLAN (no gain themselves):
     ~148. Tonight's palindrome measures it.
   - Warm 2-row FLAT (no SSD): 55.2 -> 44.3 ms with DN-KS + D17-NAX + att_single [K] (-10.9, -20 %). Each piece is FAST
     (bits move), so the same-scores run is their gate.
+  - MEASURED Fri 15:4x, the stack WITH CD16 (KILLed since; not publishable) [K, BigMoE data/fday]: 157.9 tok/s at K 12.58 = a ~80 ms cycle (check
+    68.8 + draft ~7 + ~4). 300 at K 12.58 needs a 41.9 ms cycle (-38 ms); 250 needs 50.3 (-29).
+    - What is still priced: dense -13..-16, draft -2 and expert-kernel steps of a few ms. That is ~-17..-22 -> ~58-63
+      ms, so ~200-217 tok/s at this K.
+    - So the 250-330 band on HumanEval needs either an expert-bytes breakthrough (the group cuts failed: SPLIT-NAX KILL)
+      or K well past 12.6. Never-wait and the split are both KILLed on this stack.
   - The two biggest gaps are now the dense pass (-13..-16) and the misses (-13.5..-15), then K (x1.35), then the draft.
   - One dependent sync point costs ~1.6 us, so the kernel count is worth only ~2-6 ms per check: the dense lever is the
     kernels' shapes, not their number.
@@ -178,6 +211,7 @@ MEASUREMENTS THAT GATE THE PLAN (no gain themselves):
       tok/s on this copy-friendly prompt.
     - The 12-HumanEval average K is ~9.4-10.4. There, 300 needs a 31-35 ms cycle, which nothing priced reaches. K is
       the gate on average prompts: CD16 tonight, then MTP Head's drafter.
+  - CD16: KILL on quality, Fri 16:0x (item 6); the K numbers below are its replay, kept for the record.
   - CD16 [P, Fable GOAL's K_WALL_1106 replay, Fri 10:50]: K on MBPP 5.6 -> 10.3-10.9, whole HumanEval 10.4 -> 13.2
     (docstring-free HumanEval 6.2-7.7 -> 10.7-10.8).
     - At those K, 300 needs a 34-36 ms cycle on MBPP and ~44 ms on HumanEval. At the priced 48-55 ms cycle they give
@@ -207,7 +241,9 @@ checked math, which the CODE profile also serves.
 
   - Already in the stack, so not counted again: QOM (sure rows skip cold ranks 2-9), U3 (no LSB on sure rows), B's
     Q1-UNION gate on code.
-  - Order: #1 tonight decides the premise. If ms follow groups, #2's s90 arm is next. #3's map verdict lands tonight
+  - RESULT Fri 15:4x: #1 KILL on the stack (-1.3 %, kept -5.7 %). #2 shares its mechanism and would lose more kept,
+    so it is deprioritized. #3 (xs, the map tonight) is the live expert-bytes lever.
+  - Order (was): #1 tonight decides the premise. If ms follow groups, #2's s90 arm is next. #3's map verdict lands tonight
     regardless. #4 is a kernel step after that.
 
 GPU ORDER, Fri 6 -> Sat 7 Nov (set by NewIdeas Fri 08:0x at the orchestrator's request; goal: by Saturday morning, the
@@ -230,16 +266,32 @@ ends it by the next item's start.
   6. DONE 13:46: MAP PASS on code (item 4). (Fri 12:5x) Breakthrough's never-wait map arm, moved up from tonight: the misses (-13.5..-15 ms per check) are the
      second-biggest gap to 300, and Leap has never-wait's engine side built, so a map verdict today lets the engine
      A/B land Saturday. Share lock, alone, ~15-30 min. If it cannot start by 13:30, it stays first in tonight's map.
-  7. Then EvalSuite's long-code smoke: 6 of the drift top-up's 40 problems on tonight's CODE env (stack + B, QOM on code
+  7. NOT RUN (Fri 15:1x): runner 51 waited from 13:51 for 50 GB NO-SWAP (it peaked at 47) and the day window closed;
+     cancelled. Tonight's two top-ups supersede it. Then EvalSuite's long-code smoke: 6 of the drift top-up's 40 problems on tonight's CODE env (stack + B, QOM on code
      sets), one order, scored for blunders, ~20-30 min. If it shows > 1 blunder per 10K, tonight's top-up also runs the
      QOM-off CODE arm. EvalSuite's determinism follow-up (an exact base in both orders, then one-lever-ON arms, ~1 h)
      moves to Saturday by day.
+> (a quote from the project owner, kept private)
+  job ENDS by 17:00):
+  1. BigMoE, quiet, to 16:10: the NW and SPLIT-NAX speed arms vs the stack (12 HumanEval, C 224, the lines above).
+     - If NW PASSES (>= +8 %), NW joins tonight's GATED stack on the code sets only (the "every lever that passes today"
+       rule; NW's map is clean on code at every pool). That saves a night for NW's gate.
+     - The split stays speed-only tonight whatever it scores: strict rows drop more experts (the agent-FAIL mechanism),
+       and its long-code risk is unchecked.
+     - Then, if it is ready by ~15:50: GOAL's 12-MBPP CD16 speed arm (a SETOF entry on dec_mbpp's 100 walk prompts).
+     DONE 15:4x: both KILL (NW -2.8 %, SPLIT-NAX -1.3 %); neither joins tonight's gate, and both leave tonight's
+     palindrome. The stack itself measured 157.9 tok/s. MBPP12's first try died at once (rc 127: the runner split the
+     comma in R57_QOM_SETS); re-run ~16:00.
+  2. EvalSuite, 16:15-16:55: the MBPP check's NAX6-N reference on the 100 MBPP tasks (exact, no stack env), chunked to
+     end by 16:55. The stack + CD16 arms stay tonight.
+  3. Fit12's 10-min kp2 only if EvalSuite's build is not ready; else the next window.
 - Tonight, Sat 00:30 -> ~10:00:
   1. BigMoE's stacked FAST palindrome on 12 HumanEval: today's all-in vs all-in + every lever that passes today
      (FAST-NAX, DN-KS, CD16, FASTTAX att_single, lazy commit if wanted), plus FAR-G1. FAST-NAX is in (its BETWEEN on
      record). Plus one SPLIT-NAX arm (stack + split 0.99, ~7 min; speed only, outside the gated
      stack; item 2). Plus one never-wait arm (stack + NW, ~7 min; speed only, outside the gated stack;
-     item 4), if BigMoE judges its r57 side ready. BigMoE writes the winning stack's env to ~/BigMoE/data/stack/stack_env.txt for EvalSuite.
+     item 4): IN, BigMoE e77d1fd (snv after ssp, snvb before sspb; per-check check / service / misses / stalls / wait
+     plus the NW counters in the report). BigMoE writes the winning stack's env to ~/BigMoE/data/stack/stack_env.txt for EvalSuite.
   2. Env rule for tonight's gate (NewIdeas Fri 11:2x, after the agent FAIL): QOM on the code sets only
      (R57_QOM_SETS=humaneval,mbpp). Math rows stay as certified (B without QOM): math answers average ~670 tokens, and a
      first-time QOM on math could sink the one gate. Chat rows run a separate launch, stack minus HC8 + E (R1 0.5) with
@@ -247,7 +299,8 @@ ends it by the next item's start.
      EvalSuite (the orchestrator's order, Fri 10:5x): the stack same-scores (~1.5 h, 2 orders) -> the drift top-up
      (~1.5 h; Fri 13:2x: both forms, the registered B top-up via relax.py (KLD + blunders, the rollback gate), then the
      stack's CODE env on all 41 (blunders only); if the night runs short, the map's 8 leftover 24 GB arms yield first) ->
-     MBPP decision 4 for CD16 (~1.2 h: NAX6-N reference on the walk's 100 MBPP tasks, then the stack with
+     (Fri 16:0x: CD16 is KILLed, so this becomes MBPP on the stack without CD16, a coverage check, last, and it yields if the
+     night runs short) MBPP decision 4 for CD16 (~1.2 h: NAX6-N reference on the walk's 100 MBPP tasks, then the stack with
      CD16 in 2 orders). Details of the first two follow. ONE same-scores run (decision 4 vs REF2-T) on exactly that stack, code and math on the CODE profile
      (stack + B with HC8), plus the code drift top-up (40 HumanEval+ problems, >= 1K tokens, ~1.5 h; PASS = blunders
      <= 1 per 10K AND pooled q4 KLD <= 0.02 AND no row's q4 > 0.05, else RELAX's code part rolls back). IFEval rows

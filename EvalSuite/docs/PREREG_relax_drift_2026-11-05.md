@@ -157,4 +157,9 @@ Written before any re-check row.
 - **The QOM-off CODE arm:** the same env with R57_QOM_SETS=humaneval,mbpp, run only if the afternoon smoke said
   > 1/10K (amendment 3).
 - **Report:** results/stack_ht_report.txt.
+- **Status Fri 15:17: the smoke did not run.**
+  - It waited from 13:51 for 50 GB NO-SWAP, which peaked at 47. NewIdeas stopped it after the big-test window closed at
+    15:00. No row exists.
+  - Tonight's two top-ups supersede it (amendment 4). The QOM-off CODE arm stays pre-registered as their fail arm,
+    for Saturday by day.
 

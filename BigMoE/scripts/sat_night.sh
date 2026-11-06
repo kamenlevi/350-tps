@@ -3,7 +3,7 @@
 # 300"): the stacked FAST headline. Arms on scripts/r57_screen_fast.py (the merged FAST screen; qall = its flags off), C 224 by
 # NO-SWAP, 12 HumanEval + 4 chat (ifeval 1220 / 1561, multi de3 / zh15), a palindrome with three qall passes:
 #   qall / stack / qallm / stackb / qallb      (the stack's pair mean is centred on qallm; the noise floor from the qall passes)
-# stack = qall + SN_STACK (default FAST-NAX + DN-KS + GDN lazy + CD16 + FAST-tax; the arming line drops what failed the Fri
+# stack = qall + SN_STACK (default FAST-NAX + DN-KS + GDN lazy + D7BNAX_32 + FAST-tax; CD16 dropped Fri 16:0x after its MBPP12 quality KILL; the arming line drops what failed the Fri
 # pre-flight). Passes overlapping a fanwatch freeze are dropped and listed. The stack's env is written to
 # data/stack/stack_env.txt for EvalSuite's same-scores run on exactly that stack.
 # Lines (pre-registered Fri 08:3x, before arming; per domain, pair-mean geo steady tok/s, stack vs qall):
@@ -19,7 +19,7 @@ cd "${SN_ROOT:-$HOME/BigMoE}" || exit 1
 mkdir -p data/sat data/stack data/r57/snap
 LOG="$PWD/data/sat/sat.log"
 say() { echo "$(date '+%m-%d %H:%M:%S') $*" >> "$LOG"; }
-STACK=${SN_STACK-R57_NAX=1,REF2_NAX_1CQ=1,REF2_DN_KS=1,REF2_GDN_LAZY=1,D7BNAX_32=1,R57_INERT=CD16,R57_FASTTAX=1}
+STACK=${SN_STACK-R57_NAX=1,REF2_NAX_1CQ=1,REF2_DN_KS=1,REF2_GDN_LAZY=1,D7BNAX_32=1,R57_FASTTAX=1}   # Fri 16:0x: CD16 DROPPED (NewIdeas; MBPP12 quality KILL, c966c0d)
 # stackr (the orchestrator Fri 08:4x: the shipping CODE config carries a relax gate): the stack with MoonShots' relax v2 (DELTA
 # 0.5 + SPAN) IN PLACE OF CD16 (INERT asserts against both relaxed rules), = the pre-flight's clean f2k mix; 12 HumanEval only.
 # Line (pre-registered Fri 08:4x, before arming): PASS = stackr >= stack x 1.03 on code (pair-mean geo steady), KILL = stackr <
@@ -78,8 +78,9 @@ RR="$QAC,$STACKR,R57_RELAX_LOG=$PWD/data/sat/stackr_relax.jsonl"
 # uses, stalls), so the read can split "waits removed" from "late work added".
 NWE="R57_NEVERWAIT=1,REF2_NEVERWAIT=1"
 for t in stq sts str s7x ssp snv stqm snvb sspb s7xb strb stsb stqb snw; do rm -f data/r57/${t}_${CC}_*; done   # every tag tonight
-for a in "stq:$QAC" "sts:$QAC,$STACK" "str:$RR" "s7x:$QAC,D7BNAX_32=1" "ssp:$QAC,$STACK,R57_QOM_SPLIT=0.99" "snv:$QAC,$STACK,$NWE" \
-         "stqm:$QAC" "snvb:$QAC,$STACK,$NWE" "sspb:$QAC,$STACK,R57_QOM_SPLIT=0.99" "s7xb:$QAC,D7BNAX_32=1" "strb:$RR" \
+# Fri 15:5x: SPLIT-NAX and NEVER-WAIT ran by day instead (scripts/fri_day.sh, data/fday, b3b1e68: both KILL vs the stack at
+# C 224, -1.3 % / -2.8 %), so they leave tonight's palindrome (NewIdeas 15:2x); the report points there.
+for a in "stq:$QAC" "sts:$QAC,$STACK" "str:$RR" "s7x:$QAC,D7BNAX_32=1" "stqm:$QAC" "s7xb:$QAC,D7BNAX_32=1" "strb:$RR" \
          "stsb:$QAC,$STACK" "stqb:$QAC"; do
   KK=$K; case "${a%%:*}" in str|strb|s7x|s7xb|ssp|sspb|snv|snvb) KK=$KC ;; esac
   R57_KEYS=$KK C45_ARMS="${a%%:*}_$CC:$CC:${a#*:}" $RUN
@@ -181,9 +182,12 @@ def q1c(ts, i):   # per-check mean of Leap's one-call counter i over the clean p
             pass
     return S.mean(xs) if xs else float("nan")
 gs, gp = q1c(P["stack"], 2), q1c(P["ssp"], 2)
-L.append(f"Verdict SPLIT-NAX (pre-registered Fri 10:1x, NewIdeas){' INDICATIVE at C < 224' if int(C) < 224 else ''}: {vs_}: "
-         f"tok/s {100 * (rs_ - 1):+.1f} % vs the stack on code over {ns_}, kept {100 * (ks_ - 1):+.1f} % (PASS >= +8 %, KILL < +3 %); "
-         f"groups computed per check: stack {gs:.0f}, ssp {gp:.0f} ({gp / gs:.3f}x), split drops per check {q1c(P['ssp'], 3):.0f}")
+if ns_:
+    L.append(f"Verdict SPLIT-NAX (pre-registered Fri 10:1x, NewIdeas){' INDICATIVE at C < 224' if int(C) < 224 else ''}: {vs_}: "
+             f"tok/s {100 * (rs_ - 1):+.1f} % vs the stack on code over {ns_}, kept {100 * (ks_ - 1):+.1f} % (PASS >= +8 %, KILL < +3 %); "
+             f"groups computed per check: stack {gs:.0f}, ssp {gp:.0f} ({gp / gs:.3f}x), split drops per check {q1c(P['ssp'], 3):.0f}")
+else:
+    L.append("SPLIT-NAX: not run tonight; run by day Fri 15:40 (data/fday, b3b1e68): KILL, -1.3 % vs the stack at C 224")
 def pcm(ts, f, d="code"):   # median of a per-check field over the clean passes' checks >= 2 (steady, as tpsw), one domain
     xs = []
     for t in ts:
@@ -199,15 +203,18 @@ def pcm(ts, f, d="code"):   # median of a per-check field over the clean passes'
 rn_, nn_ = ratio(pm(P["snv"], lambda r: r["tpsw"], "code"), pm(P["stack"], lambda r: r["tpsw"], "code"))
 kn_, _ = ratio(pm(P["snv"], kept, "code"), pm(P["stack"], kept, "code"))
 vn_ = "MISSING" if nn_ == 0 else ("PASS" if rn_ >= 1.08 else "KILL" if rn_ < 1.03 else "BETWEEN")
-L.append(f"Verdict NEVER-WAIT (pre-registered Fri 13:5x, NewIdeas){' INDICATIVE at C < 224' if int(C) < 224 else ''}: {vn_}: "
-         f"tok/s {100 * (rn_ - 1):+.1f} % vs the stack on code over {nn_}, kept {100 * (kn_ - 1):+.1f} % (PASS >= +8 %, KILL < +3 %)")
-for b in ("stack", "snv"):
+if nn_:
+    L.append(f"Verdict NEVER-WAIT (pre-registered Fri 13:5x, NewIdeas){' INDICATIVE at C < 224' if int(C) < 224 else ''}: {vn_}: "
+             f"tok/s {100 * (rn_ - 1):+.1f} % vs the stack on code over {nn_}, kept {100 * (kn_ - 1):+.1f} % (PASS >= +8 %, KILL < +3 %)")
+    L.append("  snv never-wait counters per check (medians): " + ", ".join(
+        f"{n} {pcm(P['snv'], lambda e, i=i: [x[i] for x in e.get('nw', [])]):.1f}"
+        for i, n in enumerate(("late groups", "late uses", "late mass", "last-layer late uses (dropped or waited)", "stalls"))))
+else:
+    L.append("NEVER-WAIT: not run tonight; run by day Fri 15:40 (data/fday, b3b1e68): KILL, -2.8 % vs the stack at C 224")
+for b in ("stack",) + (("snv",) if nn_ else ()):
     L.append(f"  per check (code, checks >= 2, medians) {b:5s}: check {pcm(P[b], lambda e: e.get('ck', [])):.1f} ms, gate service "
              f"{pcm(P[b], lambda e: e.get('svc', [])):.1f} ms, misses {pcm(P[b], lambda e: e.get('miss', [])):.0f}, stalled layer "
              f"calls {pcm(P[b], lambda e: e.get('stl', [])):.1f}, eval wait {pcm(P[b], lambda e: e.get('wt', [])):.1f} ms")
-L.append("  snv never-wait counters per check (medians): " + ", ".join(
-    f"{n} {pcm(P['snv'], lambda e, i=i: [x[i] for x in e.get('nw', [])]):.1f}"
-    for i, n in enumerate(("late groups", "late uses", "late mass", "last-layer late uses (dropped or waited)", "stalls"))))
 r7, n7 = ratio(pm(P["d7x"], lambda r: r["tpsw"], "code"), pm(P["qall"], lambda r: r["tpsw"], "code"))
 k7, _ = ratio(pm(P["d7x"], kept, "code"), pm(P["qall"], kept, "code"))
 L.append(f"d7x kept clause (pre-registered Fri 08:5x): {'MISSING' if n7 == 0 else 'OK' if abs(k7 - 1) <= 0.01 else 'NOT OK'}: "
@@ -234,7 +241,7 @@ if rl or sp:
              f"{sum(x.get('span_rows', 0) for x in sp)}, relaxed {sum(x.get('relaxed', 0) for x in sp)}")
 try:                                                     # EvalSuite's same-scores runner reads ONE code file (Fri 09:2x rule):
     envl = lambda f: [x for x in open(f).read().splitlines() if x and not x.startswith("#")][-1]   # stackr if its line PASSed,
-    pick = "stackr" if vr == "PASS" else "stack"                                                   # else the stack (CD16)
+    pick = "stackr" if vr == "PASS" else "stack"                                                   # else the stack (no CD16 since Fri 16:0x)
     open("data/stack/code_env.txt", "w").write(
         f"# CODE profile for EvalSuite's same-scores run (sat_night.sh, Sat {C}): {pick} (stackr verdict {vr}; rule: stackr if "
         f"PASS, else stack). Screen scripts/r57_screen_fast.py. One comma-separated env line:\n"

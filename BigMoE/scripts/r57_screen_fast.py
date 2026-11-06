@@ -948,6 +948,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
     a6 = {}                                              # A6's pre-loop steps (outside the decode clock), in this order
     R_ = R if (cg is not None or (INERT is not None and INERT["rows"] > 16)) else 16                     # R57_ROWS=32 only where the copy runs (MATCH 2.5), 16 elsewhere
     fz = FASTARMS[FAST].get(fset) if FAST else None      # R57_FAST: this prompt set's setting (None = exact acceptance)
+    nwp_ = NW and fz is not None                         # R57_NEVERWAIT per prompt set (NewIdeas Fri 15:2x): only sets with a FAST rule
     grams = RXC.prompt_grams(ids) if fz and fz["copy"] else None
     scan = RXC.CodeScan() if fz and fz["loop"] else None
     rgrams = RXC.prompt_grams(ids) if RLX_D > 0 and RLX_COPY else None   # R57_RELAX_GATE copy: its own grams (FAST's stay)
@@ -1161,12 +1162,12 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                           t3=bool(fz and fz.get("t3")), qom=bool(fz and fz.get("qom")) and sq_ is not None,   # R57
                           qcf=mx.array(qcf_[:w_]) if qcf_ is not None else None)   # R57_FAST's gate in
                 try:                                     # the warm split too: a gated arm's warm per-row cost (Fable C's
-                    if NW:                               # R57_NEVERWAIT: on for this verify pass only (prefill stays as today)
+                    if nwp_:                             # R57_NEVERWAIT: on for this verify pass only (prefill stays as today)
                         ref2.NW_RESET(); ref2.NW_ON = True
                     with ref2.verify_scope(model):       # gated expert term, the orchestrator 23:2x)
                         lg_ = model(inp_[:, :w_], cache=cache)
                 finally:
-                    if NW:
+                    if nwp_:
                         ref2.NW_ON = False
                     FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, qom=False, qcf=None)
                 mx.eval(mx.argmax(lg_[0], axis=-1))
@@ -1199,7 +1200,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             PR.update(on=True, cur=None, y={}, blk={}, cap={}, dump=[] if PRDUMP else None)   # each layer's true top-10
             EM.STATE.capture = {}
         nwl_ = None
-        if NW:                                           # R57_NEVERWAIT: this real check's late groups, counted by ref2
+        if nwp_:                                         # R57_NEVERWAIT: this real check's late groups, counted by ref2
             ref2.NW_RESET(); ref2.NWCNT = []; ref2.NW_ON = True
         if QC1C:
             ref2.QCNT_1C = []                            # R57_QCNT1C (ported Fri 10:0x): this real check's one-call counters
@@ -1212,7 +1213,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             PR["on"] = False
             if QC1C:
                 q1l_, ref2.QCNT_1C = ref2.QCNT_1C, None
-            if NW:
+            if nwp_:
                 ref2.NW_ON = False
                 nwl_, ref2.NWCNT = ref2.NWCNT, None
         cb = time.perf_counter()                         # graph built: the sync-free gate waits on each layer's router ids
@@ -1336,7 +1337,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         sm.append(stats() - s0)
         if QC1C:
             q1c_.append([int(x_) for x_ in np.array(mx.stack(q1l_).sum(axis=0))] if q1l_ else [0, 0, 0, 0])
-        if NW:                                           # [late groups, late uses, late mass, L47 drops, L47 rank-0 stalls, forced]
+        if nwp_:                                         # [late groups, late uses, late mass, L47 drops, L47 rank-0 stalls, forced]
             nw_.append([float(x_) for x_ in np.array(mx.stack(nwl_).sum(axis=0))] if nwl_ else [0.0] * 6)
         rows_.append(len(dr) + 1); cb_.append(disk_read_bytes() - b0_)
         ck_t.append(c2 - c1); kept.append(k + 1); wl.append(c2 - c0)

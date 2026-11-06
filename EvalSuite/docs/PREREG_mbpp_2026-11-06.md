@@ -59,3 +59,9 @@ Written before any MBPP row.
 - **Caps:** the items' max_tokens stays 1024, as registered. GOAL's 384 is for its 12-prompt speed arm. The screen runs
   to CAP 1536, and each row is cut at 1024.
 
+## Amendment 2 (Fri 15:36; before any row): the reference's afternoon slot (NewIdeas)
+- Kamen extended the big-test window to 17:00. The exact reference (ref2tnaxn.r2 on dec_mbpp) decodes 16:15-16:55
+  (runner 52): one chunk sized to end by 16:55, and the cli's deadline is 16:55.
+- Rows left over resume tonight in runner 49's MBPP phase, which decodes only missing rows. The stack + CD16 arms stay
+  tonight, after the top-ups. The line is unchanged.
+
