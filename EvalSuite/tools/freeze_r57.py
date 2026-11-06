@@ -3,7 +3,7 @@
   python3 tools/freeze_r57.py <FZ dir> <reference manifest> <Leap commit> <BigMoE commit>
 FZ/BigMoE/{bigmoe,scripts} = `git archive` of BigMoE at the commit, + ext/<build> copied (the .so); FZ/Leap/{scripts,
 third_party} = `git archive` of Leap at the commit; FZ/TrainLab/{sticky,mtp125.py} and FZ/Breakthrough/keepset copied live.
-In the frozen screen and the frozen outside modules, code paths (the trees above) are rewritten to the copies; data paths
+In the frozen screen and every frozen .py file, code paths (the trees above) are rewritten to the copies; data paths
 (models, data/, ckpt/, FableGod, EvalSuite) stay live. Then every module of the reference manifest (an earlier process's
 loaded modules + sha256) must have a frozen copy with the same sha, or differ only by the rewritten path strings.
 Writes FZ/FREEZE.json (sources, commits, per-module shas, the rewrites) and prints the screen path to run."""
@@ -44,11 +44,10 @@ def main(fz, refman, leap_c, bm_c):
     live_of = {f"{fz}/BigMoE/": f"{H}/BigMoE/", f"{fz}/Leap/": f"{H}/Leap/", f"{fz}/TrainLab/": f"{H}/TrainLab/",
                f"{fz}/Breakthrough/": f"{H}/Breakthrough/"}
     frozen_of = {v: k for k, v in live_of.items()}
-    targets = [f"{fz}/BigMoE/scripts/r57_screen_fast.py"]
-    for f, _ in ref.values():
-        for lp, fp in frozen_of.items():
-            if f.startswith(lp) and f.endswith(".py"):
-                targets.append(fp + f[len(lp):])
+    targets = [f"{fz}/BigMoE/scripts/r57_screen_fast.py"]   # every .py file of the frozen trees: a frozen module the
+    for top in ("BigMoE", "Leap", "TrainLab", "Breakthrough"):   # reference does not load (e.g. tierglu_3cn on the 3c base)
+        for dp, _, fs in os.walk(f"{fz}/{top}"):                 # must not put a live path on sys.path either (Fri 12:2x)
+            targets += [os.path.join(dp, f) for f in fs if f.endswith(".py")]
     done = {}
     for t in sorted(set(targets)):
         if not os.path.exists(t):

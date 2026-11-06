@@ -1507,7 +1507,7 @@ for n_p, (s, key) in enumerate(PICK):
         RUNS.append(dict(key=key, arm=arm, type=typ, bad=r["bad"], cut=r["cut"], P=len(ids),
                          **{k_: r[k_] for k_ in ("drafter", "hist", "a6", "n", "tps", "tpsw", "kept", "checks", "cyc", "ck",
                                                  "drf", "miss", "io", "mb", "mpk", "mem", "copy", "fast", "pf", "lh", "inert")},
-                         d7b=draft is DRAFT4, rlx=r.get("rlx"), spn=r.get("spn"), inert=r.get("inert")))   # Thu 18:5x / Fri 10:0x: relaxed / span / INERT
+                         d7b=draft is DRAFT4, rlx=r.get("rlx"), spn=r.get("spn")))   # Thu 18:5x / Fri 10:0x: relaxed / span / INERT
                                                          # stats were computed but never written (the pre-flight's MISSING)
         m = min(len(want), r["n"])
         agree = same(r["out"], want)

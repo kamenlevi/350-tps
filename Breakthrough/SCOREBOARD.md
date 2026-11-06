@@ -3454,3 +3454,20 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
     - The next test is Fit12's: time 16- vs 32-row checks in t80ck2, on copy rows.
   - **Caveat**: outputs are capped at 256 tokens, which favours the copy-rich start of each answer. The drafter's run
     off the logged starts is approximated (to its next logged divergence).
+- Fri 13:0x: PRE-REGISTRATION, NEVER-WAIT MOVED UP TO TODAY (NewIdeas' GPU ORDER item 6, b6e90b5, 12:5x: the expert-weight
+  misses, -13.5..-15 ms per check, are the second-biggest gap to 300; a map verdict today lets BigMoE's engine A/B land on
+  Saturday). Driver scripts/dm_s7/fri_nw.sh, list data/fri_nw_extra.txt. A share lock per run (MEM 18 GB), alone; hard stop
+  14:10 (EvalSuite's long-code smoke follows).
+  1. The GPU self-check first (FAR's INSTALL.md step 2), last start 13:30. PASS or REPORT runs the arms. Otherwise none run,
+     and tonight's sat_night.sh keeps them as armed.
+  2. Then Saturday's tier 1 + 1b code arms (Thu 19:4x item 2): the same 8 lines, twins and lines (FAR's INSTALL.md
+     section 4). The decisive arm is nw1 at 208 slots against the c208 twin: PASS <= 1.34 % and D <= +0.40 points ("clean"
+     D <= +0.15); BETWEEN (1.34, 2.0] % or D in (+0.40, +0.80]; KILL > 2.0 % or D > +0.80. FAR's predictions stand: twin at
+     208 slots 0.6-0.9 %; nw1 D +0.1 to +0.4, PASS 60 %.
+  3. Added at NewIdeas' request ("all three domains"; FAR's tier-2 chat form, 36 windows):
+     - `qom_0_live_ball_nw1`, against its twin `qom_0_live_ball` on record (0.51 / 4.03 / 3.26);
+     - then `qom_0_live_ball_c208` and `qom_0_live_ball_c208_nw1`.
+     Lines: my VERDICT2 per domain (code 1.34 [0.87], IFEval 5.42 [2.22], multi 3.69 [1.63]). D against the own twin, with
+     McNemar counts, is reported per domain. FAR registered no chat D line, so none is set now; a chat D over +0.40 points
+     with |z| >= 2 is flagged.
+  - Arms not done by 14:10 stay in tonight's list (the code ones). The 36-window arms are not added to tonight's list.

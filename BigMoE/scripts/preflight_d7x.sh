@@ -27,7 +27,7 @@ export C45_OUT="$PWD/data/pf3" C45_SWAP0=$(sysctl -n vm.swapusage | awk '{gsub("
 QA="R57_LAYSZ=0,BIGMOE_TIER_CL=64,BIGMOE_EXT_BUILD=build_qom,R57_REFTOK=,R57_FAST=QOM,R57_D17=1,R57_D7B=code,R57_HC8=1"
 QA="$QA,REF2_HC8_FAST=1,R57_DNR=1,R57_HCB=1,REF2_SMALL_NATIVE=1,R57_D7BNAX=1,REF2_OOO_1C=1,R57_VTIER="
 L1="R57_NAX=1,REF2_NAX_1CQ=1,REF2_DN_KS=1,REF2_GDN_LAZY=1,D7BNAX_32=${PD_D7:-1},R57_FASTTAX=1"   # PD_D7=2: Leap d9e32317
-rm -f data/r57/f3*_160_*; say "D7BNAX_32=${PD_D7:-1}"
+rm -f data/r57/f3*_160_* data/pf3/f3?_160.txt; say "D7BNAX_32=${PD_D7:-1}"
 say "start (pid $$, NO-SWAP $(nsw) GB)"
 for a in "f3k:$QA,$L1,R57_INERT=CD16" "f3r:$QA,$L1,R57_RELAX_DELTA=0.5,R57_RELAX_SPAN=1,R57_RELAX_LOG=$PWD/data/pf3/r.jsonl"; do
   C45_ARMS="${a%%:*}_160:160:${a#*:}" /bin/bash data/r57/snap/c45_runner_pf3.sh

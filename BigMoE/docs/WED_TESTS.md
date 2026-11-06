@@ -370,3 +370,32 @@ The D7BNAX_32=1 re-run (pf3) and never-wait bit check 4 (pf4) waited separately 
 ~27 s, and f3r and f4k never started (0 / 2 each). No result. Fix: scripts/pf_chain.sh runs them in sequence, and both
 scripts look again 20 s after their share lock (any > 5 GB job or NO-SWAP < 40 GB: release and wait). Tonight's env files
 also take NewIdeas' gate rule (QUEUE 70a4951): R57_QOM_SETS=humaneval,mbpp.
+
+### Fri 12:4x: pre-flights after the crash fix (1f16f71): D7BNAX_32 stays =1; never-wait check 4 CLEAN
+
+Both chains ran 2 / 2 prompts per arm with no new error. The "error lines 2" in pf3.log / pf4.log are the 11:37 / 12:29
+crash's lines left in the same per-arm log; the scripts now clear those logs at their start.
+
+**D7BNAX_32=2 vs =1** (2 prompts, CAP 32, C 160; =2 ran 09:27, =1 12:46, fresh processes, same order):
+
+| arm | HumanEval/68 (code: the D7b drafter, where D7BNAX_32 acts) | ifeval/1220 (chat: the MTP head drafts) |
+|---|---|---|
+| f3k (stack + CD16) | identical | differs within its first tokens |
+| f3r (stack + relax v2) | identical | identical |
+
+The rule (the orchestrator): use =2 only if it matches =1 token for token, so **=1 stays** (tonight's script unchanged).
+D7BNAX_32 is read only by Leap's d7b_nax.py (the code drafter), so the chat difference is not =2's: the same FAST env
+gave different chat tokens in two fresh processes 3 h apart. Some FAST lever depends on machine state or timing, not only on
+in-process history (EvalSuite 12:44: QOM-KEEP off still leaves the two prompt orders different).
+
+**Never-wait bit check 4** (R57_NEVERWAIT=1 + REF2_NEVERWAIT=1, Leap ref2; docs/NEVERWAIT_IFACE.md section 4): CLEAN on qall
+(f4n) and on stack + CD16 (f4k); ref2's layer-47 assert held. ref2.NWCNT sums (fields: late groups, late uses, late mass,
+last-layer late uses, stalls, forced groups):
+
+| arm | checks | late groups (median / check) | late uses | late mass | last-layer late uses | stalls | forced |
+|---|---|---|---|---|---|---|---|
+| f4n qall + NW | 20 | 4363 (160) | 7982 | 901.6 | 99 | 24 | 0 |
+| f4k stack + CD16 + NW | 19 | 3990 (128) | 7636 | 871.9 | 100 | 25 | 0 |
+
+Indicative only (one cold pass each, CAP 32, C 160, 3 min apart, no palindrome): stack + CD16 HumanEval/68 70.7 tok/s
+(f3k) vs 75.9 with never-wait (f4k), kept 15.0 both; ifeval/1220 22.2 vs 22.7. The pre-registered speed A/B is Saturday night.

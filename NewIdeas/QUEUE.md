@@ -39,6 +39,16 @@ MEASURED (quality measured; speed measured or priced):
      tokens off the reference's top token. Short edits are clean; the long writes carry it (write12-14 at 16-20 %
      deviation, up to 16 blunders per turn). The two orders are token-identical on only 3 of 17 turns, several diverging
      by token 1-6. So agent turns stay EXACT. A cause bisect is ordered (GPU ORDER).
+     BISECT [K, EvalSuite 12:43, results/agentbisect_report.txt; write12-14, one lever off per arm, vs base fwd 21
+     blunders]: QOM-KEEP off 4 (19 %): it carries it. DRAFT17's bonus row off 9 (43 %): partial. HC8 off 20, FAST-NAX
+     base off 20, SMALL-N off 21: not the cause. The sharp test FAILS: with QOM-KEEP off the two orders still differ
+     (write12 @4, write13 @64, write14 @4), and deviations stay at 6.9-7.8 % (base 10.8-11.0 %), mostly near-ties.
+     - So something else is history-dependent too. BigMoE: the same FAST env and order in two fresh processes gives
+       different chat tokens. EvalSuite: with QOM off, drafted row counts differ between orders before the tokens do.
+       The likely cause is drafts carrying history into a row-count-variant FAST kernel.
+     - Agent turns stay EXACT: no FAST form reached the bar's 0 blunders.
+     - For code answers, QOM is the suspect on long outputs. Tonight's drift top-up decides; its fail arm is the CODE
+       profile with QOM off (pre-registered here).
    - CHAT: the EXACT launch. Chat's FAST is the tested E without HC8 (HC8 code-only): (i) a per-launch profile with
      R57_HC8 off, or (ii) BigMoE's request-boundary swap, bit-checked. "Chat without R1" (HC8 on, no relax gate) is
      untested, so it does not ship.
@@ -199,12 +209,19 @@ ends it by the next item's start.
      NAX6-N (env 6c08636, R57_QOM_SETS with agentlong; the orchestrator 08:1x). Start by 12:30 so it ends by 15:00. If it cannot start by 12:30,
      it runs Saturday by day as the only big job. It ranks last today: agent turns are 92-94 % prefill, so it decides
      only a few % per agent turn, and agent turns default to EXACT, so the publish does not wait on it.
-  5. (Fri 11:2x) The agent-FAST cause bisect on write12-14, scored by EvalSuite's replay scorer, one lever off per arm:
+  5. DONE 12:43 (item 1's BISECT). (Fri 11:2x) The agent-FAST cause bisect on write12-14, scored by EvalSuite's replay scorer, one lever off per arm:
      QOM-KEEP first, then DRAFT17's bonus row, HC8, FAST-NAX's base, and the long-context pieces (DKV / att_single past
      512 keys). Prior: QOM-KEEP, the only history-dependent lever (the orders diverge by token 1-6). Sharp test: without
      QOM-KEEP the two orders should be token-identical. Line for that arm: blunders <= 20 % of plain FAST's on the same
      turns = it carries it; >= 50 % = not the main cause. Today if it can start by 14:15, else Saturday by day as the
      only big job.
+  6. (Fri 12:5x) Breakthrough's never-wait map arm, moved up from tonight: the misses (-13.5..-15 ms per check) are the
+     second-biggest gap to 300, and Leap has never-wait's engine side built, so a map verdict today lets the engine
+     A/B land Saturday. Share lock, alone, ~15-30 min. If it cannot start by 13:30, it stays first in tonight's map.
+  7. Then EvalSuite's long-code smoke: 6 of the drift top-up's 40 problems on tonight's CODE env (stack + B, QOM on code
+     sets), one order, scored for blunders, ~20-30 min. If it shows > 1 blunder per 10K, tonight's top-up also runs the
+     QOM-off CODE arm. EvalSuite's determinism follow-up (an exact base in both orders, then one-lever-ON arms, ~1 h)
+     moves to Saturday by day.
 - Tonight, Sat 00:30 -> ~10:00:
   1. BigMoE's stacked FAST palindrome on 12 HumanEval: today's all-in vs all-in + every lever that passes today
      (FAST-NAX, DN-KS, CD16, FASTTAX att_single, lazy commit if wanted), plus FAR-G1. FAST-NAX is in (its BETWEEN on

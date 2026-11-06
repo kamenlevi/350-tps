@@ -131,3 +131,18 @@ Written before any re-check row.
   - deviations by cause;
   - blunders by position (in code vs in comments).
 - **Slot:** tonight (Sat 00:30 to ~10:00), after the agent check, per the orchestrator.
+
+## Amendment 3 (Fri 12:58; before any smoke row): the long-code smoke on tonight's CODE env (NewIdeas, QUEUE b6e90b5)
+- **Why:** the agent bisect showed QOM-KEEP carries long agent outputs' blunders. Long code is the open question for the
+  code headline, which tonight's stack (QOM on the code sets) carries.
+- **The smoke:**
+  - tonight's CODE env, built from BigMoE's sat_night.sh: QA + STACK, i.e. the QOM FAST all-in + NAX6-N + DN-KS + GDN
+    lazy + D7BNAX_32 + CD16 + FAST-tax.
+  - R57_QOM_SETS=humaneval,mbpp,humanevalt. humanevalt is a code set; BigMoE adds it to the screen's SETOF.
+  - It runs on 6 humanevalt rows (HumanEval/0, 4, 8, 12, 16, 20), one order, one process on the live tree; the process's
+    module manifest is the provenance.
+  - It is scored by tfwin against NAX6-N (`ref2tnaxn`).
+- **The line:** more than 1 blunder per 10K tokens means tonight's top-up ALSO runs the QOM-off CODE arm (the same env
+  with R57_QOM_SETS without humanevalt). At or below, no extra arm. The smoke changes no registered verdict.
+- **Runs:** runner 51, today after Breakthrough's never-wait map arm, ending by 15:00 (~20-30 min).
+

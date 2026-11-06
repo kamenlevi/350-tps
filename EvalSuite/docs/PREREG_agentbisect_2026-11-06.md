@@ -60,3 +60,14 @@ Each arm is runner 50's FASTENV with one change (results/bisect/arms.txt):
 - **History:** BigMoE says d17 / hc8 / nax / small are all history-free. If qom's two orders are identical, the other
   arms can move only the blunder count.
 
+## Status Fri 12:29: the nax arm voided; a full freeze for the rest (before the remaining rows)
+- **Done on freeze af1:** qom (fwd + rev), base (fwd + rev), d17, hc8 are run and scored.
+- **The void:** the nax arm loaded Leap's p11.py from the live tree. On the 3c base it loads tierglu_3cn.py, a frozen
+  module the reference never loads, and its "~/Leap/scripts" path was not rewritten, because af1 rewrote only the
+  reference's modules.
+  - The live p11.py has the reference's content (cba73e517b61), but the rule voids it. Its tokens are not used.
+- **The fix:** freeze af2 (tools/freeze_r57.py now rewrites every .py file of the frozen trees). All 33 reference
+  modules are identical between af1 and af2 once the freeze directory's name is swapped, so af1's arms and af2's arms run
+  the same code.
+- **The rest:** nax and small run on af2.
+
