@@ -65,3 +65,11 @@ Written before any MBPP row.
 - Rows left over resume tonight in runner 49's MBPP phase, which decodes only missing rows. The stack + CD16 arms stay
   tonight, after the top-ups. The line is unchanged.
 
+## Amendment 3 (Fri 16:47; before any arm row): CD16 dropped, so the arm is a coverage check
+- **NewIdeas, Fri 16:0x:** CD16 is KILLed on quality by GOAL's MBPP12 (BigMoE: 11/12 -> 8/12 per pass pair, from the
+  drafter's comment loops). It is out of tonight's stack (BigMoE f27b132).
+- **The arm:** tonight's stack_env.txt as written, now WITHOUT CD16. It runs on the 100, in two orders, last tonight, and
+  yields if the night runs short (the END bound). It is a coverage check of the stack on MBPP, decision 4 per order as
+  registered.
+- **The reference is done** (runner 52, 16:15-16:46): ref2tnaxn.r2, 100/100 rows, pass@1 79.0 %, 6 cap hits.
+

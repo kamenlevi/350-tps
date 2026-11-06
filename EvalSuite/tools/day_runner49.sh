@@ -10,7 +10,8 @@
 #    (the converted store, ref2tf0, as Friday's runner 45), then tools/relax_report.py's top-up line -> results/TOPUP_DONE.
 # 2b. The stack's CODE env on all 41 humanevalt rows (blunders, tfwin; NewIdeas Fri 13:3x), + the QOM-off arm if the
 #    afternoon smoke said > 1/10K (results/topsmoke_report.txt) -> results/stack_ht_report.txt.
-# 3. MBPP (docs/PREREG_mbpp_2026-11-06.md): NAX6-N's AR on dec_mbpp (ref2tnaxn.r2), then the stack with CD16
+# 3. MBPP (docs/PREREG_mbpp_2026-11-06.md + amendment 3): NAX6-N's AR on dec_mbpp (ref2tnaxn.r2, done Fri 16:46), then
+#    the stack WITHOUT CD16 (NewIdeas Fri 16:0x: CD16 KILLed on GOAL's MBPP12), a coverage check, last
 #    (stack_env.txt + R57_QOM_SETS ... mbpp) in two orders, tools/mbpp_score.py d4 per order -> results/MBPP_DONE.
 # Waits for code_env.txt (written tonight, after BigMoE's report), BigMoE's sat_night.sh gone and the day rule. Every GPU
 # step: the gates of runners 47 / 48 (pins: EvalSuite's code + BigMoE's HEAD at the start + the ext .so + every external
@@ -381,12 +382,12 @@ SENV=$BM/data/stack/stack_env.txt
 SLINE=$(grep -v '^#' "$SENV" | grep . | tail -1)
 parse_env "$SENV" || { say "stack_env.txt's env line does not parse as K=V pairs: runner stops"; exit 2; }
 MBENV=("${ENVARR[@]}")
-echo "$SLINE" | tr ',' '\n' | grep -q '^R57_INERT=CD16$' || { say "stack_env.txt has no R57_INERT=CD16: runner stops"; exit 2; }
+echo "$SLINE" | tr ',' '\n' | grep -q '^R57_INERT=CD16$' && say "NOTE: stack_env.txt still carries R57_INERT=CD16 (NewIdeas dropped it Fri 16:0x)"
 QS=$(printf '%s\n' "${MBENV[@]}" | grep '^R57_QOM_SETS=' | tail -1)
 case ",${QS#R57_QOM_SETS=}," in *,mbpp,*) EXTRAENV=() ;; *) EXTRAENV=(R57_QOM_SETS=humaneval,ifeval,multi,mbpp) ;; esac
 say "MBPP arm: stack_env.txt ($(grep '^#' "$SENV" | head -1 | cut -c1-120)); QOM sets ${QS:-unset}${EXTRAENV:+ -> ${EXTRAENV[0]}}"
 REFMAN_STACK=$REFMAN; REFMAN=""
-PHASE="the MBPP run (the stack with CD16)"; CURENV=("${MBENV[@]}")
+PHASE="the MBPP coverage check (the stack without CD16)"; CURENV=("${MBENV[@]}")
 TAGP=es_mb_; IFECOPY=0
 MKEYS=$(python3 -c 'import json
 r = [json.loads(l) for l in open("data/items/dec_mbpp.jsonl")]
