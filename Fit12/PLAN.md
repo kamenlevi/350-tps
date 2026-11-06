@@ -3309,3 +3309,9 @@ so R-01 should find about the same slots, not ~1 GB more.
   d7b_nax or r57 in the process). Ported in a copy: the drafter on qmm16c + per-shape ks (exact), and pass 1's attention as
   one SDPA call + pass 1's 4-bit dense on qmm16c + per-shape ks (FAST, pass 1 only). FAST-NAX: no counterpart (v3p).
 - Pre-registered lines, arms and the run state: /Users/kamen/Fit12/PLAN_12GB_90_fit12.md 'Lever 3'. Run: kp2 (share lock).
+- RESULT (Fri 6 Nov 13:2x; kp2 12:59:03-13:17:31, share lock, rc 0, swap flat; 14 clean prompts, ROUGH; full table in
+  /Users/kamen/Fit12/PLAN_12GB_90_fit12.md 'Lever 3 RESULT'): t80ck2 38.72 tok/s; + dn1 (pass 1's dense on qmm16c + ks)
+  40.28 (x1.054, pass 1 -17.5 ms per run on 14 / 14) PAYS; + att1 39.16 (x1.013) BETWEEN; all three 40.10 (x1.047); the
+  drafter port -3.2 ms per check (exact loop ex 18.58 -> exd 18.93, +0.5 % from its draft part). exd = ex on 14 / 16: the
+  known keep-1 replay dependence (WV3; PR1 not in the pinned engine), not a port bug. Correction: t80ck2 (40.8 in T3R2)
+  is FAST, not the exact mode; the 12 GB exact loop is ~18.5 tok/s on HumanEval.

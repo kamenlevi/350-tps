@@ -14,8 +14,11 @@ RX = re.compile(rf"^\[{TAG}\] (\S+) (\S+) theta .*?\| tok (\d+) .*?\| = ex token
                 r"exact ([\d.]+) commit ([\d.]+);(.*)$")
 RP = re.compile(rf"^\[{TAG}\] (\S+) (\S+) PHASES (.*)$")
 RPH = re.compile(r"(\w+): (\d+) runs, ([\d.]+) ms, (\d+) MB")
+SKIP = set(os.environ.get("KP_SKIP", "").split(",")) - {""}   # whole prompts left out (e.g. disturbed by a neighbour)
 rows, ph = [], {}
 for ln in open(F):
+    if any(f" {k} " in ln for k in SKIP):
+        continue
     m = RX.match(ln.strip())
     if m:
         g = m.groups()
@@ -67,4 +70,4 @@ print("phases per run (ms, MB read):")
 for a in arms:
     print(f"  {a:8s} " + " | ".join(f"{k} {v['runs']} runs {v['ms']:.1f} ms {v['mb']:.0f} MB" for k, v in out[a]["phases"].items())
           + (f" || KP {out[a]['kp']}" if out[a]["kp"] else ""))
-json.dump(out, open(os.path.join(os.path.dirname(F), f"{TAG}_read.json"), "w"), indent=1)
+json.dump(dict(skip=sorted(SKIP), arms=out), open(os.path.join(os.path.dirname(F), f"{TAG}_read{'_skip' if SKIP else ''}.json"), "w"), indent=1)

@@ -3471,3 +3471,57 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
      McNemar counts, is reported per domain. FAR registered no chat D line, so none is set now; a chat D over +0.40 points
      with |z| >= 2 is flagged.
   - Arms not done by 14:10 stay in tonight's list (the code ones). The 36-window arms are not added to tonight's list.
+- Fri 13:2x: CORRECTION (Fit12, `~/Fit12/PLAN_12GB_90_fit12.md` "Lever 3 RESULT"): t80ck2 is FAST (top-2 pass 1, θ 0.8,
+  cf 0.9; a map code KILL at 1.63 %), not the 12 GB exact mode. The exact loop runs 18.4-18.9 tok/s. PLAN_12GB_90 "Update
+  Fri 13:2x" has the consequences; two land here.
+  - PRE-REGISTRATION: two step 0 arms are back in Saturday's list (sat_extra.txt, after T3R2's own form, start by 09:10):
+    P1-K1 KU 4 cf 0.9 at θ 0.9 and 0.95 (`p1c_oea_k1_ku4_p09_cf09+code`, `p1c_oea_k1_ku4_p095_cf09+code`; 41.0 / 37.9
+    tok/s [P]). Thu 20:0x pruned them as "no faster than exact", which was the mislabel. Lines: VERDICT2 code 1.34
+    [0.87]. Predictions [G]: θ 0.9 1.3-1.5 %, θ 0.95 1.1-1.3 % (top-2 ran 1.49 / 1.22 there; at θ 0.8, P1-K1 ran 1.52 against
+    top-2's 1.63).
+  - Lever 1's CW8 lead is KILLED at 12 GB [P, Fit12's arithmetic]. A 32-row pass 1 overflows the 47-slot pool, so it
+    takes two 16-row pass-1 calls: ~35 ms per kept token against 25.9 (x0.74). Not timed; nothing routed.
+- RESULT, NEVER-WAIT ON THE MAP (Fri 13:19-13:46; pre-registered Thu 19:4x item 2 and Fri 13:0x; fri_nw.sh, alone under
+  share locks; data data/dm_s7/results_nw/: s67_nw_fri.log, fri_nw.log with nw_read's output, SCREEN_read_*.txt, the
+  self-check's files).
+  - **GPU self-check PASS** (2 code windows, 292 rows). (i) nwz equals the twin exactly. (ii) nw0: 0 flips, mean
+    |d log p1| 0.0016. (iii) Rows and late flags are as expected. The twin is deterministic: its second run equals its
+    first. On the 12 windows, nw_read's (ii) is REPORT (nw0 20 flips vs the twin, mean 0.0056).
+  - **Code**, 12 windows, 3,366 rows. Flips are all-row [non-tie]. D = arm - twin in points; McNemar is only-arm /
+    only-twin.
+
+    | arm | flips | against its twin | verdict |
+    |---|---|---|---|
+    | `qom_0_live_ball_c208` (twin, 208 slots) | 0.74 [0.33] | vs the published pool's 0.51: +0.23, 14 / 6, z +1.79 | PASS (FAR: 0.6-0.9) |
+    | `_c208_nw0` (control, lateness 0) | 0.62 [0.21] | -0.12, 8 / 12, z -0.89 | PASS |
+    | **`_c208_nw1`** (every demand miss 1 layer late) | **0.68 [0.27]** | **-0.06**, 7 / 9, z -0.50 | **PASS, clean** |
+    | `_c208_nw1r1` (rank 0 waits) | 0.74 [0.36] | 0.00, 10 / 10 | PASS (not needed: nw1 passes) |
+    | `qom_0_live_ball_nw1` (published pool) | 0.59 [0.18] | +0.09, 9 / 6, z +0.77 | clean |
+    | `qom_0_live_ball_c266` (twin, 266 slots) | 0.56 [0.12] | | PASS |
+    | `_c266_nw1` | 0.65 [0.24] | +0.09, 8 / 5, z +0.83 | PASS, clean |
+    | `qom_0_split0.99_live_ball_nw1` (the stack) | 1.07 [0.60] | +0.15 vs split 0.99 (12 / 7, z +1.15) | PASS |
+
+    - Lateness itself (nw1 vs nw0) costs +0.06 points (8 / 6, z +0.53).
+    - FAR's predictions: twin at 208 slots 0.6-0.9 (0.74, in); nw1 D +0.1 to +0.4 (-0.06, better); the published
+      pool D +0.03 to +0.15 (+0.09, in); nw1r1 D +0.05 to +0.2 (0.00, better); the stack 0.95-1.15 (1.07, in).
+    - The stack is +0.56 against `qom_0_live_ball` itself (27 / 8, z +3.21), mostly the split's own cost on code.
+  - **Chat**, 36 windows (VERDICT2 lines: IFEval 5.42 [2.22], multi 3.69 [1.63]):
+
+    | arm | code | IFEval | multi | VERDICT2 |
+    |---|---|---|---|---|
+    | `qom_0_live_ball` (twin, on record) | 0.51 [0.21] | 4.03 [1.00] | 3.26 [0.91] | PASS all |
+    | `qom_0_live_ball_nw1` | 0.59 [0.18] | 3.97 [1.38] | 3.24 [0.85] | **PASS all** |
+    | `qom_0_live_ball_c208` | 0.74 [0.33] | 5.27 [2.12] | 3.38 [1.30] | PASS all (IFEval at the line) |
+    | `qom_0_live_ball_c208_nw1` | 0.68 [0.27] | 5.33 [2.35] | 3.72 [1.39] | code PASS / IFEval FAIL / multi FAIL |
+
+    - At the published pool, nw1 equals its twin on all rows: IFEval 47 / 49 (z -0.20), multi 32 / 33 (z -0.12). On
+      non-tie rows IFEval is 24 / 12 (z +2.00, +0.38 points): flagged, but under the 2.22 line.
+    - At 208 slots the pool carries the chat cost. c208 alone vs the published pool: IFEval 86 / 44 (z +3.68), non-tie
+      47 / 12 (z +4.56). nw1 on top adds nothing significant (IFEval 56 / 54, z +0.19; multi 50 / 38, z +1.28), but it
+      tips IFEval non-tie (2.35) and multi all-row (3.72) over the lines.
+  - **Reading**:
+    - Never-wait passes code at every pool tested, clean.
+    - On chat it passes at the published pool and fails at 208 slots, where the small pool itself sits at the lines.
+    - So the engine A/B (BigMoE; Leap's engine side) is open for code. For chat, never-wait needs a pool at or above the
+      published one, or a chat read at the engine's own pool.
+    - Adoption still needs EvalSuite same-scores on code, and the speed needs the engine test (FAR's spec section 3).

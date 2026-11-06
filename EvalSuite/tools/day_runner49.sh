@@ -8,6 +8,8 @@
 #    rows (results/ref2tnax). tools/d4x.py vs REF2-T per order -> results/stack_{fwd,rev}_d4.txt, results/STACK_DONE.
 # 2. The code-only drift top-up (PREREG_relax_drift amendment 2): RELAX's B on the 41 humanevalt keys + REF2-T's replay
 #    (the converted store, ref2tf0, as Friday's runner 45), then tools/relax_report.py's top-up line -> results/TOPUP_DONE.
+# 2b. The stack's CODE env on all 41 humanevalt rows (blunders, tfwin; NewIdeas Fri 13:3x), + the QOM-off arm if the
+#    afternoon smoke said > 1/10K (results/topsmoke_report.txt) -> results/stack_ht_report.txt.
 # 3. MBPP (docs/PREREG_mbpp_2026-11-06.md): NAX6-N's AR on dec_mbpp (ref2tnaxn.r2), then the stack with CD16
 #    (stack_env.txt + R57_QOM_SETS ... mbpp) in two orders, tools/mbpp_score.py d4 per order -> results/MBPP_DONE.
 # Waits for code_env.txt (written tonight, after BigMoE's report), BigMoE's sat_night.sh gone and the day rule. Every GPU
@@ -332,6 +334,33 @@ done
 $PY tools/relax_report.py --arms B --out results/relax_topup_report.txt > /dev/null 2>&1
 say "the top-up: $(grep '^== code-only top-up' results/relax_topup_report.txt | sed 's/^== //' | cut -c1-260)"
 touch results/TOPUP_DONE
+# ------------------------------------------------ the stack's CODE env on all 41 humanevalt rows (NewIdeas Fri 13:3x): blunders
+TKEYS=$(grep . results/drift/keys_T.txt | paste -sd, -)
+REFMAN_SS=$REFMAN; REFMAN=""
+PHASE="the stack on humanevalt"; CURENV=("${STACKENV[@]}"); EXTRAENV=(R57_QOM_SETS=humaneval,mbpp,humanevalt); TAGP=es_ht_; IFECOPY=0
+order stack_ht fwd "$TKEYS"
+tfwin stack_ht "stack humanevalt"
+HT="stack_ht"
+if grep -q "ALSO runs the QOM-off" results/topsmoke_report.txt 2>/dev/null; then   # the smoke's trigger (amendment 3)
+  REFMAN=""; EXTRAENV=(R57_QOM_SETS=humaneval,mbpp); TAGP=es_hq_
+  order stack_htq fwd "$TKEYS"
+  tfwin stack_htq "stack humanevalt, QOM off"
+  HT="stack_ht stack_htq"
+fi
+python3 - $HT <<'HTR' > results/stack_ht_report.txt 2>&1
+import gzip, json, math, sys
+for run in sys.argv[1:]:
+    rows = {r["key"]: r for r in map(json.loads, open(f"results/{run}/decode.jsonl"))}
+    tok = dev = bl = 0
+    for k in rows:
+        s = json.load(gzip.open(f"results/{run}/tfwin/{k.replace('/', '__')}.json.gz", "rt"))
+        out = rows[k]["completion_ids"]
+        tok += len(out); dev += sum(a != b for a, b in zip(s["am"], out)); bl += sum(lp < math.log(0.01) for lp in s["lp"])
+    print(f"STACK_HT {run}: {len(rows)} rows, {tok} tokens, blunders {bl} = {1e4 * bl / max(tok, 1):.2f} per 10K, "
+          f"deviations {100 * dev / max(tok, 1):.2f} %")
+HTR
+say "$(grep '^STACK_HT' results/stack_ht_report.txt | paste -sd' ' -)"
+REFMAN=$REFMAN_SS
 # ------------------------------------------------ MBPP (docs/PREREG_mbpp_2026-11-06.md): NAX6-N's AR, then the stack with CD16
 count() { [ -f "$1" ] && wc -l < "$1" | tr -d ' ' || echo 0; }
 MREF=ref2tnaxn.r2

@@ -69,9 +69,19 @@ say "stacked FAST start (pid $$, NO-SWAP $A GB -> C $CC, deadline $C45_DEADLINE,
 # cost in every arm), so QAC = QA + the counter; the env files keep QA.
 QAC="$QA,R57_QCNT1C=1"
 RR="$QAC,$STACKR,R57_RELAX_LOG=$PWD/data/sat/stackr_relax.jsonl"
-for a in "stq:$QAC" "sts:$QAC,$STACK" "str:$RR" "s7x:$QAC,D7BNAX_32=1" "ssp:$QAC,$STACK,R57_QOM_SPLIT=0.99" "stqm:$QAC" \
-         "sspb:$QAC,$STACK,R57_QOM_SPLIT=0.99" "s7xb:$QAC,D7BNAX_32=1" "strb:$RR" "stsb:$QAC,$STACK" "stqb:$QAC"; do
-  KK=$K; case "${a%%:*}" in str|strb|s7x|s7xb|ssp|sspb) KK=$KC ;; esac
+# NEVER-WAIT A/B (NewIdeas Fri 13:5x, QUEUE item 4 d3e845f; the map PASSed on code, Breakthrough 1d46c51): snv = the stack +
+# R57_NEVERWAIT=1 + REF2_NEVERWAIT=1 (Leap's ref2 never-wait; bit check 4 CLEAN, c2e6a53) on the 12 HumanEval, two passes placed
+# symmetrically like SPLIT-NAX, SPEED ONLY (it stays out of the env files EvalSuite reads). Line (pre-registered Fri 13:5x,
+# NewIdeas', before arming): net pair-mean geo steady tok/s vs the stack on code: PASS >= +8 %, KILL < +3 %, else BETWEEN; kept
+# recorded beside (no clause). Logged beside, per check (code, checks >= 2, medians): check ms, gate service, misses, stalled
+# layer calls and eval wait for the stack and snv, and snv's never-wait counters (late groups / uses / mass, last-layer late
+# uses, stalls), so the read can split "waits removed" from "late work added".
+NWE="R57_NEVERWAIT=1,REF2_NEVERWAIT=1"
+for t in stq sts str s7x ssp snv stqm snvb sspb s7xb strb stsb stqb snw; do rm -f data/r57/${t}_${CC}_*; done   # every tag tonight
+for a in "stq:$QAC" "sts:$QAC,$STACK" "str:$RR" "s7x:$QAC,D7BNAX_32=1" "ssp:$QAC,$STACK,R57_QOM_SPLIT=0.99" "snv:$QAC,$STACK,$NWE" \
+         "stqm:$QAC" "snvb:$QAC,$STACK,$NWE" "sspb:$QAC,$STACK,R57_QOM_SPLIT=0.99" "s7xb:$QAC,D7BNAX_32=1" "strb:$RR" \
+         "stsb:$QAC,$STACK" "stqb:$QAC"; do
+  KK=$K; case "${a%%:*}" in str|strb|s7x|s7xb|ssp|sspb|snv|snvb) KK=$KC ;; esac
   R57_KEYS=$KK C45_ARMS="${a%%:*}_$CC:$CC:${a#*:}" $RUN
   say "${a%%:*} rc=$?"
 done
@@ -110,7 +120,7 @@ for ln in open("data/sat/c45.log"):
         arm_t.setdefault(m.group(3), {})[m.group(2)] = D.datetime.fromisoformat(f"{day} {m.group(1)}")
 hit = {t for t, v in arm_t.items() if "run" in v and "done" in v and any(a < v["done"] and b > v["run"] for a, b in win)}
 P = {"qall": ("stq", "stqm", "stqb"), "stack": ("sts", "stsb"), "stackr": ("str", "strb"), "d7x": ("s7x", "s7xb"),
-     "ssp": ("ssp", "sspb")}
+     "ssp": ("ssp", "sspb"), "snv": ("snv", "snvb")}
 runs = {}
 for t in sum(P.values(), ()):
     try:
@@ -174,6 +184,30 @@ gs, gp = q1c(P["stack"], 2), q1c(P["ssp"], 2)
 L.append(f"Verdict SPLIT-NAX (pre-registered Fri 10:1x, NewIdeas){' INDICATIVE at C < 224' if int(C) < 224 else ''}: {vs_}: "
          f"tok/s {100 * (rs_ - 1):+.1f} % vs the stack on code over {ns_}, kept {100 * (ks_ - 1):+.1f} % (PASS >= +8 %, KILL < +3 %); "
          f"groups computed per check: stack {gs:.0f}, ssp {gp:.0f} ({gp / gs:.3f}x), split drops per check {q1c(P['ssp'], 3):.0f}")
+def pcm(ts, f, d="code"):   # median of a per-check field over the clean passes' checks >= 2 (steady, as tpsw), one domain
+    xs = []
+    for t in ts:
+        if f"{t}_{C}" in hit:
+            continue
+        try:
+            for e in json.load(open(f"data/r57/{t}_{C}_checks.json")):
+                if dom(e.get("key", "")) == d and not e.get("paused"):
+                    xs += [x for x in f(e)[2:] if x is not None]
+        except (OSError, ValueError):
+            pass
+    return S.median(xs) if xs else float("nan")
+rn_, nn_ = ratio(pm(P["snv"], lambda r: r["tpsw"], "code"), pm(P["stack"], lambda r: r["tpsw"], "code"))
+kn_, _ = ratio(pm(P["snv"], kept, "code"), pm(P["stack"], kept, "code"))
+vn_ = "MISSING" if nn_ == 0 else ("PASS" if rn_ >= 1.08 else "KILL" if rn_ < 1.03 else "BETWEEN")
+L.append(f"Verdict NEVER-WAIT (pre-registered Fri 13:5x, NewIdeas){' INDICATIVE at C < 224' if int(C) < 224 else ''}: {vn_}: "
+         f"tok/s {100 * (rn_ - 1):+.1f} % vs the stack on code over {nn_}, kept {100 * (kn_ - 1):+.1f} % (PASS >= +8 %, KILL < +3 %)")
+for b in ("stack", "snv"):
+    L.append(f"  per check (code, checks >= 2, medians) {b:5s}: check {pcm(P[b], lambda e: e.get('ck', [])):.1f} ms, gate service "
+             f"{pcm(P[b], lambda e: e.get('svc', [])):.1f} ms, misses {pcm(P[b], lambda e: e.get('miss', [])):.0f}, stalled layer "
+             f"calls {pcm(P[b], lambda e: e.get('stl', [])):.1f}, eval wait {pcm(P[b], lambda e: e.get('wt', [])):.1f} ms")
+L.append("  snv never-wait counters per check (medians): " + ", ".join(
+    f"{n} {pcm(P['snv'], lambda e, i=i: [x[i] for x in e.get('nw', [])]):.1f}"
+    for i, n in enumerate(("late groups", "late uses", "late mass", "last-layer late uses (dropped or waited)", "stalls"))))
 r7, n7 = ratio(pm(P["d7x"], lambda r: r["tpsw"], "code"), pm(P["qall"], lambda r: r["tpsw"], "code"))
 k7, _ = ratio(pm(P["d7x"], kept, "code"), pm(P["qall"], kept, "code"))
 L.append(f"d7x kept clause (pre-registered Fri 08:5x): {'MISSING' if n7 == 0 else 'OK' if abs(k7 - 1) <= 0.01 else 'NOT OK'}: "

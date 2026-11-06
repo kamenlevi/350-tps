@@ -21,6 +21,12 @@ qom_0_live_ball_c266_nw1+code 4 09:05 qom_0_live_ball_c266+code qom_0_live_ball_
 #    - step 0b's widths: top-3 34.5 / 33.1; top-4 / 5 overflow the 47-slot pool at 16 rows and abort.
 #    One arm decides: is the x1.12 FAST point code-valid?
 p1c_oea_k1_ku4_p08_cf09+code 4 09:10 p1c_oea_k1_p08 cert_top5_p09
+#    RE-ADDED Fri 13:2x: theta 0.9 / 0.95 of T3R2's form (41.0 / 37.9 tok/s). The prune above rested on a wrong label:
+#    t80ck2 (40.8) is FAST (top-2 pass 1, theta 0.8, a map code KILL), not the exact mode; the 12 GB exact loop runs ~18.5
+#    tok/s (Fit12 13:2x). So every two-pass point runs ~2x exact, and the fastest code-valid one is the 12 GB base (on record:
+#    top-2 theta 0.95, 1.22 %, ~35.9 tok/s). P1-K2 and the wider widths stay out: no faster than these at a given theta.
+p1c_oea_k1_ku4_p09_cf09+code 4 09:10 p1c_oea_k1_ku4_p08_cf09+code p1c_oea_k1_p08
+p1c_oea_k1_ku4_p095_cf09+code 4 09:10 p1c_oea_k1_ku4_p08_cf09+code cert_top5_p09
 # 3. Friday's leftovers (added Fri 04:0x). The Friday runner hit its 14-run cap at 03:45 (now 40), so these 8 arms of
 #    data/fri_extra.txt did not run. Same lines, twins and condition; Saturday's start-by. They go after step 0, by value:
 #    - R15b: its condition holds (R15's multi 2.76 <= 3.19);

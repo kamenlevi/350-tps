@@ -30,7 +30,8 @@ The exposed SSD wait is ~128 ms, 49 % of the check. It reads 1.23 GB per check a
   | P1-K1 | 45.8 | 41.0 | 37.9 | 35.3 |
   | top-2 | 40.2 | 37.6 | 35.9 | 33.4 |
 
-- **The code-valid points so far are slower than the exact mode.** Top-2 at θ 0.95 (1.22 %, PASS) runs ~36 tok/s; the
+- **[CORRECTED Fri 13:2x: t80ck2 is FAST, not the exact mode; the exact loop runs ~18.5 tok/s. See "Update Fri 13:2x".]**
+  **The code-valid points so far are slower than the exact mode.** Top-2 at θ 0.95 (1.22 %, PASS) runs ~36 tok/s; the
   exact mode, t80ck2, runs 40.8 on full outputs and 49.9 on the shared text. Until a FAST form passes code and is
   priced, the base for the factors is the exact mode. From 49.9, 90-130 needs x1.8-2.6.
 - **Lever 2 is now a wider pass 1.** It means a better KV for the certified rows. On the map, top-5 at θ 0.9 passes
@@ -40,7 +41,7 @@ The exposed SSD wait is ~128 ms, 49 % of the check. It reads 1.23 GB per check a
   - Fit12 builds the engine form (ranks 0-4 in pass 1) and prices it from one calibration run.
 - **Levers 1 and 3 apply to the exact base unchanged.** They come first now.
 
-## Update Thu 20:0x: the two-pass FAST route is closed at 12 GB, except T3R2's own point
+## Update Thu 20:0x: the two-pass FAST route is closed at 12 GB, except T3R2's own point [CORRECTED Fri 13:2x: this rested on t80ck2 being the exact mode; it is FAST. See "Update Fri 13:2x".]
 
 - **A wider pass 1 is slower** (Fit12, `~/Fit12/data/scr/t3cal`; full outputs, cf 0.9). Top-3 runs 34.5 / 33.1 tok/s at
   θ 0.9 / 0.95, with pass 1 at ~207 ms.
@@ -52,6 +53,7 @@ The exposed SSD wait is ~128 ms, 49 % of the check. It reads 1.23 GB per check a
   - If it passes VERDICT2, the x1.12 is real. If it fails, the FAST route at 12 GB is closed.
   - The other step 0 / 0b arms were dropped before running. topk3 / topk4 stay registered; they are harmless.
 - **The plan is now levers 1 and 3 on the exact mode** (49.9 tok/s on the shared text, 40.8 on full outputs).
+  [CORRECTED Fri 13:2x: those are t80ck2's FAST numbers; the exact loop runs ~18.5.]
   - Lever 1: kept per check. The first test is Breakthrough's CPU replay on Friday: copy spans and today's kept per check on
     them, over T3R2's prompts.
   - Lever 3: bytes and compute per check. The rank-0 residency replay, and Leap's kernels.
@@ -71,9 +73,37 @@ The exposed SSD wait is ~128 ms, 49 % of the check. It reads 1.23 GB per check a
   - Kept per check: 12.21 (x1.21). Rows per kept token: 1.64 vs 1.59 (+3 %).
   - It pays only if a 32-row check costs well under 1.21x a 16-row one in the exact mode. At 1.1x it gives ~x1.1
     [P, halved].
-  - The next test is Fit12's: time 16- vs 32-row checks in t80ck2, on copy rows.
+  - The next test is Fit12's: time 16- vs 32-row checks in t80ck2, on copy rows. [Priced Fri 13:2x without a timing:
+    KILL at 12 GB. See "Update Fri 13:2x".]
 - **The drafter side of lever 1 is parked.** MTP Head reports P-OFF has no effect. So lever 1 now rests on the wide copy
   check and INERT.
+
+## Update Fri 13:2x: CORRECTION, t80ck2 is FAST; the 12 GB exact loop runs ~18.5 tok/s (Fit12, `~/Fit12/PLAN_12GB_90_fit12.md` "Lever 3 RESULT")
+
+- **t80ck2 is not the exact mode.** It commits pass-1-certified rows (top-2 pass 1, θ 0.8, cf 0.9) without the exact
+  check, and the map scored top-2 at θ 0.8 a code KILL (1.63 %). The exact loop (`ex`: DFlash2 plus exact calls of <= 4
+  rows, C_m 47 / C_l 32) runs 18.4-18.9 tok/s on HumanEval [K]: 18.9 and 18.42 quiet, 18.58 under today's share lock.
+  "Update Thu 19:5x" and "Update Thu 20:0x" called t80ck2 the exact mode; both are marked CORRECTED.
+- **So the two-pass FAST route is open again.** Every two-pass point runs ~2x the exact loop, and the 12 GB base is the
+  fastest one that passes code:
+
+  | point | tok/s [P, Fit12's replay, full outputs, cf 0.9] | code on the map |
+  |---|---|---|
+  | P1-K1, θ 0.8, KU 4 (t80ck1u, T3R2's form) | 45.8 | Saturday's step 0 arm |
+  | P1-K1, θ 0.9 | 41.0 | re-added to Saturday's step 0 |
+  | P1-K1, θ 0.95 | 37.9 | re-added to Saturday's step 0 |
+  | top-2, θ 0.95 | 35.9 | 1.22 % all-row, PASS (on record) |
+
+  From 36-46 tok/s, 90-130 needs x2.0-3.6 (not the x1.8-2.6 written above). The stack below assumed a 50-57 base; on
+  36-46 it gives ~55-105 [G], so 130 still needs the SSD wait hidden.
+- **Lever 3, Leap's Friday switches ported** [K, rough, share lock, 14 clean prompts]: the dense pass-1 kernel (dn1)
+  PAYS, x1.054 (pass 1 157 -> 140 ms per run); att_single x1.013 (BETWEEN); all three x1.047; the drafter port saves
+  ~3 ms per check. The check stays bytes-bound (~1.47 GB per check).
+- **Lever 1's wide copy check (CW8) is KILLED at 12 GB** [P, Fit12's arithmetic]:
+  - A 32-row pass 1 overflows the 47-slot pool. Top-4 at 16 rows, also 64 picks per layer, already aborted at 54
+    experts. So the check needs two 16-row pass-1 calls (+~157 ms).
+  - That is ~398 ms per check for ~11.3 kept: ~35 ms per kept token against 25.9 today (x0.74).
+  - Only a form where copy rows skip pass 1 could pay. It is unpriced and not routed. Lever 1 now rests on INERT alone.
 
 ## Step 0: the 57 is not yet a code-valid base
 

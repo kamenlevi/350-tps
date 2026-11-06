@@ -399,3 +399,9 @@ last-layer late uses, stalls, forced groups):
 
 Indicative only (one cold pass each, CAP 32, C 160, 3 min apart, no palindrome): stack + CD16 HumanEval/68 70.7 tok/s
 (f3k) vs 75.9 with never-wait (f4k), kept 15.0 both; ifeval/1220 22.2 vs 22.7. The pre-registered speed A/B is Saturday night.
+
+### Fri 13:55: tonight's never-wait arm env pre-flight (pf5): CLEAN
+
+f5v = the stack + CD16 + R57_NEVERWAIT=1 + REF2_NEVERWAIT=1 + R57_QCNT1C=1 (tonight's snv env; the counter + never-wait pair was
+the one combination check 4 did not run), 2 prompts, CAP 32, C 160: ran 2 / 2, no error lines. Both per-check counters are
+written for all 19 checks (q1c and nw). NWCNT sums: late groups 4094, late uses 7746, last-layer late uses 82, stalls 25.

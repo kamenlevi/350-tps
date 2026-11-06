@@ -146,3 +146,15 @@ Written before any re-check row.
   with R57_QOM_SETS without humanevalt). At or below, no extra arm. The smoke changes no registered verdict.
 - **Runs:** runner 51, today after Breakthrough's never-wait map arm, ending by 15:00 (~20-30 min).
 
+## Amendment 4 (Fri 13:32; before any row): tonight's top-up arms (NewIdeas Fri 13:3x)
+- **Order:** the stack same-scores run, then the registered B top-up (relax.py; KLD + blunders; the rollback gate), then
+  the stack's CODE env on all 41 humanevalt rows, then MBPP / CD16.
+- **The stack on humanevalt:**
+  - code_env.txt's env with R57_QOM_SETS=humaneval,mbpp,humanevalt, one order, scored by tfwin against NAX6-N.
+  - Reported with amendment 2's blunder bar (<= 1 per 10K) as its line. It has no KLD, because the screen logs no
+    distributions.
+  - It is not RELAX B's rollback gate.
+- **The QOM-off CODE arm:** the same env with R57_QOM_SETS=humaneval,mbpp, run only if the afternoon smoke said
+  > 1/10K (amendment 3).
+- **Report:** results/stack_ht_report.txt.
+

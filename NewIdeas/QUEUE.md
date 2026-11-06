@@ -19,6 +19,8 @@ A-B-B-A (passes 112.7 / 115.0), with no freezes.
   (the orchestrator's call: the kept drop is NAX6-N's own numerics, and the tok/s includes it). Its gate is the
   same-scores run.
 - HumanEval is flattered by prompt copying.
+- Against Kamen's publish trigger (lossy, code): 45 GB 113.9 vs 250-330 (x2.2-2.9 to go; tonight's stack priced ~128);
+  12 GB code-valid ~36 [P] vs 90-130 (x2.5-3.6 to go). The 12 GB EXACT loop is 18.4-18.9 (not 40.8; see 12 GB LINE).
 
 MEASURED (quality measured; speed measured or priced):
 1. RELAX ship, B on code + E on chat (45). Speed [K, EvalSuite RESULT 8797f54, C 160, paired]:
@@ -94,6 +96,16 @@ MEASURED (quality measured; speed measured or priced):
 
 PRE-REGISTERED, NOT RUN (by expected gain on 45 GB code; lines in QUEUE Thu 19:0x unless noted):
 4. FAR never-wait nw1 (45). [P] median check 88 -> 72-76 ms on HumanEval code = +16-22 %. Map arm, then the engine form.
+   MAP PASS [K, Breakthrough 13:46, SCOREBOARD 1d46c51; data/dm_s7/results_nw/]: code is clean at every pool. nw1 at 208
+   slots 0.68 % [non-tie 0.27] vs its twin 0.74 [0.33]; at the published pool 0.59 [0.18]; at 266 slots 0.65 [0.24]. The
+   stack form, split 0.99 + nw1, scores 1.07 [0.60]: PASS. Chat passes at the published pool but fails at 208 slots;
+   that is pool-driven (the 208 pool alone sits at the chat lines), so chat needs a pool at or above the published one.
+   - Engine: BigMoE's r57 side is built, and its NW bit check 4 is clean with counters (abb43e0, c2e6a53).
+   - Next (NewIdeas Fri 13:4x): one "stack + NW" arm in tonight's palindrome, speed only and outside the gated stack.
+     Pre-registered line: net tok/s vs the stack PASS >= +8 %, KILL < +3 %. [P] the misses are ~13.5-15 ms per check,
+     so +10-15 %.
+   - If it and SPLIT-NAX both pass, ONE same-scores run covers stack + split 0.99 + NW (the map passed that
+     combination).
 5. MEASURED Fri 02:0x-02:13 [K, code windows, Fable C's VERDICT2 lines]: no gain beyond item 2. K8 PASS 1.19 / 0.69 %
    (all-row / non-tie) at x0.539 tiles; K6 1.49 / 0.97, A 1.40 / 0.87, A' 1.40 / 0.81, B 1.87 / 1.21: KILL. K4 (probe,
    03:41) KILL 2.02 / 1.42. By Fable C's rule (the passing arm with the fewest tiles) the code preset stays split 0.9 (x0.508);
@@ -215,7 +227,7 @@ ends it by the next item's start.
      QOM-KEEP the two orders should be token-identical. Line for that arm: blunders <= 20 % of plain FAST's on the same
      turns = it carries it; >= 50 % = not the main cause. Today if it can start by 14:15, else Saturday by day as the
      only big job.
-  6. (Fri 12:5x) Breakthrough's never-wait map arm, moved up from tonight: the misses (-13.5..-15 ms per check) are the
+  6. DONE 13:46: MAP PASS on code (item 4). (Fri 12:5x) Breakthrough's never-wait map arm, moved up from tonight: the misses (-13.5..-15 ms per check) are the
      second-biggest gap to 300, and Leap has never-wait's engine side built, so a map verdict today lets the engine
      A/B land Saturday. Share lock, alone, ~15-30 min. If it cannot start by 13:30, it stays first in tonight's map.
   7. Then EvalSuite's long-code smoke: 6 of the drift top-up's 40 problems on tonight's CODE env (stack + B, QOM on code
@@ -226,26 +238,40 @@ ends it by the next item's start.
   1. BigMoE's stacked FAST palindrome on 12 HumanEval: today's all-in vs all-in + every lever that passes today
      (FAST-NAX, DN-KS, CD16, FASTTAX att_single, lazy commit if wanted), plus FAR-G1. FAST-NAX is in (its BETWEEN on
      record). Plus one SPLIT-NAX arm (stack + split 0.99, ~7 min; speed only, outside the gated
-     stack; item 2). BigMoE writes the winning stack's env to ~/BigMoE/data/stack/stack_env.txt for EvalSuite.
+     stack; item 2). Plus one never-wait arm (stack + NW, ~7 min; speed only, outside the gated stack;
+     item 4), if BigMoE judges its r57 side ready. BigMoE writes the winning stack's env to ~/BigMoE/data/stack/stack_env.txt for EvalSuite.
   2. Env rule for tonight's gate (NewIdeas Fri 11:2x, after the agent FAIL): QOM on the code sets only
      (R57_QOM_SETS=humaneval,mbpp). Math rows stay as certified (B without QOM): math answers average ~670 tokens, and a
      first-time QOM on math could sink the one gate. Chat rows run a separate launch, stack minus HC8 + E (R1 0.5) with
      no QOM, as E was certified, or are skipped (chat stays EXACT).
      EvalSuite (the orchestrator's order, Fri 10:5x): the stack same-scores (~1.5 h, 2 orders) -> the drift top-up
-     (~1.5 h) -> MBPP decision 4 for CD16 (~1.2 h: NAX6-N reference on the walk's 100 MBPP tasks, then the stack with
+     (~1.5 h; Fri 13:2x: both forms, the registered B top-up via relax.py (KLD + blunders, the rollback gate), then the
+     stack's CODE env on all 41 (blunders only); if the night runs short, the map's 8 leftover 24 GB arms yield first) ->
+     MBPP decision 4 for CD16 (~1.2 h: NAX6-N reference on the walk's 100 MBPP tasks, then the stack with
      CD16 in 2 orders). Details of the first two follow. ONE same-scores run (decision 4 vs REF2-T) on exactly that stack, code and math on the CODE profile
      (stack + B with HC8), plus the code drift top-up (40 HumanEval+ problems, >= 1K tokens, ~1.5 h; PASS = blunders
      <= 1 per 10K AND pooled q4 KLD <= 0.02 AND no row's q4 > 0.05, else RELAX's code part rolls back). IFEval rows
      run the chat profile that would ship (stack + E without HC8) only if BigMoE's HC8-off launch exists by then;
      otherwise chat stays EXACT and needs no run. Bisect only on a fail.
   3. Breakthrough's map, fitted around EvalSuite's runs (share locks where memory allows): never-wait first (the 45 GB
-     SSD-wait lever), then T1 (Fable A's xs arms), then the 8 leftover 24 GB arms.
+     SSD-wait lever; DONE today, 13:46: only its 2-min self-check re-runs), then T1 (Fable A's xs arms), then the 8
+     leftover 24 GB arms.
   4. EvalSuite runner 46's F1 moves to Sunday night (the orchestrator's call, Fri 10:5x: F1 certifies fs4, which the
      stack does not use; att_single ships through FASTTAX). BigMoE's 12-MBPP speed arm stays Saturday night.
 - Fable B's v2 (ks / tile plans per shape) lands by ~11:00 and feeds Leap's next builds.
 
-12 GB LINE: no lossy tok/s of my own records. Today's 12 GB exact line is 40.8 tok/s (the likely first, in an 11.35 GB
-footprint). Breakthrough + Fit12 own the line. Items 2, 4 and 9 carry over to 12 GB with unpriced pool effects; DRAFT17
+12 GB LINE (CORRECTED Fri 13:2x; Fit12 PLAN_12GB_90_fit12.md 'Lever 3 RESULT', re-read by NewIdeas):
+- The 12 GB EXACT loop runs 18.4-18.9 tok/s on HumanEval [K: T3t 18.9 and T3R 18.42 quiet, kp2 18.58 share], 11.4 GB
+  lifetime footprint.
+- The 40.8 quoted before as "the 12 GB exact line" is T3R2's t80ck2, which is FAST. It commits pass-1-certified rows
+  (theta 0.8, cf 0.9) without the exact check (= the exact loop on 5 of 16 prompts in kp2), and the map scored that
+  setting a code KILL (1.63 % vs the 1.34 % line).
+- The code-valid FAST point is top-2 at theta 0.95 (map 1.22 %, PASS): ~36 tok/s [P, Fit12's model]. The 90-130 publish
+  line is x2.5-3.6 away.
+- Fit12's lever 3 (rough, share, 14 clean HumanEval): Leap's switches add ~+5 % (pass-1 dense port x1.054; att_single
+  x1.013, BETWEEN; the drafter port -3 ms per check). The 12 GB check is bytes-bound (~1.47 GB of SSD per check), so the
+  12 GB lever is bytes per check (BYTES10), not kernels.
+- Breakthrough + Fit12 own the line. Items 2, 4 and 9 carry over to 12 GB with unpriced pool effects; DRAFT17
 is in.
 
 NOT ON EITHER LINE (24 GB chat bytes; kept for 24 GB): R15 / R15b (Fri 00:30), the 0.4 gate, the chat route itself

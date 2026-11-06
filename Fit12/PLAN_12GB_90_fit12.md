@@ -102,3 +102,38 @@ rule: tokens per check, time per check from the table above, and divergences vs 
   - A FAST port PAYS if its arm's tok/s is >= +3 % against t80ck2 (geo mean per prompt) with the saving visible in pass 1's
     ms per run; NOTHING if < +1 %. Quality stays the map's question (the ports change pass 1 only).
 - kp1 (09:42) was stopped by my swap guard (+1.08 GB in 50 s beside a 39 GB job); kp2 waits for a clear memory slot.
+
+## Lever 3 RESULT (Fri 6 Nov 13:2x; kp2 ran 12:59:03-13:17:31 under a share lock, rc 0, swap flat 11.99 -> 11.93 GB, 96 / 96 arm outputs; ROUGH)
+- Data /Users/kamen/Fit12/data/scr/kp2 (kp2.txt, kp2_read.json = all 16, kp2_read_skip.json = 14 clean); reader
+  /Users/kamen/Fit12/scripts/kp1_read.py (KP_SKIP=...). Breakthrough's never-wait self-check ran beside the run 13:00:50-
+  13:02:15 (full GPU; it told me): prompts HumanEval/42 and /68 are left out of the numbers below (their arms fell in it).
+- 14 clean prompts, full outputs (256 cap), C_m 47 / C_l 32, lifetime 11.39 GB in every arm (the ports add no memory):
+
+  | arm | tok/s | vs base (geo / prompt) | kept | ms per check: draft / pass 1 / exact / commit / total | pass 1 per run |
+  |---|---|---|---|---|---|
+  | ex (exact loop) | 18.58 | - | 9.71 | 11.2 / - / 510.7 / - / 522.5 | - |
+  | exd (+ drafter port) | 18.93 | x1.020 (warm-order bias) | 9.67 | 8.4 / - / 501.6 / - / 510.6 | - |
+  | t80ck2 (FAST base) | 38.72 | - | 9.32 | 11.1 / 124.4 / 91.1 / 11.0 / 240.6 | 156.9 ms, 935 MB |
+  | t80ck2a (+ att1) | 39.16 | x1.013 | 9.32 | 11.1 / 121.9 / 90.9 / 10.9 / 238.0 | 153.8 |
+  | t80ck2n (+ dn1) | 40.28 | x1.054 | 9.22 | 11.2 / 114.5 / 88.9 / 11.3 / 229.0 | 139.7, 908 MB |
+  | t80ck2f (all three) | 40.10 | x1.047 | 9.17 | 8.1 / 112.5 / 94.1 / 10.9 / 228.7 | 139.2 |
+
+- Per phase, paired by prompt (the cleaner read: the FAST arms write different texts, so their tok/s ratios spread
+  x0.59-1.47): dn1 pass 1 -17.5 ms per run (median, lower on 14 / 14); att1 -1.0 (10 / 14, noisy); all three -15.8 (14 /
+  14); the drafter port's draft -3.2 ms per check (13 / 14), -3.0 inside t80ck2f (14 / 14). SSD bytes unchanged.
+- Engaged per run: dn1 ~181 qmm16c calls per pass 1 (N >= 1024; ~496 other quantized calls stayed on MLX: 8-bit, N < 1024,
+  not broken down); att1 ~12 per pass 1 (one per attention layer); dnax every drafter projection of <= 16 rows (ks > 1).
+- VERDICTS (lines above): dn1 PAYS (+5.4 %); att1 BETWEEN (+1.3 %, ~nothing: 16-row attention at 300-600 keys is small
+  here); all three PAYS (+4.7 %, no better than dn1 alone within noise); the drafter port is ~-3 ms per check (+0.5 % on
+  the exact loop's 522 ms check, ~+1.3 % on t80ck2's 240 ms). The 12 GB check is bytes-bound (t80ck2 ~1.47 GB per check,
+  ex ~4.2 GB), so dense kernels move it ~5 %.
+- exd = ex on 14 / 16 (12 / 14 clean), against my pre-registered 16 / 16. Not a port bug: ex itself is reproducible (kp2's
+  ex = Thursday's c51 on 16 / 16), and both divergences follow the known keep-1 replay dependence (WV3, Oct: MTPLX's commit
+  replays the PLE layer at width 1 when a <= 4-row call keeps 1 row, so B12's exact tokens depend on the draft pattern at
+  near-ties). HumanEval/17: exd has extra keep-1 commits at tokens 133 / 146, divergence at 178; HumanEval/77: ex has an
+  extra one at 28, divergence at 134. PR1 (2-row replay, PASS in Oct: draft-policy-invariant) is not in the pinned engine,
+  so any drafter change on the 12 GB exact line moves tokens at near-ties until PR1 is installed. My 16 / 16 line forgot it.
+- CORRECTION for the shared plan: t80ck2 is not the exact mode. It commits pass-1-certified rows (theta 0.8, cf 0.9) without
+  the exact check (= ex on 5 / 16 here), and the map scored top-2 at theta 0.8 a code KILL (1.63 %). The 12 GB exact loop
+  (ex) runs 18.4-18.9 tok/s on HumanEval (T3t 18.9 and T3R 18.42, both quiet; kp2 18.58 share). The 40.8 quoted as the
+  12 GB exact line is T3R2's t80ck2 full-output number.
