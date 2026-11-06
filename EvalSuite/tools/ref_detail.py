@@ -1,7 +1,9 @@
 """A reference candidate's detail (RESULT_nax6; tools/hc8_detail.py with the arm as an argument): per set, token-identical
 rows and where the arm first leaves ref2t and ref2b; discordant items vs ref2t (decision 4's pair) with the other
 reference arms beside them, and for IFEval the instructions each arm missed; the items one arm alone gets wrong / right
-(the noise around the verdict); rough AR speed. Usage: .venv/bin/python tools/ref_detail.py [arm, default ref2tnax]"""
+(the noise around the verdict); rough AR speed.
+Usage: .venv/bin/python tools/ref_detail.py [arm, default ref2tnax] [reference, default ref2t] [others, comma-separated]
+  e.g. T0: tools/ref_detail.py t0_mode_T0 ref b12llff,floor,ref.r2,ref2t"""
 import os, statistics, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -18,8 +20,9 @@ def first_diff(a, b):
     return None if len(a) == len(b) else min(len(a), len(b))
 
 
-def main(arm):
-    ARMS = (arm, "ref2t") + OTHERS
+def main(arm, ref="ref2t", others=OTHERS):
+    others = tuple(o for o in others if o not in (arm, ref))
+    ARMS = (arm, ref) + others
     its = dr.items()
     V = {n: dr.load(n) for n in ARMS}
     keys = sorted(set.intersection(*(set(d) for d in V.values())))
@@ -31,21 +34,21 @@ def main(arm):
             sc.setdefault(n, {}).update(dr.SCORERS[s]({k: d[k] for k in ks}, its))
         tot = {n: 100 * sum(sc[n][k][1] for k in ks) / len(ks) for n in ARMS}
         print(f"\n== {s}: {len(ks)} rows; % correct: " + ", ".join(f"{n} {tot[n]:.1f}" for n in ARMS))
-        for r in ("ref2t", "ref2b"):
+        for r in dict.fromkeys((ref, "ref2b")):
             fd = [first_diff(V[arm][k]["completion_ids"], V[r][k]["completion_ids"]) for k in ks]
             dv = [x for x in fd if x is not None]
             print(f"   vs {r}: token-identical {len(fd) - len(dv)}/{len(ks)}; first divergence median "
                   f"{statistics.median(dv) if dv else '-'}, min {min(dv) if dv else '-'}")
-        print(f"   discordant {arm} vs ref2t (1 = correct); first diff = token where {arm} leaves ref2t")
+        print(f"   discordant {arm} vs {ref} (1 = correct); first diff = token where {arm} leaves {ref}")
         for k in ks:
-            a, b = sc[arm][k][1], sc["ref2t"][k][1]
+            a, b = sc[arm][k][1], sc[ref][k][1]
             if a == b:
                 continue
-            c, t = V[arm][k], V["ref2t"][k]
-            print(f"  {k:40s} {arm} {a:.0f} ({c['finish']}, {len(c['completion_ids'])} tok)  ref2t {b:.0f} "
+            c, t = V[arm][k], V[ref][k]
+            print(f"  {k:40s} {arm} {a:.0f} ({c['finish']}, {len(c['completion_ids'])} tok)  {ref} {b:.0f} "
                   f"({t['finish']}, {len(t['completion_ids'])} tok, cap {its[k]['max_tokens']})  first diff "
                   f"{first_diff(c['completion_ids'], t['completion_ids'])}  "
-                  + "  ".join(f"{n} {sc[n][k][1]:.0f}" for n in OTHERS))
+                  + "  ".join(f"{n} {sc[n][k][1]:.0f}" for n in others))
             if s == "ifeval":
                 ids = its[k]["instruction_id_list"]
                 for n in ARMS:
@@ -62,7 +65,7 @@ def main(arm):
     for s in ("math", "ifeval", "humaneval"):
         ks = [k for k in keys if its.get(k, {}).get("set") == s]
         out = []
-        for n in (arm, "ref2t"):
+        for n in (arm, ref):
             tok = sum(len(V[n][k]["completion_ids"]) for k in ks)
             sec = sum(V[n][k]["seconds"] - V[n][k].get("mem", {}).get("paused_s", 0) for k in ks)
             out.append(f"{n} {tok / sec:.2f} tok/s ({tok} tok)")
@@ -70,4 +73,5 @@ def main(arm):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "ref2tnax")
+    a = sys.argv[1:]
+    main(a[0] if a else "ref2tnax", a[1] if len(a) > 1 else "ref2t", tuple(a[2].split(",")) if len(a) > 2 else OTHERS)

@@ -3501,6 +3501,15 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   relative** (the small-scale test gave <= 1.2e-4); FAIL otherwise (then the root cause is incomplete).
 - Run 2 (if >= 5 min remain before 15:00), TF32 on (MLX's default), vs L1-20's log: reproduced = within 2e-3 (MLX is
   deterministic enough that the log is today's TF32 trajectory); else the log isn't reproducible either (record it).
+- Amendment Fri 11-06 07:3x (the orchestrator 07:2x; Kamen made the 45 GB dense-kernel rebuild today's top priority):
+  start only after Leap's part B quiet lock is released (or from 10:00 if it hasn't come and gone by then). BigMoE's
+  share pre-flights may run beside it. Lines unchanged. The runner is turns/mlx_fp32_fri2.sh (a copy; the first runner
+  was stopped in its wait), log data/port/fp32_fri2.log.
+- Amendment 2, Fri 11-06 08:0x (the orchestrator 08:0x): BigMoE's FAST-NAX engine A/B (quiet, ~30-40 min) goes first.
+  Start after BigMoE's quiet lock is released, or at 09:00 if BigMoE hasn't queued by then. The gate wants 3 clear
+  minutes. Lines unchanged. fri2 was stopped at 08:01, just after runner 45 ended (08:00:13) and before its gate, with
+  no lock taken. The runner is turns/mlx_fp32_fri3.sh, log data/port/fp32_fri3.log. It saw BigMoE's ticket (#1 in
+  line) at 08:02:00.
 
 ### MTP3BIT (the orchestrator 19:4x; CPU from stored logs, data/mtp_3bit_vs_4bit.txt): does the 3-bit trunk hurt the MTP head's drafting? No, not measurably
 - Public rig for comparison (github.com/crgregersen/m10dis, docs/RESULTS.md, as quoted by the orchestrator): this model's
@@ -3534,3 +3543,24 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   bound on GPU idle, since svc includes the spin on loads), U3C 33.4; the drafter takes 10.0 ms; checks run 86-96 ms. So
   the 10 ms draft fits in the idle only if most of svc is real idle: plausible, not shown. If it fits, draft-ahead saves
   ~0.34-0.43 x 10 ms = 3.4-4.3 ms per check (~+4-5 %, the same share as estimated). A timeline of real GPU idle decides.
+
+### DA-1 re-priced from Leap's step 0 (Fri 11-06 07:3x; the orchestrator's note; desk, no run): 0 on FLAT, was -1.4..-1.7
+- Input: Leap's TABLE_350 'STEP 0, PART A', from FLAT-2's synced records. The warm 2-row check is GPU-bound: 47.8 ms of
+  GPU work (plus head and embed) in a 50.3 ms unsynced check. So the GPU is idle <= ~2.5 ms per check, and FLAT-2's
+  draft is 9.1 ms, serial.
+- DRAFTOFF's condition (GPU idle >= the draft's time) fails: ~2.5 vs 9.1 ms.
+- Fitting the draft into idle gaps only: drafting ahead on every check delays the check by >= 9.1 - 2.5 = 6.6 ms. It
+  saves 9.1 ms only on hits (h = 0.34-0.43 of code checks), so the net is +2.7..+3.5 ms per check, i.e. slower. It breaks
+  even only at h >= 0.73, the same bar if it is gated to the checks predicted to accept in full.
+- The only way left is running the draft inside the check's under-filled kernels on a second GPU queue. Owner records
+  show MLX's second GPU stream barely overlaps here:
+  - D-COMMIT design D (the draft on a second stream beside the commit replay) hid 0.06 ms per cycle (KILL, 11-03).
+  - NAX-OCC (two expert calls on two streams): KILL, "no overlap lever" (11-04).
+  - Neither ran beside the dense pass itself (~60 GB/s, bubble-bound).
+- Re-price: draft-ahead counts 0 on FLAT. Leap's 'with the draft' line is the pieces alone (~42-48 before the bench).
+  On the real cycle with SSD waits it could still give up to h x 9.1 = -3.1..-3.9 ms per code check, if >= 9 ms of true
+  GPU idle sits in the waits; BigMoE's svc 19.3 ms median is an upper bound. That idle shrinks as NEVER-WAIT and the
+  flat cuts land.
+- Built but not installed, exact: BP-9's screened draft head (R57_DSUB; PASS 11-04, propose -1.0 ms with D8-NAX, kept
+  code x1.0000) exists only as Leap's data/r57_session_vocab.diff. FLAT-2's arms (R57_D7B=code + R57_D7BNAX=1, and the 45
+  preset doesn't set it) drafted without it: ~-1 ms on FLAT if it carries to D7b-NAX. NewIdeas / BigMoE decide.

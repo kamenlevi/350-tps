@@ -8220,3 +8220,125 @@ screen); GPU tests small, on share locks.
     - The incremental route likely misses PASS (<= 37) and may hit its KILL (> 45 with 1-4 in). The structural step
       (fewer, larger kernels per layer: the per-kernel minimum cost x ~1,000 kernels) is probably the real route. It has
       to answer the M5 grid-barrier KILL and M6b.
+
+## STEP 0 PART B RESULT: what the 45 GB FAST check's kernels cost (Leap, Fri 2026-11-06 07:50-07:55, quiet lock, C 224)
+- Why: Kamen (07:2x, via the orchestrator) made the dense-kernel rebuild the top priority. Part B gives the numbers it
+  needs: per-kernel time in a dependent chain, bytes, GB/s, the cost of one sync point, kernel counts, the experts at 2 and
+  16 rows. Fable B's DENSE_REBUILD v1 (section 6) asked for the same three things.
+- Method (scripts/stepb/, commit 6de31d2 + this one): zero's FLAT-2 harness on BigMoE's r57_screen.py HEAD, unchanged except
+  the probe. Two arms in one quiet lock: fri (today's FAST all-in without the split) and nax (+ FAST-NAX: R57_NAX=1
+  REF2_NAX_1CQ=1). Two probes per arm (checks 8 and 24), at 2 and 16 rows.
+  - stepb_k.py wraps every kernel-launching mx call, metal_kernel and compile before mlx loads; off, it passes through.
+  - Chained replay: the engine's own calls of one kind (same kernel and shapes), across the layers in order (cold
+    weights), each waiting on the last through a 3-kernel link. Per call = (chain - the same links alone) / n.
+  - t_sync: a dependent chain of 200 kernels that move almost no bytes, at 32 to 655,360 threads.
+  - Graph counts: mx.export_to_dot of each piece (one GDN and one attention layer) before its eval.
+  - Checks: kernel-level forwards gave logits == the live check bitwise (12 of 12 at 2 rows). The replay repeats across the
+    two arms' processes to within ~5 %. The per-call synced timings (one eval per call) are NOT usable: they swing 2-3x
+    between processes (GPU clock between tiny command buffers). Only the chains, the piece split and the counts are used.
+- **t_sync, one dependent sync point (us): 1.24 (32 threads), 1.40 (1 x 1,024), 1.55 (16 x 1,024), 1.56 (20 x 1,024),
+  1.86 (80 x 256), 4.13 (512 x 256, 1 MB moved).** So one wide wait costs ~1.6 us, not the 12-20 us of DENSE_REBUILD's
+  fit. ~1,000-4,000 dispatches per check are worth ~2-6 ms, not 20.
+- **Kernels in a dependent chain (us per call at 2 / 16 rows; MB per call; GB/s; calls per check):**
+  - GDN in_proj qkv|z (leap_qmm26_d, 512 tiles, ks 1): 113 / 115; 23.6 MB; 210; 36.
+  - **out_proj (GDN) and o_proj (attention), 80 tiles, K 6,144, ks 1: 112 / 112; 8.9 MB; 81; 48.** Floor at 220 GB/s
+    ~40 us.
+  - **GDN a|b, 3 tiles, ks 1: 45 / 46; 0.22 MB; 5; 36.**
+  - attention q, 384 tiles: 75 / 74; 17.7 MB; 243-247; 12. **attention k and v, 16 tiles each: 48 / 49; 0.8 MB; 18; 24.**
+  - **shared gate|up, 41 tiles: 48 / 47; 2.0 MB; 42; 48.** Shared down (K 640): 13.7 / 13.6; 1.0 MB; 75; 48.
+  - router logits (8-bit MLX qmm): 18.6; 1.46 MB; 80; 48. Attention's 8-bit 640 x 2,560: 21.9; 1.8 MB; 84; 12.
+  - SDPA, head dim 256: 144 calls per check (12 head chunks per attention layer, each a Matmul / Softmax / Matmul
+    fallback): 21.9 / 21.8 each, 20 GB/s.
+  - HC8: k1c 22-26 (4.6 MB, 177-213 GB/s), k3c 27-29 (3.8 MB, 137-143), k2b 9.4-10.5 (0.45 MB, 44-49); 96 each.
+  - gated_delta_step: 25-27 at 2 rows (6.2 MB, 239-250 GB/s), 57.5 at 16 (119 GB/s).
+  - Glue: the 2 -> 16-row pads (Full + Concatenate, ~300 per 2-row check) 1-3 us each; sigmoid, compute_g, swiglu,
+    moe_tail, prework, gated norm 1-5 us each.
+  - Fit t = t_sync + bytes / B over the 4-bit kinds: B ~295 GB/s with a 33 us intercept. The intercept is the narrow
+    kinds, not a sync cost: their time does not move with bytes.
+- **Reading (the dense part).** The wide kernels already stream near the floor (in_proj 210, attention q 245, HC k1c ~200
+  GB/s). The time is lost in narrow GEMVs. ref2 runs every native call at ks 1 (ref2.py 366 / 503 / 512, "bitwise == qmm16c
+  (ks 1)"). One simdgroup per 32-column tile then walks the whole K. With 3-80 tiles the GPU is mostly empty, and the call
+  costs ~1.1-1.2 us per K group whatever its bytes.
+  - Per 2-row check:
+
+    | piece | today | at 220 GB/s | saving | calls |
+    |---|---|---|---|---|
+    | out_proj / o_proj | 5.4 ms | ~1.9 | -3.5 | 48 |
+    | a\|b | 1.6 | ~0.1 | -1.5 | 36 |
+    | k\|v | 1.2 | ~0.2 | -1.0 | 24 |
+    | shared gate\|up | 2.3 | ~0.5 | -1.8 | 48 |
+    | shared down + 8-bit router | 1.5 | ~0.6 | -0.9 | |
+    | SDPA chunks (fallback) | 3.2 | | -2.4 (R-62's att_single, Fable B's FASTTAX patch is ready) | |
+    | HC k2b | 1.0 | | -0.7 | |
+    | 2 -> 16-row pads | ~0.6 | | -0.5 | |
+  - **Sum: ~-12 ms of the ~36 ms dense part (2-row check), with today's kernel set re-shaped, no megakernel.**
+  - Replay chain sums per layer agree with part A: GDN ~0.31 ms + glue vs 0.37; MoE side ~0.10 vs 0.12; HC read ~0.06
+    vs 0.09.
+- **Kernel counts per layer (graph primitives that launch, 2 / 16 rows):**
+  - GDN-type layer 64 / 44: HC read 6 / 4, GDN 14 / 8, HC read 9 / 3, router + shared 11 / 5, experts 22 / 22, tail 1,
+    HC write 1.
+  - Attention-type layer 131 / 116: the attention itself 82 / 81, mostly the 12-chunk SDPA fallback.
+  - So ~3,900 / ~3,000 per check. The 2-row extra (~20 per layer) is the pads.
+  - The experts' 22 = 3 kernels + ~19 tiny id / mask ops (BitwiseOr, Select, PostIds, ...): ~1.5 ms per check at
+    ~1.6 us each.
+- **Experts (one unit per layer; bytes = distinct experts x the MSB-3 record + ranks 0-1 x LSB, an upper bound: QOM drops
+  are not taken off):**
+  - fri (3c-N one-call): ~17 ms at 2 rows, **~60 ms at 16 rows (8.4 GB, 139 GB/s), +3.25 ms per row** (part A: 57, +3.27).
+  - **nax (FAST-NAX, NAX6-N's one-call): ~14 ms at 2 rows, ~25 ms at 16 rows (8.5 GB upper bound), +0.98 ms per row.**
+  - So FAST-NAX already meets the "experts 57 -> ~25 ms at 16 rows" target on all-resident blocks. That holds unless real
+    blocks differ (misses, real QOM blocks), which BigMoE's FAST-NAX engine A/B (Saturday) decides.
+  - The faster-kernel vs fewer-bytes question reads: 3c-N's kernel is the loss (~2x the read floor at 16 rows), NAX6-N
+    is not (its time is at or under the upper-bound bytes' floor).
+- **Against DENSE_REBUILD's rule (section 6).** t_sync(wide) ~1.6 us (< 6), B in flight 210-247 GB/s on the wide 4-bit
+  kinds. So the count is not the lever: each removed wait is worth ~1.6 us. W and D still pay, through what they do to
+  the narrow GEMVs: W folds a|b into in_proj's stream, D splits out_proj's K 8 ways. But the same gain comes from K-split
+  and merged narrow projections in today's kernels, at far lower risk. The waits are worth ~1.5-6 ms per check over all
+  kinds, a later step.
+- Program, re-priced (dense part of a 2-row check, today ~36 ms): shape fixes -12 -> ~24 ms. Every kernel at 220 GB/s
+  with today's counts -> ~16-17. 12 ms needs ~250 GB/s average and ~1/3 of today's kernel count.
+- Data: data/stepb/ (reports stepb_{fri,nax}_224_report.txt; out/: json, screens, logs, dot_*/ graphs).
+- **DN-KS, pre-registered Fri 08:0x (the first build; FAST, off by default).**
+  - What: ref2's native dense calls pick ks per shape (REF2_DN_KS=1): the smallest ks (dividing K / 64, ks <= 16 for
+    threadgroup memory) that gives >= ~320 simdgroups. Bits change in the K order, so FAST: EvalSuite's same-scores
+    gate.
+  - Step 1 (cheap, share lock): the chained microbench of qmm16n at the 5 narrow kinds' real shapes, ks 1 vs the
+    candidates.
+    - PASS: >= 5.0 ms per 2-row check saved over the 5 kinds.
+    - KILL: < 2.5 ms. Prediction: -6..-8 ms.
+    - Bits: max relative error vs ks 1 <= 2e-3 per projection.
+  - Step 2: the FLAT A/B on the engine (quiet). PASS: FLAT -4.0 ms or more. KILL: < 2.0.
+- **DN-KS step 1 RESULT (Fri 08:01, share lock, scripts/dnks_bench.py -> data/dnks_bench.txt): PASS, -7.74 ms per 2-row check.**
+  - Round-robin over ks, 9 rounds, cold copies. The ks 1 baselines match part B's engine chains: out_proj 115 vs 112,
+    a|b 47 vs 45, k / v 47 vs 48, gate|up 48 vs 47, in_proj 120 vs 113, attention q 75 vs 75.
+  - The first, non-interleaved pass (07:59) was noisy (baselines up to 3.7x high); it is kept in the file but not used.
+  - Results:
+
+    | kind | ks 1 | best | at ks | GB/s | per check |
+    |---|---|---|---|---|---|
+    | out_proj / o_proj | 114.8 us | 41.4 us | 6 | 214 | -3.5 ms |
+    | a\|b | 47.3 | 10.4 | 10 | | -1.3 |
+    | k / v | 47.4 | 9.4 | 10 | | -0.9 |
+    | shared gate\|up | 48.4 | 14.7 | 8 | 129 | -1.6 |
+    | shared down | 16.7 | 9.1 | 5 | | -0.4 |
+  - Controls: in_proj and attention q gain <= 0.55 ms in all, so they stay at ks 1 (rule: >= 320 simdgroups at ks 1).
+  - Bits at the chosen ks: max relative error <= 2.0e-3 (most 0 or < 5e-6). Some other ks values flip one bf16 ulp
+    (3.8e-3).
+- **LAZY GDN COMMIT RESULT (Fable B's patch, ported onto ref2 eb43fcc2; Fri 08:01, share lock; data/gdnb_lazy_check.txt):
+  BETWEEN.**
+  - Bits: (1)-(4) all bitwise (lazy off == today; the replay == MTPLX's commit at keep 1 / 2 / 9 / 15 / 16, NSG 8 / 16,
+    G3 off / on; a 40-event protocol stream), and ref2.self_test PASS.
+  - Time (36 chained layers, S 16, median of 9; by day under a share lock):
+    - keep 9: -0.56 ms per cycle (line PASS >= 0.8, KILL < 0.4);
+    - keep 16: +0.93 ms (line <= 0.8);
+    - net at 24 % full accepts: -0.20 ms per check.
+  - Exact, small: BigMoE's call whether to stack it.
+- **INSTALLED Fri 08:03:37: ref2.py 1851aa5c (eb43fcc2 + the lazy port + DN-KS), gdnbody.py 2ac884e8 (+ gdn_body_lazy).**
+  - Both switches are off by default (REF2_GDN_LAZY, REF2_DN_KS); the live self_test passes.
+  - Off, every path is the eb43fcc2 code, since _dn_ks returns 1. Backups: data/dnks/ref2_before_dnks.py,
+    gdnbody_before_lazy.py.
+  - DN-KS through ref2's own hook (dense_native, small_native; data/dnks/ref2_cand.py test 08:02): the 5 narrow kinds
+    take their ks with error <= 6e-8; in_proj stays at ks 1.
+  - The DENSE-N-RAM path (_dnr_qmm) uses the same _dn_ks; the engine A/B confirms it by COUNTS dn_ks.
+- **DN-KS step 2 (pre-registered above):** FLAT A/B on zero's FLAT-2 harness (scripts/stepb/run_stepb.sh), arms fri, friks,
+  fri2 (A-B-A, one quiet lock, C by the ladder). PASS: FLAT -4.0 ms or more against the mean of the two A arms. KILL:
+  < 2.0. VOID if the A arms differ by > 2.0.

@@ -203,3 +203,10 @@ your turn after 45s: quiet lock held until 04:08. Measure now, and `peer unlock`
 03:23:56 [BigMoE: split A/B on the one-call path (qall / s99 / s90 palindrome, 12 HumanEval, C 224 down to 128), MEM ~32-44 GB] granted, 46 GB available: run
 lock released
 03:39:25 [BigMoE: split A/B on the one-call path (qall / s99 / s90 palindrome, 12 HumanEval, C 224 down to 128), MEM ~32-44 GB] done rc=0, ticket released
+08:01:25 [BigMoE: FAST-NAX engine A/B (qall vs + R57_NAX=1 REF2_NAX_1CQ=1, A-B-B-A, 12 HumanEval, C 224), MEM ~41-45 GB] start: PEAK 33 GB, ticket 30 min, window to Fri 10:30, cmd: /bin/bash scripts/fri_nax.sh
+08:01:25 [BigMoE: FAST-NAX engine A/B (qall vs + R57_NAX=1 REF2_NAX_1CQ=1, A-B-B-A, 12 HumanEval, C 224), MEM ~41-45 GB] queue the quiet ticket (available 48 GB)
+queued #1; this returns when it's your turn and the Mac is quiet.
+your turn after 2 min: quiet lock held until 08:33. Measure now, and `peer unlock` as soon as you're done.
+08:03:57 [BigMoE: FAST-NAX engine A/B (qall vs + R57_NAX=1 REF2_NAX_1CQ=1, A-B-B-A, 12 HumanEval, C 224), MEM ~41-45 GB] granted, 48 GB available: run
+lock released
+08:10:49 [BigMoE: FAST-NAX engine A/B (qall vs + R57_NAX=1 REF2_NAX_1CQ=1, A-B-B-A, 12 HumanEval, C 224), MEM ~41-45 GB] done rc=0, ticket released

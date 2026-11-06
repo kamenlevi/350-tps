@@ -349,3 +349,16 @@ counters in every arm.
   cost per check, FLAT-2's 53.7 ms, and the SSD dominate).
 
 C3-R8: qall 2,359 vs exact's 3,708 (Fri's fexr; exact groups do not depend on C) = 0.636x (the audit asked >= 0.85x).
+
+## Fri 6 Nov 08:04-08:10: FAST-NAX engine A/B (data/fnx/fnx_report.txt)
+C 224 (NO-SWAP 49 GB), 12 HumanEval, A-B-B-A, no freezes, qall drift -1.2 %.
+
+| arm | geo steady tok/s | passes | kept per check |
+|---|---|---|---|
+| qall | 97.5 | 98.1 / 96.9 | 10.55 |
+| FAST-NAX (R57_NAX=1 REF2_NAX_1CQ=1) | 113.9 | 112.7 / 115.0 | 10.36 |
+
+**Verdict (pre-registered): BETWEEN.** tok/s +16.8 %, kept -1.8 %; the line needed kept within 1 %.
+- The kept change comes from the base: NAX6-N is a certified exact reference with its own numerics.
+- tok/s already nets it.
+- Proposed for tonight's stack, with EvalSuite's same-scores as the gate (the orchestrator decides).

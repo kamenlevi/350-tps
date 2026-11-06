@@ -100,3 +100,34 @@ Written before any re-check row.
   - Chunks are END-bounded by 15:00, so the whole run fits if GO comes by about 11:00.
   - If E8 does not finish by 15:00, its rows resume in the next slot the orchestrator gives (the rows are resumable).
     ship8's verdict waits for all of them.
+
+## Amendment 2 (Fri 2026-11-06 08:09; before any top-up row): a code-only confirmation
+- **Why:**
+  - The orchestrator (Fri 08:0x) accepted 16 long rows for the registered pooled line, so the drift PASS stands.
+  - The pooled line cannot see code drift, because agentlong's ~200x larger KLD dominates it. The 10 HumanEval-type long
+    rows alone grow ×4-6 from a tiny base (docs/RESULT_relax_drift_2026-11-06.md).
+  - So: a code-only confirmation on >= 20 long HumanEval-type rows. If it fails, the RELAX code part rolls back before
+    anything is published. The orchestrator accepted the line below (Fri 08:3x).
+- **Rows:** HumanEval+ is used up (all 164 problems; 10 gave >= 512 tokens). Local, no download: 41 HumanEval+ problems
+  (task ids 0, 4, 8, ... 160) with a longer answer:
+  - the prompt asks for the function plus a pytest module of at least 15 tests;
+  - max_tokens 1536;
+  - set `humanevalt`, built by tools/drift_build.py in BigMoE's venv (the chat template), keys
+    results/drift/keys_T.txt.
+- **Arm:** RELAX's B exactly as Friday's run: the converted store, `ref2tf0`, snap/bigmoe-da8e7a6. B gains the set
+  `humanevalt` with its HumanEval+ settings, including the comment rule. Then REF2-T's replay of B's checks.
+- **The line,** on every code row of >= 512 tokens (Thursday's 10 + the new long rows):
+  - **PASS:**
+    - blunders (E's p of the committed token < 0.01) <= 1 per 10K tokens on those rows;
+    - AND the pooled q4 KLD (the mean over the last quarter of positions) <= 0.02;
+    - AND no row's q4 KLD > 0.05.
+  - **FAIL:** any of the three fails.
+  - 0.02 is about 2x Thursday's code q4 mean (0.0095). Math's q4 is 0.0066.
+  - If fewer than 20 long code rows come out, the verdict is reported with that count beside it, and the orchestrator
+    decides whether it is enough.
+- **Information:**
+  - the code-only q4 / q1 ratio (not in the line: with q1 near zero it fails on noise);
+  - per-row q1 / q4;
+  - deviations by cause;
+  - blunders by position (in code vs in comments).
+- **Slot:** tonight (Sat 00:30 to ~10:00), after the agent check, per the orchestrator.

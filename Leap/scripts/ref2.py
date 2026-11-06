@@ -122,6 +122,20 @@ What changes (monkeypatches on MTPLX, read-only):
     instead of Multiply + Add. The MoE block's exact pieces (R-70 router, R-73 tail) live in the block owners' code.
   - GDNB (exact-safe, off by default; Mon 2026-11-02): CFG["gdn_body"] runs a 1-16-row GDN call's body (gdn_exact's
     prework + the recurrence + the exact gated norm) as ONE dispatch (scripts/gdnbody.py), bitwise == REF2-T.
+  - LAZY COMMIT (Fable B, ~/FableGod/fableb/build_1105, Thu 2026-11-05; a SKETCH, never run on a GPU; off by default:
+    CFG["gdn_lazy_commit"] or REF2_GDN_LAZY=1; needs CFG gdn_body): a partly accepted check no longer pays MTPLX's
+    commit replay on the pure-GDN layers (a second kernel per layer that reads the snapshot state and writes the new
+    one, pulled by the next check's eval). The cache entry's state becomes [conv, base, pack]: the true recurrent
+    state is the pack's rows (q | k | v | a | b of the kept rows, 10,336 bf16 each) replayed on base, and the next
+    <= 16-row call's body (gdnbody.gdn_body_lazy) replays them in registers before its own rows, writes that committed
+    state once and emits its own rows' pack. The pack is a state leaf, so MTPLX's snapshot / restore carry it. Any other
+    reader of entry.state[1] must flush first (gdn_lazy_flush) or ask gdn_lazy_state; _gdn_call flushes for the calls
+    the body declines. The PLE layer (4 slots) is never lazy. COUNTS gdn_lazy / gdn_lazy_rows / gdn_lazy_flush. The
+    protocol is fuzzed on CPU (build_1105/lazy_commit/lazy_sim_check.py); the bits need scripts/gdnb_lazy_check.py.
+  - DN-KS (Fri 2026-11-06, FAST, off by default: CFG["dn_ks"] or REF2_DN_KS=1): the native 4-bit calls (DENSE-N, DENSE-N-RAM,
+    SMALL-N) take a K split per shape (_dn_ks) instead of ks 1. Part B found the narrow calls K-serial; the chained bench
+    (scripts/dnks_bench.py) saves 7.7 ms per 2-row check over out_proj / o_proj (ks 6), a|b (10), k / v (10), shared
+    gate|up (8) and shared down (5). Bits change in the K order (<= 1 bf16 ulp per output): FAST only. COUNTS dn_ks.
   - R-83 (exact-safe, off by default): CFG["gdn_inproj_x"] is R-68's fusion without the reference change: qkv | z as ONE
     qmm16c call (N 16384; qmm16c's per-column bits do not depend on N) and b | a as ONE MLX 16-row call (N 96, below
     dense_min_n, so it stays on MLX's kernel). Every part keeps REF2-T's bits; two dispatches less per GDN layer.
@@ -202,11 +216,14 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
            os.environ.get("REF2_QOM_SPLIT", os.environ.get("R57_QOM_SPLIT", ""))),   # QOM-SPLIT-1C (Fri 11-06)
        "hc_pend_mlp": os.environ.get("REF2_HC_PEND") == "1",
        "screened_head": os.environ.get("REF2_SCREENED_HEAD") == "1",
-       "screened_head_n": int(os.environ.get("REF2_SCREENED_HEAD_N", "98304"))}
+       "screened_head_n": int(os.environ.get("REF2_SCREENED_HEAD_N", "98304")),
+       "gdn_lazy_commit": os.environ.get("REF2_GDN_LAZY") == "1",
+       "dn_ks": os.environ.get("REF2_DN_KS") == "1"}
 _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
               kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
-              fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0, ooo_1c_qom=0, nax_1cq=0, qom_split=0)
+              fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0, ooo_1c_qom=0, nax_1cq=0, qom_split=0,
+              gdn_lazy=0, gdn_lazy_rows=0, gdn_lazy_flush=0, dn_ks=0)
 QCNT_1C = None                                       # Fri 11-06: a list -> each one-call's post-drop work (see the notes)
 _ROWS = [R]                                          # F1-R8: the real rows of the attention call being built (_att)
 _ORIG = {}
@@ -350,6 +367,30 @@ def dense_native_unconvert(model):
     _DNR_ON[0] = False
     return n
 
+_DNKS = {(2560, 6144): 6, (96, 2560): 10, (512, 2560): 10, (1312, 2560): 8, (2560, 640): 5}
+
+
+def _dn_ks(N, K):
+    """DN-KS (Leap, Fri 2026-11-06, FAST, off by default; CFG["dn_ks"] or REF2_DN_KS=1): the K split of a native 4-bit
+    call (qmm26.qmm16n's ks) per shape. ks 1 walks the whole K in one simdgroup per 32-column tile, so a narrow call is
+    latency-bound (STEP 0 PART B: out_proj / o_proj 112 us, a|b 45, k / v 48, shared gate|up 47). The 5 measured kinds
+    take their best ks (scripts/dnks_bench.py, PASS 08:01: -7.7 ms per 2-row check); any other shape takes the smallest
+    ks dividing K / 64 (<= 16, threadgroup memory) that gives >= 320 simdgroups. Bits change (the K order): FAST only."""
+    if not CFG["dn_ks"]:
+        return 1
+    ks = _DNKS.get((N, K))
+    if ks is None:
+        g, tiles, ks = K // 64, N // 32, 1
+        for k in (1, 2, 4, 5, 8, 10, 16):
+            if g % k == 0:
+                ks = k
+                if tiles * k >= 320:
+                    break
+    if ks > 1:
+        COUNTS["dn_ks"] += 1
+    return ks
+
+
 def _dnr_qmm(x, w, orig, args, kw):
     """DENSE-N-RAM: a call on a converted weight"""
     scales = args[0] if len(args) > 0 else kw.get("scales")
@@ -362,8 +403,9 @@ def _dnr_qmm(x, w, orig, args, kw):
     lead, rows = _rows(x)
     if (_ON[0] and transpose and mode == "affine" and bits == 4 and group_size == 64 and rows <= R
             and x.dtype == mx.bfloat16 and x.shape[-1] == K and scales.dtype == mx.bfloat16):
-        nt = CFG["dense_native_nt"] if N % (32 * CFG["dense_native_nt"]) == 0 else 1
-        y = _qmm16n()(_pad16(x.reshape(rows, K)), w, scales, biases, N, 1, nt)
+        ks = _dn_ks(N, K)
+        nt = CFG["dense_native_nt"] if ks == 1 and N % (32 * CFG["dense_native_nt"]) == 0 else 1
+        y = _qmm16n()(_pad16(x.reshape(rows, K)), w, scales, biases, N, ks, nt)
         COUNTS["dense_native"] += 1
         return y[:rows].reshape(*lead, N)
     wm, sm, bm = _dn_unpack(w, scales, biases, N, K)
@@ -499,8 +541,9 @@ def _qmm(x, w, *args, **kw):
     if bits == 4 and group_size == 64 and N >= CFG["dense_min_n"] and N % 64 == 0 and K_ % 64 == 0:
         e = _dn_get(w, scales, biases) if CFG["dense_native"] else None
         if e is not None:                                # DENSE-N: bitwise == qmm16c (ks 1); nt only groups tiles
-            nt = CFG["dense_native_nt"] if N % (32 * CFG["dense_native_nt"]) == 0 else 1
-            y = _qmm16n()(x16, e[1], e[2], e[3], N, 1, nt)
+            ks = _dn_ks(N, K_)
+            nt = CFG["dense_native_nt"] if ks == 1 and N % (32 * CFG["dense_native_nt"]) == 0 else 1
+            y = _qmm16n()(x16, e[1], e[2], e[3], N, ks, nt)
             COUNTS["dense_native"] += 1
         else:
             y = qmm16c(x16, w, scales, biases)
@@ -509,7 +552,7 @@ def _qmm(x, w, *args, **kw):
         e = (_sn_get(w, scales, biases) if (CFG["small_native"] and bits == 4 and group_size == 64 and K_ % 64 == 0
                                            and scales is not None and scales.dtype == mx.bfloat16) else None)
         if e is not None:                                # SMALL-N (FAST): qmm16n on the padded native copy
-            y = _qmm16n()(x16, e[1], e[2], e[3], e[4], 1, 1)[:, :N]
+            y = _qmm16n()(x16, e[1], e[2], e[3], e[4], _dn_ks(e[4], K_), 1)[:, :N]
             COUNTS["small_native"] += 1
         else:
             y = orig(x16, w, scales, biases, transpose=True, group_size=group_size, bits=bits, mode=mode)
@@ -1189,6 +1232,23 @@ def _gdn_body_call(self, inputs, mask, cache):
         qkv, z = self.in_proj_qkv(inputs), self.in_proj_z(inputs)
         b, a = self.in_proj_b(inputs), self.in_proj_a(inputs)
     z = z.reshape(B, S, self.num_v_heads, self.head_v_dim)
+    lz = _lz_form(cache)                               # LAZY COMMIT: 3 = [conv, base, pack], 2 = the true state, 0 = not ours
+    if CFG["gdn_lazy_commit"] and lz:
+        pend = cache.state[2] if lz == 3 else None
+        y, q, k, v, cs, st, pack = _gbmod().gdn_body_lazy(qkv, z, a, b, cache[0], self.conv1d.weight, self.A_log,
+                                                          self.dt_bias, cache[1], self.norm.weight, self.norm.eps,
+                                                          _gdnx()._scale(), pending=pend)
+        if Q._VERIFY_CAPTURE.get():                    # MTPLX's commit still validates and reads the stash (conv state)
+            cache._mtplx_verify_rows = (qkv, q, k, v, a, b)
+        cache.state = [cs, st, pack]                   # the post-window state = st (committed) + the pack's S rows
+        cache._ref2_lz_c = (st, S)                     # for THIS window's commit only: _gdn_call clears it on any call
+        cache.advance(S)
+        COUNTS["gdnb"] += 1
+        COUNTS["gdn_lazy"] += 1
+        COUNTS["gdn_lazy_rows"] += 0 if pend is None else int(pend.shape[-2])
+        return Q._linear(self.out_proj, y.reshape(B, S, -1))
+    if lz == 3:                                        # the switch went off with rows pending: today's replay first
+        gdn_lazy_flush(self, cache)
     y, q, k, v, cs, st = _gbmod().gdn_body(qkv, z, a, b, cache[0], self.conv1d.weight, self.A_log, self.dt_bias,
                                           cache[1], self.norm.weight, self.norm.eps, _gdnx()._scale())
     if Q._VERIFY_CAPTURE.get():                        # MTPLX's capture-commit stash: the same tensors, the same bits
@@ -1202,6 +1262,8 @@ def _gdn_body_call(self, inputs, mask, cache):
 def _gdn_call(self, inputs, mask=None, cache=None):
     """R-68: with CFG gdn_inproj, a GDN layer's first call builds its padded fused projection (once); GDNB: with
     CFG gdn_body, 1-16-row calls run the body as one dispatch (_gdn_body_call)"""
+    if cache is not None and getattr(cache, "_ref2_lz_c", None) is not None:
+        cache._ref2_lz_c = None                        # LAZY COMMIT: only the lazy body's own forward leaves it set
     if _ON[0] and CFG["gdn_inproj"] and not isinstance(self.__dict__.get("in_proj_fused"), _InProjPad):
         f = _InProjPad(self)
         self.pop("in_proj_fused", None)
@@ -1218,7 +1280,95 @@ def _gdn_call(self, inputs, mask=None, cache=None):
         out = _gdn_body_call(self, inputs, mask, cache)
         if out is not None:
             return out
+    if _lz_form(cache) == 3:                           # LAZY COMMIT: MTPLX's own forward reads cache[1] itself
+        gdn_lazy_flush(self, cache)
     return _ORIG["gdn_call"](self, inputs, mask, cache)
+
+
+def _lz_form(entry):
+    """LAZY COMMIT: a pure-GDN cache entry's form. 2 = [conv, state], state the true recurrent state; 3 = [conv, base,
+    pack], the true state = the pack's rows replayed on base; 0 = anything else (None, QSA caches, the PLE layer's 4
+    slots). The arity is the whole protocol: MTPLX's snapshots take a view of every leaf and its restores install clones
+    with the snapshot's arity (cache_state._lazy_state_view / _restore_state_preserving_container), so the pack follows
+    the state through rollbacks with no hook and no reliance on array identity."""
+    st = getattr(entry, "state", None)
+    if not isinstance(entry, Q.ArraysCache) or type(st) is not list or len(st) not in (2, 3):
+        return 0
+    if len(st) == 3 and not (st[2] is not None and st[2].ndim == 3 and st[2].shape[-1] == _gbmod().PW):
+        return 0
+    return len(st)
+
+
+def _lz_true(gdn, base, pack):
+    """LAZY COMMIT: the true state of (base, pack) = MTPLX's own commit replay (mlx_lm gated_delta_update on the kept rows'
+    q / k / v / a / b from the snapshot state), so a flush is today's computation on today's values"""
+    from mlx_lm.models.gated_delta import gated_delta_update
+    q, k, v, a, b = _gbmod().unpack_rows(pack)
+    _, st = gated_delta_update(q, k, v, a, b, gdn.A_log, gdn.dt_bias, base, None, use_kernel=not gdn.training)
+    return st
+
+
+def gdn_lazy_flush(gdn, entry):
+    """LAZY COMMIT: [conv, base, pack] -> [conv, true state] (lazy MLX ops, no eval); False when there was nothing to do"""
+    if _lz_form(entry) != 3:
+        return False
+    conv, base, pack = entry.state
+    entry.state = [conv, _lz_true(gdn, base, pack)]
+    entry._ref2_lz_c = None
+    COUNTS["gdn_lazy_flush"] += 1
+    return True
+
+
+def gdn_lazy_state(model, cache, flush=False):
+    """LAZY COMMIT, for readers of the recurrent state (digests, dumps, a cache save): every layer's TRUE recurrent
+    state (None for QSA layers); flush=True also puts the entries back in today's 2-leaf form. model: anything with
+    .layers (Qwen4ExpTextModel) or .model.layers."""
+    lays = getattr(model, "layers", None) or model.model.layers
+    out = []
+    for layer, e in zip(lays, cache):
+        f = _lz_form(e)
+        if f == 3:
+            gdn = layer.linear_attn
+            if flush:
+                gdn_lazy_flush(gdn, e)
+                out.append(e.state[1])
+            else:
+                out.append(_lz_true(gdn, e.state[1], e.state[2]))
+        else:
+            st = getattr(e, "state", None)
+            out.append(st[1] if isinstance(e, Q.ArraysCache) and type(st) is list and len(st) > 1 else None)
+    return out
+
+
+def _lz_commit_pre(self, cache, snapshot_states, verified):
+    """LAZY COMMIT, before MTPLX's commit: wins = the entries whose LAST forward was this window's lazy body (their
+    replay by MTPLX is discarded afterwards, whatever it starts from). Every other pure-GDN entry whose snapshot is in
+    the 3-leaf form gets its snapshot's TRUE state handed to MTPLX in place of the bare base (MTPLX replays from
+    pre[1]); the caller's snapshot is not modified."""
+    wins, ss = {}, None
+    for i, (layer, e) in enumerate(zip(self.layers, cache)):
+        w = getattr(e, "_ref2_lz_c", None) if e is not None else None
+        if w is not None and w[1] == verified and _lz_form(e) == 3:
+            wins[i] = w
+            continue
+        pre = snapshot_states[i] if snapshot_states is not None else None
+        if (pre is not None and getattr(layer, "ple", None) is None and isinstance(pre, (list, tuple)) and len(pre) == 3
+                and pre[2] is not None and getattr(pre[2], "ndim", 0) == 3 and pre[2].shape[-1] == _gbmod().PW):
+            if ss is None:
+                ss = list(snapshot_states)
+            ss[i] = [pre[0], _lz_true(layer.linear_attn, pre[1], pre[2])]
+    return (snapshot_states if ss is None else tuple(ss)), wins
+
+
+def _lz_commit_post(cache, wins, ok, keep, verified):
+    """LAZY COMMIT, after MTPLX's commit: on a partial accept MTPLX has set each entry's conv state (kept) and its
+    recurrent state to a replay node (never evaluated: dropped here). The committed base goes back and the pack keeps
+    its first `keep` rows (a view). A full accept changes nothing: base + the whole pack is the post-window state."""
+    for i, (st, S) in wins.items():
+        e = cache[i]
+        if ok and keep < verified:
+            e.state = [e.state[0], st, e.state[2][:, :keep]]
+        e._ref2_lz_c = None
 
 _BS = [None]
 def _tier_slots(self, x, indices, bm):
@@ -1389,11 +1539,19 @@ def _commit(self, cache, snapshot_states, *, keep_tokens, verified_tokens):
     elsewhere (the stock one); the two differ in the last bit at some bf16 inputs, so a replay outside the verify
     scope left layer 1's state off the AR's at rare positions (prealgebra/1640, relative 39-40). REF2's AR and its
     checks run in decode_verify; a 1-row AR commit is a full accept and replays nothing."""
+    lazy = any(e is not None and (getattr(e, "_ref2_lz_c", None) is not None or _lz_form(e) == 3) for e in cache) or \
+        any(isinstance(p, (list, tuple)) and len(p) == 3 for p in (snapshot_states or ()))
+    if lazy:                                           # LAZY COMMIT (off: no entry is ever in the 3-leaf form)
+        snapshot_states, wins = _lz_commit_pre(self, cache, snapshot_states, int(verified_tokens))
     if not _ON[0] or not CFG["commit_phase"]:
-        return _ORIG["commit"](self, cache, snapshot_states, keep_tokens=keep_tokens, verified_tokens=verified_tokens)
-    from mtplx.attention_context import attention_phase, model_forward_kind
-    with attention_phase("decode_verify"), model_forward_kind("target_verify"):
-        return _ORIG["commit"](self, cache, snapshot_states, keep_tokens=keep_tokens, verified_tokens=verified_tokens)
+        ok = _ORIG["commit"](self, cache, snapshot_states, keep_tokens=keep_tokens, verified_tokens=verified_tokens)
+    else:
+        from mtplx.attention_context import attention_phase, model_forward_kind
+        with attention_phase("decode_verify"), model_forward_kind("target_verify"):
+            ok = _ORIG["commit"](self, cache, snapshot_states, keep_tokens=keep_tokens, verified_tokens=verified_tokens)
+    if lazy:
+        _lz_commit_post(cache, wins, ok, int(keep_tokens), int(verified_tokens))
+    return ok
 
 def apply():
     """install the patches (idempotent) and switch them on"""

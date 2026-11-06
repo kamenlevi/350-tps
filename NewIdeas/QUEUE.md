@@ -11,11 +11,39 @@
 ## flattered by prompt copying (its answers re-emit the prompt's signature and docstring), so code gains are given per set.
 Tags: [K] = measured, [P] = priced from measured parts, [G] = a guess. 45 = the 45 GB line, 12 = the 12 GB line.
 
+TODAY'S MEASURED 45 GB CODE NUMBER (pending the same-scores gate): 113.9 tok/s [K, BigMoE data/fnx/fnx_report.txt;
+re-derived by NewIdeas Fri 08:1x]. That is the FAST all-in + FAST-NAX on 12 HumanEval, C 224, the steady-state geo mean,
+A-B-B-A (passes 112.7 / 115.0), with no freezes.
+- Against qall's 97.5 (passes 98.1 / 96.9): +16.8 % (+14.9 to +18.7 % over the pass pairings). Cycle ~108 -> ~91 ms.
+- Kept 10.36 vs 10.55 per check (-1.8 %): BETWEEN by the pre-registered line (kept within 1 %). It joins tonight's stack
+  (the orchestrator's call: the kept drop is NAX6-N's own numerics, and the tok/s includes it). Its gate is the
+  same-scores run.
+- HumanEval is flattered by prompt copying.
+
 MEASURED (quality measured; speed measured or priced):
 1. RELAX ship, B on code + E on chat (45). Speed [K, EvalSuite RESULT 8797f54, C 160, paired]:
    - B: tok/s x1.49 HumanEval+, x1.32 math, x1.54 agent;
    - E: tok/s x1.46 IFEval.
 > (a quote from the project owner, kept private)
+   ROUTED Fri 08:0x (the Thu 08:5x rule, plus the orchestrator's 08:0x agent-turn scope). B's drift re-check: PASS [K,
+   EvalSuite runner 45: pooled long-row KLD q4 / q1 0.82, line <= 1.5, 16 rows]. E8: KILL [K: IFEval 84.0 vs REF2-T's
+   90.0 %, -6.0 pt, McNemar 0 / 6, p 0.03; E without HC8 scored 87.0, PASS].
+   - CODE AND MATH ANSWERS: FAST ships B with HC8 (tok/s x1.49 HumanEval+, x1.32 math).
+   - AGENT TURNS (tool calls that write files): not on B. On 17 long agent writes B made 20 blunders (22.6 per 10K
+     tokens, 16 of them inside the written code); 6.7 % of its tokens left REF2-T's top token, against 1.2-1.4 % on
+     HumanEval. The gate causes it, not HC8 (arm A: 2 in 732 agent tokens; exact: 0). Agent turns run EXACT until plain
+     FAST passes the agent bar (EvalSuite's next slot). Agent turns are 92-94 % prefill (AT14), so B gave them only ~+9 %
+     per turn.
+   - CHAT: the EXACT launch. Chat's FAST is the tested E without HC8 (HC8 code-only): (i) a per-launch profile with
+     R57_HC8 off, or (ii) BigMoE's request-boundary swap, bit-checked. "Chat without R1" (HC8 on, no relax gate) is
+     untested, so it does not ship.
+   - On record: the 10 HumanEval-type long rows alone grow 4-6x from q1 to q4, at tiny KLD (q4 median 0.010, max
+     0.028). The pooled ratio is carried by the 6 agentlong rows. EvalSuite re-checks >= 20 long code rows on a
+     pre-registered code-only line; if that fails, the code part rolls back before anything is published.
+   - Every published code tok/s names this configuration, with the agent-turn limit stated beside it. Profile selection
+     is specced with BigMoE: an agent turn (tools or tool messages in the request) never gets a relax gate. v1 =
+     per-launch profiles (BigMoE 08:1x: each launch runs exactly its tested config; the request-boundary swap is
+     unmeasured, likely seconds per swap, so not for v1).
 2. Split form, split 0.99 / 0.9 on QOM-KEEP (45). Quality [K]: map code PASS, 0.92 / 1.31 % (HumanEval-style code
    windows); VERDICT2 non-tie 0.51 / 0.78 % PASS. Chat control [K, Fri 01:4x, all 36 windows]: split 0.99 IFEval 6.01 /
    multi 5.15 % (BETWEEN / BETWEEN), split 0.9 8.10 / 6.73 % (BETWEEN / KILL), twin qom_0_live_ball 4.03 / 3.26 % (PASS):
@@ -31,6 +59,10 @@ MEASURED (quality measured; speed measured or priced):
    split 0.99 vs qall, after the FLAT cuts bring the cycle to <= ~80 ms. The tile price above was ~2-3x too high:
    37-51 % fewer groups cut only 5-6 ms. Leap's step 0 puts the experts at 57 ms of GPU at 16 rows (11.1 at 2 rows),
    so their time is mostly per-row work, not per-group weight reads.
+   RE-TEST TRIGGER MOVED Fri 08:0x (Leap's part B): that per-row cost belongs to 3c-N's kernel (+3.25 ms per row, ~2x
+   its read floor at 16 rows). FAST-NAX's time follows its bytes (+0.98 per row, at or under the floor), and fewer
+   groups means fewer bytes. So re-test split 0.99 vs qall ON FAST-NAX (Leap's QOM-SPLIT-1C + NH-1C form) after
+   BigMoE's FAST-NAX A/B, not after the FLAT cuts.
 3. DRAFT17 (45 / 24 / 12): in the stack. Code bytes [P] x0.706 at 24 GB, x0.742 at 12 GB (HumanEval-style windows);
    quality PASS [K].
 
@@ -66,6 +98,59 @@ MEASUREMENTS THAT GATE THE PLAN (no gain themselves):
   (item 2). At 3.0 ms per row (16 rows = 48 ms), 250 needs FLAT <= 8 / 12 / 20 ms at K 14 / 15 / 17 per 16-row
   check. A per-row cut has to come
   from the expert kernel's per-row work (Leap's step 0 part B bench prices it), not from fewer groups.
+- 300 BUDGET LINE (45, HumanEval code). Kamen Fri 07:2x (via the orchestrator): 45 GB -> 300 tok/s is THE priority. The
+  orchestrator's budget, re-derived by NewIdeas Fri 07:3x from the measured pieces: 300 tok/s = 3.33 ms per kept token,
+  so K 14 per 16-row check needs a 46.7 ms cycle = dense 12 + experts 25 + draft 5 + SSD ~0, with 4.7 ms left over.
+
+  | piece (ms per check) | today | budget | cut | what it takes (Leap's part B, 87c9009) |
+  |---|---|---|---|---|
+  | dense GPU (flat in rows) | ~36 [K] | 12 | -24 (x0.33) | The time sits in ks-1 narrow GEMVs (out_proj / o_proj at 81 GB/s, a\|b, k\|v, shared gate\|up) and the 12-chunk SDPA fallback (3.2). Shape fixes -12 -> ~24 [P]; DN-KS (ks per shape) is -7.74 of them [K, Leap's microbench 7ebf2d7; engine FLAT A/B next]; every kernel at 220 GB/s -> 16-17; 12 needs ~250 GB/s and ~1/3 of today's kernels. Leap's realistic target this round: 16-20 |
+  | SSD + other waits | ~18 (SSD busy 13.2 [K]) | ~5 | -13 | the misses hidden: never-wait / prefetch (item 4) |
+  | experts, 16 rows | 3c-N ~60 [K] all-resident (~35.6 [P] on real QOM code) | 25 | the kernel switch | FAST-NAX ~25 [K] all-resident (+0.98 ms per row vs +3.25): the budget is met there. Real blocks: the engine A/B cut the cycle ~108 -> ~91 ms (-17) [K, 12 HumanEval, C 224] |
+  | draft | 9.1 [K] | 5 | -4 | DRAFTOFF prices -1.4..-1.7; the rest from the drafter's own pass (projections' floor ~1.7-1.9) |
+  | cycle | 98.5 [K] | 46.7 | x0.47 | |
+  | K per 16-row check | 9.38 [K] | 14 | x1.49 | the drafter track (D98) |
+
+  - Sources: dense and experts = Leap's part B (dense of a 2-row check, flat in rows; experts at 2 / 16 rows: 3c-N ~17
+    / ~60, FAST-NAX ~14 / ~25); ~1.94 ms per row on real QOM blocks for 3c-N (FAR, via Leap); draft = FLAT-2; SSD =
+    BigMoE's sqall screen (C 224, 12 HumanEval); cycle and K = ZERO's C 208 read; SSD + other = the cycle minus the
+    other pieces.
+  - One dependent sync point costs ~1.6 us, so the kernel count is worth only ~2-6 ms per check: the dense lever is the
+    narrow GEMVs' shapes (DN-KS first), not the count.
+  - So: at today's K 9.38 the budget cycle gives 201 tok/s. 300 needs K >= 14 (12.6 with no slack), so kernel work
+    alone cannot reach 300. At the budget cycle, 250 needs K 11.7 and 330 needs K 15.4.
+  - With Leap's realistic dense 16-20 and every other piece at budget: a 50.7-54.7 ms cycle. Then K 14 gives 256-276
+    tok/s (inside the 250-330 publish band), 300 needs K 15.2-16.4 of 17, and today's K gives 171-185.
+  - CORRECTED Fri 08:0x: the experts row said "also 5-13 % fewer expert bytes". That held only for 3c-N. FAST-NAX
+    reaches ~25 ms at 16 rows, so the expert budget needs the kernel switch, not fewer bytes.
+  - MEASURED Fri 08:1x, BigMoE's FAST-NAX engine A/B on real blocks: the cycle went ~108 -> ~91 ms (-17) at K 10.55 ->
+    10.36 [K]. With 3c-N's real-block expert term at ~35.6 [P], FAST-NAX's sits at ~19 [P], under the 25 budget. What
+    is left for 300: the dense pass, the SSD + other waits, the draft, and K.
+  - Correct this line again from Leap's DN-KS FLAT A/B.
+
+GPU ORDER, Fri 6 -> Sat 7 Nov (set by NewIdeas Fri 08:0x at the orchestrator's request; goal: by Saturday morning, the
+stacked code number AND whether it is publishable). Every owner sizes its chunk from its own path's measured times and
+ends it by the next item's start.
+- Today to 15:00:
+  1. BigMoE's FAST-NAX engine A/B (quiet, 12 HumanEval, C 224), now. Then Leap's DN-KS FLAT A/B (quiet, ~6 min).
+  2. MTP Head's PORT, as armed (after BigMoE's lock). It ends or yields by 12:30.
+  3. EvalSuite's 20-min smoke in the first gap: beside PORT under a share lock if both fit in memory, else right after it.
+  4. EvalSuite's agent check (plain FAST, no gate, 17 agentlong turns, 2 orders, ~2.5 h; PASS = 0 blunders) on
+     NAX6-N (env 6c08636, R57_QOM_SETS with agentlong; the orchestrator 08:1x). Start by 12:30 so it ends by 15:00. If it cannot start by 12:30,
+     it runs Saturday by day as the only big job. It ranks last today: agent turns are 92-94 % prefill, so it decides
+     only a few % per agent turn, and agent turns default to EXACT, so the publish does not wait on it.
+- Tonight, Sat 00:30 -> ~10:00:
+  1. BigMoE's stacked FAST palindrome on 12 HumanEval: today's all-in vs all-in + every lever that passes today
+     (FAST-NAX, DN-KS, CD16, FASTTAX att_single, lazy commit if wanted), plus FAR-G1. FAST-NAX is in (its BETWEEN on
+     record). BigMoE writes the winning stack's env to ~/BigMoE/data/stack/stack_env.txt for EvalSuite.
+  2. EvalSuite: ONE same-scores run (decision 4 vs REF2-T) on exactly that stack, code and math on the CODE profile
+     (stack + B with HC8), plus the code drift top-up (40 HumanEval+ problems, >= 1K tokens, ~1.5 h; PASS = blunders
+     <= 1 per 10K AND pooled q4 KLD <= 0.02 AND no row's q4 > 0.05, else RELAX's code part rolls back). IFEval rows
+     run the chat profile that would ship (stack + E without HC8) only if BigMoE's HC8-off launch exists by then;
+     otherwise chat stays EXACT and needs no run. Bisect only on a fail.
+  3. Breakthrough's map: never-wait first (the 45 GB SSD-wait lever), then T1, then the 8 leftover 24 GB arms.
+  4. EvalSuite runner 46's F1 rest (~2.5 h) only if it fits; otherwise the next night, unless F1 gates the publish.
+- Fable B's v2 (ks / tile plans per shape) lands by ~11:00 and feeds Leap's next builds.
 
 12 GB LINE: no lossy tok/s of my own records. Today's 12 GB exact line is 40.8 tok/s (the likely first, in an 11.35 GB
 footprint). Breakthrough + Fit12 own the line. Items 2, 4 and 9 carry over to 12 GB with unpriced pool effects; DRAFT17

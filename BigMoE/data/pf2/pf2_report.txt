@@ -1,0 +1,11 @@
+PRE-FLIGHT (sat; data/pf2): HumanEval/68 + ifeval/1220, CAP 32, C 160 uniform, r57_screen_fast.py
+pq   FAIL NO runs.json; log clean
+pi   FAIL NO runs.json; no log
+pp   FAIL NO runs.json; no log
+pt   FAIL NO runs.json; no log
+pn   FAIL NO runs.json; no log
+pr   FAIL ran 18 / 2; rlx MISSING; tok/s 50 / 34 / 41 / 43 / 51 / 48 / 47 / 50 / 56 / 55 / 52 / 54 / 21 / 33 / 20 / 18 / 21 / 21; no log
+ps   FAIL NO runs.json; no log
+prs  FAIL NO runs.json; no log
+pk   FAIL NO runs.json; no log
+pki  FAIL NO runs.json; no log

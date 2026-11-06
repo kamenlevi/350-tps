@@ -113,7 +113,8 @@ PICK = (("humaneval", "humaneval/HumanEval/68"), ("math", "math500/test/prealgeb
 # R57_PROMPTS=6 R57_TAG=r55l runs only those arms on S45's six prompts and writes data/r57/r55l_screen.txt
 ARMS_ = tuple(os.environ.get("R57_ARMS", "slot,gate,gate+pf").split(","))
 PICK = PICK[:int(os.environ.get("R57_PROMPTS", "2"))]
-SETOF = {"humaneval": "humaneval", "math500": "math", "gsm8k": "math", "ifeval": "ifeval", "multi": "multi", "agent": "agent"}
+SETOF = {"humaneval": "humaneval", "math500": "math", "gsm8k": "math", "ifeval": "ifeval", "multi": "multi", "agent": "agent",
+         "agentlong": "agentlong"}   # Fri 08:2x: EvalSuite's dec_agentlong (FAST there needs R57_QOM_SETS=...,agentlong)
 if os.environ.get("R57_KEYS"):                           # an explicit prompt list ("set/key,..." or '+'-joined inside c45_runner's
     PICK = tuple((SETOF[k.split("/")[0]], k) for k in os.environ["R57_KEYS"].replace("+", ",").split(","))   # arm lists)
 TAG = os.environ.get("R57_TAG", "r57")
@@ -199,7 +200,8 @@ if FAST:
     # R57_QOM_TAIL=4 (LSB reads for kept ranks 2-9, the map's tested C) is not built. Not with REF2_OOO_1C (-2 base slots).
     _QT = float(os.environ.get("R57_QOM_THR", "0.0"))
     assert os.environ.get("R57_QOM_TAIL", "3") == "3", "R57_QOM_TAIL=4 (LSB reads for kept ranks 2-9) is not built yet"
-    FASTARMS["QOM"] = {s_: _S(thr=_QT, q1u=True, t3=True, qom=True) for s_ in ("humaneval", "ifeval", "multi")}
+    FASTARMS["QOM"] = {s_: _S(thr=_QT, q1u=True, t3=True, qom=True) for s_ in   # R57_QOM_SETS (Fri 08:1x, EvalSuite's agent
+                       os.environ.get("R57_QOM_SETS", "humaneval,ifeval,multi").split(",")}   # check): agent sets run exact unless listed
     if FAST == "QOM":
         sys.path.insert(0, "/Users/kamen/Breakthrough/keepset")
         import qom_keep as QK                            # read-only: Breakthrough's module
