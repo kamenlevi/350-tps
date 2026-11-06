@@ -54,6 +54,13 @@ def span_rows(rxc, scan, dtexts, atexts):
     return rows, pre
 
 
+def may_touch(scan, dtexts):
+    """v2 (Fri 2026-11-06): can any row of this block be inside a comment? CodeScan opens a comment only on a '#' it is fed,
+    so if the tagger is not in one at the block start and no draft holds a '#', span_rows would return no rows: skip it.
+    Exactly equivalent (test_relax_v2.py checks it on every recorded check)."""
+    return bool(scan.com) or any("#" in t for t in dtexts)
+
+
 def span_k(dr, am, dlm, drk, rows, rule=DEFAULT_RULE, fast_ok=None):
     """(k, relaxed rows): the leading kept drafts and the rows kept only by rule C. Row j is kept when dr[j] == am[j], or
     fast_ok(j) (the arm's own R57_FAST rules), or j in rows and rule_ok(rule, dlm[j], drk[j]). With rows empty and no

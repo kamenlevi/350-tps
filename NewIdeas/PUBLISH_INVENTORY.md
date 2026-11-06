@@ -51,12 +51,13 @@ To fix before the freeze (NewIdeas):
 | 45 GB | EXACT (NAX6-N) | ref14, 13-14 prompts | 49.9 [K, quiet, C 192, NATIVE-FRI run 2] | certified exact reference (Part 1 + 2 PASS, Thu 5 Nov) | stands |
 | 45 GB | FAST (FAST-NAX all-in) | 12 HumanEval | 113.9 [K, quiet, C 224, palindrome] | same-scores: tonight's run on the stack | pending tonight |
 | 45 GB | FAST stack (+ DN-KS, lazy, D7BNAX_32, att_single; no CD16) | 12 HumanEval | 132.6 [K, quiet, C 224, palindrome, Sat 00:2x] | same-scores (runner 49 gates stackb, below) | measured |
-| 45 GB | FAST stackb (the stack + B's comment rule + g2 copy) at C 256 | 12 HumanEval | 144.9 [K, quiet, palindrome 145.5 / 144.3, lifetime peak 42.8 GB; +46 % vs qall 99.1] | runner 49's same-scores + 2 long-code top-ups (at C 160 / 192: more QOM skipping than C 256, so conservative); CERT at the release C | pending runner 49 |
+| 45 GB | FAST stackb (the stack + B's comment rule + g2 copy) at C 256 | 12 HumanEval | 144.9 [K, quiet, palindrome 145.5 / 144.3, lifetime peak 42.8 GB; +46 % vs qall 99.1]; 142.4 in the S2 A/B (~1.7 % run to run) | runner 49's same-scores + 2 long-code top-ups (at C 160 / 192: more QOM skipping than C 256, so conservative); CERT at the release C | pending runner 49 |
+| 45 GB | stackb + S2 (SB 2, D7BNAX_32=2, DSUB / SVH) at C 256 | 12 HumanEval | 146.8 [K, quiet A/B vs 142.4: +3.1 %, peak 42.8 GB] | S4's gate (QOM run-to-run tokens differ, so no token route) | pending S4 |
 | 45 GB | FAST + RELAX B (code and math answers) | HumanEval+ / math | x1.49 / x1.32 vs the exact control [K, paired, C 160] | decision 4 PASS; drift PASS as registered | stands; tonight's top-up can roll it back |
 | 45 GB | chat | IFEval | E x1.46 [K, paired] | E PASS alone; E + HC8 KILL (84 vs 90) | ships EXACT until E runs without HC8 |
 | 45 GB | agent turns | 17 long agent turns | - | AGENTFAST FAIL (85 blunders; QOM-KEEP carries it) | ships EXACT (stated limit) |
 | 45 GB | FAST | 12 MBPP | 71.3 [K, qall, C 224] | none on MBPP yet | coverage check tonight |
-| 12 GB | VERIFIED GREEDY (not exact: 2-4-row verify calls round differently from one-token decoding) | HumanEval | 18.4-18.9 [K, 4 runs mixed; clean run Sat morning] | deterministic; not bit-exact; the ~12x comparison withdrawn | stands as verified greedy, with that label |
+| 12 GB | VERIFIED GREEDY (not exact: 2-4-row verify calls round differently from one-token decoding) | 16 HumanEval | 18.42 decode geo mean [K, 12GB-CLEAN Sat 00:28, alone, quiet; pooled 18.47; 13.66 with prefill; lifetime peak 11.144 GB] | deterministic (outputs = kp2's 16 / 16); not bit-exact; the ~12x comparison withdrawn | stands as verified greedy, with that label |
 | 12 GB | FAST (top-2, theta 0.95) | HumanEval | ~36 [P, modelled] | map code PASS 1.22 %; the 12 GB FAST arm's T0 same-scores was KILL on 5 Nov (HumanEval+ 80.0 vs 91.7, IFEval 84 vs 90; T1039) | needs a measured run + a new same-scores (map STEP0-P1C queued Sat night) |
 | 12 GB | FAST (theta 0.8, t80ck2) | HumanEval | 38.7-40.3 [K] | map code KILL 1.63 % | not releasable |
 

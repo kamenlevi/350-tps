@@ -373,6 +373,14 @@ ends it by the next item's start.
   3. EvalSuite's runner 49 (~4 h: same-scores on BigMoE's code_env, both drift top-ups, MBPP coverage): it starts once
      the "Verdict stacked FAST" line is in BigMoE's sat_report, Leap's run is done and Fit12's DONE file exists, or 30
      min after the verdict line at the latest. If Fit12 missed its gap, it takes the gap after runner 49.
+     Sat 00:51-00:54: it started (after the orchestrator touched code_env.txt; its mtime was before the runner's 00:30
+     EARLIEST), then VOIDED and stopped. Its provenance check found 12 loaded modules that are BigMoE's untracked
+     sat_night freeze copies (data/r57/snap/frozen_sat/*, relax_span.py), not 5e41177's. Fix asked 00:57: BigMoE commits
+     the snapshot (or gives a manifest), EvalSuite re-pins and restarts. The same check would hit S4 / CERT, so the S5
+     freeze gets committed. nw3_first.sh fired on runner 49's pid ending, so nw3's 3 code arms took the gap (~00:55).
+     FIXED 00:57: BigMoE pinned the snapshot (5fecd8f). EvalSuite restarted runner 49 (58d1ad9): its git check skips the
+     data/r57/snap freeze, and every loaded module's sha256 (frozen_sat included) is in per-process manifests pinned
+     across processes. It waits for nw3 on memory. Runner 53 (CERT reference decodes) is queued behind it (END 16:00).
   4. Breakthrough's map, nw3 first (S1's input): beside runner 49 under a share lock if memory allows, else right
      after it. Then step 0, then T1 (xs has no engine kernel yet). The 24 GB arms move to Sunday night.
   5. EvalSuite's CERT reference decodes (~1.5 h, NAX6-N): right after runner 49, beside the map if memory allows.
@@ -423,6 +431,10 @@ ends it by the next item's start.
       svh_extra 3; footprint peak 38.6 GB. Leap's repeat of SB 2 vs SB 4 gave -1.3..-2.0 ms, so the range with 23:4x's run is
       -1.3..-3.6 ms per 16-row cycle. BigMoE's A/B (stackb at C 256 vs + S2) settles it. It takes the next quiet slot:
       before runner 49 if BigMoE is ready, else runner 49's first chunk boundary (45-min chunks).
+      RESULT Sat 00:4x (BigMoE d9debf9, C 256, quiet, 12 HumanEval palindrome): PASS +3.1 %, 146.8 vs 142.4 (re-derived
+      x1.031), cycle -1.3 ms, peak 42.8 GB. Tokens S2 vs B matched on 7-10 of 12, but B1 vs B2 matched on only 7 / 12 (QOM
+      run to run), so token equality cannot clear any S-item. S2 joins S4's gate (data/stack/stackb_s2_env.txt). stackb
+      itself read 142.4 here vs 144.9 in the ticket (~1.7 % run to run), so S5's palindrome sets the number.
   S2b. ENGINE ITEMS WITH NUMBERS (the orchestrator Sat 00:3x: "combine what we have"; sources: Fable B's DENSE_REBUILD.md
       sections 2, 0b and 5, and kernels/eprep.py). Leap builds and benches; BigMoE runs one bundle A/B. Prices are per
       16-row check [P, Fable B's fill model]. Fable B's own small-kernel prices ran ~2x high on Friday (section 0b), so
@@ -449,6 +461,35 @@ ends it by the next item's start.
       - The router on qmm16c8 (-0.6) stays parked: it can flip routes on near-ties.
       - Count S2b at [G] until Leap's step 1: a ~5-min quiet in-situ pricing of the HC / k3c / in_proj / attention
         pieces, unsynced. Leap warns the HC "excess" rests on synced per-piece timing and may mostly vanish.
+      - STEP 1 RESULT Sat 00:42-00:44 (Leap, quiet, C 224, SB 2, stack env). Each piece is stubbed in the 16-row
+        dense-only forward (base 21.85 ms wall, ~20.5 GPU; 4 rounds x 12 forwards, interleaved). Saved, wall / GPU ms:
+        - HC reads, both: 6.82 / 11.3 (attention-side 5.05 / 6.3, MLP-side 2.37 / 2.9).
+        - HC write: 3.58 / 3.3.
+        - GDN: 7.45 / 10.1, of which in_proj is 4.22 / 5.9.
+        - Attention: 3.53 / 4.3. MoE block (router + shared): 1.36 / 1.6. PLE: 0.62 / 0.75.
+        - Big stubs push the forward toward its CPU build, so their wall deltas are lower bounds.
+      - CORRECTION Sat 00:5x (Leap): the stub breaks the GPU's barrier chain. MLX's concurrent encoder puts a barrier only
+        where a kernel reads a buffer an earlier kernel wrote, and the stub returns old buffers. So the next layer's
+        kernels overlap with the work before them, and every delta above is an inflated UPPER BOUND, not a price. It is
+        worst for small pieces on the layer-to-layer chain: the HC write's 3.58 ms is a ~3 us kernel plus the chain it
+        broke. The step 1b slot re-runs it with a barrier-preserving stub, its calibration and a D5 on / off check.
+      - Verdicts per item:
+        - a' DROPPED. Folding the MLP write into the next attention read is D5 (REF2_HC_PEND=1, Wed 11-04): bitwise, but
+          KILLed as a speed lever (write + next read 85.4 -> 83.0 us; +0.3 us with R-73's compiled write on). The 8.6 vs
+          2.4 ms behind it was the broken barrier chain. I queued a' without checking the owner records first.
+        - c KILL: in_proj is 4.22 in situ vs ~4.1 chained, so there is no excess.
+        - d: inside attention's 3.53 ms; priced from the chained bench.
+        - f REAL: R-83 (the stack's gdn_inproj_x) runs qkv|z and b|a as two calls. So the GDN a|b fold saves one launch
+          per GDN layer, and the k|v -> q fold also applies. Leap benches both chained (bitwise vs the unfolded call at the
+          same ks).
+        - e and b: their own benches follow.
+      - STEP 1B RESULT Sat 00:54-00:56 (Leap, quiet, barrier kept: calibration minus stub, 16-row dense-only, wall per
+        check):
+        - HC reads 4.3 (attention-side 2.12; MLP-side, including the folded attention write, 2.20). HC write 0.14 (the
+          depends stub had said 3.44). Attention 3.38. GDN 7.65, of which in_proj 4.63. MoE dense part 1.17.
+        - D5 on vs off saves 0.04.
+        - a KILL: the reads cost 4.3 in place vs 5.95 chained, so the "8.6 in situ" was synced accounting. c stays KILL.
+        - S2b now rests on e (eprep) and f (the two folds); Leap's fold bench is next (chained, under a share lock).
   S2c. IN-LOOP EXCESS (Leap's lead from tonight's 132 checks, the orchestrator Sat 00:4x; possibly bigger than S1 + S2).
       Leap's fit: check + commit = 57.9 + 0.76 x gate service (r 0.77). So at zero service a real 16-row check + commit
       costs ~58 ms, but the same forward run back to back is ~45 ms and the commit ~0.5 ms. That leaves ~11-13 ms per
@@ -462,6 +503,61 @@ ends it by the next item's start.
         Last call 14:00, then post-freeze.
       - The same fit prices S1's ceiling at ~0.76 x gate service: ~3 ms on tonight's warm prompt, ~10.6 ms at ~14 ms of
         service. BigMoE's NW v3 A/B tests it on the 12-prompt set.
+      - STEP 1 RESULT Sat 00:4x (Leap): BETWEEN.
+        - The excess reproduces: check 6's own block runs back to back in 48.6-49.1 ms vs the loop's check + commit
+          59-63, so ~9 ms at zero gate service (>= 8).
+        - No mechanism holds >= 6 ms yet. "A new expert set per forward" is ruled out: alternating with check 5's block,
+          or cycling checks 4-6, moves the block by only +0.3..+0.6 ms.
+        - The 16-row commit is bimodal: ~0.47 ms on most checks, 4.6-5.2 ms on ~1/3 (GDN replay), ~2 ms on average.
+        - Drafts are host-synced before the check (r57 line 1005), so the drafter cannot spill into it.
+        - Step 1b (granted, ~3 min quiet, next boundary): per-piece sync inside a live check, then the same block synced
+          right after; the per-piece difference names where the ~9 ms goes.
+      - STEP 1B RESULT Sat 00:54-00:56 (Leap): still BETWEEN, but the excess is LOCATED.
+        - Check 6, synced per piece: live 68.42 ms vs the same block replayed right after 58.40 (59.18 after the
+          alternating forwards), so +10.0 ms live.
+        - moe_pre (the router + shared expert before the expert call) takes +5.85 of it: 10.02 vs 4.17, i.e. ~209 vs
+          ~87 us per layer. The same ops run slower live.
+        - The rest: GDN +1.52 (likely the lazy commit's replay), experts +1.37 (gate service), attention +0.93, HC ~0.
+        - 5.85 sits just under the 6 ms line, and the mechanism is not proven.
+        - Two candidates: (1) the loader's background reads (look-ahead prefetch, miss reads) during the live check;
+          (2) CPU contention on the encode (the loader thread at user-interactive priority on the P-cores).
+      - Step 1c, REVISED Sat 01:0x (Leap). The prefetch-off arm is moot: r57's set_arm drops bm["next"] for the stack's
+        arm (gate+t; only the +pf arms prefetch ahead), and the live check had only 2-3 misses. So the loader-reads
+        hypothesis is out.
+        - The moe_pre excess is uniform: +0.09..+0.16 ms in each of the 48 layers (median 0.121; live ~0.34 vs replay
+          ~0.22 ms per layer). 0.12 ms is one GPU round trip (0.131-0.141 by calibration). So the live check pays about
+          one extra synchronisation per MoE layer before the expert call.
+        - NewIdeas' candidate, RULED OUT by Leap's code check (Sat 01:1x): the gate's host readback of the router ids.
+          At decode widths the gated path has none: post_ids and spin_wait are lazy GPU ops, and tier.py:312's np.array is
+          the sync / prefill path only. moe_pre is also timed before the post, so a readback would show in "experts".
+        - The run (Leap, ~4 min, next grant) has three arms: base, BIGMOE_SSD_KEEPALIVE_US=0, and R57_VTIER= (BigMoE's
+          suggestions). Each repeats step 1b at real check 6 with thread CPU per piece. An arm NAMES the cause if its live -
+          replay moe_pre excess falls by >= 4 ms vs base (>= 0.08 ms per layer). Keepalive is a +12 % lever in the EXACT
+          default, so if it is the cause, a FAST-only engine A/B decides the trade.
+      - STEP 1C RESULT Sat 01:03-01:06 (Leap, quiet, check 6, thread CPU per piece): keepalive and VTIER are NOT the cause.
+        - moe_pre live - replay: base +5.65, keepalive off +5.90, VTIER off +5.56 ms; none falls by >= 4.
+        - Live vs replay totals, synced: 65.8 / 64.4 / 65.1 vs 55.2 / 52.2 / 55.7 ms.
+        - moe_pre per layer: wall +0.117..+0.122 ms, CPU +0.030..+0.031 (on the 0.03 boundary). So ~75 % of it is
+          non-CPU waiting and ~25 % more CPU.
+        - NEW: across the whole forward, the Python thread spends ~20 % more CPU on identical code live. GDN 5.11 vs
+          4.00, attention 5.49 vs 4.57, MoE block 15.2 vs 12.4: +5.0..5.4 ms of the ~10.5 ms excess.
+        - So about half of S2c is the CPU running the same code slower, and half is waiting.
+        - Suspect: core placement or clock. The main thread runs at default QOS and may lose P-core time to loader_main,
+          which spins at user-interactive on a P-core.
+      - Step 1d (granted, ~3 min quiet, next boundary): (q) the Python thread raised to QOS user-interactive
+        (pthread_set_qos_class_self_np, a harness switch; a per-thread hint inside our own process, not a system
+        setting); (i) BIGMOE_IDLE_MS=0.5 (the loader naps when idle).
+        - Line: an arm names the cause if live - replay falls by >= 4 ms in total.
+        - Also reported per arm: gate service / experts, and any heat / PAUSE flag.
+        - A named cause becomes a lever only through BigMoE's engine A/B at C 256: PASS >= +4 %, KILL < +1.5 %, last
+          call 14:00. If (q) holds, the fix is a one-line QOS call in r57.
+        - The run (~3 min quiet): step 1b with thread CPU per synced piece, live vs replay. Pre-registered "extra wait":
+          live - replay wall >= 0.08 ms per layer with |CPU live - CPU replay| <= 0.03 ms. More CPU live instead means
+          encode contention.
+        - The unsynced price needs a direct A/B once the sync is found. S0's GPU-idle read (2.5-3.6 ms per cycle at
+          SB 2) is its floor, unless the 40 ms util sampling hides sub-ms gaps.
+        - Fix space if confirmed: decide QOM's skip on the GPU (a residency bitmap), and read back to the host only
+          when a rank 0-1 expert is cold (2-3 per check).
   (Map order, re-timed Fri 23:3x: nw3 first (S1's input), then step 0, then T1 (xs has no engine kernel yet, so it
   cannot ship Saturday). The 24 GB arms move to Sunday night.)
   S3. PARKED Sat 00:2x (the orchestrator and Leap). Leap measured it directly at SB 2: the Python thread uses 38.9-40.9 ms
@@ -539,9 +635,12 @@ ends it by the next item's start.
   ordinary verified speculative decoding: the greedy argmax from 2-4-row verify calls, all ten ranks read. It is
   deterministic, but 2-4-row calls round differently from one-token decoding, and near-tie tokens follow the draft
   pattern. The ~12x claim against the published exact run is withdrawn (not like-for-like).
-- The 12 GB verified-greedy loop runs 18.4-18.9 tok/s on HumanEval [K: T3t 18.9 and T3R 18.42 quiet, kp2 18.58 share;
-  four runs and prompt subsets mixed]. The 11.39 GB lifetime footprint came from a six-arm process. A clean run is
-  slotted Saturday morning.
+- 12GB-CLEAN RESULT Sat 00:3x (Fit12 ex16, 00:28-00:32, quiet, alone, rc 0; PLAN_12GB_90_fit12.md; re-derived by NewIdeas):
+  18.42 tok/s decode geo mean on all 16 HumanEval prompts. Pooled it is 18.47 (3,456 tokens in 187.11 s); per-prompt
+  range 17.16-20.30; 13.66 end to end with prefill. Lifetime peak 11.144 GB (under 12). Outputs equal kp2's on 16 / 16.
+  This is the 12 GB release number for the verified-greedy loop (not exact).
+- Earlier: 18.4-18.9 tok/s on HumanEval [K: T3t 18.9 and T3R 18.42 quiet, kp2 18.58 share; four runs and prompt
+  subsets mixed]. The 11.39 GB lifetime footprint came from a six-arm process.
 - The 40.8 quoted before as "the 12 GB exact line" is T3R2's t80ck2, which is FAST. It commits pass-1-certified rows
   (theta 0.8, cf 0.9) without the exact check (= the exact loop on 5 of 16 prompts in kp2), and the map scored that
   setting a code KILL (1.63 % vs the 1.34 % line).

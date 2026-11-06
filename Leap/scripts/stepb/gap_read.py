@@ -73,12 +73,22 @@ def main(argv):
                           f"{meta.get('inproj')}, PLE {meta.get('ple')}{'; ERROR ' + meta['error'] if meta.get('error') else ''}")
                     bw = med(ab["base"]["wall"])
                     bu = busy(ab["base"]["win"])
+                    W_, G_ = {}, {}
                     for v in meta.get("names", []):
                         d_ = ab[v]
                         w_, b_ = med(d_["wall"]), med(d_["build"])
                         u_ = busy(d_["win"])
-                        print(f"      {v:7s} wall {w_:6.2f} ms (build {b_:5.2f}{', CPU-bound' if b_ > 0.9 * w_ else ''}): piece = {bw - w_:+6.2f} ms "
-                              f"of wall; GPU busy {u_:3.0f} % -> GPU {u_ / 100 * w_:5.2f} ms, piece = {bu / 100 * bw - u_ / 100 * w_:+6.2f} ms of GPU")
+                        W_[v], G_[v] = w_, u_ / 100 * w_
+                        print(f"      {v:10s} wall {w_:6.2f} ms (build {b_:5.2f}{', CPU-bound' if b_ > 0.9 * w_ else ''}): vs base {bw - w_:+6.2f} ms "
+                              f"of wall; GPU busy {u_:3.0f} % -> GPU {u_ / 100 * w_:5.2f} ms, vs base {bu / 100 * bw - u_ / 100 * w_:+6.2f} ms of GPU")
+                    for v in meta.get("names", []):      # the barrier-preserving price: cal:P (real + zero term) - P (stub + term)
+                        if ":" in v or v in ("base", "d5") or f"cal:{v}" not in W_:
+                            continue
+                        print(f"      PRICE {v:7s} (barrier kept) = wall(cal) - wall(stub) = {W_['cal:' + v] - W_[v]:+6.2f} ms of wall, "
+                              f"{G_['cal:' + v] - G_[v]:+6.2f} ms of GPU; the zero term itself costs {W_['cal:' + v] - bw:+5.2f} ms"
+                              + (f"; the old depends stub said {bw - W_['dep:' + v]:+5.2f}" if f"dep:{v}" in W_ else ""))
+                    if "d5" in W_:
+                        print(f"      D5 (REF2_HC_PEND fold on) vs base: {bw - W_['d5']:+6.2f} ms of wall saved")
                 s2 = pr.get("s2c")
                 if s2:                                   # S2c step 1: the check's own block alone vs alternating blocks
                     print(f"    S2C at check {pr['check']} ({s2['rows']} rows; previous blocks {s2['prev']} rows):")
@@ -93,6 +103,55 @@ def main(argv):
                             parts.append(f"block {p_}: wall {med([d_['wall'][i] for i in ii[1:]]):.2f} (build "
                                          f"{med([d_['build'][i] for i in ii[1:]]):.2f}), misses {sum(d_['miss'][i] for i in ii):.0f}")
                         print(f"      {lab:5s} ({len(d_['wall'])} forwards; the first per block dropped): " + "; ".join(parts))
+                    if s2.get("live_seg") and s2.get("replay_seg"):   # step 1b: the live check vs its block replayed, per piece
+                        sync = d["meta"].get("sync_ms", 0.13)
+
+                        def by_kind(seg):
+                            o_ = {}
+                            for kind, L_, b_, e_ in seg:
+                                o_[kind] = o_.get(kind, 0.0) + max(0.0, e_ - sync)
+                            return o_
+
+                        def by_layer(seg):
+                            o_ = {}
+                            for kind, L_, b_, e_ in seg:
+                                if L_ is not None:
+                                    o_[L_] = o_.get(L_, 0.0) + max(0.0, e_ - sync)
+                            return o_
+                        lv, r1, r2 = by_kind(s2["live_seg"]), by_kind(s2["replay_seg"]), by_kind(s2.get("replay_seg2") or [])
+                        print(f"      STEP 1b per piece, synced (ms; live check / its block replayed right after / again after the "
+                              f"alternating forwards; live - replay): total {sum(lv.values()):.2f} / {sum(r1.values()):.2f} / "
+                              f"{sum(r2.values()):.2f}")
+                        for k_ in sorted(set(lv) | set(r1), key=lambda k: -(lv.get(k, 0) - r1.get(k, 0))):
+                            print(f"        {k_:8s} {lv.get(k_, 0):7.2f} / {r1.get(k_, 0):7.2f} / {r2.get(k_, 0):7.2f}   {lv.get(k_, 0) - r1.get(k_, 0):+6.2f}")
+                        ll, l1 = by_layer(s2["live_seg"]), by_layer(s2["replay_seg"])
+                        top = sorted(ll, key=lambda L_: -(ll[L_] - l1.get(L_, 0)))[:6]
+                        print("        layers with the largest live - replay: " + ", ".join(f"L{L_} {ll[L_] - l1.get(L_, 0):+.2f}" for L_ in top))
+                        if s2.get("live_cpu") and s2.get("replay_cpu"):   # Sat 01:2x: the thread's CPU per piece (build + eval)
+                            def cpu_kind(cl):
+                                o_ = {}
+                                for kind, L_, cb, ce in cl:
+                                    o_[kind] = o_.get(kind, 0.0) + cb + ce
+                                return o_
+
+                            def per_layer(seg, kind, cpu=False):
+                                o_ = {}
+                                for row in seg:
+                                    if row[0] == kind:
+                                        o_[row[1]] = o_.get(row[1], 0.0) + ((row[2] + row[3]) if cpu else max(0.0, row[3] - sync))
+                                return o_
+                            cl, cr = cpu_kind(s2["live_cpu"]), cpu_kind(s2["replay_cpu"])
+                            print("        thread CPU per piece (ms; live / replay; live - replay): " + ", ".join(
+                                f"{k_} {cl.get(k_, 0):.2f} / {cr.get(k_, 0):.2f} ({cl.get(k_, 0) - cr.get(k_, 0):+.2f})"
+                                for k_ in sorted(set(cl) | set(cr), key=lambda k: -abs(cl.get(k, 0) - cr.get(k, 0)))))
+                            wl, wr = per_layer(s2["live_seg"], "moe_pre"), per_layer(s2["replay_seg"], "moe_pre")
+                            cl_, cr_ = per_layer(s2["live_cpu"], "moe_pre", True), per_layer(s2["replay_cpu"], "moe_pre", True)
+                            dw = [wl[L_] - wr.get(L_, 0) for L_ in wl]
+                            dc = [cl_.get(L_, 0) - cr_.get(L_, 0) for L_ in wl]
+                            ok_w, ok_c = med(dw) >= 0.08, abs(med(dc)) <= 0.03
+                            print(f"        moe_pre per layer: live - replay wall median {med(dw):+.3f} ms, CPU median {med(dc):+.3f} ms -> "
+                                  + ("EXTRA WAIT (wall >= 0.08, CPU flat)" if ok_w and ok_c else
+                                     ("ENCODE CONTENTION (CPU rises)" if ok_w and med(dc) > 0.03 else "neither line")))
                 for key_ in ("full16", "dense16"):
                     dn = pr.get(key_)
                     if not dn:

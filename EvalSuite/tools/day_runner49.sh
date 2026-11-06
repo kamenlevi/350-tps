@@ -73,8 +73,8 @@ import hashlib, json, subprocess, sys
 mods, bm, c = json.load(open(sys.argv[1]))["modules"], sys.argv[2], sys.argv[3]
 bad, n = [], 0
 for name, (f, sha) in sorted(mods.items()):
-    if not f.startswith(bm + "/") or f.endswith(".so"):
-        continue
+    if not f.startswith(bm + "/") or f.endswith(".so") or f.startswith(bm + "/data/"):   # data/r57/snap: BigMoE's own freeze
+        continue                                                                          # (untracked; the manifest pin covers it)
     rel = f[len(bm) + 1:]
     r = subprocess.run(["git", "-C", bm, "show", f"{c}:{rel}"], capture_output=True)
     n += 1

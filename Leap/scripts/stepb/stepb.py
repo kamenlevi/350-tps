@@ -14,6 +14,11 @@ sys.path.append(HERE)
 import flat2_driver
 import flat2_patch
 
+if os.environ.get("STEPB_QOS") == "1":                   # S2c (Sat 01:1x): the decode thread at QOS user-interactive (as
+    import ctypes                                        # BigMoE's loader_main), so the scheduler keeps it on a P-core
+    _qrc = ctypes.CDLL("/usr/lib/libSystem.B.dylib").pthread_set_qos_class_self_np(0x21, 0)
+    print(f"[stepb] main thread QOS user-interactive: rc {_qrc}", flush=True)
+
 assert os.environ.get("R57_PRESET") == "45", "step B runs on the 45 GB preset: use run_stepb.sh (or set the arm's env)"
 F2_CFG = flat2_driver.config()
 os.makedirs(F2_CFG["out"], exist_ok=True)

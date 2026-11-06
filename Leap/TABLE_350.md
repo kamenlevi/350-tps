@@ -8785,3 +8785,130 @@ order S3 (the CPU-side lever) against S1, and for NW v3's ceiling priced against
   - BigMoE applied the diff in its r57_screen_fast.py (97a23bf). S2's speed + token-equality A/B is BigMoE's.
 - **Data:** data/stepb/gap_xpt.txt, gpu_util_xpt.txt; out/stepb_bstackF_224_xpt2* / xpt4* / xptp* (+ _prof.txt);
   data/s2wire/s2smoke.log, data/s2wire/r57/s2smoke_*.
+
+## S2b STEP 1 (in-situ price per dense piece) + S2c STEP 1 (own block vs alternating) (Leap, Sat 2026-11-07 00:42-00:44, quiet)
+NewIdeas' QUEUE f270dee lines. C 224, SB 2 (S2's PASS), stack env (bstackF), ioreg sampler. Tools: STEPB_ABL / STEPB_S2C
+(flat2_probe._abl_probe / _s2c_probe; the memo stub is unit-tested in test_abl.py).
+- **S2b step 1.** The 16-row dense-only forward (every expert call returns zeros) at the 2-row probe check 8. 4 rounds x
+  12 timed forwards per variant, interleaved. Each variant stubs one piece: its first call runs for real and is kept;
+  later calls return the kept outputs through mx.depends on every input. Base: wall 21.85 ms, build 15.32, GPU busy 94 %.
+
+| stubbed piece | wall saved (ms) | GPU saved (ms, busy % x wall) | note |
+|---|---|---|---|
+| HC reads, both (96 calls) | 6.82 | 11.3 | variant runs at 61 % busy, near its CPU build: wall is a lower bound |
+| HC read, attention side (48) | 5.05 | 6.3 | ~105 us per layer |
+| HC read, MLP side (48), with the attention write folded in | 2.37 | 2.9 | ~49 us per layer |
+| HC write, MLP side (_hyper_residual_write, 48) | 3.58 | 3.3 | ~75 us per layer |
+| GDN in_proj (36) | 4.22 | 5.9 | ~117 us per call vs ~113 chained: no excess |
+| GDN whole (36, incl. in_proj) | 7.45 | 10.1 | |
+| attention whole (12) | 3.53 | 4.3 | ~294 us per layer |
+| MoE block, dense part (router + shared, 48) | 1.36 | 1.6 | |
+| PLE (1) | 0.62 | 0.75 | |
+
+  - **CORRECTED Sat 01:1x: these deltas are UPPER BOUNDS, inflated by the stub itself.**
+    - mx.depends keeps the graph order. But MLX's concurrent encoder puts a barrier only where a kernel reads a buffer
+      that an earlier kernel wrote. The stub's kept outputs are old buffers, so the consumers stop waiting for the
+      stubbed piece's inputs and overlap with the work before it: the serial chain breaks.
+    - Small pieces on the layer-to-layer chain are hit hardest. The HC write's "3.58 ms" is a ~3 us compiled kernel
+      plus the broken chain.
+    - Fix: a barrier-preserving stub (the kept output plus a zero term read from the inputs' buffers), calibrated by
+      adding the same term to the real piece.
+  - ~~The HC machinery costs ~10.4 ms; lead a': fold the MLP write into the next attention read (8.6 vs 2.4 ms).~~
+    **Withdrawn:** a' is D5 (REF2_HC_PEND=1, section "D5", Wed 11-04): bitwise, KILLed as a speed lever. Isolated
+    write + next read went 85.4 -> 83.0 us, or +0.3 us with R-73's compiled write on.
+  - (c) in_proj nt 2: in situ equals chained, so there is no excess to win: KILL.
+  - The FULL / DENSE probes of the same block: wall 44.53 (GPU ~35.8) / 21.87 (GPU ~18.8) ms.
+- **S2c step 1 (real probe pass, check 6, 16 rows): BETWEEN.**
+  - The check's own block back to back: wall 48.57 / 49.14 ms (same / same2, 0 misses).
+  - Alternating with check 5's block: own 48.84. Cycling checks 4 / 5 / 6: own 49.22. So "a new expert set per forward"
+    adds +0.3..+0.6 ms only: not the mechanism. The previous blocks themselves ran 43.9-45.5 ms (103 / 121 misses on their
+    first touches).
+  - The loop's check+commit at SB 2 is 59.1-63.0 ms (real passes 2 / 3 / commit), or ~57.9 at zero gate service (the
+    SVC fit). So the excess reproduces at ~9 ms (>= 8), but no mechanism >= 6 ms is named yet.
+  - The 16-row commit (stage pass, synced) is bimodal: ~0.47 ms on most checks, 4.6-5.2 ms on ~1/3 (a GDN replay); ~2 ms
+    on average.
+  - r57 host-syncs the drafts before the check (`dr = np.array(pth[0]).tolist()`), so the drafter cannot spill into it.
+  - Step 1b: per-piece synced timing inside the live check vs the same block replayed synced right after. The sync cost
+    is the same in both, so the difference names the pieces that carry the loop's excess.
+- **Data:** data/stepb/gap_s2.txt, gpu_util_s2.txt, out/stepb_bstackF_224_s2b*.
+
+## S2b STEP 1 REDONE (barrier kept) + S2c STEP 1b (live check vs its block replayed, per piece) (Leap, Sat 2026-11-07 00:54-00:56, quiet)
+C 224, SB 2, stack env. The ablation now uses the barrier-preserving stub (`bar`: the kept output plus a zero term read
+from every input's buffer) and its calibration (`cal`: the real piece plus the same term). Price = wall(cal) - wall(bar).
+Both modes are unit-tested (test_abl.py).
+- **S2b prices, in place, barrier kept (16-row dense-only, per check):**
+
+| piece | price, wall ms (GPU ms) | the old depends stub said |
+|---|---|---|
+| HC read, attention side (48) | 2.12 (2.33) | 5.05 |
+| HC read, MLP side, incl. the folded attention write (48) | 2.20 | 2.37 |
+| HC write, MLP side (48) | 0.14 (-0.03) | 3.44 |
+| attention (12) | 3.38 (2.42) | 3.53 |
+| GDN (36), incl. in_proj | 7.65 (10.5) | 7.45 |
+| GDN in_proj (36) | 4.63 (5.98) | 4.22 |
+| MoE dense part: router + shared (48) | 1.17 (2.02) | 1.36 |
+| D5 fold on (REF2_HC_PEND) | +0.04 saved | - |
+
+  - Verdicts:
+    - (a) HC in-loop excess: KILL. In place the reads cost 4.3 ms vs 5.95 chained; the "8.6 in situ" was synced
+      accounting.
+    - a' = D5: no gain (as on Wed 11-04).
+    - (c) in_proj: KILL. S2b rests on (e) eprep and (f) the folds.
+  - The zero term costs 0.0-0.6 ms per variant (cal vs base). GPU-ms estimates from busy % are noisy for the small
+    pieces; wall is the price.
+- **S2c step 1b (real probe pass, check 6, 13 rows): the live check synced per piece vs the same block synced right
+  after (and again after the alternating forwards):** totals 68.42 vs 58.40 (59.18) ms, i.e. **+10.0 ms live.**
+
+| piece | live | replay | replay 2 | live - replay |
+|---|---|---|---|---|
+| moe_pre (router + shared expert, evaluated before the expert call) | 10.02 | 4.17 | 4.43 | **+5.85** |
+| gdn | 11.91 | 10.39 | 10.32 | +1.52 |
+| experts | 27.42 | 26.05 | 26.39 | +1.37 |
+| att | 6.43 | 5.51 | 5.50 | +0.93 |
+| hc_w / hc_a / hc_m / hc_f / moe / ple | | | | ~0 each |
+
+  - moe_pre is BigMoE's tier._call: shared expert + softmax(gate) + argpartition + sort, the same ops live and in the
+    replay. Live they take ~209 us per layer vs ~87: the same ops run slower in the loop.
+  - Candidates:
+    - (1) the loader's background reads during the live check (look-ahead prefetch d = 1-3, miss reads). The replay
+      has nothing to read.
+    - (2) CPU contention on the encode: loader_main runs at user-interactive priority on a P-core, and synced timing
+      includes the encode.
+  - GDN's +1.5 fits the lazy commit's GDN replay; experts' +1.4 is gate service.
+  - Unsynced, the own block back to back is 47.95 / 48.24 ms; alternating blocks 48.10 / 48.24 (own); the loop's
+    check+commit 59.0-62.7.
+  - **Verdict vs the line: BETWEEN.** The excess reproduces at ~10 ms (>= 8). The location holds 5.85 ms (just under
+    6), and its mechanism is not proven.
+  - Next: step 1b with the look-ahead prefetch off (BigMoE's switch), plus XPT's CPU vs wall around moe_pre.
+- **Data:** data/stepb/gap_s2b.txt, gpu_util_s2b.txt, out/stepb_bstackF_224_s2b2*.
+
+## S2c STEP 1b ARMS: keepalive / VTIER, and the thread's CPU per piece (Leap, Sat 2026-11-07 01:03-01:06, quiet)
+C 224, SB 2, the stack env. Real check 6: the live check synced per piece vs its block replayed synced right after, now
+with the thread's CPU per piece (time.thread_time at every wrapper stamp). One process per arm (BigMoE's suggestions).
+NewIdeas' line: an arm names the cause if its moe_pre live - replay falls by >= 4 ms vs base.
+
+| arm | total live / replay (ms) | moe_pre live - replay | moe_pre per layer: wall / CPU (live - replay) | experts live - replay |
+|---|---|---|---|---|
+| base | 65.77 / 55.21 | +5.65 | +0.117 / +0.031 | +1.71 |
+| BIGMOE_SSD_KEEPALIVE_US=0 | 64.36 / 52.21 | +5.90 | +0.122 / +0.030 | +3.31 |
+| R57_VTIER= (no tier copies) | 65.13 / 55.73 | +5.56 | +0.117 / +0.030 | +1.51 |
+
+- **Neither switch is the cause** (no fall >= 4 ms). Look-ahead prefetch is off under gate+t, and the gated path has no
+  host readback (post_ids / spin_wait are lazy GPU ops).
+- **New: the Python thread spends ~+20 % more CPU on identical code in the live check**, on every piece.
+
+  | piece | thread CPU live (ms) | thread CPU replay (ms) |
+  |---|---|---|
+  | GDN | 5.11 | 4.00 |
+  | attention | 5.49 | 4.57 |
+  | MoE block | 15.2 | 12.4 |
+  | HC pieces | +0.1..+0.2 over the replay | |
+  | whole forward ("layer") | 33.3 | 27.8 |
+
+  - So ~half of the ~10.5 ms excess is the same Python and encode running slower, and the other half is waiting.
+  - In moe_pre itself ~75 % of the excess is non-CPU waiting (+0.09 ms per layer) and ~25 % CPU.
+- The same code ~20 % slower on the CPU points at core placement or clock: the decode thread runs at default QOS while
+  BigMoE's loader_main spins at user-interactive on a P-core.
+- Next (step 1c): arms STEPB_QOS=1 (the decode thread at QOS user-interactive; pthread_set_qos_class_self_np, tested rc
+  0) and BIGMOE_IDLE_MS=0.5 (the loader naps when idle), and both.
+- Data: data/stepb/gap_s2c.txt, out/stepb_bstackF_224_s2c_{base,ka0,vt0}*.

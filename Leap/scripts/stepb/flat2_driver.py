@@ -43,6 +43,7 @@ def one_pass(ns, H, ids, arm, fset, mode, label, at=(), real_cap=0):
     2 rows (maxd 1, cut t ~0) unless real_cap: then the engine's own blocks (its t cut, up to 16 rows) for real_cap tokens"""
     say, clock = ns["say"], ns["time"].time
     H.new_pass(mode, at)
+    H.real_pass = bool(real_cap)                         # S2c step 1b: the live per-piece sync runs in real-block passes only
     w0_ = clock()                                        # step B: wall stamps of the pass (GPU-utilization sampler join)
     ns["F2ON"][0] = mode != "meas"
     del ns["F2C"][:]                                     # run() stamps each cycle's start and the loop's end here

@@ -58,22 +58,47 @@ def _rewrap(mx, o, deps):
     return o
 
 
-def _memo(mx, fn, ids, store=None):
-    """S2b's stub: the first call per (instance, input shapes) runs fn and keeps its evaluated outputs; later calls return
-    them depending on every input array (upstream work stays in the graph, fn's own kernels are gone). ids: the
-    instances to stub when fn is a method (others pass through); None for a module function."""
+def _zero_from(mx, ins):
+    """a float32 scalar 0 computed FROM every input's buffer (a 1-element read of each): adding it to an output makes
+    the output's kernel wait for the inputs on the GPU (MLX's encoder puts a barrier only on a real buffer read)"""
+    return mx.concatenate([x.reshape(-1)[:1].astype(mx.float32) for x in ins]).sum() * 0.0
+
+
+def _add_zero(mx, o, z):
+    if isinstance(o, mx.array):
+        return o + z.astype(o.dtype)
+    if isinstance(o, tuple):
+        return tuple(_add_zero(mx, x, z) for x in o)
+    if isinstance(o, list):
+        return [_add_zero(mx, x, z) for x in o]
+    return o
+
+
+def _memo(mx, fn, ids, store=None, mode="dep"):
+    """S2b's stub: the first call per (instance, input shapes) runs fn and keeps its evaluated outputs. ids: the
+    instances to stub when fn is a method (others pass through); None for a module function. Later calls, by mode:
+      dep  the kept outputs through mx.depends on every input (Sat 00:5x; WRONG as a price: consumers read old buffers,
+           so MLX's concurrent encoder drops the barrier and the chain overlaps; an upper bound only)
+      bar  the kept outputs + a zero read from every input's buffer (_zero_from): the chain stays serial; the piece's
+           own kernels are gone, a few tiny ones are added (priced by cal)
+      cal  the REAL piece + the same zero term: what bar adds, so piece = wall(cal) - wall(bar)"""
     store = {} if store is None else store
 
     def w(*a, **kw):
         if ids is not None and (not a or id(a[0]) not in ids):
             return fn(*a, **kw)
         ins = _flat(mx, list(a[1:] if ids is not None else a)) + _flat(mx, kw)
+        if mode == "cal":
+            o = fn(*a, **kw)
+            return _add_zero(mx, o, _zero_from(mx, ins)) if ins else o
         key = (id(a[0]) if ids is not None else 0, tuple(tuple(x.shape) for x in ins))
         if key not in store:
             o = fn(*a, **kw)
             mx.eval(_flat(mx, o))
             store[key] = o
             return o
+        if mode == "bar":
+            return _add_zero(mx, store[key], _zero_from(mx, ins)) if ins else store[key]
         return _rewrap(mx, store[key], ins)
     w.__wrapped__ = fn
     return w
@@ -168,8 +193,19 @@ class Hooks:
         gated = fz is not None and (fz["thr"] is not None or fz["copy"])
         self.full = dict(dr=list(L["dr"]), fk=L.get("fk_"), sq=L.get("sq_"), cg=list(L["cg_"]) if gated else None,
                          c16=L.get("c16"), R_=L.get("R_", 16))
+        if S2C and getattr(self, "real_pass", False) and not L.get("mtp"):   # S2c step 1b: the LIVE check synced per piece (the same
+            self._live_saved = self._seg_install()               # wrappers as the probe's synced replay of its block)
+            self.SEG["rec"] = []
+            self.SEG["on"] = True
 
     def before_commit(self, L):
+        if getattr(self, "_live_saved", None) is not None:   # S2c step 1b: the live check is done: keep its pieces
+            self.SEG["on"] = False
+            self._seg_remove(self._live_saved)
+            self._live_saved = None
+            self.live_seg = [list(x) for x in self.SEG["rec"]]
+            self.live_cpu = [list(x) for x in self.SEG.get("cpu", [])]
+            self.SEG["rec"] = []
         n = len(L["kept"]) + 1                           # this check, 1-based
         if self.mode == "probe" and n in self.at and not L.get("mtp"):
             self.rec["probes"].append(self._probe(L, n))
@@ -208,13 +244,20 @@ class Hooks:
 
     # ------------------------------------------------------------ the synced pass's wrappers (C0's seg_install)
     def _seg_install(self):
-        ns, SEG, clock = self.ns, self.SEG, self.clock
+        ns, SEG, clock0 = self.ns, self.SEG, self.clock
         mx, Q, lay = ns["mx"], ns["Q"], ns["lay"]
         LIDX = {id(l): i for i, l in enumerate(lay)}
         HCK = {}
         for l in lay:
             HCK[id(l.attn_hyper_connection)] = "hc_a"
             HCK[id(l.mlp_hyper_connection)] = "hc_m"
+        CPUAT = {}                                       # S2c (Sat 01:2x): the thread's CPU time at each wrapper stamp
+        SEG["cpu"] = []                                  # (kind, L, cpu ms of the build, cpu ms of the eval) per rec
+
+        def clock():
+            t = clock0()
+            CPUAT[t] = time.thread_time()
+            return t
 
         def arrs(o):
             if isinstance(o, mx.array):
@@ -225,6 +268,11 @@ class Hooks:
 
         def rec(kind, t0, t1, t2):
             SEG["rec"].append((kind, SEG["L"], 1e3 * (t1 - t0), 1e3 * (t2 - t1)))
+            c0, c1, c2 = CPUAT.pop(t0, None), CPUAT.pop(t1, None), CPUAT.get(t2)
+            CPUAT.pop(t2, None)
+            if c0 is not None and c2 is not None:
+                c1 = c0 if c1 is None else c1
+                SEG["cpu"].append((kind, SEG["L"], 1e3 * (c1 - c0), 1e3 * (c2 - c1)))
 
         KK = KB.K
         TIXL = (getattr(ns.get("st"), "_tier_idx", None) or {}).get("layers") or {}
@@ -482,10 +530,10 @@ class Hooks:
         i.e. the piece's own kernels are gone and nothing else changes. The wall delta vs base = the piece's in-situ cost
         (valid while the forward stays GPU-bound: compare build vs wall). Unix stamps per window for the sampler."""
         ns = self.ns
-        mx, lay, Q = ns["mx"], ns["lay"], ns["Q"]
+        mx, lay, Q, ref2 = ns["mx"], ns["lay"], ns["Q"], ns["ref2"]
 
-        def memo(fn, ids):
-            return _memo(mx, fn, ids)
+        def memo(fn, ids, mode):
+            return _memo(mx, fn, ids, mode=mode)
 
         gl = [l for l in lay if l.is_linear]
         al = [l for l in lay if not l.is_linear]
@@ -504,24 +552,39 @@ class Hooks:
              "gdn": [cls([l.linear_attn for l in gl])],
              "moe": [cls([l.mlp for l in lay])],
              "ple": [cls(pl)] if pl else []}
-        names = ["base"] + [v for v in ABL.split(",") if v in V and V[v]]
+        SPEC = {}                                        # variant -> (mode, specs); "<mode>:<piece>", a bare piece = bar,
+        for tok_ in [t_ for t_ in ABL.split(",") if t_]:  # "d5" = ref2's D5 fold on (CFG hc_pend_mlp) with no stub
+            if tok_ == "d5":
+                SPEC[tok_] = ("cfg", [("cfg", "hc_pend_mlp", True)])
+                continue
+            mode_, piece = tok_.split(":", 1) if ":" in tok_ else ("bar", tok_)
+            if mode_ in ("bar", "cal", "dep") and V.get(piece):
+                SPEC[tok_] = (mode_, V[piece])
+        names = ["base"] + list(SPEC)
 
-        def install(specs):
+        def install(v):
             sv = []
+            mode_, specs = SPEC.get(v, ("bar", []))
             for sp in specs:
                 if sp[0] == "cls":
                     for T_ in sp[1]:
                         sv.append((T_, "__call__", T_.__call__, "__call__" in vars(T_)))
-                        T_.__call__ = memo(T_.__call__, sp[2])
-                else:
+                        T_.__call__ = memo(T_.__call__, sp[2], mode_)
+                elif sp[0] == "mod":
                     _, obj, name = sp
                     sv.append((obj, name, getattr(obj, name), name in vars(obj)))
-                    setattr(obj, name, memo(getattr(obj, name), None))
+                    setattr(obj, name, memo(getattr(obj, name), None, mode_))
+                else:                                    # ("cfg", key, value): a ref2 switch for this variant only
+                    _, key, val = sp
+                    sv.append((ref2.CFG, key, ref2.CFG.get(key), "cfg"))
+                    ref2.CFG[key] = val
             return sv
 
         def uninstall(sv):
             for obj, name, old, own in reversed(sv):
-                if own:
+                if own == "cfg":
+                    obj[name] = old
+                elif own:
                     setattr(obj, name, old)
                 else:
                     delattr(obj, name)
@@ -540,7 +603,7 @@ class Hooks:
                 t_.__call__ = zstub
             for _ in range(ABL_R):
                 for v in names:
-                    sv = install(V.get(v, []))
+                    sv = install(v)
                     try:
                         fwd([tok] + dr_, m_)                 # fills the variant's memo (real pieces, evaluated)
                         fwd([tok] + dr_, m_)
@@ -609,6 +672,7 @@ class Hooks:
             d = stats() - s0
             return lg_, dict(rows=len(rows), build=1e3 * (t1 - t0), wall=1e3 * (t2 - t0), miss=int(d[0]), io=1e3 * float(d[1]),
                              seg=[list(x) for x in SEG["rec"]] if synced else None,
+                             cpu=[list(x) for x in SEG.get("cpu", [])] if synced else None,
                              krec=[list(x) for x in KB.K["rec"]] if synced == "k" else None,
                              kskip=KB.K["skip"] if synced == "k" else None)
 
@@ -621,7 +685,14 @@ class Hooks:
                 w.append(r_)
             res["warm"] = w
             if S2C and len(real) > 2:                    # S2c step 1 at a real check: its own block back to back, then
-                res["s2c"] = self._s2c_probe(fwd, real, rmask)   # alternating with the previous checks' blocks
+                live_ = getattr(self, "live_seg", None)  # alternating with the previous checks' blocks; step 1b: the
+                livec_ = getattr(self, "live_cpu", None)  # live check per piece vs its block replayed synced (+ thread CPU)
+                self.live_seg = self.live_cpu = None
+                r1_ = fwd(real, rmask, True)[1]
+                res["s2c"] = self._s2c_probe(fwd, real, rmask)
+                r2_ = fwd(real, rmask, True)[1]
+                res["s2c"].update(live_seg=live_, replay_seg=r1_["seg"], replay_seg2=r2_["seg"], live_cpu=livec_,
+                                  replay_cpu=r1_.get("cpu"), replay_cpu2=r2_.get("cpu"))
                 raise _SkipRest
             if not self.dot["res"] or self.dot["rows"] != len(real):
                 self.dot.update(on=self.dot.get("done2") is None, rows=len(real))

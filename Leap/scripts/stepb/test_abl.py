@@ -65,6 +65,27 @@ finally:
     Piece.__call__ = orig
 
 
+for mode in ("bar", "cal"):                              # Sat 01:2x: the barrier-preserving stub and its calibration
+    Piece.__call__ = FP._memo(mx, orig, {id(p1)}, mode=mode)
+    try:
+        a = p1(mx.exp(x0))                               # bar: 1st call real; cal: always real (+ the zero term)
+        mx.eval(a)
+        h = mx.exp(x0 + 1.0)
+        b = p1(h)
+        lb = labels(list(b))
+        if mode == "bar":
+            check("bar: the output reads the input's buffer (Exp -> Slice -> Multiply x 0 -> Add) and not the piece "
+                  "(no Sin / Matmul)", {"Exp", "Slice", "Multiply", "Add"} <= lb and not any(
+                      ("Sin" in s) or ("Matmul" in s) for s in lb))
+            check("bar: values == the kept outputs", all(bool(mx.array_equal(u, v).item()) for u, v in zip(b, ref)))
+        else:
+            check("cal: the real piece runs (Sin in the graph) with the zero term", any("Sin" in s for s in lb) and "Add" in lb)
+            check("cal: values == the real outputs of this input", all(bool(mx.allclose(u, v).item())
+                                                                    for u, v in zip(b, orig(p1, h))))
+    finally:
+        Piece.__call__ = orig
+
+
 def fn(x, y):
     return x * y + 1.0
 
