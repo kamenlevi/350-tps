@@ -348,3 +348,8 @@ Verdicts are from results; ADOPTED only where the live default runs it (REF2 / R
 - 2026-11-06 08:50 GDN-CHUNK v2 (Fable B's redraft, RB 8 / 4): bits ok, time KILL (149-183 vs 91-93 us at S 16): chunk form dead for the check. WIDE-NT: in_proj ks 2 -13 % (-0.5..-0.7 ms/check), nt no help.
 - 2026-11-06 09:02 QMM32 (Leap): 32-row qmm16c (weights read once) == halves bitwise; -0.44 ms/propose vs halves, -3.0 vs MLX; staged D7BNAX_32=2.
 - 2026-11-06 09:03 GDN-STEP3 (Fable B's ablations): KILL by its gate (no simd_sum / const k,q do not speed the 16-row step); suspect per-step global loads.
+- 2026-11-06 09:12 GDN-STEP3 prefetch ablation: bitwise, best -7 % (line 25 %): STOP; mlx_lm's step kernel stays. Installed ref2 438d4774 (REF2_DN_KS=2) + d7b_nax d9e32317 (D7BNAX_32=2), off by default.
+- 2026-11-06 09:19 v2 engine A-B-A (Leap, quiet): D7BNAX_32=2 (qmm32c) PASS, draft -0.75 ms/cycle (propose -0.85); REF2_DN_KS=2 VOID (A arms drifted 2.1 ms; microbench says -0.5).
+- 2026-11-06 09:29 NEVER-WAIT engine form in ref2's one-call (Leap): built and bit-checked (warm == off bitwise; FORCE / cold == ordinary-call reference; layer 47 rule; off == live one-call), installed off by default (ref2 84d0ab40; REF2_NEVERWAIT arms, ref2.NW_ON per pass). Speed A/B pending (BigMoE, Sat night).
+- 2026-11-06 09:36 DN-KS v2 by in-process TOGGLE A/B (Leap, quiet): BETWEEN, -0.25 ms/2-row check (line -0.3); keep REF2_DN_KS=1. TOGGLE tool (alternating passes in one process) resolves ~0.2-0.3 ms.
+- 2026-11-06 09:41 NEVER-WAIT v2 (Leap): FAST-NAX skipped pairs at -2 (no read) instead of slot 0; bit checks PASS; staged, lands only if tonight's ceiling passes.

@@ -15,7 +15,7 @@ class Ext:
 
 
 B = types.SimpleNamespace(CFG={}, V3F="fake")
-T3 = types.SimpleNamespace(_K2=[False], _K1U=[0], _M3=[False], _PF2=[0], PHLOG=[None])
+T3 = types.SimpleNamespace(_K2=[False], _K1U=[0], _M3=[False], _PF2=[0], PHLOG=[None], _TOPK=[0], CAL=[None])   # _TOPK / CAL: Thu 5 Nov fields (added Fri 6 Nov)
 
 
 def generate(B_, model, draft, DF, ids, cap, th, stop_ids=None, log=None, **kw):

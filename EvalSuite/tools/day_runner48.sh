@@ -26,7 +26,10 @@ export EVALSUITE_DEADLINE=$CUTOFF
 export PEER_QUEUE_TIMEOUT=21600
 R3IDX=$HOME/BigMoE/models/bare/records3/index.json
 BM=$HOME/BigMoE
-BMC=9c82d1d
+BMC=fce0e55
+REFMAN=results/agentfast/es_af_fwd5_modules.json   # the reference manifest: Leap 03a63c5, BigMoE fce0e55 (Fri 09:3x)
+FZ=$HOME/EvalSuite/snap/r57frz-af1                 # tools/freeze_r57.py FZ REFMAN 03a63c5 fce0e55 (Fri 09:4x): the outside code, frozen
+SCREEN=$FZ/BigMoE/scripts/r57_screen_fast.py
 QOMSO=ff69fa24a745
 KEYS="agentlong/edit00,agentlong/edit01,agentlong/edit02,agentlong/edit03,agentlong/edit04,agentlong/edit05,agentlong/edit06,agentlong/edit07,agentlong/edit08,agentlong/edit09,agentlong/edit10,agentlong/write11,agentlong/write12,agentlong/write13,agentlong/write14,agentlong/write15,agentlong/write16"
 RKEYS=$(echo "$KEYS" | tr ',' '\n' | tail -r | paste -sd, -)
@@ -97,6 +100,56 @@ pin() {
     ls "$HOME/BigMoE/.venv/lib/python3.12/site-packages" | grep -E '^(mlx|mlx_lm|mlx_metal|mtplx)-.*dist-info$'; } 2>&1 \
     | shasum | cut -c1-12
 }
+ext_pin() {     # every external module of the reference manifest still has its sha (BigMoE, Leap, TrainLab, Breakthrough, MoonShots)
+  python3 - "$REFMAN" <<'EXT'
+import hashlib, json, sys
+m = json.load(open(sys.argv[1]))["modules"]
+T = ("/BigMoE/", "/Leap/", "/TrainLab/", "/Breakthrough/", "/MoonShots/")
+bad = [f for f, s in m.values() if any(t in f for t in T) and hashlib.sha256(open(f, "rb").read()).hexdigest()[:12] != s]
+sys.exit(1 if bad else 0)
+EXT
+}
+man_same() {    # a process's manifest: the same external modules, same shas, as the reference (else VOID)
+  python3 - "$REFMAN" "$1" <<'MS'
+import json, sys
+T = ("/BigMoE/", "/Leap/", "/TrainLab/", "/Breakthrough/", "/MoonShots/")
+ext = lambda p: {k: s for k, (f, s) in json.load(open(p))["modules"].items() if any(t in f for t in T)}
+a, b = ext(sys.argv[1]), ext(sys.argv[2])
+d = sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))
+print(f"external modules: {len(b)}, equal to the reference: {len(b) - len(d)}" + (f"; DIFFERENT: {d}" if d else ""))
+sys.exit(1 if d else 0)
+MS
+}
+frz_pin() {     # the frozen tree unchanged (FREEZE.json's shas) and the live-but-pinned modules (MoonShots' tierglu) as REFMAN
+  python3 - "$FZ/FREEZE.json" "$REFMAN" <<'FP'
+import hashlib, json, sys
+fz, ref = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))["modules"]
+sh = lambda f: hashlib.sha256(open(f, "rb").read()).hexdigest()[:12]
+bad = [n for n, r in fz["modules"].items() if r.get("frozen", 1) is not None and sh(r["path"]) != r["sha"]]
+bad += [n for n, (f, s) in ref.items() if "/MoonShots/" in f and sh(f) != s]
+bad += [] if sh(fz["screen"]) == fz["screen_sha"] else ["screen"]
+print("frozen tree / pinned live modules: " + ("OK" if not bad else f"CHANGED {bad}"))
+sys.exit(1 if bad else 0)
+FP
+}
+frz_loaded() {  # a process's manifest: every outside module from the frozen tree with FREEZE.json's sha, tierglu as REFMAN,
+  python3 - "$FZ/FREEZE.json" "$REFMAN" "$1" <<'FL'   # and the same outside modules as REFMAN (none missing, none extra)
+import json, sys
+fz, ref, got = (json.load(open(a)) for a in sys.argv[1:4])
+T = ("/BigMoE/", "/Leap/", "/TrainLab/", "/Breakthrough/", "/MoonShots/")
+ext = lambda m: {k: v for k, v in m.items() if any(t in v[0] for t in T)}
+r, g = ext(ref["modules"]), ext(got["modules"])
+bad = sorted(set(r) ^ set(g))
+for k, (f, s) in g.items():
+    row = fz["modules"].get(k, {})
+    if "/MoonShots/" in f:
+        bad += [] if s == r.get(k, [None, None])[1] else [k]
+    elif not f.startswith(fz["fz"] + "/") or s != row.get("sha"):
+        bad.append(k)
+print(f"outside modules loaded: {len(g)}, from the freeze as recorded: {len(g) - len(bad)}" + (f"; NOT: {bad}" if bad else ""))
+sys.exit(1 if bad else 0)
+FL
+}
 gate() {        # label, MEM GB, seconds the step is estimated / measured to take: every check before a GPU step
   local w=0
   calm
@@ -105,7 +158,7 @@ gate() {        # label, MEM GB, seconds the step is estimated / measured to tak
     w=$((w + 1)); sleep 60; calm
   done
   [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }
-  bm_pin || { say "BigMoE's tree is not 6c08636 / build_qom (git diff or status, .so sha): runner stops"; exit 7; }
+  frz_pin >> "$LOG" 2>&1 || { say "the frozen tree or a pinned live module changed: runner stops"; exit 7; }
   store_ok || { say "records3 is not fully converted: runner stops"; exit 8; }
   [ "$(swapgb)" -le $(( SWAP0 + 2 )) ] || { say "swap $(swapgb) GB > $SWAP0 + 2 at the start: runner stops"; exit 3; }
   [ $(( $(date +%s) + $3 )) -le "$CUTOFF" ] || { say "$1: does not fit before 15:00 ($(( $3 / 60 )) min): runner stops"; exit 6; }
@@ -134,14 +187,14 @@ fast() {        # tag, keys, label: one FAST process (all its keys), under this 
   share_lock "evalsuite: MEM 39 GB: agent check, plain FAST $3" 90
   t0=$(date +%s)
   env "${UNSETS[@]}" "${FASTENV[@]}" R57_TAG="$tag" R57_KEYS="$keys" \
-    "$BM/.venv/bin/python" tools/r57_wrap.py "$BM/scripts/r57_screen_fast.py" "$AF/${tag}_modules.json" 224 1024 \
+    EVALSUITE_BIGMOE_CODE="$FZ/BigMoE" "$BM/.venv/bin/python" tools/r57_wrap.py "$SCREEN" "$AF/${tag}_modules.json" 224 1024 \
     > "$AF/${tag}.log" 2>&1; rc=$?
   peer unlock > /dev/null 2>&1
   d=$(( $(date +%s) - t0 ))
   say "FAST $3: rc=$rc ($((d / 60)) min)"
   cp "$BM/data/r57/${tag}_"* "$AF/" 2>/dev/null
   [ "$rc" = 0 ] && [ -s "$AF/${tag}_tokens.json" ] || { say "FAST $3 failed (results/agentfast/${tag}.log)"; return 1; }
-  bm_loaded "$AF/${tag}_modules.json" >> "$LOG" 2>&1 || { say "FAST $3: a loaded BigMoE module is not 6c08636's: VOID: runner stops"; exit 5; }
+  frz_loaded "$AF/${tag}_modules.json" >> "$LOG" 2>&1 || { say "FAST $3: an outside module did not come from the freeze: VOID: runner stops"; exit 5; }
   python3 - "$AF/${tag}_runs.json" "$AF/${tag}_modules.json" <<'ENG' >> "$LOG" 2>&1 || { say "FAST $3: not engaged (QOM / draft17): VOID: runner stops"; exit 5; }
 import json, sys
 runs = [r for r in json.load(open(sys.argv[1])) if str(r.get("key", "")).startswith("agentlong/")]
@@ -175,7 +228,7 @@ tfwin() {       # run, label: tfwin chunks until every row of the run is scored
 }
 PIN0=$(pin)
 echo $$ > results/q48.pid; trap 'rm -f results/q48.pid' EXIT
-say "runner 48 start (pid $$); code pin $PIN0; BigMoE $BMC / build_qom $QOMSO; swap $SWAP0 GB; FAST rest in chunks, tfwin, report"
+say "runner 48 start (pid $$); code pin $PIN0; frozen outside code $FZ (Leap 03a63c5, BigMoE fce0e55; reference $REFMAN); swap $SWAP0 GB; forward edits, reverse, tfwin, report"
 missing() {     # run, comma list -> the keys not yet in results/<run>/decode.jsonl
   python3 -c 'import json, os, sys
 p = os.path.join("results", sys.argv[1], "decode.jsonl")
@@ -197,7 +250,8 @@ order() {       # run, label, chunks...: each chunk's missing prompts in one pro
   done
   say "$lab: $(grep -c . "results/$run/decode.jsonl")/17 rows"
 }
-order agentfast_fwd fwd "agentlong/edit06,agentlong/edit07,agentlong/edit08" "agentlong/edit09,agentlong/edit10" \
+order agentfast_fwd fwdb "agentlong/edit00,agentlong/edit01,agentlong/edit02" "agentlong/edit03,agentlong/edit04,agentlong/edit05" \
+  "agentlong/edit06,agentlong/edit07,agentlong/edit08" "agentlong/edit09,agentlong/edit10" \
   "agentlong/write11,agentlong/write12" "agentlong/write13,agentlong/write14" "agentlong/write15,agentlong/write16"
 order agentfast_rev rev "agentlong/write16,agentlong/write15" "agentlong/write14,agentlong/write13" \
   "agentlong/write12,agentlong/write11" "agentlong/edit10,agentlong/edit09,agentlong/edit08" \

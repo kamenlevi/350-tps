@@ -1987,3 +1987,5 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 20:01:23 SCR t3cal c52 aborted at 20:00:28 (rc 134) after HumanEval/156 g1k3 (= ex, OK): 'bigmoe: 54 experts > C=47 at layer 0' = a 16-row top-4 pass 1 needs more distinct experts than the 12 GB pool's 47 slots per layer; top-3 alone next (c53)
 20:01:26 SCR t3cal start: fit_t3.py c53 arm g1k3 only (top-4 / 5 exceed C_m 47 at 16 rows: abort 20:00:28) F12_CAL=1, 16 HumanEval prompts (33 GB free, swap 8392 MB)
 20:06:32 SCR t3cal end (rc 0, 305 s, swap 8392 MB): 16 cal files
+09:42:20 SCR kp1 start: fit_t3.py kp1 arms ex,t80ck2,exd,t80ck2a,t80ck2n,t80ck2f F12_KPORTS=1, 16 HumanEval prompts (25 GB free, swap 12568 MB)
+09:43:10 SCR kp1 end (rc 127, 45 s, swap 13651 MB): 2 arm outputs

@@ -136,6 +136,7 @@ What changes (monkeypatches on MTPLX, read-only):
     SMALL-N) take a K split per shape (_dn_ks) instead of ks 1. Part B found the narrow calls K-serial; the chained bench
     (scripts/dnks_bench.py) saves 7.7 ms per 2-row check over out_proj / o_proj (ks 6), a|b (10), k / v (10), shared
     gate|up (8) and shared down (5). Bits change in the K order (<= 1 bf16 ulp per output): FAST only. COUNTS dn_ks.
+    REF2_DN_KS=2 (v2, Fri 08:5x): + in_proj qkv|z at ks 2 (scripts/wide_bench.py: -13 %), fallback ks <= 10; =1 unchanged.
   - R-83 (exact-safe, off by default): CFG["gdn_inproj_x"] is R-68's fusion without the reference change: qkv | z as ONE
     qmm16c call (N 16384; qmm16c's per-column bits do not depend on N) and b | a as ONE MLX 16-row call (N 96, below
     dense_min_n, so it stays on MLX's kernel). Every part keeps REF2-T's bits; two dispatches less per GDN layer.
@@ -218,13 +219,34 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "screened_head": os.environ.get("REF2_SCREENED_HEAD") == "1",
        "screened_head_n": int(os.environ.get("REF2_SCREENED_HEAD_N", "98304")),
        "gdn_lazy_commit": os.environ.get("REF2_GDN_LAZY") == "1",
-       "dn_ks": os.environ.get("REF2_DN_KS") == "1"}
+       "dn_ks": int(os.environ.get("REF2_DN_KS", "0") or "0"),
+       "neverwait": os.environ.get("REF2_NEVERWAIT") == "1",
+       "nw_force": os.environ.get("REF2_NW_FORCE", "")}
 _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
               kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
               fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0, ooo_1c_qom=0, nax_1cq=0, qom_split=0,
-              gdn_lazy=0, gdn_lazy_rows=0, gdn_lazy_flush=0, dn_ks=0)
+              gdn_lazy=0, gdn_lazy_rows=0, gdn_lazy_flush=0, dn_ks=0, nw_calls=0, nw_late_calls=0, nw_writes=0)
 QCNT_1C = None                                       # Fri 11-06: a list -> each one-call's post-drop work (see the notes)
+NW_ON = False                                        # NEVER-WAIT (Fri 11-06): runtime switch, read per one-call (armed by
+NWCNT = None                                         # CFG["neverwait"]); NWCNT: a list -> per one-call float32 counters
+NW_LAST = 47                                         # the last MoE layer: a cold rank 0 waits there, other late pairs drop
+NW = {"k": 0, "pend": None, "due": None, "after": False, "inj": {}}
+
+
+def NW_RESET():
+    """NEVER-WAIT: per check (r57 calls it before each verify pass): the layer counter to 0 and nothing carried over"""
+    NW.update(k=0, pend=None, due=None, after=False, inj={})
+
+
+def _nw_force():
+    """REF2_NW_FORCE 'L:e1,e2;L2:e3' -> {L: (e1, e2), ...} (test only: these groups are late whatever their residency)"""
+    out = {}
+    for part in (CFG["nw_force"] or "").split(";"):
+        if ":" in part:
+            l_, es = part.split(":", 1)
+            out[int(l_)] = tuple(int(e) for e in es.split(",") if e.strip())
+    return out
 _ROWS = [R]                                          # F1-R8: the real rows of the attention call being built (_att)
 _ORIG = {}
 _WCAT = {}
@@ -368,6 +390,7 @@ def dense_native_unconvert(model):
     return n
 
 _DNKS = {(2560, 6144): 6, (96, 2560): 10, (512, 2560): 10, (1312, 2560): 8, (2560, 640): 5}
+_DNKS2 = {**_DNKS, (16384, 2560): 2}              # DN-KS v2 (REF2_DN_KS=2): + in_proj qkv|z at ks 2 (WIDE-NT, -13 %)
 
 
 def _dn_ks(N, K):
@@ -376,12 +399,13 @@ def _dn_ks(N, K):
     latency-bound (STEP 0 PART B: out_proj / o_proj 112 us, a|b 45, k / v 48, shared gate|up 47). The 5 measured kinds
     take their best ks (scripts/dnks_bench.py, PASS 08:01: -7.7 ms per 2-row check); any other shape takes the smallest
     ks dividing K / 64 (<= 16, threadgroup memory) that gives >= 320 simdgroups. Bits change (the K order): FAST only."""
-    if not CFG["dn_ks"]:
+    v = CFG["dn_ks"]
+    if not v:
         return 1
-    ks = _DNKS.get((N, K))
+    ks = (_DNKS2 if v >= 2 else _DNKS).get((N, K))
     if ks is None:
         g, tiles, ks = K // 64, N // 32, 1
-        for k in (1, 2, 4, 5, 8, 10, 16):
+        for k in ((1, 2, 4, 5, 8, 10) if v >= 2 else (1, 2, 4, 5, 8, 10, 16)):   # v2: <= 20 KB of partials (NAX-OCC)
             if g % k == 0:
                 ks = k
                 if tiles * k >= 320:
@@ -873,6 +897,43 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
             t.pop("nolsb")
         pre_l = mx.zeros((M, 1), mx.int32)
     xin = mx.depends(x2, [shared]) if shared is not None else x2   # the shared expert first, as today's spins wait after it
+    nw = bool(NW_ON and CFG["neverwait"])
+    if nw:                                           # NEVER-WAIT (Fri 11-06, Leap; data/nw/NW_DESIGN.md): a cold DEMAND pair
+        k_ = NW["k"]                                 # (post slot -1, not QOM's optional use) runs one layer late
+        NW["k"] = k_ + 1
+        COUNTS["nw_calls"] += 1
+        late = (pre_m.reshape(M, K) == -1)
+        if qm is not None:
+            late = late & ~qm[0].reshape(M, K)
+        fz = _nw_force().get(k_)
+        if fz:                                       # test only: forced groups are late whatever their residency
+            late = late | mx.any(ids_k.reshape(M, K, 1).astype(mx.int32) == mx.array(list(fz), mx.int32).reshape(1, 1, -1),
+                                 axis=-1)
+        stall = None
+        if k_ >= NW_LAST:                            # the last MoE layer: a cold rank 0 waits, the other late pairs drop
+            rk = mx.arange(K).reshape(1, K) > 0
+            stall = late & ~rk
+            late = late & rk
+        sc2 = sc.reshape(M, K)
+        lw = mx.where(late, sc2, mx.zeros_like(sc2))
+        pm_late = mx.where(late, pre_m.reshape(M, K), 0).reshape(pre_m.shape)
+        pre_m = mx.where(late, 0, pre_m.reshape(M, K)).reshape(pre_m.shape).astype(pre_m.dtype)   # any valid slot, weight 0
+        sc = mx.where(late, mx.zeros_like(sc2), sc2).reshape(sc.shape)
+        if R4:
+            lr = late[:, :R4]
+            pl_late = mx.where(lr, pre_l.reshape(M, R4), -2).astype(pre_l.dtype).reshape(pre_l.shape)
+            pre_l = mx.where(lr, -2, pre_l.reshape(M, R4)).astype(pre_l.dtype).reshape(pre_l.shape)   # U3's no-LSB path
+        else:
+            pl_late = pre_l
+        if NWCNT is not None:                        # [late groups, late uses, late mass, layer-47 drops, layer-47 stalls, forced]
+            f32 = lambda a: a.astype(mx.float32)
+            li = mx.sort(mx.where(late, ids_k.reshape(M, K).astype(mx.int32), -1).reshape(-1))
+            ng = ((li[1:] != li[:-1]) & (li[1:] >= 0)).sum() + (li[0] >= 0)
+            NWCNT.append(mx.stack([f32(ng), f32(late.sum()), f32(lw.sum()),
+                                   f32(late.sum()) * (1.0 if k_ >= NW_LAST else 0.0),
+                                   f32(stall.sum()) if stall is not None else mx.array(0.0),
+                                   f32(mx.array(len(fz) if fz else 0))]))
+    tb, tsp = t["base"], t["sideP"]
     OC = _ooo1c()
     if nax:
         TG = BT._tier_glu_mod()
@@ -882,23 +943,35 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
             COUNTS["nax_1cq"] += 1
         else:
             f1c = OC.tier_glu_nax6n_1c if native else OC.tier_glu_nax6_1c
-        y, rs_m, _ = f1c(xin, t["base"], t["sideP"], pre_m, pre_l, ids_k, PLAN, gate.region, offs, gate.status)
+
+        def _kern(xin_, pm_, pl_, sc_):
+            y_, rs_, _ = f1c(xin_, tb, tsp, pm_, pl_, ids_k, PLAN, gate.region, offs, gate.status)
+            return (TG.combine_phase(y_.reshape(M * K, -1), y_.reshape(M * K, -1), mx.ones((M, K), mx.int32),
+                                     sc_.reshape(-1, K)), rs_)
         COUNTS["nax6_ooo"] += 1
-        if QCNT_1C is not None:
-            _qcnt_1c(rs_m, M, K, sdrop)
-        return TG.combine_phase(y.reshape(M * K, -1), y.reshape(M * K, -1), mx.ones((M, K), mx.int32),
-                                sc.reshape(-1, K)).reshape(*x.shape[:-1], -1)
-    f1c = OC.tier_glu_3cn_1c if native else OC.tier_glu_3c_1c
-    if qm is not None:                               # QOM-OOO: dropped optional uses (-2) read rank 0's slot at weight 0
-        f1q = OC.tier_glu_3cn_1c if native else OC.tier_glu_3c_1c
-        y, rs_m, _ = f1q(xin, t["base"], t["sideP"], pre_m, pre_l, PLAN, gate.region, offs, gate.status,
-                         sc.reshape(-1, K), qom=True)
-        if QCNT_1C is not None:
-            _qcnt_1c(rs_m, M, K, sdrop)
-        return y.reshape(*x.shape[:-1], -1)
-    y, rs_m, _ = f1c(xin, t["base"], t["sideP"], pre_m, pre_l, PLAN, gate.region, offs, gate.status, sc.reshape(-1, K))
+    else:
+        f1c = OC.tier_glu_3cn_1c if native else OC.tier_glu_3c_1c
+        qom_ = qm is not None                        # QOM-OOO: dropped optional uses (-2) read rank 0's slot at weight 0
+
+        def _kern(xin_, pm_, pl_, sc_):
+            if qom_:
+                y_, rs_, _ = f1c(xin_, tb, tsp, pm_, pl_, PLAN, gate.region, offs, gate.status, sc_.reshape(-1, K), qom=True)
+            else:
+                y_, rs_, _ = f1c(xin_, tb, tsp, pm_, pl_, PLAN, gate.region, offs, gate.status, sc_.reshape(-1, K))
+            return y_, rs_
+    y, rs_m = _kern(xin, pre_m, pre_l, sc)
     if QCNT_1C is not None:
         _qcnt_1c(rs_m, M, K, sdrop)
+    if nw:                                           # the previous layer's late pairs, on its saved input and pool; written
+        p_ = NW["pend"]                              # after this layer's MoE write through its own inject (_hc_write)
+        if p_ is not None:
+            d_, _ = p_["kern"](p_["x"], p_["pm"], p_["pl"], p_["sc"])
+            NW["due"] = (d_, p_["k"])
+            NW["pend"] = None
+            COUNTS["nw_late_calls"] += 1
+        if k_ < NW_LAST:
+            NW["pend"] = dict(k=k_, x=xin, pm=pm_late, pl=pl_late, sc=lw, kern=_kern)
+        NW["after"] = True
     return y.reshape(*x.shape[:-1], -1)
 
 def _qcnt_1c(rs_m, M, K, sdrop):
@@ -923,6 +996,8 @@ def _ooo_nax6(x, ids, bm, t, post, sc, shared):
         y1c = _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax=True)   # OOO-1C: one NAX6 call
         if y1c is not None:
             return y1c
+        if NW_ON and CFG["neverwait"]:
+            raise RuntimeError("REF2 NEVER-WAIT: the one-call declined a layer (NW needs it on every MoE layer of the pass)")
     if t.get("qom") is not None:                     # FAST-NAX declined (or off): the two phases below would ignore QOM
         raise RuntimeError("REF2: QOM on the NAX path needs FAST-NAX's one-call (ooo_1c + nax_1cq + nax_native, no hybrid)")
     import bigmoe.tier as BT
@@ -1038,6 +1113,8 @@ def _ooo_sel(x, ids, bm, t, post, sc, shared):
                 y1c = _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax=False)
                 if y1c is not None:
                     return y1c
+                if NW_ON and CFG["neverwait"]:
+                    raise RuntimeError("REF2 NEVER-WAIT: the one-call declined a layer (NW needs it on every MoE layer of the pass)")
             if t.get("qom") is not None:                 # the one-call declined: 3c-N's two phases would ignore QOM
                 raise RuntimeError("REF2: QOM on native records needs the one-call path (ooo_1c, a gate with regions, t3)")
             return _ooo_3cn(x, ids, bm, t, post, sc, shared)
@@ -1045,7 +1122,9 @@ def _ooo_sel(x, ids, bm, t, post, sc, shared):
             y1c = _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax=False)
             if y1c is not None:
                 return y1c
-    elif _layout(t) in (1, 2):
+    if NW_ON and CFG["neverwait"]:                       # NEVER-WAIT: every other route is a decline while NW is on
+        raise RuntimeError("REF2 NEVER-WAIT: the one-call declined a layer (NW needs it on every MoE layer of the pass)")
+    if not _ON[0] and _layout(t) in (1, 2):              # (== the original 'elif' of 'if _ON[0]')
         return _ooo_3cn(x, ids, bm, t, post, sc, shared)
     return _ORIG["ooo_call"](x, ids, bm, t, post, sc, shared)
 
@@ -1519,10 +1598,30 @@ def _hc_write_c(hyper, block_out, inject):
 
 _CARRY = [None]                                      # D5: (output, hyper, block_out, inject) of the last write
 
+@mx.compile
+def _nw_add_c(hyper, d, inject):
+    """NEVER-WAIT's late term: hyper + d x inject, exactly hyper wherever the term is +-0 (so a warm pass stays bitwise)"""
+    grouped = hyper.reshape(*hyper.shape[:-1], inject.shape[-1], d.shape[-1])
+    t_ = d[..., None, :] * inject[..., :, None]
+    return mx.where(t_ == 0, grouped, grouped + t_).reshape(*hyper.shape)
+
+
 def _hc_write(hyper, block_out, inject):
     """R-73 (exact-safe, CFG hc_write): hyper + block_out x inject as ONE compiled kernel on <= 16-row bf16 calls
     (bitwise == the stock Multiply + Add: R-73, layer 3's real weights, 6 scales). D5 (CFG hc_pend_mlp): every write's
-    operands are stashed for the next HC read of its output"""
+    operands are stashed for the next HC read of its output. NEVER-WAIT: the first write after a one-call is that layer's
+    MLP-side write; its inject is kept for the next layer, and the previous layer's late term goes into hyper first (so
+    the D5 carry still describes one write)."""
+    if NW["after"] and NW_ON and CFG["neverwait"]:
+        NW["after"] = False
+        k_ = NW["k"] - 1
+        NW["inj"][k_] = inject
+        due = NW["due"]
+        if due is not None:
+            d_, kd = due
+            NW["due"] = None
+            hyper = _nw_add_c(hyper, d_.reshape(block_out.shape).astype(block_out.dtype), NW["inj"].pop(kd))
+            COUNTS["nw_writes"] += 1
     lead, rows = _rows(hyper)
     if _ON[0] and CFG["hc_write"] and rows <= R and hyper.dtype == mx.bfloat16:
         COUNTS["hc_write"] += 1

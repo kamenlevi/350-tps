@@ -38,3 +38,21 @@
 11-06 08:57:17 run stepb_batt_224_new (swap 12076 MB)
 11-06 08:58:02 done stepb_batt_224_new rc=0:   step B calibration: round trip 138 us (p10-p90 122-177), dependent dispatch 2.32 us; read floor (KB: cold / warm GB/s) 16: 1 / 2, 64: 6 / 10, 256: 23 / 262144 FLAT-2 VERDICT: INVALID (FLAT nan ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +nan ms from it); only 0 steady zero-mi 
 11-06 08:58:02 STEP B end (rc 0)
+11-06 09:13:34 STEP B start (pid 40112, NO-SWAP 50.5 GB -> C 224, arms: batt bv2 batt2; md5 probe b598ebaf k d27a87fe)
+11-06 09:13:34 run stepb_batt_224_v2 (swap 11832 MB)
+11-06 09:16:54 done stepb_batt_224_v2 rc=0:   step B calibration: round trip 127 us (p10-p90 115-154), dependent dispatch 2.16 us; read floor (KB: cold / warm GB/s) 16: 12 / 11, 64: 65536 / 65536, 256: 26 FLAT-2 VERDICT: INVALID (FLAT 41.99 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +16.99 ms from it); only 76 steady ze 
+11-06 09:16:54 run stepb_bv2_224_v2 (swap 11824 MB)
+11-06 09:18:14 done stepb_bv2_224_v2 rc=0:   step B calibration: round trip 137 us (p10-p90 122-173), dependent dispatch 2.35 us; read floor (KB: cold / warm GB/s) 16: 2 / 1, 64: 16 / 6, 256: 43 / 25, 10 FLAT-2 VERDICT: INVALID (FLAT 42.81 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +17.81 ms from it); only 97 steady ze 
+11-06 09:18:14 run stepb_batt2_224_v2 (swap 11800 MB)
+11-06 09:19:35 done stepb_batt2_224_v2 rc=0:   step B calibration: round trip 136 us (p10-p90 120-172), dependent dispatch 2.34 us; read floor (KB: cold / warm GB/s) 16: 1 / 2, 64: 7 / 16, 256: 42 / 24, 10 FLAT-2 VERDICT: INVALID (FLAT 44.08 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +19.08 ms from it); only 86 steady ze 
+11-06 09:19:35 STEP B end (rc 0)
+11-06 09:34:40 STEP B start (pid 56277, NO-SWAP 50.3 GB -> C 224, arms: tog; md5 probe b598ebaf k d27a87fe)
+11-06 09:34:40 run stepb_tog_224_togks (swap 12608 MB)
+11-06 09:36:45 done stepb_tog_224_togks rc=0:   step B calibration: round trip 134 us (p10-p90 120-166), dependent dispatch 2.23 us; read floor (KB: cold / warm GB/s) 16: 1 / 2, 64: 4 / 6, 256: 18 / 16, 102 FLAT-2 VERDICT: KILL (FLAT 44.12 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +19.12 ms from it) 
+11-06 09:36:45 STEP B end (rc 0)
+11-06 09:37:59 STEP B start (pid 59447, NO-SWAP 49.8 GB -> C 224, arms: nax0 stack; md5 probe b598ebaf k d27a87fe)
+11-06 09:37:59 run stepb_nax0_224_ceil (swap 12592 MB)
+11-06 09:39:24 done stepb_nax0_224_ceil rc=0:   step B calibration: round trip 135 us (p10-p90 121-169), dependent dispatch 2.26 us; read floor (KB: cold / warm GB/s) 16: 1 / 2, 64: 5 / 6, 256: 21 / 16, 102 FLAT-2 VERDICT: INVALID (FLAT <= 56.63 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +31.63 ms from it); only 7 steady  
+11-06 09:39:24 run stepb_stack_224_ceil (swap 12592 MB)
+11-06 09:40:44 done stepb_stack_224_ceil rc=0:   step B calibration: round trip 137 us (p10-p90 121-175), dependent dispatch 2.24 us; read floor (KB: cold / warm GB/s) 16: 1 / 2, 64: 65536 / 65536, 256: 2621 FLAT-2 VERDICT: INVALID (FLAT <= 47.50 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +22.50 ms from it); only 8 steady  
+11-06 09:40:44 STEP B end (rc 0)

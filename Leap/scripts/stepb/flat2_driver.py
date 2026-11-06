@@ -111,13 +111,38 @@ def main(ns, cfg, info, hooks=None, prewarm=True):
     runs, err = [], None
     try:
         runs.append(one_pass(ns, H, ids, arm, fset, "meas", "pass 1 (cold, discarded)"))
+        TG_ = os.environ.get("STEPB_TOGGLE")             # step B's interleaved A/B: "CFG_KEY=A|B" alternates per measured pass
+        tg_key, tg_vals = (TG_.split("=", 1)[0], [int(v) if v.lstrip("-").isdigit() else v for v in TG_.split("=", 1)[1].split("|")]) if TG_ else (None, None)
         for j in range(cfg["passes"]):
             if el() > HARD - 120:
                 say("  time budget: no further measured pass")
                 break
             if not prewarm:
                 H.pool_prev = None                       # the control: passes start from the prefill's pools
-            runs.append(one_pass(ns, H, ids, arm, fset, "meas", f"measured pass {j + 1}"))
+            if tg_key:                                   # A B A B ...: pass j runs value j % 2 (read per call by ref2)
+                ns["ref2"].CFG[tg_key] = tg_vals[j % 2]
+            r_ = one_pass(ns, H, ids, arm, fset, "meas", f"measured pass {j + 1}" + (f" [{tg_key}={tg_vals[j % 2]}]" if tg_key else ""))
+            r_["toggle"] = tg_vals[j % 2] if tg_key else None
+            runs.append(r_)
+        if tg_key:                                       # the paired read-out: per value, the passes' check + commit and cycles
+            ns["ref2"].CFG[tg_key] = tg_vals[0]
+            by = {}
+            for r_ in runs[1:]:
+                if r_.get("toggle") is None:
+                    continue
+                pc = r_["pc"]
+                ok_ = [i for i in range(len(pc["ck"])) if pc["miss"][i] == 0 and pc["stl"][i] == 0 and i > 0]
+                ck = [pc["ck"][i] for i in ok_]
+                cy = [r_["period"][i] for i in ok_] if r_.get("period") else []
+                by.setdefault(r_["toggle"], []).append((flat2_core.med(ck), flat2_core.med(cy), len(ok_)))
+            for v_, xs in by.items():
+                say(f"  TOGGLE {tg_key}={v_}: passes {len(xs)}, check + commit (zero-miss) per pass {[round(x[0], 2) for x in xs]}, "
+                    f"cycles {[round(x[1], 2) for x in xs]}, n {[x[2] for x in xs]}")
+            if len(by) == 2:
+                (va, xa), (vb, xb) = list(by.items())
+                pairs = [(b_[0] - a_[0]) for a_, b_ in zip(xa, xb) if a_[0] == a_[0] and b_[0] == b_[0]]   # pairs with zero-miss checks
+                say(f"  TOGGLE paired (B - A per pass pair, check + commit): {[round(d, 2) for d in pairs]} -> median "
+                    f"{flat2_core.med(pairs):+.2f} ms ({tg_key}: {va} -> {vb})")
         side = [("stage", "stage pass", (), 0), ("probe", "probe pass", cfg["at"], 0)]
         if cfg.get("real"):                              # the engine's own blocks: one pass to load their rows, then measured
             side += [("meas", "real-block pass 1 (discarded)", (), cfg["real_cap"])]

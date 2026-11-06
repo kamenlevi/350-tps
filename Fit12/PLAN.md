@@ -3303,3 +3303,9 @@ so R-01 should find about the same slots, not ~1 GB more.
   engine abort). top-3 (16 / 16 = ex) has a pass 1 of ~207 vs ~170 ms; at theta 0.9 / 0.95, cf 0.9, it runs 34.5 / 33.1
   tok/s vs top-2 37.6 / 35.9 and P1-K1 41.0 / 37.9. So a wider pass 1 loses speed at 12 GB; the code-valid two-pass ceiling
   is ~34-38 tok/s on full outputs.
+
+## 12 GB PLAN, LEVER 3 (Fri 6 Nov 09:4x; the orchestrator 09:3x: price Leap's Fri kernel switches on the 12 GB path)
+- Code read: the 12 GB T3 path reads none of REF2_DN_KS / D7BNAX_32 / att_single / fs4 / FAST-NAX as they are (no ref2,
+  d7b_nax or r57 in the process). Ported in a copy: the drafter on qmm16c + per-shape ks (exact), and pass 1's attention as
+  one SDPA call + pass 1's 4-bit dense on qmm16c + per-shape ks (FAST, pass 1 only). FAST-NAX: no counterpart (v3p).
+- Pre-registered lines, arms and the run state: /Users/kamen/Fit12/PLAN_12GB_90_fit12.md 'Lever 3'. Run: kp2 (share lock).

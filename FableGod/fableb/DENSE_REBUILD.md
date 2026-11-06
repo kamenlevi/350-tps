@@ -54,6 +54,12 @@ on a GPU. v1 is kept as `DENSE_REBUILD_v1.md`. Source for every [K]: `~/Leap/TAB
   dependent chain, and 6,144 simdgroups writing single values into shared cache lines of y on every row.
   PF changes no value and no expression, so a PF win would be an exact gain. Line: >= 25 % off VAR 0 at S 16, else stop.
 
+- **Prefetch result [K Leap]: STOP.** us per call at S 16: mlx_lm 63.7; PF 0 74.9; PF 1 93.4; PF 4 74.1; PF 3 83.3;
+  PF 7 69.6 (-7 %, line 25 %). All arms bitwise == mlx_lm. mlx_lm's own kernel beats every variant of the loop, so the
+  16-row step stays as it is. I stop on it.
+- **Tally of v2's items:** in = the K split with the fill model, att_single. Killed = the chunk step (both drafts), the
+  gate kernel k2c, gdn_step3. Not run yet = the a|b and k|v folds, the expert glue kernel, the pad frame.
+
 ## 1. The fill model [P from part B]
 
 `t = 1.6 us + 1.15 us x max(KG / ks, tiles x KG / C)`, with KG = K / 64, C = simdgroups in flight.

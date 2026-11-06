@@ -17,10 +17,11 @@ COUNTS = {"nax": 0, "mlx": 0, "nax32": 0, "naxks": 0}
 # D17-NAX (Leap, Fri 2026-11-06 08:2x; TABLE_350 'DRAFTER PROFILE'): with R57_D17 the draft block is 17 rows, so every block
 # projection fell off the <= 16-row path onto MLX's quantized_matmul (52-57 GB/s: gate|up / down 219 us, q / o 107 us).
 # D7BNAX_32=1 (off by default): 17-32 rows run as two 16-row qmm16c halves (weights >= 4 MB), and every <= 16-row NaxQL
+# (D7BNAX_32=2: 17-32 rows on qmm32.qmm32c instead, one weight read, every eligible shape; Fri 09:0x)
 # call takes a per-shape K split
 # (_ks: the smallest ks dividing K / 64, <= 10, that gives >= 320 simdgroups). Drafts change only by fp32 accumulation
 # order; the drafter's outputs are verified, so the output stays exact.
-D32 = [os.environ.get("D7BNAX_32") == "1"]
+D32 = [int(os.environ.get("D7BNAX_32", "0") or "0")]   # 1: two qmm16c halves (>= 4 MB); 2: qmm32.qmm32c, one weight read, all shapes
 
 
 def _ks(N, K):
@@ -50,6 +51,21 @@ class NaxQL(nn.QuantizedLinear):
             y = qmm16c(x2, self["weight"], self["scales"], self["biases"], _ks(self["weight"].shape[0], K))
             COUNTS["nax"] += 1
             return y[:rows].reshape(*x.shape[:-1], y.shape[-1])
+        if D32[0] >= 2 and x.dtype == mx.bfloat16 and rows <= 32 and "bias" not in self:   # D17-NAX v2: qmm32c (09:0x
+            K = x.shape[-1]                                                                   # bench: == the halves bitwise,
+            from qmm32 import qmm32c                                                          # -0.44 ms per propose vs them)
+            N = self["weight"].shape[0]
+            g, tiles, ks = K // 64, N // 32, 1
+            for k in (1, 2, 4, 5):                       # qmm32c's partials are 2x qmm16c's: ks <= 5 keeps them <= 16 KB
+                if g % k == 0:
+                    ks = k
+                    if tiles * k >= 320:
+                        break
+            if ks > 1:
+                COUNTS["naxks"] += 1
+            y = qmm32c(x.reshape(rows, K), self["weight"], self["scales"], self["biases"], ks)
+            COUNTS["nax32"] += 1
+            return y.reshape(*x.shape[:-1], N)
         if (D32[0] and x.dtype == mx.bfloat16 and rows <= 32 and "bias" not in self      # D17-NAX: two 16-row halves,
                 and self["weight"].shape[0] * self["weight"].shape[1] * 8 >= 8_000_000):   # for weights >= 4 MB only (the
             # 08:19 bench: k|v 1024 x 2560 and 640 x 2560 ran faster on MLX's 17-row kernel than as two halves)

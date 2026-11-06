@@ -14,7 +14,7 @@ Tags: [K] = measured, [P] = priced from measured parts, [G] = a guess. 45 = the 
 TODAY'S MEASURED 45 GB CODE NUMBER (pending the same-scores gate): 113.9 tok/s [K, BigMoE data/fnx/fnx_report.txt;
 re-derived by NewIdeas Fri 08:1x]. That is the FAST all-in + FAST-NAX on 12 HumanEval, C 224, the steady-state geo mean,
 A-B-B-A (passes 112.7 / 115.0), with no freezes.
-- Against qall's 97.5 (passes 98.1 / 96.9): +16.8 % (+14.9 to +18.7 % over the pass pairings). Cycle ~108 -> ~91 ms.
+- Against qall's 97.5 (passes 98.1 / 96.9): +16.8 % (+14.9 to +18.7 % over the pass pairings). Cycle 109-110 -> 89-90 ms [K].
 - Kept 10.36 vs 10.55 per check (-1.8 %): BETWEEN by the pre-registered line (kept within 1 %). It joins tonight's stack
   (the orchestrator's call: the kept drop is NAX6-N's own numerics, and the tok/s includes it). Its gate is the
   same-scores run.
@@ -63,6 +63,17 @@ MEASURED (quality measured; speed measured or priced):
    its read floor at 16 rows). FAST-NAX's time follows its bytes (+0.98 per row, at or under the floor), and fewer
    groups means fewer bytes. So re-test split 0.99 vs qall ON FAST-NAX (Leap's QOM-SPLIT-1C + NH-1C form) after
    BigMoE's FAST-NAX A/B, not after the FLAT cuts.
+   RE-TEST ORDERED Fri 09:3x (NewIdeas' call; the orchestrator asked): SPLIT-NAX = stack + R57_QOM_SPLIT=0.99 vs the
+   stack, one extra arm in BigMoE's Sat 00:30 palindrome (~7 min, quiet, 12 HumanEval, C 224).
+   - Why now: Leap's NAX1CQ-TUNE (187b834) found no tunable winner for FAST-NAX's expert one-call. It streams ~180 GB/s
+     cold at ~100-140 groups per call, so on FAST-NAX the experts are a bytes (groups) lever.
+   - Line, pre-registered now: net tok/s vs the stack PASS >= +8 %, KILL < +3 %, else BETWEEN. Kept is recorded with no
+     separate clause: tok/s carries it, as for FAST-NAX.
+   - Prediction [P]: +2..+8 % net. That is a ~30 % expert-byte cut on a ~20-25 ms expert term, minus 2-4 % kept, and a
+     fixed per-layer part that does not shrink.
+   - Speed only tonight: it does not enter tonight's gated stack. If PASS, its own same-scores run (code + math on the
+     CODE profile; the map never checked math) takes EvalSuite's next slot. No share-lock proof of concept today: rough
+     numbers would not decide anything.
 3. DRAFT17 (45 / 24 / 12): in the stack. Code bytes [P] x0.706 at 24 GB, x0.742 at 12 GB (HumanEval-style windows);
    quality PASS [K].
 
@@ -102,36 +113,64 @@ MEASUREMENTS THAT GATE THE PLAN (no gain themselves):
   orchestrator's budget, re-derived by NewIdeas Fri 07:3x from the measured pieces: 300 tok/s = 3.33 ms per kept token,
   so K 14 per 16-row check needs a 46.7 ms cycle = dense 12 + experts 25 + draft 5 + SSD ~0, with 4.7 ms left over.
 
-  | piece (ms per check) | today | budget | cut | what it takes (Leap's part B, 87c9009) |
-  |---|---|---|---|---|
-  | dense GPU (flat in rows) | ~36 [K] | 12 | -24 (x0.33) | The time sits in ks-1 narrow GEMVs (out_proj / o_proj at 81 GB/s, a\|b, k\|v, shared gate\|up) and the 12-chunk SDPA fallback (3.2). Shape fixes -12 -> ~24 [P]; DN-KS (ks per shape): engine FLAT -4.19 [K, Leap 919392c, A-B-A, bitwise-deterministic; microbench -7.74, some narrow calls already overlapped]; every kernel at 220 GB/s -> 16-17; 12 needs ~250 GB/s and ~1/3 of today's kernels. Leap's realistic target this round: 16-20 |
-  | SSD + other waits | ~18 (SSD busy 13.2 [K]) | ~5 | -13 | the misses hidden: never-wait / prefetch (item 4) |
-  | experts, 16 rows | 3c-N ~60 [K] all-resident (~35.6 [P] on real QOM code) | 25 | the kernel switch | FAST-NAX ~25 [K] all-resident (+0.98 ms per row vs +3.25): the budget is met there. Real blocks: the engine A/B cut the cycle ~108 -> ~91 ms (-17) [K, 12 HumanEval, C 224] |
-  | draft | 9.1 [K] | 5 | -4 | The drafter has the dense pass's problem: D17's 17-row block falls off the 16-row NAX path onto MLX qmm at 52-57 GB/s (~53 MB per propose = ~0.25 ms at 220 GB/s). D17-NAX (two 16-row halves; output exact): bench -3.3 per propose [K, contended; engine A/B next]. DRAFTOFF -1.4..-1.7 |
-  | cycle | 98.5 [K] | 46.7 | x0.47 | |
-  | K per 16-row check | 9.38 [K] | 14 | x1.49 | the drafter track (D98) |
+  Measured state on 12 HumanEval at C 224 (BigMoE's FAST-NAX A/B screens, data/fnx/nxn_224.txt + nxnb_224.txt; Leap's
+  engine A/Bs and new-base kernel table, Fri 08:1x-08:57):
 
-  - Sources: dense and experts = Leap's part B (dense of a 2-row check, flat in rows; experts at 2 / 16 rows: 3c-N ~17
-    / ~60, FAST-NAX ~14 / ~25); ~1.94 ms per row on real QOM blocks for 3c-N (FAR, via Leap); draft = FLAT-2; SSD =
-    BigMoE's sqall screen (C 224, 12 HumanEval); cycle and K = ZERO's C 208 read; SSD + other = the cycle minus the
-    other pieces.
+  | piece (ms per check) | FAST-NAX run [K] | + new base | budget | gap | next levers |
+  |---|---|---|---|---|---|
+  | dense GPU (flat in rows) | ~33-36 [K, probes] | ~25-28 [K, -8.2: DN-KS + att_single] | 12 | -13..-16 | Chained 16-row kernels now sum 19.6 (in_proj 4.1, HC reads 5.9, GDN step 2.1, out / o_proj 1.8, ...). Next: HC reads -1..-2, GDN step -1, expert id glue -1, in_proj ks 2 -0.5, router -0.5. 12 needs ~250 GB/s and ~1/3 of the kernels; Leap's realistic target is 16-20 |
+  | misses (the GPU's spin on them) | ~13.5-15 [K] (35-37 per check; SSD busy 11.6-13.4) | same | ~0 | -13.5..-15 | never-wait (item 4): ref2 side built + bit-checked, live off (Leap, TABLE_350 'NEVER-WAIT in ref2's one-call'); its map arm runs first in tonight's map. Then prefetch |
+  | experts + commit + rest | ~28-32 [K, the check's remainder] | same | ~30 (25 + 4.7 left over) | ~0 | FAST-NAX ~25 at 16 rows all-resident [K] |
+  | draft (the loop's) | 10.1 [K] | ~8.1 [K, D17-NAX -2.0] | 5 | -3 | QMM32 -0.44 per propose [K bench]; the small 17-row calls + concats -0.5..-0.8 |
+  | cycle | 89.3-90.1 [K] | ~79-80 [P] | 46.7 | x0.59 | |
+  | K per 16-row check | 10.36 [K] | 10.36 | 14 | x1.35 | the drafter track (D98) |
+
+  - tok/s: 113.9 [K] -> ~128 [P] with the new base. CD16's x1.15 [P, lexer replay], if it passes its pre-flight, makes
+    ~148. Tonight's palindrome measures it.
+  - Warm 2-row FLAT (no SSD): 55.2 -> 44.3 ms with DN-KS + D17-NAX + att_single [K] (-10.9, -20 %). Each piece is FAST
+    (bits move), so the same-scores run is their gate.
+  - The two biggest gaps are now the dense pass (-13..-16) and the misses (-13.5..-15), then K (x1.35), then the draft.
   - One dependent sync point costs ~1.6 us, so the kernel count is worth only ~2-6 ms per check: the dense lever is the
-    narrow GEMVs' shapes (DN-KS first), not the count.
-  - So: at today's K 9.38 the budget cycle gives 201 tok/s. 300 needs K >= 14 (12.6 with no slack), so kernel work
-    alone cannot reach 300. At the budget cycle, 250 needs K 11.7 and 330 needs K 15.4.
-  - With Leap's realistic dense 16-20 and every other piece at budget: a 50.7-54.7 ms cycle. Then K 14 gives 256-276
-    tok/s (inside the 250-330 publish band), 300 needs K 15.2-16.4 of 17, and today's K gives 171-185.
-  - CORRECTED Fri 08:0x: the experts row said "also 5-13 % fewer expert bytes". That held only for 3c-N. FAST-NAX
-    reaches ~25 ms at 16 rows, so the expert budget needs the kernel switch, not fewer bytes.
-  - MEASURED Fri 08:1x, BigMoE's FAST-NAX engine A/B on real blocks: the cycle went ~108 -> ~91 ms (-17) at K 10.55 ->
-    10.36 [K]. With 3c-N's real-block expert term at ~35.6 [P], FAST-NAX's sits at ~19 [P], under the 25 budget. What
-    is left for 300: the dense pass, the SSD + other waits, the draft, and K.
-  - MEASURED Fri 08:15, Leap's DN-KS engine A-B-A: FLAT 55.2 -> 51.1 ms (-4.19) [K]. FAST (bits move vs ks 1), so its
-    gate is the same-scores run.
-  - Tonight's stack, priced from these parts [P, additive pieces, 12 HumanEval, C 224]: FAST-NAX's ~91 ms cycle, minus
-    DN-KS 4.2, att_single 2.4 (R-62) and D17-NAX 1.5-3.3 (if its engine A/B passes today) = ~81-83 ms at K 10.36,
-    which is ~125-128 tok/s. CD16's x1.15 [P, lexer replay] on top makes ~144-147. The palindrome measures it.
-  - Correct this line again from D17-NAX's engine A/B and tonight's palindrome.
+    kernels' shapes, not their number.
+  - At K 10.36 the budget cycle gives 222 tok/s, so 300 needs K >= 14 (12.6 with no slack): kernel work alone cannot
+    reach 300. At the budget cycle, 250 needs K 11.7 and 330 needs K 15.4. With Leap's realistic dense 16-20 and every
+    other piece at budget (a 50.7-54.7 ms cycle), K 14 gives 256-276 tok/s and 300 needs K 15.2-16.4 of 17.
+  - CORRECTED Fri 08:0x: the experts row said "also 5-13 % fewer expert bytes". That held only for 3c-N; FAST-NAX
+    reaches ~25 ms at 16 rows.
+  - CORRECTED Fri 09:0x: my 08:1x "FAST-NAX's real-block expert term ~19 [P]" came from differencing probes across runs.
+    The A/B's own split puts experts + commit + rest at ~28-32 ms, so the experts sit near the 25 budget, not under it.
+  - Was (07:3x): the budget against ZERO's C 208 read (98.5 ms cycle at K 9.38 = 95 tok/s).
+  - NO-WAIT CEILING [K, Leap TABLE_350, Fri 09:38-09:40, quiet, C 224]: HumanEval/68 (160 tokens, 12 checks of 13-16
+    rows, K 14.42), all-resident with a few residual misses. FAST-NAX alone: draft ~10.0 + check + commit 67.2 = ~77 ms,
+    ~187 tok/s. Stack (FAST-NAX + DN-KS + D7BNAX_32=2 + att_single + lazy): draft ~7.2 + check + commit 61.2 = ~68 ms,
+    ~211 tok/s (-11 % cycle).
+    - So 300 at this prompt's K 14.42 needs a 48.1 ms cycle: -20 ms. The check splits roughly into dense ~20 (near its
+      floor in today's form), experts ~25 (bytes-bound, ~180 GB/s cold) and ~16 of misses, commit and glue (85 misses).
+    - The known next levers sum to -13..-20 ms [P]: experts -7..-13 (the group cuts below), dense -4.5..-5.8 (Leap's
+      list), draft -1..-1.2 (QMM32, small calls), plus never-wait on the residual misses. That is ~48-55 ms, 262-300
+      tok/s on this copy-friendly prompt.
+    - The 12-HumanEval average K is ~9.4-10.4. There, 300 needs a 31-35 ms cycle, which nothing priced reaches. K is
+      the gate on average prompts: CD16 tonight, then MTP Head's drafter.
+
+EXPERT-BYTES LEVERS on FAST-NAX, ranked for the weekend (NewIdeas Fri 09:4x, the orchestrator asked). Premise [K, Leap
+NAX1CQ-TUNE]: FAST-NAX's expert one-call is bytes-bound (~180 GB/s cold, no tunable winner), so ms follow the groups
+read. Prices [P] = (1 - group factor) x the expert term's variable part (~17-25 of ~25 ms at 16 rows; the fixed
+per-layer part is unmeasured). Every group cut below is code-only (chat fails the map for all of them); the map never
+checked math, which the CODE profile also serves.
+
+  | # | lever | exists? | quality status | ms at 16 rows [P] | weekend step |
+  |---|---|---|---|---|---|
+  | 1 | split 0.99: cf >= 0.99 rows keep ranks 0-1 + members, no resident keep | live (R57_QOM_SPLIT; QOM-SPLIT-1C covers NAX6-N 1C-Q) | map code PASS 0.92 % (non-tie 0.51), 31 flips vs a line of 45 | groups x0.625 [K, 3c-N A/B] -> -6..-9; kept -2..-4 % on 3c-N | tonight's SPLIT-NAX arm (speed); a PASS -> same-scores, code + math |
+  | 2 | the code frontier at ~x0.5 groups: split 0.9, Fable C's K8, or MASSB-0.5 (one of them; they cut the same groups) | split 0.9 live; K8 and MASSB-0.5 are map arms only (each needs an engine keep rule) | code PASS: s90 1.31 % / 0.78 (44 flips vs 45, thin); K8 1.19 / 0.69; MASSB-0.5 1.31 / 0.87 (at the line) | x0.49-0.54 -> -8..-13 | only if #1 shows ms follow groups: an s90 arm (exists); K8 needs a build |
+  | 3 | Fable A's xs input sparsity (skip down-proj rows whose SwiGLU input is ~0) | map patch built (run_1105: xs64 / 48 / 40 / 32 + code); no engine kernel | T1 map arms tonight | -5..-7 [P, Fable A], only with a kernel that skips the weight reads | the map verdict tonight; a kernel only on a PASS |
+  | 4 | NH-1C: NAX6-NH's ALU path for one-pair groups inside the one-call | NAX6-NH exists (N7-14 PASS, FAST); the 1C form is not built | FAST numerics; same-scores gate | ~-2..-3 [K bench: NAX6-N 33-36 vs NH 31-33 at 16 rows]; less if bytes-bound | Leap, after #1 |
+  | 5 | top-8 on unsure rows (R15's rule) at 45 GB code | map arm exists | PASS on the 24 GB chat route; 45 GB code untested | ~-1: code has few unsure rows | low |
+  | 6 | fewer bits (MSB-2 tails on low ranks; no LSB on unsure rows) | no store or kernel path | bit cuts have failed so far (trellis 2.4 b; MSB-2 ~5x MSB-3's output error) | <= -2.5 | not this weekend |
+
+  - Already in the stack, so not counted again: QOM (sure rows skip cold ranks 2-9), U3 (no LSB on sure rows), B's
+    Q1-UNION gate on code.
+  - Order: #1 tonight decides the premise. If ms follow groups, #2's s90 arm is next. #3's map verdict lands tonight
+    regardless. #4 is a kernel step after that.
 
 GPU ORDER, Fri 6 -> Sat 7 Nov (set by NewIdeas Fri 08:0x at the orchestrator's request; goal: by Saturday morning, the
 stacked code number AND whether it is publishable). Every owner sizes its chunk from its own path's measured times and
@@ -147,7 +186,8 @@ ends it by the next item's start.
 - Tonight, Sat 00:30 -> ~10:00:
   1. BigMoE's stacked FAST palindrome on 12 HumanEval: today's all-in vs all-in + every lever that passes today
      (FAST-NAX, DN-KS, CD16, FASTTAX att_single, lazy commit if wanted), plus FAR-G1. FAST-NAX is in (its BETWEEN on
-     record). BigMoE writes the winning stack's env to ~/BigMoE/data/stack/stack_env.txt for EvalSuite.
+     record). Plus one SPLIT-NAX arm (stack + split 0.99, ~7 min; speed only, outside the gated
+     stack; item 2). BigMoE writes the winning stack's env to ~/BigMoE/data/stack/stack_env.txt for EvalSuite.
   2. EvalSuite: ONE same-scores run (decision 4 vs REF2-T) on exactly that stack, code and math on the CODE profile
      (stack + B with HC8), plus the code drift top-up (40 HumanEval+ problems, >= 1K tokens, ~1.5 h; PASS = blunders
      <= 1 per 10K AND pooled q4 KLD <= 0.02 AND no row's q4 > 0.05, else RELAX's code part rolls back). IFEval rows

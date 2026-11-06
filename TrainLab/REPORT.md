@@ -3510,6 +3510,13 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   minutes. Lines unchanged. fri2 was stopped at 08:01, just after runner 45 ended (08:00:13) and before its gate, with
   no lock taken. The runner is turns/mlx_fp32_fri3.sh, log data/port/fp32_fri3.log. It saw BigMoE's ticket (#1 in
   line) at 08:02:00.
+- Amendment 3, Fri 11-06 09:4x (the orchestrator 09:4x): EvalSuite's agent check (runner 48, shared MEM 39 GB, 09:40 to
+  ~11:10-12:10) took the GPU, and swap hit 13.65 GB. Start only after runner 48 ends and EvalSuite holds no lock, with
+  no other MEM > 5 GB lock (no exceptions now), and NO-SWAP >= 40 GB (PORT's ~37 GB peak + 3 GB margin; Leap's noswap10
+  definition). Start by 14:50, else Saturday by day. Lines unchanged.
+  - fri3 never saw runner 45's end: EvalSuite deleted q45.pid when runner 45 ended (08:00:13). It was stopped at
+    09:44 in its step 1 (no lock).
+  - turns/mlx_fp32_fri4.sh takes runner 48's pid when armed (09:46:01). Log data/port/fp32_fri4.log.
 
 ### MTP3BIT (the orchestrator 19:4x; CPU from stored logs, data/mtp_3bit_vs_4bit.txt): does the 3-bit trunk hurt the MTP head's drafting? No, not measurably
 - Public rig for comparison (github.com/crgregersen/m10dis, docs/RESULTS.md, as quoted by the orchestrator): this model's

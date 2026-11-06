@@ -8512,3 +8512,93 @@ screen); GPU tests small, on share locks.
     reductions nor the k / q loads are the per-row cost.
   - Next suspect: each row step's uncached global loads of v / g / beta (16 dependent rounds). Ablation to try: all
     S rows' inputs preloaded into threadgroup memory before the time loop.
+- **GDN-STEP3 prefetch ablation (Fable B's pf bit mask; Fri 09:12, share lock beside EvalSuite): STOP.**
+  - Every pf arm is bitwise == mlx_lm (an exact candidate).
+  - S 16 chained: mlx_lm 63.7, pf 0 74.9, pf 1 93.4, pf 4 74.1, pf 3 83.3, pf 7 69.6 us. The best arm is -7 % off pf 0
+    (line >= 25 %).
+  - mlx_lm's own kernel stays the fastest form, so the 16-row GDN step stays as it is.
+- **INSTALLED Fri 09:12:23 (BigMoE's pre-flight done): ref2.py 438d4774 (DN-KS v2 behind REF2_DN_KS=2), d7b_nax.py d9e32317
+  (qmm32c behind D7BNAX_32=2).**
+  - Live self_test passes; both off by default; =1 values unchanged.
+  - Backups: data/dnks2/ref2_before.py (1851aa5c), data/d17nax2/d7b_nax_before.py (dd9066d3).
+  - Engine A/B next (quiet): batt / bv2 / batt2.
+- **v2 engine A-B-A (Fri 09:13-09:19, quiet lock, C 224; arms batt / bv2 / batt2 on att_single; data/stepb/out/*_v2_*).**
+  - Drafter: loop draft per cycle 6.90-6.94 / **6.18-6.24** / 6.98-7.03 ms; propose walls 6.52-6.78 / **5.68-5.90** /
+    6.58-6.78. So **D7BNAX_32=2 is -0.75 ms per cycle (-0.85 per propose): PASS** on the drafter line (-0.5 for the
+    v2 step).
+  - Check side: the A arms drifted 2.1 ms apart (FLAT 41.99 vs 44.08; check + commit ~41.6 vs ~43.4: heat between the
+    first and the last arm). bv2's FLAT (42.81) and check + commit (42.3-42.8) sit between them.
+  - **DN-KS v2's in_proj ks 2 (expected -0.5) is NOT resolved here: VOID by drift.** Engaged: dn_ks 105,600 vs 89,760.
+  - Recommendation for tonight's stack: D7BNAX_32=2 yes. Drafts are verified; it is bitwise == =1's halves on the big
+    shapes, and k|v / 2560 -> 640 leave MLX. REF2_DN_KS stays 1 unless BigMoE's own A-B-A-B shows v2.
+  - Lesson: back-to-back 45 GB arms drift ~2 ms in heat. A-B-A brackets it only when the drift is linear; this time
+    batt ran cool. Small check-side effects (< 1 ms) need interleaved passes in one process.
+
+## NEVER-WAIT in ref2's one-call (Leap, Fri 2026-11-06 09:2x-09:3x; the orchestrator's assignment, BigMoE's interface)
+- Spec ~/FableGod/far/NEVERWAIT_TEST.md section 6; interface ~/BigMoE/docs/NEVERWAIT_IFACE.md; design data/nw/NW_DESIGN.md.
+- Switches: REF2_NEVERWAIT=1 arms it; ref2.NW_ON (runtime, read per one-call; r57 sets it around verify passes);
+  ref2.NW_RESET() per check; ref2.NWCNT = [] for per-call float32 counters [late groups, late uses, late mass, layer-47
+  drops, layer-47 rank-0 stalls, forced uses]; REF2_NW_FORCE='L:e1,e2;L2:e3' (test only).
+- How (no kernel change):
+  - A cold DEMAND pair (post slot -1, not QOM's bit-21 optional use) runs one layer late.
+  - Layer k's own kernel takes it at slot 0 (any valid slot) at weight 0, with its LSB at -2 (U3's no-LSB path). So
+    nothing spins for it.
+  - At layer k + 1 the same one-call kernel runs on layer k's pool and saved input with only the late pairs. Their -1
+    slots resolve through layer k's release region, so it waits only if a read has not landed after a whole layer.
+  - ref2's _hc_write adds the late term into layer k + 1's hyper before its own MLP-side write, through layer k's
+    inject. A where-guard keeps zero terms exact, and the D5 carry still describes one write.
+  - Layer 47: a cold rank 0 waits, the other late pairs drop.
+  - While NW_ON, a one-call decline raises.
+  - Kernels group resident pairs by slot (ooo1cq's key), so the weight-0 pairs cost one group.
+- **Bit checks (scripts/nw_check.py -> data/nw_check.txt; 3c-N 1C QOM and NAX6-N 1C-Q, layers 20 -> 44, M 16): ALL PASS.**
+  - (w) warm, NW on == off bitwise (3 reps x 2 forms; NWCNT zeros).
+  - (f) FORCE == the ordinary-call reference (y_A without the forced pairs, y_B, and the B write == hc_write(h_B + delta x
+    inj_A, ...)); counters match the forced pairs.
+  - (c) cold demand experts at A's post == the same reference; no timeouts.
+  - (l) layer 47: forced rank 0 kept, others dropped, nothing pending; counters right.
+  - Bit check 1 (NW off == the live one-call): qomsplit_check with REF2_PATH = the candidate, (o) PASS and (s) PASS.
+  - self_test PASS.
+- **INSTALLED Fri 09:29:39: ref2.py 84d0ab40** (backup data/nw/ref2_before.py = 438d4774). Off by default; NW_ON False.
+- Next: BigMoE's r57 side + its 2-prompt pre-flight (bit check 4), then the speed A/B Saturday night.
+  - Stop rule: tonight's map arm KILL on code, or the snw ceiling < 0.3 S.
+  - Costs to watch: one extra one-call + one write per layer even when nothing is late. If the ceiling passes, the
+    first refinement folds the late pairs into k + 1's own call.
+- **K3C diagnostic (hc8r kernel 8; Fri 09:31, share lock; scripts/k3c_diag.py -> data/k3c_diag.txt).**
+  - Chained 48 calls: cold 23.5 us (163 GB/s on 3.83 MB), warm 12.9 us (warm / cold 0.55).
+  - Mostly bytes: a perfect cold kernel at 250 GB/s is ~15.5 us, so the ceiling is ~-0.7 ms per check over 96 calls.
+    Parked behind higher ms-per-hour items.
+- **NAX1CQ-TUNE (FAST-NAX's expert one-call at ks / nsg_b / ks_b; Fri 09:32-09:38, share lock beside EvalSuite;
+  scripts/nax1cq_tune.py -> data/nax1cq_tune.txt): no consistent winner.**
+  - The best config changes with the routing regime (M 16 skewed (4, 4, 1) -4.3 %; M 16 random (2, 2, 2) -10.5 %; M 2
+    (5, 4, 2) / (4, 4, 1) -10 %), and (5, 4, 2) is +17 % at M 16. All within contention noise.
+  - At ~100-140 groups per call the kernel moves ~180 GB/s cold, so the expert lever is bytes (groups), not the kernel's
+    split. ks 8 / 10 do not load (limits).
+- **TOGGLE A/B tool (stepb flat2_driver, STEPB_TOGGLE='CFG_KEY=A|B'):** one process, measured passes alternate A B A B; per
+  pass the zero-miss check + commit median; the paired (B - A) median. It cancels the ~2 ms drift between processes, for
+  runtime-togglable switches (ref2 CFG read per call).
+  - Pre-registered for DN-KS v2 (dn_ks 1 vs 2, 10 passes): PASS paired median <= -0.3 ms, KILL > -0.1.
+- **DN-KS v2 by TOGGLE (Fri 09:34-09:36, quiet lock, C 224, one process, dn_ks 1 / 2 alternating over 10 passes, base
+  D7BNAX_32=2 + att_single; data/stepb/out/stepb_tog_224_togks_*): BETWEEN, about -0.25 ms per 2-row check.**
+  - Paired (2 - 1) zero-miss check + commit per pass pair: +0.51, -0.51, -0.32, -0.19 ms; the first pair had no zero-miss
+    checks. Median -0.26.
+  - All-checks check + commit, passes 3-10: 44.05 vs 43.80 (-0.25). Zero-miss cycles: 50.21 vs 50.03 (-0.18).
+  - Line: PASS <= -0.3, KILL > -0.1. As with DN-KS v1, the engine sees about half the chained gain (overlap).
+  - Keep REF2_DN_KS=1 in the stacks. =2 stays available.
+  - The tool resolves ~0.2-0.3 ms with 4-5 pairs (pair noise ~+-0.5 ms). The read-out now skips pairs without zero-miss
+    checks.
+- **NO-WAIT CEILING on the engine's own blocks (Fri 09:38-09:40, quiet lock, C 224; FLAT-2 real-block passes,
+  HumanEval/68, 160 tokens, 12 checks of 13-16 rows, kept 14.42 per check; data/stepb/out/stepb_{nax0,stack}_224_ceil_*).**
+  - nax0 (FAST-NAX as this morning): draft ~10.0 ms, check + commit 67.2 ms (pass 3; 92 residual misses), cycle ~77 ms ->
+    ~187 tok/s.
+  - **stack (FAST-NAX + DN-KS + D7BNAX_32=2 + att_single + LAZY): draft ~7.2, check + commit 61.2 (85 misses), cycle ~68
+    ms -> ~211 tok/s: -11 % cycle.**
+  - The 300-at-K14 budget needs a ~47 ms cycle, so ~21 ms remain. Residual misses remain in both arms (all-resident is
+    slightly faster). This prompt's K 14.4 is high; the 12-HumanEval average is ~9.4-10.
+- **NEVER-WAIT v2 staged (Fri 09:41; data/nw2/ref2_cand.py md5 287b1245; NOT installed: lands only if tonight's ceiling
+  passes, the orchestrator 09:3x).**
+  - On FAST-NAX's 1C-Q a skipped pair is slot -2 (zero rows, no weight read) instead of slot 0 (a weight-0 read). This
+    applies to the own call's late pairs and to the late call's other pairs. So a late call with nothing late reads
+    nothing. 3c-N keeps slot 0 (its -2 reads rank 0's slot).
+  - nw_check with REF2_PATH = v2: (w) / (f) / (c) / (l) all PASS on both forms.
+  - Measuring NW's own overhead (the extra call + write per layer when nothing is late) needs BigMoE's r57 side
+    (NW_ON around verify passes only). Then a TOGGLE A/B in one process.

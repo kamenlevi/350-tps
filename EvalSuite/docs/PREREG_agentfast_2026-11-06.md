@@ -113,3 +113,40 @@ Written before any row of this check.
   - forward: the first process's 6 prompts, then chunks in key order;
   - reverse: chunks from write16 down.
 
+## Status Fri 09:28: a provenance gap, the fix (before any further row)
+- **What happened:**
+  - Runner 48 ran the forward order to 17/17, then stopped (exit 7) because BigMoE committed fce0e55.
+  - fce0e55 adds NEVER-WAIT behind R57_NEVERWAIT=1. It is off here; every line is under `if NW:` except a `nw_ = []`
+    stats field, so the run path is unchanged.
+- **The gap, found in the processes' module manifests:** each FAST process also loads live code from Leap, TrainLab,
+  Breakthrough and MoonShots, which BigMoE's pin did not cover.
+  - Leap's ref2.py and d7b_nax.py changed between forward chunks 2 and 3 (Leap 03a63c5, 09:12: DN-KS v2 + D17-NAX v2,
+    off by default).
+  - So edit00-10 ran on Leap 7ebf2d7 + an uncommitted d7b_nax, and write11-16 ran on 03a63c5.
+  - ref2.py's diff is behind REF2_DN_KS (unset here; the default path is unchanged).
+  - d7b_nax's earlier version is not in git, so its default path cannot be diffed. QOM's keep decisions read the
+    drafter's confidence, so drafter code can move FAST tokens.
+- **The fix:**
+  - edit00-10's forward rows are set aside as information (results/agentfast_fwd_v1/).
+  - Both orders run entirely on one code version: the reference manifest results/agentfast/es_af_fwd5_modules.json
+    (Leap 03a63c5, BigMoE 9c82d1d's modules = fce0e55's, TrainLab / Breakthrough / MoonShots as listed), plus
+    fce0e55's screen.
+  - Every external module of that manifest and the screen is pinned before each process (exit 7 on a change).
+  - Each process's own manifest must equal the reference (else VOID).
+  - Forward: edit00-10 rerun in chunks. write11-16 stand (run on 03a63c5). Then reverse, all 17.
+
+## Status Fri 09:38: the outside code frozen (before any further row)
+- **What happened:** the relaunched runner 48 voided its first chunk (09:34). Leap committed 586c892 (NEVER-WAIT in
+  ref2's one-call) at 09:29, between the pin check and the process's import, and the manifest check caught it. Its
+  tokens are not used.
+- **The fix, a freeze:** tools/freeze_r57.py built snap/r57frz-af1 from the reference manifest's versions:
+  - Leap 03a63c5 and BigMoE fce0e55 by `git archive`, plus the build_qom .so;
+  - TrainLab sticky + mtp125.py and Breakthrough keepset, copied.
+  - Code-path strings in the frozen screen and the frozen modules point at the copies; data paths stay live.
+  - All 33 frozen modules equal the reference exactly, or after undoing the rewritten path strings.
+  - Still live, and pinned: MoonShots' tierglu.py (BigMoE's loader adds its path), and EvalSuite's own code.
+- **Every FAST process now runs the frozen screen,** with EVALSUITE_BIGMOE_CODE pointing at the frozen BigMoE.
+  - Before each process: the frozen tree and the pinned live modules must be unchanged (exit 7).
+  - After it: every outside module it loaded must come from the freeze with the recorded sha, with the same module set
+    as the reference (else VOID).
+

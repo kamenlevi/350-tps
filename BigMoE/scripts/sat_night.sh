@@ -35,9 +35,21 @@ CC=; for c in 224:45.2 208:43.1 192:41.0 176:38.9 160:36.7; do fits ${c#*:} && {
 [ -z "$CC" ] && { say "NO-SWAP $A GB < 36.7: nothing fits, nothing runs"; exit 0; }
 cp scripts/r57_screen_fast.py data/r57/snap/r57_screen_sat.py && cp scripts/relax_delta.py scripts/relax_span.py scripts/inert_span.py \
   data/r57/snap/ && cp scripts/c45_runner.sh data/r57/snap/c45_runner_sat.sh || exit 2
+# Fri 09:4x (EvalSuite's warning: the screen loads LIVE outside code, and Leap changed ref2.py / d7b_nax.py between processes
+# this morning): freeze it for every arm of tonight's run. Copies of Leap's scripts + third_party, TrainLab's sticky and
+# Breakthrough's keepset; the snapshot screen points at the copies (EvalSuite's own package and data paths stay live).
+FZ="$PWD/data/r57/snap/frozen_sat"; rm -rf "$FZ"; mkdir -p "$FZ"
+cp -R "$HOME/Leap/scripts" "$FZ/Leap_scripts" && cp -R "$HOME/Leap/third_party" "$FZ/Leap_third_party" \
+  && cp -R "$HOME/TrainLab/sticky" "$FZ/TrainLab_sticky" && cp -R "$HOME/Breakthrough/keepset" "$FZ/Breakthrough_keepset" || exit 2
+find "$FZ" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null
+sed -i '' -e "s#\"~/Leap/scripts\"#\"$FZ/Leap_scripts\"#g" -e "s#\"~/Leap/third_party\"#\"$FZ/Leap_third_party\"#g" \
+  -e "s#\"~/TrainLab/sticky\"#\"$FZ/TrainLab_sticky\"#g" -e "s#\"/Users/kamen/Breakthrough/keepset\"#\"$FZ/Breakthrough_keepset\"#g" \
+  data/r57/snap/r57_screen_sat.py
+LIVE0=$(md5 -q "$HOME/Leap/scripts/ref2.py" "$HOME/Leap/scripts/d7b_nax.py" "$HOME/Breakthrough/keepset/qom_keep.py" | tr '\n' ' ')
+say "frozen outside code in $FZ ($(grep -c frozen_sat data/r57/snap/r57_screen_sat.py) screen paths): ref2 / d7b_nax / qom_keep md5 $LIVE0"
 RUN="/bin/bash data/r57/snap/c45_runner_sat.sh"
 export C45_OUT="$PWD/data/sat" C45_SWAP0=$(sysctl -n vm.swapusage | awk '{gsub("M","",$6); print $6 / 1024}') C45_ALARM=1200 \
-  MG=${SN_MG:-4} C45_DEADLINE=${SN_DEADLINE:-$(date -v+50M +%H%M)} C45_SCREEN=data/r57/snap/r57_screen_sat.py C45_REFTOK=
+  MG=${SN_MG:-4} C45_DEADLINE=${SN_DEADLINE:-$(date -v+60M +%H%M)} C45_SCREEN=data/r57/snap/r57_screen_sat.py C45_REFTOK=
 K="humaneval/HumanEval/68,humaneval/HumanEval/16,humaneval/HumanEval/91,humaneval/HumanEval/6,humaneval/HumanEval/79"
 K="$K,humaneval/HumanEval/19,humaneval/HumanEval/161,humaneval/HumanEval/17,humaneval/HumanEval/56,humaneval/HumanEval/141"
 K="$K,humaneval/HumanEval/101,humaneval/HumanEval/63,ifeval/1220,ifeval/1561,multi/de3,multi/zh15"
@@ -50,10 +62,16 @@ printf '%s\n' "# Sat 7 Nov stacked FAST + relax v2 for CODE (BigMoE sat_night.sh
 KC=$(echo "$K" | tr ',' '\n' | grep '^humaneval/' | paste -sd, -)   # stackr runs the 12 HumanEval only (chat has no relax gate)
 rm -f data/r57/st*_${CC}_*
 say "stacked FAST start (pid $$, NO-SWAP $A GB -> C $CC, deadline $C45_DEADLINE, stack '$STACK')"
-RR="$QA,$STACKR,R57_RELAX_LOG=$PWD/data/sat/stackr_relax.jsonl"
-for a in "stq:$QA" "sts:$QA,$STACK" "str:$RR" "s7x:$QA,D7BNAX_32=1" "stqm:$QA" "s7xb:$QA,D7BNAX_32=1" "strb:$RR" \
-         "stsb:$QA,$STACK" "stqb:$QA"; do
-  KK=$K; case "${a%%:*}" in str|strb|s7x|s7xb) KK=$KC ;; esac
+# SPLIT-NAX (NewIdeas Fri 10:0x, QUEUE item 2 ad24dd3): ssp = the stack + R57_QOM_SPLIT=0.99 on the 12 HumanEval, two passes placed
+# symmetrically, SPEED ONLY (it stays out of the env files EvalSuite reads). Line (pre-registered Fri 10:1x, NewIdeas'): net
+# pair-mean geo steady tok/s vs the stack on code: PASS >= +8 %, KILL < +3 %, else BETWEEN; kept recorded beside (no clause).
+# Every arm carries R57_QCNT1C=1 (Leap's one-call counters: groups computed per check, for the bytes premise; the same small
+# cost in every arm), so QAC = QA + the counter; the env files keep QA.
+QAC="$QA,R57_QCNT1C=1"
+RR="$QAC,$STACKR,R57_RELAX_LOG=$PWD/data/sat/stackr_relax.jsonl"
+for a in "stq:$QAC" "sts:$QAC,$STACK" "str:$RR" "s7x:$QAC,D7BNAX_32=1" "ssp:$QAC,$STACK,R57_QOM_SPLIT=0.99" "stqm:$QAC" \
+         "sspb:$QAC,$STACK,R57_QOM_SPLIT=0.99" "s7xb:$QAC,D7BNAX_32=1" "strb:$RR" "stsb:$QAC,$STACK" "stqb:$QAC"; do
+  KK=$K; case "${a%%:*}" in str|strb|s7x|s7xb|ssp|sspb) KK=$KC ;; esac
   R57_KEYS=$KK C45_ARMS="${a%%:*}_$CC:$CC:${a#*:}" $RUN
   say "${a%%:*} rc=$?"
 done
@@ -64,8 +82,11 @@ done
 #   PASS = median (cold16 - warm16) >= 0.6 x S; BETWEEN = 0.3-0.6 x S; KILL = < 0.3 x S (the wait is not where the logs say).
 #   Caveat (section 3): a sample is a full 16-row check, heavier than the live ones (Wed: 602 vs 138 misses); the samples'
 #   median misses are printed beside the live checks'. The ceiling ignores the late groups' own compute.
-R57_KEYS=$KC C45_ARMS="snw_$CC:$CC:$QA,$STACK,R57_WARMSPLIT=4" $RUN
+R57_KEYS=$KC C45_ARMS="snw_$CC:$CC:$QAC,$STACK,R57_WARMSPLIT=4" $RUN
 say "snw rc=$?"
+LIVE1=$(md5 -q "$HOME/Leap/scripts/ref2.py" "$HOME/Leap/scripts/d7b_nax.py" "$HOME/Breakthrough/keepset/qom_keep.py" | tr '\n' ' ')
+[ "$LIVE1" = "$LIVE0" ] && say "live outside code unchanged during the run" \
+  || say "NOTE: live outside code CHANGED during the run ($LIVE0 -> $LIVE1); every arm used the frozen copies"
 "${SN_PY:-$HOME/BigMoE/.venv/bin/python}" -I - "$CC" "$(date +%F)" "${SN_FANLOG:-$HOME/Library/Logs/fanwatch.log}" >> "$LOG" 2>&1 <<'EOF'
 import datetime as D, json, math, re, statistics as S, sys
 C, day, fanlog = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -88,7 +109,8 @@ for ln in open("data/sat/c45.log"):
     if m:
         arm_t.setdefault(m.group(3), {})[m.group(2)] = D.datetime.fromisoformat(f"{day} {m.group(1)}")
 hit = {t for t, v in arm_t.items() if "run" in v and "done" in v and any(a < v["done"] and b > v["run"] for a, b in win)}
-P = {"qall": ("stq", "stqm", "stqb"), "stack": ("sts", "stsb"), "stackr": ("str", "strb"), "d7x": ("s7x", "s7xb")}
+P = {"qall": ("stq", "stqm", "stqb"), "stack": ("sts", "stsb"), "stackr": ("str", "strb"), "d7x": ("s7x", "s7xb"),
+     "ssp": ("ssp", "sspb")}
 runs = {}
 for t in sum(P.values(), ()):
     try:
@@ -134,6 +156,24 @@ rq, _ = ratio(pm(P["stackr"], lambda r: r["tpsw"], "code"), pm(P["qall"], lambda
 vr = "MISSING" if nr == 0 else ("PASS" if rr >= 1.03 else "KILL" if rr < 0.97 else "BETWEEN")
 L.append(f"Verdict stackr (pre-registered Fri 08:4x){' INDICATIVE at C < 224' if int(C) < 224 else ''}: {vr}: code vs stack "
          f"{100 * (rr - 1):+.1f} % over {nr}, vs qall {100 * (rq - 1):+.1f} % (PASS >= +3 % vs stack; KILL < -3 %)")
+rs_, ns_ = ratio(pm(P["ssp"], lambda r: r["tpsw"], "code"), pm(P["stack"], lambda r: r["tpsw"], "code"))
+ks_, _ = ratio(pm(P["ssp"], kept, "code"), pm(P["stack"], kept, "code"))
+vs_ = "MISSING" if ns_ == 0 else ("PASS" if rs_ >= 1.08 else "KILL" if rs_ < 1.03 else "BETWEEN")
+def q1c(ts, i):   # per-check mean of Leap's one-call counter i over the clean passes (first check excluded), code prompts
+    xs = []
+    for t in ts:
+        if f"{t}_{C}" in hit:
+            continue
+        try:
+            xs += [c[i] for e in json.load(open(f"data/r57/{t}_{C}_checks.json")) if dom(e.get("key", "")) == "code"
+                   and not e.get("paused") for c in e.get("q1c", [])[1:]]
+        except OSError:
+            pass
+    return S.mean(xs) if xs else float("nan")
+gs, gp = q1c(P["stack"], 2), q1c(P["ssp"], 2)
+L.append(f"Verdict SPLIT-NAX (pre-registered Fri 10:1x, NewIdeas){' INDICATIVE at C < 224' if int(C) < 224 else ''}: {vs_}: "
+         f"tok/s {100 * (rs_ - 1):+.1f} % vs the stack on code over {ns_}, kept {100 * (ks_ - 1):+.1f} % (PASS >= +8 %, KILL < +3 %); "
+         f"groups computed per check: stack {gs:.0f}, ssp {gp:.0f} ({gp / gs:.3f}x), split drops per check {q1c(P['ssp'], 3):.0f}")
 r7, n7 = ratio(pm(P["d7x"], lambda r: r["tpsw"], "code"), pm(P["qall"], lambda r: r["tpsw"], "code"))
 k7, _ = ratio(pm(P["d7x"], kept, "code"), pm(P["qall"], kept, "code"))
 L.append(f"d7x kept clause (pre-registered Fri 08:5x): {'MISSING' if n7 == 0 else 'OK' if abs(k7 - 1) <= 0.01 else 'NOT OK'}: "

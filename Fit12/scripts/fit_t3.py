@@ -54,6 +54,7 @@ sys.path.insert(1, os.path.expanduser("~/SpecDecode"))
 sys.path.insert(0, os.path.dirname(BT))
 sys.path.insert(0, os.path.expanduser("~/Fit12/scripts"))
 FAKE = os.environ.get("F12_FAKE") == "1"             # (T3R2, Tue 19:3x) harness dry test: no model, no GPU (fit_t3_fake.py)
+KP = None                                              # (Fri 6 Nov) f12_kports when F12_KPORTS=1
 if FAKE:
     import fit_t3_fake as FK
     B, T3, model, draft, DF, _EXT = FK.B, FK.T3, None, None, None, FK.Ext
@@ -72,6 +73,11 @@ else:
         import k12sync                                 # (50de28c): mx.eval at every MoE block's entry and exit
         k12sync.wrap(mx)
         print(f"[{TAG}] K12: mx.eval at every MoE block's entry and exit (mtplx qwen4_exp.SparseMoeBlock)", flush=True)
+    if os.environ.get("F12_KPORTS") == "1":            # (Fri 6 Nov 09:4x, 12 GB plan lever 3) Leap's Fri switches, ported
+        import f12_kports as KP                        # (inert until an arm sets them; pinned kernels, a GPU self-test)
+        KP.install(model, draft)
+        print(f"[{TAG}] KPORTS installed (f12_kports.py; kernels from {KP.PIN})", flush=True)
+        KP.selftest()
     dbytes = sum(v.nbytes for _, v in __import__("mlx.utils", fromlist=["tree_flatten"]).tree_flatten(draft.parameters()))
     os.makedirs(OUTD, exist_ok=True)
     print(f"[{TAG}] bt_b12 {sha}, engine {getattr(B, 'V3F', '?')}, C_m {B.CFG.get('cm')} C_l {B.CFG.get('cl')}, cap {CAP}; drafter "
@@ -95,7 +101,14 @@ ARMS = [("ex", None, {}), ("g1", 1.01, dict(p2_all=True)), ("g0", 0.0, {}), ("t8
         ("g1k2", 1.01, dict(p2_all=True, _k2=True)),
         # (Thu 5 Nov 20:2x, lever 2: the wider pass 1, Breakthrough 19:5x) calibration with a top-k pass 1 (k 3 / 4 / 5)
         ("g1k3", 1.01, dict(p2_all=True, _k2=True, _topk=3)), ("g1k4", 1.01, dict(p2_all=True, _k2=True, _topk=4)),
-        ("g1k5", 1.01, dict(p2_all=True, _k2=True, _topk=5))]
+        ("g1k5", 1.01, dict(p2_all=True, _k2=True, _topk=5)),
+        # (Fri 6 Nov 09:4x, 12 GB plan lever 3, the orchestrator 09:3x) Leap's Fri kernel switches, ported (f12_kports.py, needs
+        # F12_KPORTS=1): dnax = the drafter on qmm16c + per-shape ks (exact for the target); att1 = pass 1's attention as one
+        # SDPA; dn1 = pass 1's 4-bit dense on qmm16c + per-shape ks (att1 / dn1: FAST, pass 1 only)
+        ("exd", None, dict(_dnax=True)),
+        ("t80ck2a", 0.8, dict(cfmin=0.9, _k2=True, _att1=True)),
+        ("t80ck2n", 0.8, dict(cfmin=0.9, _k2=True, _dn1=True)),
+        ("t80ck2f", 0.8, dict(cfmin=0.9, _k2=True, _dnax=True, _att1=True, _dn1=True))]
 if os.environ.get("F12_T3ARMS"):
     want = os.environ["F12_T3ARMS"].split(",")
     ARMS = [a for a in ARMS if a[0] in want]
@@ -170,6 +183,10 @@ def run_prompt(ri, r):                                   # all arms of one promp
         T3._M3[0] = kw.pop("_m3", False)                 # M3: wide pass 1 at 3 bits (MSB-3 parts only)
         T3._PF2[0] = kw.pop("_pf2", 0)                   # P2-PREFETCH: late-flagged pass-2 ids in pass 1's base posts
         T3._TOPK[0] = kw.pop("_topk", 0)                 # (Thu 5 Nov) lever 2: wide pass 1 on ranks 0..k-1 (REF2-T tiers)
+        kp = dict(dnax=kw.pop("_dnax", False), att1=kw.pop("_att1", False), dn1=kw.pop("_dn1", False))   # (Fri 6 Nov) lever 3
+        assert KP is not None or not any(kp.values()), f"arm {arm} needs F12_KPORTS=1"
+        kpn = KP.set_arm(**kp) if KP is not None else 0
+        kc0 = KP.counts() if KP is not None else {}
         T3.PHLOG[0] = [] if os.environ.get("F12_PHLOG") == "1" else None   # (T3P) per-phase marks
         T3.CAL[0] = [] if os.environ.get("F12_CAL") == "1" else None       # (Thu 5 Nov) certificate calibration records
         ca = ssd_c()
@@ -182,11 +199,16 @@ def run_prompt(ri, r):                                   # all arms of one promp
             T3._M3[0] = False
             T3._PF2[0] = 0
             T3._TOPK[0] = 0
+            if KP is not None:
+                KP.set_arm()                             # every port off between arms
             ph, T3.PHLOG[0] = T3.PHLOG[0], None
             cal, T3.CAL[0] = T3.CAL[0], None
         if cal is not None:                              # one dict per check: path, d, cf, p1 / m1 / g1 (pass 1), new
             json.dump(cal, open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}_cal.json"), "w"))
         dfs = [b_ - a_ for a_, b_ in zip(dfs0, _EXT.defer_stats())]
+        kc = {k_: v_ - kc0.get(k_, 0) for k_, v_ in KP.counts().items()} if KP is not None else {}
+        kps = ("" if not any(kp.values()) else " | KP " + "+".join(k_ for k_, v_ in kp.items() if v_)
+               + f" ({kpn} drafter projections on NaxQL): " + ", ".join(f"{k_} {v_}" for k_, v_ in kc.items() if v_))
         json.dump(lg, open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}.json"), "w"))
         json.dump([int(t_) for t_ in toks], open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}_toks.json"), "w"))
         if ph is not None:                               # name, check, (uptime s, gate seq, disk bytes, misses) at start, at end
@@ -212,7 +234,7 @@ def run_prompt(ri, r):                                   # all arms of one promp
               + (f" | K1U: {s['k1u_kept'] / max(1, s['k1u_rl']):.3f} experts per row-layer, {s['k1u_over'] / max(1, s['k1u_rl']):.4f} "
                  f"of row-layers over KU ({s['k1u_rl']} row-layers)" if s.get("k1u_rl") else "")
               + (f" | PF2: {s['pf2_ids']} late ids posted in {s['pf2_calls']} wide calls, loader late reads {dfs[2]}, "
-                 f"forced to wait {dfs[3]}" if s.get("pf2_calls") else ""), flush=True)
+                 f"forced to wait {dfs[3]}" if s.get("pf2_calls") else "") + kps, flush=True)
         temps.append(f"{arm} {ca}->{ssd_c()}")
     for b_, a_ in (("t80ck2", "t80ck2pf"), ("t80ck1u", "t80ck1upf")):   # P2-PREFETCH is exact: = its base arm
         if a_ in res and b_ in res:

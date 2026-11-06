@@ -469,8 +469,17 @@ if VTIER:                                                # NewIdeas' RANKED 33, 
     VT_MAP = [[sw._bm["L"], (sw._bm.get("tier") or {}).get("side")] for sw in SW_]
     say(f"R57_VTIER: {_vb} / {_vs} slots per base / sidecar pool = {VT_BYTES / 1e9:.2f} GB volatile (purgeable: NOT in "
         f"phys_footprint; macOS reclaims it before compression or swap)")
+NW = os.environ.get("R57_NEVERWAIT") == "1"             # NEVER-WAIT (docs/NEVERWAIT_IFACE.md, Leap's ~/Leap/data/nw/NW_DESIGN.md):
+if NW:                                                   # a cold demand expert runs one layer late in ref2's one-call instead of
+    assert FAST and os.environ.get("REF2_OOO_1C") == "1", "R57_NEVERWAIT needs a FAST arm on the one-call (REF2_OOO_1C=1)"
+    assert os.environ.get("REF2_NEVERWAIT") == "1", "R57_NEVERWAIT arms ref2 with REF2_NEVERWAIT=1: set both"
+    assert all(hasattr(ref2, a_) for a_ in ("NW_RESET", "NW_ON", "NWCNT")), "R57_NEVERWAIT needs Leap's never-wait ref2"
+QSPLIT = float(os.environ["R57_QOM_SPLIT"]) if os.environ.get("R57_QOM_SPLIT") else None   # ported from r57_screen.py (Fri 10:0x,
+assert QSPLIT is None or FAST == "QOM", "R57_QOM_SPLIT is a QOM-KEEP option (R57_FAST=QOM)"   # NewIdeas' SPLIT-NAX arm): the rows'
+QC1C = os.environ.get("R57_QCNT1C") == "1"               # draft cf reach ref2's one-call as t["qom"][2]; R57_QCNT1C sums ref2.QCNT_1C's
+assert not QC1C or hasattr(ref2, "QCNT_1C"), "R57_QCNT1C needs Leap's ref2 eb43fcc2 or later"   # [kept, dropped, groups, split drops]
 FG = dict(on=False, keep=None, sure=None, sure_np=None, t3=False,   # R57_FAST: this check's keep mask [rows, top-k] / U3's
-          cold=False, warm=None, cap=None, dump=None, chk=0, qom=False)   # qom: QOM's optional uses (bit 21)   # U3C: the request's warm table [48, 512], prefill capture, dump
+          cold=False, warm=None, cap=None, dump=None, chk=0, qom=False, qcf=None)   # qom: QOM's optional uses (bit 21)   # U3C: the request's warm table [48, 512], prefill capture, dump
 # R57_CBB=1 (the stale-slot check, the orchestrator 11-03 22:5x on Leap's S7B-PROBE 50de28c / fb999be: a slot the GPU read
 # earlier in the SAME command buffer can be re-read stale after the CPU rewrites it; across buffers it is fresh): every MoE
 # layer call starts a new command buffer (its input and routing evaluated first), so each earlier read of any slot sits in
@@ -516,7 +525,7 @@ if FAST:                                                 # EvalSuite's install_g
                 km = (uns[:, None] | top2 | inU).reshape(indices.shape)
                 if FG["qom"]:                                # QOM: U3's drops become OPTIONAL uses (bit 21): the loader
                     opt = sr[:, None] & ~(top2 | inU)        # serves them only when resident (else -2, never read);
-                    self._bm["tier"]["qom"] = (opt, sr)      # _ooo_call_t3 flags ONLY its base post's copy (bit 21) and
+                    self._bm["tier"]["qom"] = (opt, sr, FG.get("qcf"))   # _ooo_call_t3 flags ONLY its base post's copy (bit 21) and
                     km = None                                # applies Breakthrough's rule after the spin; the graph's ids
                                                              # stay clean (15:29: flagged ids in the graph -> a bad id at L5)
             if FG["t3"]:
@@ -1026,6 +1035,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         res0 = np.array([BS.ext.lookup(L, list(range(512))) for L in range(NL)], np.int32)   # pools at loop start
     out, cyc, ck_t, kept, sm, wl, cut, drf = [tok], [], [], [], [], [], False, []
     lh_ = []                                             # R57_LOGHASH: per check, the verify logits' hash
+    q1c_ = []                                            # per check, R57_QCNT1C: [kept, dropped, groups computed, split drops]
+    nw_ = []                                             # per check, R57_NEVERWAIT: ref2.NWCNT summed over the layer calls
     rows_, cb_, bld_, wt_, wsf_ = [], [], [], [], []     # per check: verified rows, SSD bytes (the per-row cost split, 11-01
                                                          # lead), graph-build s, eval-wait s (A6 / K-80's split), warm-split flag
     WSPL = []                                            # this run's warm-split samples
@@ -1054,7 +1065,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             cyc.append(c0 - c_prev)
         c_prev = c0
         ref2.remove()
-        fk_ = sq_ = None                                 # R57_FAST: this check's keep mask / U3's sure rows (DFlash2 only)
+        fk_ = sq_ = qcf_ = q1l_ = None                   # R57_FAST: this check's keep mask / U3's sure rows (DFlash2 only)
         rg_ = None                                       # R57_RELAX_DELTA: the rows that may relax (DFlash2 only)
         wsp = WARMSPLIT and not mtp and len(kept) >= 2 and len(kept) % WARMSPLIT == 0   # a warm-split sample (16 rows)
         if mtp:
@@ -1111,6 +1122,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                         sq_[len(dr)] = c16 is not None and c16 >= fz["thr"]   # of the draft past the cut (gate_rows')
                 else:
                     sq_[len(dr)] = False                 # today: the last row verifies no draft -> exact
+                if QSPLIT is not None:                   # R57_QOM_SPLIT (ported Fri 10:0x): each row's draft cf, aligned with sq_
+                    qcf_ = np.array((list(cg_) + [c16 if c16 is not None else 1.0])[:len(dr) + 1], dtype=np.float32)
                 fst["gated"] += int(sq_.sum())
                 if not sq_.any() and not U3FORCE:
                     sq_ = None
@@ -1145,12 +1158,17 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                 s_, t_ = stats(), time.perf_counter()
                 FG.update(on=fk_ is not None or sq_ is not None, keep=mx.array(fk_[:w_]) if fk_ is not None else None,
                           sure=mx.array(sq_[:w_]) if sq_ is not None else None, sure_np=sq_[:w_] if sq_ is not None else None,
-                          t3=bool(fz and fz.get("t3")), qom=bool(fz and fz.get("qom")) and sq_ is not None)   # R57_FAST's gate in
+                          t3=bool(fz and fz.get("t3")), qom=bool(fz and fz.get("qom")) and sq_ is not None,   # R57
+                          qcf=mx.array(qcf_[:w_]) if qcf_ is not None else None)   # R57_FAST's gate in
                 try:                                     # the warm split too: a gated arm's warm per-row cost (Fable C's
+                    if NW:                               # R57_NEVERWAIT: on for this verify pass only (prefill stays as today)
+                        ref2.NW_RESET(); ref2.NW_ON = True
                     with ref2.verify_scope(model):       # gated expert term, the orchestrator 23:2x)
                         lg_ = model(inp_[:, :w_], cache=cache)
                 finally:
-                    FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, qom=False)
+                    if NW:
+                        ref2.NW_ON = False
+                    FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, qom=False, qcf=None)
                 mx.eval(mx.argmax(lg_[0], axis=-1))
                 d_ = stats() - s_
                 rec_ = [w_, round(1e3 * (time.perf_counter() - t_), 2), int(d_[0]), round(1e3 * d_[1], 2), round(1e3 * d_[2], 2)]
@@ -1175,16 +1193,28 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             tap_reset(); TAP["on"] = True
         FG.update(on=fk_ is not None or sq_ is not None, keep=mx.array(fk_) if fk_ is not None else None,   # R57_FAST
                   sure=mx.array(sq_) if sq_ is not None else None, sure_np=sq_, t3=bool(fz and fz.get("t3")),   # (in the graph)
-                  cold=bool(fz and fz.get("cold")) and sq_ is not None, qom=bool(fz and fz.get("qom")) and sq_ is not None)
+                  cold=bool(fz and fz.get("cold")) and sq_ is not None, qom=bool(fz and fz.get("qom")) and sq_ is not None,
+                  qcf=mx.array(qcf_) if qcf_ is not None else None)
         if PREROUTE and not mtp:                         # R57_PREROUTE: this check's capture; EvalSuite's block records
             PR.update(on=True, cur=None, y={}, blk={}, cap={}, dump=[] if PRDUMP else None)   # each layer's true top-10
             EM.STATE.capture = {}
+        nwl_ = None
+        if NW:                                           # R57_NEVERWAIT: this real check's late groups, counted by ref2
+            ref2.NW_RESET(); ref2.NWCNT = []; ref2.NW_ON = True
+        if QC1C:
+            ref2.QCNT_1C = []                            # R57_QCNT1C (ported Fri 10:0x): this real check's one-call counters
         try:
             with ref2.verify_scope(model):
                 lg = model(mx.array([[tok] + dr]), cache=cache)
         finally:
-            FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, cold=False, qom=False, chk=FG["chk"] + 1)
+            FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, cold=False, qom=False, qcf=None,
+                      chk=FG["chk"] + 1)
             PR["on"] = False
+            if QC1C:
+                q1l_, ref2.QCNT_1C = ref2.QCNT_1C, None
+            if NW:
+                ref2.NW_ON = False
+                nwl_, ref2.NWCNT = ref2.NWCNT, None
         cb = time.perf_counter()                         # graph built: the sync-free gate waits on each layer's router ids
         TAP["on"] = False
         am = mx.argmax(lg[0], axis=-1)
@@ -1304,6 +1334,10 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         mx.async_eval(states(cache))                     # SB: the commit replay submitted alone
         c2 = time.perf_counter()
         sm.append(stats() - s0)
+        if QC1C:
+            q1c_.append([int(x_) for x_ in np.array(mx.stack(q1l_).sum(axis=0))] if q1l_ else [0, 0, 0, 0])
+        if NW:                                           # [late groups, late uses, late mass, L47 drops, L47 rank-0 stalls, forced]
+            nw_.append([float(x_) for x_ in np.array(mx.stack(nwl_).sum(axis=0))] if nwl_ else [0.0] * 6)
         rows_.append(len(dr) + 1); cb_.append(disk_read_bytes() - b0_)
         ck_t.append(c2 - c1); kept.append(k + 1); wl.append(c2 - c0)
         if STALL:
@@ -1390,6 +1424,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                 rb=rb, ml=ml, kt=kt, mb=rb / 1e6 / kt, mpk=ml / kt,   # per kept token: SSD MB and misses, the whole loop
                 pc=dict(rows=rows_, kept=kept, ck=[1e3 * x for x in ck_t], drf=[1e3 * x for x in drf[:len(ck_t)]],
                         miss=sm[:, 0].tolist(), io=(1e3 * sm[:, 1]).tolist(), svc=(1e3 * sm[:, 2]).tolist(), mb=[x / 1e6 for x in cb_],
+                        nw=nw_, q1c=q1c_,        # R57_NEVERWAIT / R57_QCNT1C: per-check counters (empty when off)
                         uses=sm[:, 4].tolist(), stl=sm[:, 5].tolist(),   # C3-R8: expert groups and stalled layer calls per check
                         bld=[1e3 * x for x in bld_], wt=[1e3 * x for x in wt_], ws=wsf_), wspl=WSPL,
                 tpsw=sum(kept[2:]) / max(sum(wl[2:]), 1e-9), cut=cut, bad=bad, stall=stall,   # tpsw: steady state, checks >= 2
