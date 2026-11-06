@@ -8171,3 +8171,52 @@ screen); GPU tests small, on share locks.
   - Both cuts are still needed.
 - Order: lazy commit, then step 0, then pieces 4 and 3, then 2, then 5 only if step 0 says so. NH-1C goes in parallel,
   after Saturday's FAST-NAX arm.
+- **AMENDMENT (Fri 03:5x, before anything ran; the orchestrator approved the plan at 03:4x with owner records to fold in):**
+  - Step 0's method changes. xctrace is excluded: on 11-02 it wrote GPU counters to the per-user temp dir at ~120 MB/s,
+    even with only the GPU instrument (CA runs 1-2, two disk ACTs), against the orchestrator's 3 GB cap. MLX exposes no GPU
+    timestamps, and a .gputrace is excluded too.
+  - New step 0: a one-layer piece bench with real weights at 2 and 16 rows, MEM <= 4 GB, share lock. Per piece: synced ms,
+    R unsynced repeats (GPU-side ms), dispatch count, dispatch-gap calibration and bytes, giving in-kernel ms, gap ms and
+    achieved GB/s. Scale by layer count and check against FLAT-2's synced pieces. The 04:10 quiet slot was given back.
+  - Owner records folded in:
+    - Piece 2: start from BigMoE's BIGMOE_HC_VREAD (bigmoe/fuse.py, 3 exact dispatches instead of ~11, ADOPTED in the 64
+      GB era, off in R57_PRESET=45). The 'Fused HC block' idea was KILLed as its duplicate.
+    - Piece 3: GDNB KILL (the body is 0.082 ms per layer) and 'R3 more GDN fusion' KILL (projections at the bandwidth
+      floor). Piece 3's -3..-6 must show up in step 0 as conv / gate / norm time or gaps, else it is priced out.
+    - Launch gaps (~1,000 x 1.3-5.9 us = ~1.5-6 ms) cannot make 44 ms alone, so step 0 must split in-kernel time from
+      gaps.
+    - Any megakernel proposal must answer the M5 KILL of grid-barrier persistent kernels (a barrier costs 1.97-2.47 us
+      against 1.3-1.6 us per dependent dispatch) and MoonShots' M6b (per-layer fusion, PARKED).
+    - The draft counts at -1.4..-1.7 ms (MTP Head's DRAFTOFF estimate: draft-ahead at a 34-43 % hit rate, which needs >=
+      4-5 ms of GPU idle). Off-GPU drafting was KILLed 3 times (A7, M-19 CPUDRAFT, MEND-b). So 'with the draft' is ~29-41
+      ms, not 24-39.
+- **STEP 0, PART A (Fri 03:5x; from FLAT-2's own synced records, no new run; data/flat2/flat2_{fri,all}_224_flat2.json
+  'seg'):**
+  - Method: each piece's synced eval minus the calibrated round trip (sync_ms 0.133) = the piece's GPU time. 4 probe
+    checks per arm, at 2 rows and 16 rows.
+  - fri arm, GPU ms per check (2 rows / 16 rows):
+    - GDN 13.2 / 12.2 (36 layers, 0.37 ms each); experts 11.1 / 57.0; HC reads 8.6 / 8.1 (hc_a 3.8, hc_m 4.8);
+    - attention 6.4 / 6.5 (12 layers); router + shared 5.7 / 4.5; MoE tail 1.1; HC write 0.8; PLE 0.65; final HC 0.13.
+    - Sum at 2 rows: 47.8 ms. The 'all' arm agrees to within 1-4 %.
+  - **The check is GPU-bound.**
+    - The GPU sum (47.8, plus head and embed) is about the whole unsynced check: submit 44.7 + eval wait 5.6 = 50.3.
+    - So the CPU's 13.35 ms graph build is hidden behind GPU work, as B5a found. Piece 5 prices at ~0 and drops out
+      unless the bench says otherwise.
+    - This corrects FLAT-2's 'Reading' bullet "mostly per-layer work exposed by syncs": the unsynced loop has no
+      per-layer syncs left.
+  - **Experts' fixed GPU part: 11.1 - 2 x 3.27 = ~4.6 ms**, not ~10. The other ~6.3 ms of FLAT-2's 17.35 was CPU build,
+    which is hidden. Piece 4 re-prices to -1..-2.5.
+  - HC reads: 8.6 ms in this form against 4.97 ms for v4's quiet back-to-back chain. Piece 2 stays -1..-3; the bench
+    decides.
+  - Every dense piece is flat from 2 to 16 rows.
+    - Launch gaps are ~1.3-1.6 us per dependent dispatch (M5, TRIED), only ~1.5-3 ms over ~1,000-2,000 dispatches. So
+      most of the ~45 ms is in-kernel time at low efficiency: ZERO's 2.7 GB of dense bytes is ~60 GB/s, not ~250.
+    - Step 0 part B (the bench) must measure per piece: kernel count, bytes, in-kernel ms against a size-matched floor,
+      and the per-kernel minimum time.
+  - Re-priced program, before the bench:
+    - lazy -0.6..-1.4, HC -1..-3, GDN -1..-3, experts fixed -1..-2.5, FAST-tax -2.4, CPU build ~0 -> -6..-12
+      -> FLAT ~42-48;
+    - with the draft (-1.4..-1.7): ~40-46.
+    - The incremental route likely misses PASS (<= 37) and may hit its KILL (> 45 with 1-4 in). The structural step
+      (fewer, larger kernels per layer: the per-kernel minimum cost x ~1,000 kernels) is probably the real route. It has
+      to answer the M5 grid-barrier KILL and M6b.

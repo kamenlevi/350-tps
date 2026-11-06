@@ -325,3 +325,28 @@ ABLATIONS["cert_top4_p09"] = gate_k(("cert", "topk4", 0.9, 4))   # Thu 11-05 19:
 ABLATIONS["cert_top4_p08"] = gate_k(("cert", "topk4", 0.8, 4))   # Thu 11-05 19:5x (Breakthrough, step 0b): = the cert_top<k>_p<theta> regex, as a literal name for the runner
 ABLATIONS["cert_top5_p08"] = gate_k(("cert", "topk5", 0.8, 5))   # Thu 11-05 19:5x (Breakthrough, step 0b): = the cert_top<k>_p<theta> regex, as a literal name for the runner
 ABLATIONS["cert_top3_p09"] = gate_k(("cert", "topk3", 0.9, 3))   # Thu 11-05 19:5x (Breakthrough, step 0b): = the cert_top<k>_p<theta> regex, as a literal name for the runner
+ABLATIONS["massB_0.5"] = q1_union("/Users/kamen/FableGod/decision_map/out/c3/massB_0.5")   # snapshot of /Users/kamen/Breakthrough/data/c3/massB_0.5 (sha256 beside it), installed by install_c3.sh
+def nw_mask(path, d, zero=False):
+    """NEVER-WAIT (Fable FAR + ZERO, ~/FableGod/far/NEVERWAIT_TEST.md; Thu 2026-11-05): q1_union(path) whose masks also
+    hold `late` [rows, 48, 10] (rank-sorted like keep; ~/FableGod/far/build_1105/nw_masks.py). A kept-and-late rank's term
+    of layer L is written d layers late through layer L's own inject gates (dm_common._nw_write); the 4-bit stock path,
+    the model's own weights, no _t3. zero = the late flags forced off (self-check i: must equal the twin bit for bit)."""
+    def setup():
+        PERT.update(rmask=path, renorm=False, nw=d)
+        if zero: PERT.update(nw_zero=True)
+    return setup
+_NWD = "/Users/kamen/FableGod/decision_map/out/far/"   # snapshots of ~/FableGod/far/build_1105/masks/ (MD5SUMS beside them), installed by install_nw.sh
+ABLATIONS["qom_0_live_ball_c208"] = q1_union(_NWD + "qom_0_live_ball_c208")   # tier 1: the twin, QOM cf 0 + DRAFT17 on 208 uniform slots
+ABLATIONS["qom_0_live_ball_c208_nw1"] = nw_mask(_NWD + "qom_0_live_ball_c208_nw1", 1)   # tier 1, decisive: every demand miss one layer late
+ABLATIONS["qom_0_live_ball_c208_nw1r1"] = nw_mask(_NWD + "qom_0_live_ball_c208_nw1r1", 1)   # tier 1, fallback: rank-0 experts wait
+ABLATIONS["qom_0_live_ball_nw1"] = nw_mask(_NWD + "qom_0_live_ball_nw1", 1)   # tier 1: nw1 at the published pool (twin qom_0_live_ball)
+ABLATIONS["qom_0_split0.99_live_ball_nw1"] = nw_mask(_NWD + "qom_0_split0.99_live_ball_nw1", 1)   # tier 1: the stack (twin qom_0_split0.99_live_ball)
+ABLATIONS["qom_0_live_ball_c266"] = q1_union(_NWD + "qom_0_live_ball_c266")   # tier 1b: the twin on 266 uniform slots (the engine's by-day base-pool exposure, ZERO 5d)
+ABLATIONS["qom_0_live_ball_c266_nw1"] = nw_mask(_NWD + "qom_0_live_ball_c266_nw1", 1)   # tier 1b: nw1 at 266 slots
+ABLATIONS["qom_0_live_ball_c208_nwz"] = nw_mask(_NWD + "qom_0_live_ball_c208", 1, zero=True)   # self-check i: the twin's masks through the never-wait path
+ABLATIONS["qom_0_live_ball_c208_nw0"] = nw_mask(_NWD + "qom_0_live_ball_c208_nw0", 0)   # self-check ii: lateness 0
+ABLATIONS["qom_0_live_ball_c208_nw2"] = nw_mask(_NWD + "qom_0_live_ball_c208_nw2", 2)   # tier 2: two layers late
+ABLATIONS["qom_0_live_ball_c208_nw1s"] = nw_mask(_NWD + "qom_0_live_ball_c208_nw1s", 1)   # tier 2: late only on rows whose draft cf >= 0.9
+ABLATIONS["qom_0_split0.99_live_ball_c208"] = q1_union(_NWD + "qom_0_split0.99_live_ball_c208")   # tier 2: the stack's twin at 208 slots
+ABLATIONS["qom_0_split0.99_live_ball_c208_nw1"] = nw_mask(_NWD + "qom_0_split0.99_live_ball_c208_nw1", 1)   # tier 2: the stack at 208 slots
+ABLATIONS["qom_0_split0.9_live_ball_nw1"] = nw_mask(_NWD + "qom_0_split0.9_live_ball_nw1", 1)   # tier 2: split 0.9 + nw1 (twin qom_0_split0.9_live_ball)

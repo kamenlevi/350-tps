@@ -25,11 +25,21 @@
       a fixed cost <= ~37 ms, and 330 needs <= ~26 ms. At 54 ms, that same expert target gives ~185 tok/s.
   - For scale: FLAT-2's real-block passes ran ~104.5 ms per check at 14.4 kept, ~138 tok/s, with a few misses. That was one
     HumanEval prompt (#68), a workload that prompt copying flatters.
-  - No single piece explains the gap: GDN, HC reads, attention and router + shared all have to shrink. The 13.4 ms CPU graph
-    build already overlaps the GPU, and the CPU mostly waits on it. The dense part moves ~2.7 GB per check at ~61 GB/s,
-    against ~250 GB/s possible, in ~1,000 small dependent kernels.
-  - Leap's pre-registered flat-cut plan (Fri 03:3x): first a GPU timeline of this check (kernel time vs gaps per piece), then
-    lazy commit, the experts' fixed part, GDN, the HC reads, and the CPU build only if the timeline shows it idles the GPU.
+  - Fri 03:4x, with the split live: computed expert groups fell to 0.63x / 0.49x of plain FAST's, and tok/s did not rise at
+    C 224 (BigMoE, 12 HumanEval prompts; NOT PASS, heat-disturbed; clean first passes 96.3 / 95.8 / 99.2 tok/s). The check's
+    time sits in the fixed part and the SSD waits, so the expert-cost lines above pay only after those fall.
+  - The check is GPU-bound (Leap, Fri 03:5x, from the same synced records). Each piece's GPU time is its synced time minus
+    the 0.133 ms round trip. They sum to 47.8 ms, about the whole unsynced check, so the 13.4 ms CPU graph build is hidden
+    behind GPU work.
+    - GPU ms per 2-row check: GDN 13.2, experts 11.1 (~4.6 of it fixed), HC reads 8.6, attention 6.4, router + shared 5.7,
+      MoE tail 1.1, HC write 0.8, PLE 0.65.
+  - Launch gaps are only ~1.5-3 ms in all (~1.3-1.6 us per dependent dispatch on M5). Most of the time is spent inside
+    kernels running at low efficiency: ~2.7 GB of dense bytes per check move at ~60 GB/s, against ~250 GB/s possible,
+    across ~1,000 small kernels.
+  - Leap's pre-registered flat-cut plan re-prices to -6..-12 ms (lazy commit, HC reads, GDN, the experts' fixed part, a
+    FAST-tax switch). That gives FLAT ~42-48, or ~40-46 with the draft, and likely misses the 37 ms line.
+  - The probable route is structural: fewer, larger kernels per layer. A one-layer bench decides between fusion and better
+    small-row kernels.
 - Caveat: the split (0.9) was inert in both arms, because the one-call path bypassed it (fixed Fri 02:58, QOM-SPLIT-1C). So
   this is qall's fixed cost. The split acts on the per-row expert cost, not the fixed part, so FLAT is unaffected.
 - How:

@@ -3359,3 +3359,55 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
     is code-valid.
   - Dropped, not run: θ 0.9 / 0.95, both P1-K2 arms, topk3 / topk4 and the four width arms. The orchestrator asked for
     the same at 20:0x.
+- RESULT, THE FRIDAY MAP BATCH (Thu 23:45 to Fri 03:54) [K]. It started 45 min early on Kamen's word (23:1x, via the
+  orchestrator). It ran 14 runs on records3 with build_nat. Data: data/dm_s7/results_fri/ (the batch log without the
+  per-window lines, the SCREEN_read files, fri_c3.log).
+  - **Ran**:
+    - test 1's three arms on all 36 windows, c3_b2d and c3_b2c;
+    - Fable C's six code arms and R15;
+    - then the all-rows capture (PASS) and massB_0.5.
+  - **GO** was touched for EvalSuite's runner 45 at 03:54:25.
+  - **Not run: 8 arms.** The runner stopped at its 14-run cap at 03:45. Two of the 14 runs were stopped by others' quiet
+    windows and retried. The cap is now 40 (S67_MAXRUNS). The 8 arms move to Saturday after step 0 (sat_extra.txt section 3)
+    with the same lines and twins.
+  - **Full arms** (36 windows). Cells are all-row flips, with non-tie flips in brackets. Lines: code 1.34 [0.87], IFEval
+    5.42 [2.22], multi 3.69 [1.63].
+
+    | arm | code | IFEval | multi | VERDICT2 |
+    |---|---|---|---|---|
+    | twin `qom_0_live_ball` (QOM-KEEP + DRAFT17, 45 GB) | 0.51 [0.21] | 4.03 [1.00] | 3.26 [0.91] | PASS / PASS / PASS |
+    | split 0.99 | 0.92 [0.51] | 6.01 [2.77] | 5.15 [2.27] | PASS / FAIL / FAIL |
+    | split 0.9 | 1.31 [0.78] | 8.10 [4.47] | 6.73 [3.90] | PASS / FAIL / FAIL |
+    | `c3_b2d` | 0.89 [0.54] | 6.59 [2.77] | 4.31 [1.91] | PASS / FAIL / FAIL |
+    | `c3_b2c` | 0.95 [0.45] | 5.30 [1.87] | 3.74 [1.36] | PASS / PASS / FAIL (all-row 3.74 vs 3.69) |
+    | R15 `qom_0.5_u8_live_c147_bonus5g` | 0.65 [0.33] | 4.39 [1.22] | 2.76 [0.61] | PASS / PASS / PASS |
+    | `massB_0.5` | 1.31 [0.87] | 9.18 [5.28] | 8.22 [5.24] | FAIL / FAIL / FAIL |
+
+  - **The split is code-only.** On chat each split costs significantly against the twin:
+    - split 0.99: IFEval 110 / 43, z +5.42; multi 100 / 33, z +5.81;
+    - split 0.9: z +9.30 / +8.43.
+    - NewIdeas' read (cbd6bae) agrees.
+  - **QOM-KEEP + DRAFT17 at the 45 GB pool** (the twin, in its first full run) passes all three domains.
+  - **R15 matches the route it trims.** Its unsure rows run at top-8 + union + resident. Against the route
+    (`qom_0.5_live_c147_bonus5g`) the McNemar is code 10 / 12, IFEval 52 / 49, multi 45 / 44 (all |z| < 0.5). R15b's
+    condition holds (multi 2.76 <= 3.19), so R15b goes on Saturday's list.
+  - **massB_0.5 (R6, Fable C's rulings) is KILLED.** Against `c3_b2d` it is IFEval 171 / 83 (z +5.52) and multi 210 / 71
+    (z +8.29). Code's non-tie sits at the line (0.87 %).
+  - **Fable C's six code arms** (12 code windows, 3,366 rows; all-row [non-tie] flips). The predictions are Fable C's, on
+    non-tie flips [G].
+
+    | arm | flips | prediction | VERDICT2 |
+    |---|---|---|---|
+    | K8 | 1.19 [0.69] | ~0.7 (all-row ~1.15-1.2) | **PASS** |
+    | K6 | 1.49 [0.97] | ~0.7 | FAIL |
+    | A, reach 0.7 | 1.40 [0.87] | 0.6-0.9 | FAIL (all-row) |
+    | A', middle-layer split 0.9 | 1.40 [0.81] | 0.6-0.7 | FAIL (all-row) |
+    | B, A + the z0.999 skip | 1.87 [1.21] | A + ~0.1 | FAIL |
+    | K4, the probe | 2.02 [1.42] | 0.9-1.1 | KILL |
+
+    - Against split 0.99, K8 is 17 / 8 (z +1.80; non-tie 10 / 4, z +1.60): not significantly worse.
+    - K8 landed on its prediction. Every other arm came in 0.1-0.6 points over Fable C's prediction.
+    - So K8 is the only code preset candidate from this set. It counts only if its tiles beat split 0.99's x0.628 (Fable C's
+      count, engine side).
+- Fri 04:01: FAR's NEVER-WAIT harness patch INSTALLED (install_nw.sh exit 0, after review; HANDOVER Fri 04:01). Saturday's
+  tier 1 + 1b lines are unchanged; they run after the GPU self-check passes (PASS or REPORT).

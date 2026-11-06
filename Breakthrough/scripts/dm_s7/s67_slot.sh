@@ -34,7 +34,8 @@
 # day one > 5 GB job at a time), lid open, no PAUSE, NO-SWAP >= 25 GB: 3 clear
 # checks 10 s apart before the first arm and after any stop, 1 between arms. Share lock per arm, MEM 18 GB. Guards every
 # 15 s: swap +2 GB, others' quiet window (3 strikes), lid closed (3 strikes), PAUSE over 5 min, DEADLINE: each stops the
-# arm (a stopped arm writes nothing; it is retried from its start if it still fits). At most 14 runs.
+# arm (a stopped arm writes nothing; it is retried from its start if it still fits). At most S67_MAXRUNS runs (default 40;
+# it was 14 until Fri 04:0x).
 # Read-outs: NewIdeas' map_kl.py (read-only use; prints) for screens 6 + 7 vs C; dm_screen_read.py for 6 vs C, and --null
 # (+0.1 points vs the ungated twin, BYTES10.md:255-260) for 1(b) vs q1u_0.9_live and 1(c) vs qom_0.5_live.
 # Override the clock at arming: S67_START / S67_LASTGO / S67_DEADLINE = "YYYY-mm-dd HH:MM:SS".
@@ -141,7 +142,7 @@ while :; do
   w=$(why_not)
   if [ -n "$w" ]; then need=3; [ "$w" != "$last" ] && say "waiting: $w"; last=$w; sleep 10; continue; fi
   need=$((need - 1)); [ $need -gt 0 ] && { sleep 10; continue; }
-  last=; runs=$((runs + 1)); [ $runs -gt 14 ] && { say "14 runs used; left: $(todo)"; break; }
+  last=; runs=$((runs + 1)); [ $runs -gt ${S67_MAXRUNS:-40} ] && { say "${S67_MAXRUNS:-40} runs used; left: $(todo)"; break; }   # Fri 04:0x: was 14, which ended Friday's 20-arm list at 03:45 with 8 arms left
   peer lock share $(( 3 * $(est $PICK) + 10 ))m --cpu 200 --gpu 100 "Breakthrough map screens 6 + 7 + 1(b)/(c) (the orchestrator 14:3x / 15:3x): MEM 18 GB (flips / KL, no timing): $PICK" >> $LOG 2>&1 \
     || { say "share lock not granted"; need=3; sleep 30; continue; }
   S0=$(swap_mb); say "go $PICK (est $(est $PICK) min; NO-SWAP $(noswap) GB, swap $S0 MB)"
