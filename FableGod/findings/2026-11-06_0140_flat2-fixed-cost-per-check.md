@@ -18,17 +18,20 @@
   - At 12 kept per check, the fixed cost alone caps code at 12 / 54 ms = ~220 tok/s, even with zero expert cost. Today's
     owned levers cannot reach the 250-330 tok/s target on code at 45 GB.
   - Both parts have to fall, and neither reaches the target alone:
-    - Today's expert cost is the measured 3.0 ms per added row; ZERO's model had said ~2.2 ms per kept token. At ~3 ms,
-      250 tok/s at 12 kept would need a fixed cost <= ~12 ms.
+    - Today's expert cost on real QOM blocks is ~2.2 ms per kept token, as ZERO's model said. The 3.0 ms per added row
+      below is the all-resident slope (corrected Fri 03:4x, Leap). At ~2.2 ms, 250 tok/s at 12 kept needs a fixed cost
+      <= ~21 ms.
     - Suppose the expert part reaches ZERO's split-form target (0.77-0.9 ms per kept token on NAX6-NH). Then 250 tok/s needs
-      a fixed cost <= ~37 ms, and 330 needs <= ~26 ms. At 54 ms, that same expert target gives ~190 tok/s.
+      a fixed cost <= ~37 ms, and 330 needs <= ~26 ms. At 54 ms, that same expert target gives ~185 tok/s.
   - For scale: FLAT-2's real-block passes ran ~104.5 ms per check at 14.4 kept, ~138 tok/s, with a few misses. That was one
     HumanEval prompt (#68), a workload that prompt copying flatters.
-  - No single piece explains the gap: GDN, HC reads, attention, router + shared and the CPU graph build all have to shrink.
-  - Leap's order: lazy commit, the HC reads, GDN, fewer syncs per layer; plus caching, compiling or overlapping the 13.4 ms
-    CPU graph build.
-- Caveat: the split (0.9) was inert in both arms, because the one-call path bypassed it (being fixed tonight). So this is
-  qall's fixed cost. The split acts on the per-row expert cost, not the fixed part, so FLAT is unaffected.
+  - No single piece explains the gap: GDN, HC reads, attention and router + shared all have to shrink. The 13.4 ms CPU graph
+    build already overlaps the GPU, and the CPU mostly waits on it. The dense part moves ~2.7 GB per check at ~61 GB/s,
+    against ~250 GB/s possible, in ~1,000 small dependent kernels.
+  - Leap's pre-registered flat-cut plan (Fri 03:3x): first a GPU timeline of this check (kernel time vs gaps per piece), then
+    lazy commit, the experts' fixed part, GDN, the HC reads, and the CPU build only if the timeline shows it idles the GPU.
+- Caveat: the split (0.9) was inert in both arms, because the one-call path bypassed it (fixed Fri 02:58, QOM-SPLIT-1C). So
+  this is qall's fixed cost. The split acts on the per-row expert cost, not the fixed part, so FLAT is unaffected.
 - How:
   - Runner and lines: ~/FableGod/zero/build_1105, LOSSY350_ZERO.md section 4.
   - Data: ~/Leap/data/flat2/. Record: TABLE_350 'FLAT-2 RESULT' (Leap c91fdb7) and the TRIED line in ~/TRIED/leap.md.

@@ -331,3 +331,21 @@ check (0.759x). Groups really computed need the counter inside the one-call path
 ### Next
 - Test the split on the two-phase path, where it works: qall / s99 / s90 with REF2_OOO_1C off. No new code is needed.
 - Or have Leap move the split into the one-call kernel's keep flags.
+
+## Fri 6 Nov 03:23-03:39: the split A/B on the one-call path (Leap's QOM-SPLIT-1C; data/fsp/fsp_report.txt)
+C 224 (46 GB NO-SWAP at the grant), 12 HumanEval, the palindrome qall / s99 / s90 / qallm / s90b / s99b / qallb, Leap's one-call
+counters in every arm.
+
+**The split ENGAGES:**
+- groups computed per check: qall 2,359; s99 1,475 (0.625x); s90 1,165 (0.494x), on Breakthrough's 45 GB-pool replay
+  (x0.628 / x0.508);
+- split drops per check 1,917 / 2,468; strict rows per check 6.6 / 8.5.
+
+**Verdicts (Thu 10:40 line): both NOT PASS.**
+- s99: +6.2 % tok/s, kept -4.2 %. s90: -2.8 % tok/s, kept -1.7 %.
+- The run was heat-disturbed: the middle qall pass ran -21.3 % vs its end passes, and a freeze dropped s99b.
+- The clean early passes agree with the verdicts: qall 96.3 / 97.5, s99 95.8, s90 99.2 tok/s.
+- So a 38-51 % cut in computed groups buys ~0 tok/s at C 224: the check is not bound by expert groups there (the fixed
+  cost per check, FLAT-2's 53.7 ms, and the SSD dominate).
+
+C3-R8: qall 2,359 vs exact's 3,708 (Fri's fexr; exact groups do not depend on C) = 0.636x (the audit asked >= 0.85x).

@@ -179,3 +179,27 @@ lock released
 01:25:24 [Leap: NATIVE-FRI phase C (Dc / Nc A-B-B-A, 14 ref14 prompts, C 224-128 by NO-SWAP, MEM ~28-40 GB)] queue the quiet ticket (available 33 GB)
 queued #1; this returns when it's your turn and the Mac is quiet.
 01:25:26 [Leap: FLAT-2 (zero's fixed-cost measurement, fri / all arms x ~3 min, C 224-128 by NO-SWAP, MEM ~28-40 GB)] start: PEAK 28 GB, ticket 25 min, window from Thu 23:47 to Fri 12:00, after: sh /Users/kamen/Leap/scripts/flat2_after.sh, cmd: /bin/bash /Users/kamen/Leap/scripts/flat2_ladder.sh
+your turn after 40s: quiet lock held until 02:11. Measure now, and `peer unlock` as soon as you're done.
+01:26:35 [Leap: NATIVE-FRI phase C (Dc / Nc A-B-B-A, 14 ref14 prompts, C 224-128 by NO-SWAP, MEM ~28-40 GB)] granted, 44 GB available: run
+lock released
+01:33:17 [Leap: NATIVE-FRI phase C (Dc / Nc A-B-B-A, 14 ref14 prompts, C 224-128 by NO-SWAP, MEM ~28-40 GB)] done rc=0, ticket released
+01:33:19 [Leap: FLAT-2 (zero's fixed-cost measurement, fri / all arms x ~3 min, C 224-128 by NO-SWAP, MEM ~28-40 GB)] queue the quiet ticket (available 48 GB)
+queued #1; this returns when it's your turn and the Mac is quiet.
+your turn after 0s: quiet lock held until 01:58. Measure now, and `peer unlock` as soon as you're done.
+01:33:49 [Leap: FLAT-2 (zero's fixed-cost measurement, fri / all arms x ~3 min, C 224-128 by NO-SWAP, MEM ~28-40 GB)] granted, 48 GB available: run
+lock released
+01:37:50 [Leap: FLAT-2 (zero's fixed-cost measurement, fri / all arms x ~3 min, C 224-128 by NO-SWAP, MEM ~28-40 GB)] done rc=0, ticket released
+01:49:42 [Leap: NATIVE-FRI re-run (Dc / Nc A-B-B-A, 14 ref14 prompts, C 224-128 with 3 GB margin) after the QOM-SPLIT-1C GPU check (~5 min), MEM ~4 then ~28-40 GB] start: PEAK 31 GB, ticket 60 min, window from Fri 01:50 to Fri 12:00, after: sh /Users/kamen/Leap/scripts/natfri2_after.sh, cmd: /bin/bash /Users/kamen/Leap/scripts/natfri2_turn.sh
+02:14:00 [Leap: NATIVE-FRI re-run (Dc / Nc A-B-B-A, 14 ref14 prompts, C 224-128 with 3 GB margin) after the QOM-SPLIT-1C GPU check (~5 min), MEM ~4 then ~28-40 GB] queue the quiet ticket (available 35 GB)
+queued #1; this returns when it's your turn and the Mac is quiet.
+your turn after 43 min: quiet lock held until 03:57. Measure now, and `peer unlock` as soon as you're done.
+02:58:03 [Leap: NATIVE-FRI re-run (Dc / Nc A-B-B-A, 14 ref14 prompts, C 224-128 with 3 GB margin) after the QOM-SPLIT-1C GPU check (~5 min), MEM ~4 then ~28-40 GB] granted, 44 GB available: run
+lock released
+03:22:01 [Leap: NATIVE-FRI re-run (Dc / Nc A-B-B-A, 14 ref14 prompts, C 224-128 with 3 GB margin) after the QOM-SPLIT-1C GPU check (~5 min), MEM ~4 then ~28-40 GB] done rc=0, ticket released
+03:22:40 [BigMoE: split A/B on the one-call path (qall / s99 / s90 palindrome, 12 HumanEval, C 224 down to 128), MEM ~32-44 GB] start: PEAK 28 GB, ticket 45 min, window to Fri 09:30, cmd: /bin/bash scripts/fri_split.sh
+03:22:40 [BigMoE: split A/B on the one-call path (qall / s99 / s90 palindrome, 12 HumanEval, C 224 down to 128), MEM ~32-44 GB] queue the quiet ticket (available 35 GB)
+queued #1; this returns when it's your turn and the Mac is quiet.
+your turn after 45s: quiet lock held until 04:08. Measure now, and `peer unlock` as soon as you're done.
+03:23:56 [BigMoE: split A/B on the one-call path (qall / s99 / s90 palindrome, 12 HumanEval, C 224 down to 128), MEM ~32-44 GB] granted, 46 GB available: run
+lock released
+03:39:25 [BigMoE: split A/B on the one-call path (qall / s99 / s90 palindrome, 12 HumanEval, C 224 down to 128), MEM ~32-44 GB] done rc=0, ticket released

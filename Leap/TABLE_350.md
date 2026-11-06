@@ -8120,3 +8120,54 @@ screen); GPU tests small, on share locks.
   - The split (R57_QOM_SPLIT=0.9) was inert in both arms under REF2_OOO_1C (QOM-SPLIT-1C), so this is qall's flat cost.
   - The memory was fine: NO-SWAP 48.2 GB at the start, swap flat at 11.1 GB through both arms.
 - Data: data/flat2/ (screens, json, logs; copied from ~/FableGod/zero/build_1105/out), data/flat2_ladder.log.
+
+## FLAT-CUT PLAN: the pieces, expected ms, lines (Leap, pre-registered Fri 2026-11-06 03:3x; the orchestrator 01:4x asked for it)
+- Base: FLAT 53.74 ms (FLAT-2, fri arm) = draft 9.10 + check/commit 44.6 (warm, 2 rows, no SSD wait).
+  - Every line below is on FLAT: zero's FLAT-2 probe, the fri config plus the piece, quiet, C labelled, against a base on
+    the same night.
+- What the records already settle (prior art, mine):
+  - The per-layer id syncs are gone: GATE16 / R-55 (adopted 10-31), and ref2's post/spin resolves resident slots on the
+    GPU.
+  - The Python graph build already overlaps the GPU: B5b, async_eval every 4 layers (adopted 10-25, -17.5 ms).
+  - B5a (10-25): a native loop with no Python build at all gained only ~3.4 ms more than B5b.
+  - Today the submit is 44.7 ms against 13.35 of pure Python, so the CPU mostly waits on the GPU.
+  - The flat cost is GPU time: ~1,000 small dependent kernels at 2-16 rows. The dense pass moves ~2.7 GB in ~44 ms (~61
+    GB/s; zero's bus check) against ~250 possible. It is bubble-bound, not byte-bound.
+- Step 0 (first, ~15 min, one 45 GB job): a GPU timeline of FLAT-2's warm 2-row check, with B5's xctrace method.
+  - It gives each piece's kernel time against its gaps, and re-prices pieces 2-5 before they are built.
+  - It is a measurement, so it has no line.
+- Pieces (expected FLAT ms; line: PASS / KILL; exact pieces must be bitwise, FAST pieces need EvalSuite):
+  1. Lazy GDN commit (Fable B's patch, ready): -0.6..-1.4. R-21: the replay moves 220 MB at ~190 GB/s.
+     Line: Fable B's, i.e. bitwise; >= 0.8 ms per partial-accept cycle and <= 0.8 more per full accept = PASS; < 0.4 = KILL.
+  2. HC reads (96 per check; v4's kernels are 4.97 ms per quiet chain, the piece is 10.96 in the loop): one dispatch per
+     read, fused into the consuming norm / in_proj. -2..-5. Line: PASS >= 2.0, KILL < 1.0.
+  3. GDN (36 layers, 15.65 ms; the body is only 0.082 ms per layer, so the rest is projections and small ops at 2
+     rows): conv, gates, body and gated norm fused around the projection GEMVs, 2-3 dispatches per layer. -3..-6.
+     Line: PASS >= 2.5, KILL < 1.0.
+  4. "Fewer per-layer syncs" = the experts' fixed part: ~10 ms per 2-row check beyond the row cost, i.e. post, kernel
+     A / B and combine per layer. Merge them into <= 2 dispatches per layer. -2..-5. Line: PASS >= 2.0, KILL < 1.0.
+  5. CPU graph build 13.35 ms: compile with B5c's form (mx.compile per 4-layer run) or cache. 0..-3.
+     - Run it only if step 0 shows >= 3 ms of GPU idle caused by the CPU. It is already overlapped (B5b), and B5a
+       caps a full native loop at ~3.4 ms.
+     - Line: PASS >= 2.0, KILL < 1.0.
+  6. Ready elsewhere: FAST-tax att_single (Fable B's r57 patch, BigMoE's A-B-A): -2.4 [K R-62]. Fable B's line:
+     PASS >= 2.0, KILL < 1.0.
+  - Not on the list, but it is the second-largest flat term: the draft (9.1 ms, serial today). Drafting on a second queue
+    inside the check's bubbles, or off the GPU (Mirror-SD, PARKED), would give -3..-7. The drafter's owners decide; I
+    can build the queue part.
+- Sums:
+  - Pieces 1-6: -12..-23 -> FLAT ~31-42 ms.
+  - With the draft: -15..-30 -> ~24-39.
+- Program lines:
+  - FLAT <= 37 ms (250 tok/s at K 12 with e <= 0.9) = PASS. <= 26 = the 330 line.
+  - FLAT > 45 with pieces 1-4 in = KILL of the incremental route. Then propose the structural step: the dense pass as a
+    few fused kernels per layer (megakernel-style; prior art: Hazy Research's Llama-1B megakernel and CMU's Mirage MPK,
+    both 2025). Its floor at ~250 GB/s is ~11-14 ms of dense time.
+- The e side (corrects my 01:5x note):
+  - FLAT-2's 3.0 ms per row is the warm all-resident slope, with no drops.
+  - On real QOM blocks the expert term is ~1.94 ms per row (FAR), ~2.2 per kept.
+  - So 250 at K 12 needs FLAT <= ~21 without the split form and <= ~37 with it. The split form = QOM-SPLIT-1C (live
+    02:58; BigMoE's A/B tonight) plus NH-1C, for NAX6-NH's 8.4 us per tile.
+  - Both cuts are still needed.
+- Order: lazy commit, then step 0, then pieces 4 and 3, then 2, then 5 only if step 0 says so. NH-1C goes in parallel,
+  after Saturday's FAST-NAX arm.
