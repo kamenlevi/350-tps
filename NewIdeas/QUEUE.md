@@ -151,6 +151,17 @@ MEASUREMENTS THAT GATE THE PLAN (no gain themselves):
       tok/s on this copy-friendly prompt.
     - The 12-HumanEval average K is ~9.4-10.4. There, 300 needs a 31-35 ms cycle, which nothing priced reaches. K is
       the gate on average prompts: CD16 tonight, then MTP Head's drafter.
+  - CD16 [P, Fable GOAL's K_WALL_1106 replay, Fri 10:50]: K on MBPP 5.6 -> 10.3-10.9, whole HumanEval 10.4 -> 13.2
+    (docstring-free HumanEval 6.2-7.7 -> 10.7-10.8).
+    - At those K, 300 needs a 34-36 ms cycle on MBPP and ~44 ms on HumanEval. At the priced 48-55 ms cycle they give
+      MBPP ~185-225 and HumanEval ~240-275 tok/s. So HumanEval-style code at 300 sits ~4-11 ms past the priced levers;
+      MBPP needs ~14-20 ms beyond them.
+    - CD16 also checks more rows (MBPP 7.6 -> 12.5, HumanEval 11.9 -> 14.2 per check). At ~1 ms per row of FAST-NAX
+      expert time, that adds ~2-5 ms per check [P], which the prices above leave out.
+    - K >= 14 on MBPP is out of reach for any drafter in sight (13.3-13.6 even with the 125B's own features [P]), so
+      on average code the 300 gate is the cycle.
+    - Quality gate: EvalSuite's MBPP decision 4 tonight (the risk is MBPP's docstring planning). Speed: BigMoE's
+      12-MBPP arm on Saturday night (no MBPP prompt set in the screen yet).
 
 EXPERT-BYTES LEVERS on FAST-NAX, ranked for the weekend (NewIdeas Fri 09:4x, the orchestrator asked). Premise [K, Leap
 NAX1CQ-TUNE]: FAST-NAX's expert one-call is bytes-bound (~180 GB/s cold, no tunable winner), so ms follow the groups
@@ -188,13 +199,17 @@ ends it by the next item's start.
      (FAST-NAX, DN-KS, CD16, FASTTAX att_single, lazy commit if wanted), plus FAR-G1. FAST-NAX is in (its BETWEEN on
      record). Plus one SPLIT-NAX arm (stack + split 0.99, ~7 min; speed only, outside the gated
      stack; item 2). BigMoE writes the winning stack's env to ~/BigMoE/data/stack/stack_env.txt for EvalSuite.
-  2. EvalSuite: ONE same-scores run (decision 4 vs REF2-T) on exactly that stack, code and math on the CODE profile
+  2. EvalSuite (the orchestrator's order, Fri 10:5x): the stack same-scores (~1.5 h, 2 orders) -> the drift top-up
+     (~1.5 h) -> MBPP decision 4 for CD16 (~1.2 h: NAX6-N reference on the walk's 100 MBPP tasks, then the stack with
+     CD16 in 2 orders). Details of the first two follow. ONE same-scores run (decision 4 vs REF2-T) on exactly that stack, code and math on the CODE profile
      (stack + B with HC8), plus the code drift top-up (40 HumanEval+ problems, >= 1K tokens, ~1.5 h; PASS = blunders
      <= 1 per 10K AND pooled q4 KLD <= 0.02 AND no row's q4 > 0.05, else RELAX's code part rolls back). IFEval rows
      run the chat profile that would ship (stack + E without HC8) only if BigMoE's HC8-off launch exists by then;
      otherwise chat stays EXACT and needs no run. Bisect only on a fail.
-  3. Breakthrough's map: never-wait first (the 45 GB SSD-wait lever), then T1, then the 8 leftover 24 GB arms.
-  4. EvalSuite runner 46's F1 rest (~2.5 h) only if it fits; otherwise the next night, unless F1 gates the publish.
+  3. Breakthrough's map, fitted around EvalSuite's runs (share locks where memory allows): never-wait first (the 45 GB
+     SSD-wait lever), then T1 (Fable A's xs arms), then the 8 leftover 24 GB arms.
+  4. EvalSuite runner 46's F1 moves to Sunday night (the orchestrator's call, Fri 10:5x: F1 certifies fs4, which the
+     stack does not use; att_single ships through FASTTAX). BigMoE's 12-MBPP speed arm stays Saturday night.
 - Fable B's v2 (ks / tile plans per shape) lands by ~11:00 and feeds Leap's next builds.
 
 12 GB LINE: no lossy tok/s of my own records. Today's 12 GB exact line is 40.8 tok/s (the likely first, in an 11.35 GB

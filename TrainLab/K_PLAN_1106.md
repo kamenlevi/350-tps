@@ -1,5 +1,19 @@
 # K plan for the weekend (MTP Head, Fri 2026-11-06 09:5x; the orchestrator 09:4x)
 
+> **CORRECTED Fri 10:5x (Fable GOAL's K-wall list, ~/FableGod/goal/K_WALL_1106.md, 10:50; [P] = its replays of the
+> d23h every-position walks through the engine's tagger, 0.3 cut).**
+> - CD16 is not copying. It accepts comment / docstring text wholesale, so on MBPP it is x1.8-1.9 kept, not ~x1.0 as
+>   written in section 2: 5.61 -> 10.69-10.87 [P].
+> - Checks that start after the docstring: MBPP 5.5 -> 9.6-9.8, HumanEval 6.2-7.7 -> 10.7-10.8 [P].
+> - After CD16 the wall is the drafter's depth on code rows. The teacher-forced pick on code tokens the 125B is >= 0.99
+>   sure of, depths 1-3 / 4-7 / 8-11 / 12-15: MBPP 0.993 / 0.927 / 0.776 / 0.596; HumanEval+ 0.998 / 0.978 / 0.889 /
+>   0.712.
+> - At deep code misses (depth >= 8) the 125B's token is not a candidate 37.7 % of the time, so pickers can't fix them.
+> - DFlare's gain is mostly 3x data from a new source (+0.47 tau per doubling), not its layout (GOAL's desk read). So
+>   the Saturday DFlare read (section 5, item 3) is done, and the D98 question becomes data, re-read on code rows under
+>   CD16.
+> - The lines below are kept as written.
+
 **Bottom line.** K is 10.36 per 16-row check on the 12 HumanEval with the shipping drafter, but HumanEval flatters it.
 On MBPP (held-out code) the same drafter keeps **5.94**. The two levers measured tonight (CD16, relax v2) mostly help
 on HumanEval-style text. No drafter retrain we have measured moves code K beyond retrain noise. **K 14 on average code
@@ -21,7 +35,7 @@ has no priced route from the drafter side.**
 
 ## 2. What each lever adds ([K] measured, [P] predicted; workload named)
 - **CD16 copy drafting** (Fable GOAL, INERT): HumanEval+ 10.44 -> 12.91 (x1.24) [P, lexer replay]; tok/s x1.15 on the
-  12 HE [P]. Copying from the docstring is flattering, since copied rows are 61-68 % of HE answer tokens. On MBPP expect
+  12 HE [P]. Copying from the docstring is flattering, since copied rows are 61-68 % of HE answer tokens. [CORRECTED, see top: MBPP x1.8-1.9 [P]] On MBPP expect
   ~x1.0: MATCH, a copy override, measured x0.98 there. Runs tonight.
 - **Relax v2** (MoonShots M-44, lossy, host-light): kept x1.10-1.23 on code [P, replay]. v1 measured +9.9-10.4 % kept
   [K], but host work ate the tok/s. Sat 00:30 ticket. CD16 and relax v2 both gain in comments and docstrings: don't

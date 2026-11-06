@@ -114,7 +114,7 @@ PICK = (("humaneval", "humaneval/HumanEval/68"), ("math", "math500/test/prealgeb
 ARMS_ = tuple(os.environ.get("R57_ARMS", "slot,gate,gate+pf").split(","))
 PICK = PICK[:int(os.environ.get("R57_PROMPTS", "2"))]
 SETOF = {"humaneval": "humaneval", "math500": "math", "gsm8k": "math", "ifeval": "ifeval", "multi": "multi", "agent": "agent",
-         "agentlong": "agentlong"}   # Fri 08:2x: EvalSuite's dec_agentlong (FAST there needs R57_QOM_SETS=...,agentlong)
+         "agentlong": "agentlong", "mbpp": "mbpp"}   # Fri 08:2x / 10:5x: EvalSuite's dec_agentlong / dec_mbpp (FAST there needs R57_QOM_SETS)
 if os.environ.get("R57_KEYS"):                           # an explicit prompt list ("set/key,..." or '+'-joined inside c45_runner's
     PICK = tuple((SETOF[k.split("/")[0]], k) for k in os.environ["R57_KEYS"].replace("+", ",").split(","))   # arm lists)
 TAG = os.environ.get("R57_TAG", "r57")
@@ -1507,7 +1507,7 @@ for n_p, (s, key) in enumerate(PICK):
         RUNS.append(dict(key=key, arm=arm, type=typ, bad=r["bad"], cut=r["cut"], P=len(ids),
                          **{k_: r[k_] for k_ in ("drafter", "hist", "a6", "n", "tps", "tpsw", "kept", "checks", "cyc", "ck",
                                                  "drf", "miss", "io", "mb", "mpk", "mem", "copy", "fast", "pf", "lh", "inert")},
-                         d7b=draft is DRAFT4, rlx=r.get("rlx"), spn=r.get("spn")))   # Thu 18:5x: the relaxed / span
+                         d7b=draft is DRAFT4, rlx=r.get("rlx"), spn=r.get("spn"), inert=r.get("inert")))   # Thu 18:5x / Fri 10:0x: relaxed / span / INERT
                                                          # stats were computed but never written (the pre-flight's MISSING)
         m = min(len(want), r["n"])
         agree = same(r["out"], want)

@@ -69,3 +69,12 @@ Written before any row of this run.
   every run). A prompt that a process misses runs in the next process.
 - **The two orders and the line are unchanged:** decision 4 vs REF2-T per set, per order, and PASS = both orders pass.
 
+## Amendment 2 (Fri 10:59; before any row): QOM's sets and the env line
+- **BigMoE (Fri 11:0x):** tonight's env files (stack_env / stackr_env / code_env) carry
+  R57_QOM_SETS=humaneval,mbpp,math,ifeval,multi.
+  - So the code profile's math rows run QOM's FAST rule too. That is new, and this run is its first check. The math
+    line is decision 4's like the others.
+  - If the orchestrator wants math exact, math leaves the list before the run, and this amendment says so.
+- **The env line** is comma-separated. A token without '=' continues the previous value (R57_QOM_SETS's list); any
+  other shape stops the run.
+

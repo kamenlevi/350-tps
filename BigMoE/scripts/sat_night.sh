@@ -56,9 +56,9 @@ K="$K,humaneval/HumanEval/101,humaneval/HumanEval/63,ifeval/1220,ifeval/1561,mul
 QA="BIGMOE_EXT_BUILD=build_qom,R57_REFTOK=,R57_FAST=QOM,R57_D17=1,R57_D7B=code,R57_HC8=1,REF2_HC8_FAST=1,R57_DNR=1,R57_HCB=1"
 QA="$QA,REF2_SMALL_NATIVE=1,R57_D7BNAX=1,REF2_OOO_1C=1"
 printf '%s\n' "# Sat 7 Nov stacked FAST (BigMoE sat_night.sh, $(git rev-parse --short HEAD)): screen scripts/r57_screen_fast.py; env (comma list):" \
-  "$QA,$STACK" > data/stack/stack_env.txt
+  "$QA,$STACK,R57_QOM_SETS=humaneval,mbpp,math,ifeval,multi" > data/stack/stack_env.txt   # QOM's FAST on the code profile's sets (Fri 10:5x)
 printf '%s\n' "# Sat 7 Nov stacked FAST + relax v2 for CODE (BigMoE sat_night.sh, $(git rev-parse --short HEAD)): screen scripts/r57_screen_fast.py;" \
-  "# env (comma list; R57_RELAX_LOG optional):" "$QA,$STACKR" > data/stack/stackr_env.txt
+  "# env (comma list; R57_RELAX_LOG optional):" "$QA,$STACKR,R57_QOM_SETS=humaneval,mbpp,math,ifeval,multi" > data/stack/stackr_env.txt
 KC=$(echo "$K" | tr ',' '\n' | grep '^humaneval/' | paste -sd, -)   # stackr runs the 12 HumanEval only (chat has no relax gate)
 rm -f data/r57/st*_${CC}_*
 say "stacked FAST start (pid $$, NO-SWAP $A GB -> C $CC, deadline $C45_DEADLINE, stack '$STACK')"

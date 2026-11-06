@@ -8,6 +8,8 @@
 #    rows (results/ref2tnax). tools/d4x.py vs REF2-T per order -> results/stack_{fwd,rev}_d4.txt, results/STACK_DONE.
 # 2. The code-only drift top-up (PREREG_relax_drift amendment 2): RELAX's B on the 41 humanevalt keys + REF2-T's replay
 #    (the converted store, ref2tf0, as Friday's runner 45), then tools/relax_report.py's top-up line -> results/TOPUP_DONE.
+# 3. MBPP (docs/PREREG_mbpp_2026-11-06.md): NAX6-N's AR on dec_mbpp (ref2tnaxn.r2), then the stack with CD16
+#    (stack_env.txt + R57_QOM_SETS ... mbpp) in two orders, tools/mbpp_score.py d4 per order -> results/MBPP_DONE.
 # Waits for code_env.txt (written tonight, after BigMoE's report), BigMoE's sat_night.sh gone and the day rule. Every GPU
 # step: the gates of runners 47 / 48 (pins: EvalSuite's code + BigMoE's HEAD at the start + the ext .so + every external
 # module of the first stack process's manifest (Leap / TrainLab / Breakthrough / MoonShots, Fri 09:3x); the store; swap;
@@ -81,7 +83,8 @@ MAN
 }
 pin() {
   { shasum snap/leap-faff8e5/*.py snap/leap-52cf2c9/*.py snap/leap-52cf2c9/ms_gdn/* tools/r57_wrap.py tools/r57rows.py \
-      tools/d4x.py tools/relax_report.py "$SCREEN" results/drift/keys_T.txt data/items/dec_humanevalt.jsonl \
+      tools/d4x.py tools/relax_report.py tools/mbpp_score.py "$SCREEN" results/drift/keys_T.txt data/items/dec_humanevalt.jsonl \
+      data/items/dec_mbpp.jsonl \
       data/items/dec_math.jsonl data/items/dec_ifeval.jsonl data/items/dec_humaneval.jsonl
     (cd snap/bigmoe-da8e7a6 && find bigmoe ext -type f ! -path '*__pycache__*' | sort | xargs shasum)
     (cd "$HOME/MoonShots/patches/planes_engine" && ls *.py | sort | xargs shasum)
@@ -110,6 +113,24 @@ d = sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))
 print(f"external modules: {len(b)}, equal to the reference: {len(b) - len(d)}" + (f"; DIFFERENT: {d}" if d else ""))
 sys.exit(1 if d else 0)
 MS
+}
+parse_env() {   # file -> ENVARR: its last non-comment line, comma-split; a token without '=' continues the previous value
+  ENVARR=()       # (BigMoE Fri 11:0x: R57_QOM_SETS=humaneval,mbpp,math,ifeval,multi sits inside the comma list)
+  while IFS= read -r -d '' x; do ENVARR+=("$x"); done < <(python3 - "$1" <<'PE'
+import sys
+line = [l for l in open(sys.argv[1]).read().splitlines() if l and not l.startswith("#")][-1]
+out = []
+for t in line.split(","):
+    if "=" in t or not out:
+        out.append(t)
+    else:
+        out[-1] += "," + t
+if not all("=" in t for t in out):
+    sys.exit(1)
+sys.stdout.write("\0".join(out) + "\0")
+PE
+)
+  [ "${#ENVARR[@]}" -gt 0 ]
 }
 gate() {        # label, MEM GB, seconds the step is estimated / measured to take: every check before a GPU step
   local w=0
@@ -168,9 +189,9 @@ fast() {        # tag, keys, label: one stack process (all its keys), under this
   BMPIN=1 gate "stack $3" "$((MEM - 4))" 900          # needs MEM + 4 GB NO-SWAP free: BigMoE's own margin for this config (MG 4);
                                               # the night's order runs it alone
   rm -f "$BM/data/r57/${tag}_"*
-  share_lock "evalsuite: MEM $MEM GB: the stack's same-scores run, $3" 30
+  share_lock "evalsuite: MEM $MEM GB: $PHASE, $3" 30
   t0=$(date +%s)
-  env "${UNSETS[@]}" "${STACKENV[@]}" R57_PRESET=45 R57_REPS=1 R57_WARM=1 R57_TAG="$tag" R57_KEYS="$keys" \
+  env "${UNSETS[@]}" "${CURENV[@]}" "${EXTRAENV[@]}" R57_PRESET=45 R57_REPS=1 R57_WARM=1 R57_TAG="$tag" R57_KEYS="$keys" \
     "$BM/.venv/bin/python" tools/r57_wrap.py "$SCREEN" "$AF/${tag}_modules.json" "$C" 1536 > "$AF/${tag}.log" 2>&1; rc=$?
   peer unlock > /dev/null 2>&1
   d=$(( $(date +%s) - t0 ))
@@ -203,11 +224,11 @@ order() {       # run, label, keys (comma list): chunks of 10 per process; any m
   while :; do
     m=$(missing "$run" "$all"); [ -z "$m" ] && break
     i=$((i + 1)); tries=$((tries + 1)); [ "$tries" -le 30 ] || { say "$lab: 30 processes without all rows: runner stops"; exit 3; }
-    tag="es_st_${lab}${i}"
+    tag="${TAGP}${lab}${i}"
     fast "$tag" "$(echo "$m" | tr ',' '\n' | head -10 | paste -sd, -)" "$lab process $i"
     [ -s "$AF/${tag}_tokens.json" ] && $PY tools/r57rows.py "$AF/${tag}_tokens.json" "$run" --append >> "$LOG" 2>&1
   done
-  python3 - "$run" <<'IFE' >> "$LOG" 2>&1
+  [ "$IFECOPY" = 1 ] && python3 - "$run" <<'IFE' >> "$LOG" 2>&1
 import json, sys
 run = sys.argv[1]
 p = f"results/{run}/decode.jsonl"
@@ -218,7 +239,7 @@ with open(p, "a") as f:
         f.write(json.dumps(dict(r, source="NAX6's own row (chat stays EXACT; PREREG_stack amendment 1)")) + "\n")
 print(f"results/{run}: + {len(add)} IFEval rows from results/ref2tnax")
 IFE
-  say "$lab: $(grep -c . "results/$run/decode.jsonl") rows (110 stack + 100 exact IFEval)"
+  say "$lab: $(grep -c . "results/$run/decode.jsonl") rows"
 }
 # ------------------------------------------------ the relax top-up: runner 45's chunk logic
 pick_c() {      # the gate needs C >= MAXK 160: C 192 (need 34) or 160 (need 30) by free memory, else wait (no lock held)
@@ -267,7 +288,8 @@ while [ "$(date +%s)" -lt "$EARLIEST" ] || [ ! -s "$CENV" ] || [ "$(stat -f %m "
   [ "$(date +%s)" -lt "$CUTOFF" ] || { say "no code_env.txt by 09:30: runner stops"; exit 6; }
 done
 ENVLINE=$(grep -v '^#' "$CENV" | grep . | tail -1)
-IFS=',' read -ra STACKENV <<< "$ENVLINE"
+parse_env "$CENV" || { say "code_env.txt's env line does not parse as K=V pairs: runner stops"; exit 2; }
+STACKENV=("${ENVARR[@]}")
 C=$(grep -o 'Sat [0-9]*' "$CENV" | head -1 | awk '{print $2}'); C=${C:-224}
 case "$C" in 224) MEM=46;; 208) MEM=44;; 192) MEM=42;; 176) MEM=40;; 160) MEM=38;; *) say "C '$C' unknown: runner stops"; exit 2;; esac
 EB=$(echo "$ENVLINE" | tr ',' '\n' | grep '^BIGMOE_EXT_BUILD=' | cut -d= -f2); EB=${EB:-build}
@@ -283,6 +305,7 @@ r = [json.loads(l) for l in open("results/ref2t/decode.jsonl")]
 print(",".join(sorted(x["key"] for x in r if x["set"] in ("math", "humaneval"))))')
 RKEYS=$(echo "$KEYS" | tr ',' '\n' | tail -r | paste -sd, -)
 say "the stack: $(echo "$KEYS" | tr ',' '\n' | grep -c .) keys per order"
+PHASE="the stack's same-scores run"; CURENV=("${STACKENV[@]}"); EXTRAENV=(); TAGP=es_st_; IFECOPY=1
 order stack_fwd fwd "$KEYS"
 order stack_rev rev "$RKEYS"
 V=""
@@ -309,4 +332,56 @@ done
 $PY tools/relax_report.py --arms B --out results/relax_topup_report.txt > /dev/null 2>&1
 say "the top-up: $(grep '^== code-only top-up' results/relax_topup_report.txt | sed 's/^== //' | cut -c1-260)"
 touch results/TOPUP_DONE
+# ------------------------------------------------ MBPP (docs/PREREG_mbpp_2026-11-06.md): NAX6-N's AR, then the stack with CD16
+count() { [ -f "$1" ] && wc -l < "$1" | tr -d ' ' || echo 0; }
+MREF=ref2tnaxn.r2
+TIERENV="BIGMOE_TIER=4433333333,BIGMOE_TIER_GLU=3c,BIGMOE_TIER_CL=112"
+DEST=3000
+while [ "$(count results/$MREF/decode.jsonl)" -lt 100 ]; do
+  b=$(count "results/$MREF/decode.jsonl")
+  gate "MBPP reference" 34 "$DEST"; pick_c
+  t0=$(date +%s)
+  EVALSUITE_STAGE_ENV="$TIERENV" EVALSUITE_BIGMOE_CODE="$HOME/EvalSuite/snap/bigmoe-da8e7a6" \
+    ./bin/evalsuite gpu decode "$MREF" --sets mbpp --chunk-minutes 45 --share --C "$RC_C" --need "$RC_NEED" --minutes 60 \
+    >> "$LOG" 2>&1; RC=$?
+  d=$(( $(date +%s) - t0 )); [ "$d" -gt "$DEST" ] && DEST=$d
+  say "MBPP reference: chunk rc=$RC ($(count "results/$MREF/decode.jsonl")/100 rows, $((d / 60)) min)"
+  [ "$(count "results/$MREF/decode.jsonl")" -gt "$b" ] || { tail -40 results/gpu_stage.log | grep -q Traceback && { say "MBPP reference: the stage failed: runner stops"; exit 4; }; }
+done
+SENV=$BM/data/stack/stack_env.txt
+SLINE=$(grep -v '^#' "$SENV" | grep . | tail -1)
+parse_env "$SENV" || { say "stack_env.txt's env line does not parse as K=V pairs: runner stops"; exit 2; }
+MBENV=("${ENVARR[@]}")
+echo "$SLINE" | tr ',' '\n' | grep -q '^R57_INERT=CD16$' || { say "stack_env.txt has no R57_INERT=CD16: runner stops"; exit 2; }
+QS=$(printf '%s\n' "${MBENV[@]}" | grep '^R57_QOM_SETS=' | tail -1)
+case ",${QS#R57_QOM_SETS=}," in *,mbpp,*) EXTRAENV=() ;; *) EXTRAENV=(R57_QOM_SETS=humaneval,ifeval,multi,mbpp) ;; esac
+say "MBPP arm: stack_env.txt ($(grep '^#' "$SENV" | head -1 | cut -c1-120)); QOM sets ${QS:-unset}${EXTRAENV:+ -> ${EXTRAENV[0]}}"
+REFMAN_STACK=$REFMAN; REFMAN=""
+PHASE="the MBPP run (the stack with CD16)"; CURENV=("${MBENV[@]}")
+TAGP=es_mb_; IFECOPY=0
+MKEYS=$(python3 -c 'import json
+r = [json.loads(l) for l in open("data/items/dec_mbpp.jsonl")]
+print(",".join(x["key"] for x in sorted(r, key=lambda x: x["task_id"])))')
+MRKEYS=$(echo "$MKEYS" | tr ',' '\n' | tail -r | paste -sd, -)
+order mbpp_stack_fwd fwd "$MKEYS"
+order mbpp_stack_rev rev "$MRKEYS"
+python3 - "$REFMAN_STACK" "$REFMAN" <<'CM' >> "$LOG" 2>&1
+import json, sys
+T = ("/BigMoE/", "/Leap/", "/TrainLab/", "/Breakthrough/", "/MoonShots/")
+ext = lambda p: {k: s for k, (f, s) in json.load(open(p))["modules"].items() if any(t in f for t in T)}
+a, b = ext(sys.argv[1]), ext(sys.argv[2])
+d = sorted(k for k in set(a) & set(b) if a[k] != b[k])
+print(f"the stack run and the MBPP run share {len(set(a) & set(b))} outside modules; differing: {d or 'none'}; only in MBPP: "
+      f"{sorted(set(b) - set(a)) or 'none'}")
+CM
+MV=""
+for o in fwd rev; do
+  $PY tools/mbpp_score.py d4 "mbpp_stack_$o" "$MREF" > "results/mbpp_${o}_d4.txt" 2>&1
+  say "MBPP $o: $(grep '^mbpp (n' "results/mbpp_${o}_d4.txt" | tail -1) -> $(grep '^MBPP:' "results/mbpp_${o}_d4.txt" | tail -1)"
+  MV="$MV $o: $(grep '^MBPP:' "results/mbpp_${o}_d4.txt" | tail -1)"
+done
+case "$MV" in *FAIL*) MW=FAIL ;; *) MW=PASS ;; esac
+grep -q "^MBPP:" results/mbpp_fwd_d4.txt && grep -q "^MBPP:" results/mbpp_rev_d4.txt || MW=INCOMPLETE
+echo "MBPP: $MW ($MV )" > results/MBPP_DONE
+say "the MBPP verdict: $(cat results/MBPP_DONE)"
 say "runner 49 end"
