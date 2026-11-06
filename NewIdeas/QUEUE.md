@@ -34,6 +34,26 @@ A-B-B-A (passes 112.7 / 115.0), with no freezes.
   250-330 (x2.0-2.9 to go);
   12 GB code-valid ~36 [P] vs 90-130 (x2.5-3.6 to go). The 12 GB EXACT loop is 18.4-18.9 (not 40.8; see 12 GB LINE).
 
+200 STACK (NewIdeas Fri 21:0x; Kamen Fri ~21:0x via the orchestrator: >= 200 tok/s lossy at 45 GB on code by Saturday
+evening, measured and gated, workload named; then publish). Built levers that can still stack, on 12 HumanEval at C 224:
+
+| lever | switch | factor on HE-12 | quality status | needs tonight |
+|---|---|---|---|---|
+| the stack (base) | FAST-NAX + DN-KS + lazy + D7BNAX_32 + att_single | ~131-137 tok/s [P: 157.9 with CD16 / CD16's x1.15-1.21] | gate tonight | palindrome arm (armed) |
+| relax v2 (MoonShots M-44) | R57_RELAX_DELTA=0.5, R57_RELAX_SPAN=1 | x1.08-1.15 [P: kept x1.10-1.23 replay; v1 +10 % kept [K], host-light now] | RELAX B (v1) passed decision 4; v2's decisions == v1 on 3,296 checks | stackr arm (armed); the gate if it wins |
+| MATCH + 32-row checks | R57_COPY=g2, R57_ROWS=32 (+ D7BNAX_32=2) | x1.10-1.20 [P: K 9.57 -> 12.35 on HE+ (x1.29) [K, walk], minus ~0.8-1 ms per added row on FAST-NAX] | exact verification: outputs move only through FAST's keep sets | BigMoE stub test on the FAST engine, then arms stackm + stackrm |
+| Leap's cycle items (DN-KS v2, k3c, expert id glue, HC reads) | per item | x1.02-1.06 [P: -1.5..-5 ms of ~80] | numerics-only (FAST) | only what Leap has installed by 00:00 |
+| C 256 (~50 GB) | C | x1.03-1.05 [P] | none needed | only with Kamen's yes |
+
+- Stacked product [P]: low 131 x 1.08 x 1.10 x 1.02 = ~160; high 137 x 1.15 x 1.20 x 1.05 x 1.05 = ~208. So 200 on HumanEval-12
+  needs the upper end of every factor. MBPP stays ~90-110 [P] (qall 71.3 [K]; no CD16; MATCH ~x1.0 there). The only
+  large MBPP lever, a guarded CD16 (G16 x1.505 / D16 x1.306 [P, lexer replay]), cannot stack with relax v2 (INERT
+  asserts against both relaxed rules) and needs an MBPP12 quality run first.
+- Not stackable (KILLed today): CD16 (MBPP quality), never-wait and SPLIT-NAX (engine). Not built: bigger drafters.
+- Tonight's ticket, reshaped (asked of BigMoE): qall / stack / stackr / stackm / stackrm, palindrome, 12 HumanEval. d7x
+  and the 4 chat prompts drop: chat ships EXACT, so the chat clause is moot. The winning arm's env becomes the CODE
+  profile that EvalSuite gates; both long-code top-ups run on it.
+
 MEASURED (quality measured; speed measured or priced):
 1. RELAX ship, B on code + E on chat (45). Speed [K, EvalSuite RESULT 8797f54, C 160, paired]:
    - B: tok/s x1.49 HumanEval+, x1.32 math, x1.54 agent;
