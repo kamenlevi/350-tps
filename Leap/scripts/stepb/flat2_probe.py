@@ -23,6 +23,7 @@ import stepb_k as KB                                     # Leap's step 0 part B:
 
 SWEEP = tuple(int(x) for x in os.environ.get("FLAT2_SWEEP", "2,4,8,12,16").split(",") if x)
 KREP = int(os.environ.get("STEPB_KREP", "3"))            # kernel-level forwards per probe, at 2 rows and at 16 rows
+DPROBE = os.environ.get("STEPB_DRAFT") == "1"           # step B: the drafter's propose profiled once per probe (a cache copy)
 
 
 def sync_ms(mx, clock=time.perf_counter, n=300):
@@ -305,6 +306,54 @@ class Hooks:
             else:
                 delattr(obj, name)
 
+    # ------------------------------------------------------------ step B: the drafter's propose
+    def _draft_probe(self, L):
+        """this cycle's propose again (same block, same context) on a copy of the drafter cache, with REF2 removed as the
+        loop runs it: 4 unsynced walls, then one kernel-level pass with the chained replay of its kernel kinds"""
+        import copy
+        ns, clock = self.ns, self.clock
+        mx, ref2, draft, propose, MASK = ns["mx"], ns["ref2"], ns["draft"], ns["propose"], ns["MASK"]
+        out = {}
+
+        def fresh():
+            dc = []
+            for c in L["dcache"]:
+                c2 = copy.copy(c)
+                for k_, v_ in list(vars(c).items()):
+                    if isinstance(v_, mx.array):
+                        setattr(c2, k_, mx.array(v_))
+                dc.append(c2)
+            mx.eval([v_ for c in dc for v_ in vars(c).values() if isinstance(v_, mx.array)])
+            return dc
+
+        try:
+            R_ = int(L.get("R_", 16))
+            blk = mx.array([[int(L["tok"])] + [MASK] * (R_ if L.get("_d17") else R_ - 1)])
+            ctx = L["ctx"][None].astype(mx.bfloat16)
+            mx.eval(blk, ctx)
+            ref2.remove()
+            try:
+                walls = []
+                for _ in range(4):
+                    dc = fresh()
+                    t0 = clock(); p_, c_ = propose(blk, ctx, dc); mx.eval(p_, c_); walls.append(1e3 * (clock() - t0))
+                out["wall"] = walls
+                dc = fresh()
+                KB.K.update(rec=[], ctx=["draft"], L=None, depth=0, skip=0, cnt={}, cap=True, caps=[])
+                KB.K["on"] = True
+                try:
+                    p_, c_ = propose(blk, ctx, dc); mx.eval(p_, c_)
+                finally:
+                    KB.K["on"] = False
+                out["krec"] = [list(x) for x in KB.K["rec"]]
+                out["replay"] = KB.replay(0.0)
+            finally:
+                KB.K["cap"], KB.K["caps"] = False, []
+                ref2.apply()
+        except Exception as e:
+            out["error"] = repr(e)[:300]
+        return out
+
     # ------------------------------------------------------------ the probe
     def _probe(self, L, n):
         ns, clock, SEG = self.ns, self.clock, self.SEG
@@ -406,6 +455,8 @@ class Hooks:
                     KB.K["cap"], KB.K["caps"] = False, []
                     res["k_16"].append(rk)
             res["sweep"] = sw
+            if DPROBE:
+                res["draft"] = self._draft_probe(L)
         except Exception as e:                           # a failed probe must not cost the pass: put the check back
             res["error"] = repr(e)
             self.rec["errors"].append(f"probe at check {n}: {e!r}")

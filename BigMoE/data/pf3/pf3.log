@@ -1,0 +1,7 @@
+shared run reserved until 09:11 (about 300% CPU, 100% GPU). It doesn't need an idle Mac, so it runs beside the others; your numbers may include their load. `peer unlock` when done.
+Free for it now: about 16 cores (1691% CPU) and about 100% of the GPU. It fits: use about 3 workers or -j 3.
+11-06 08:59:20 start (pid 71884, NO-SWAP 49 GB)
+11-06 08:59:50 f3k: ran 2 / 2; error lines 0; CLEAN
+11-06 09:00:21 f3r: ran 2 / 2; error lines 0; CLEAN
+11-06 09:00:21 end
+lock released

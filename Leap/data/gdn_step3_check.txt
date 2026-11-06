@@ -1,0 +1,6 @@
+
+GDN-STEP3 check Fri 09:03:02 (share lock; MLX 0.32.2)
+  var 0 (Fable B's reference loop) vs mlx_lm at S 16: y 0.0e+00 (0.00 % differ), state 0.0e+00 (bitwise True)
+  S 16 chained (us per call): mlx_lm 67.1, v0a0 73.9, v0a1 79.8, v0a2 78.6, v0a3 69.4
+  abl 1 (no simd_sum) drops var 0 by -8 % (Fable B's gate for var 1 / 2: >= 25 %); abl 2 (k, q constants) by -6 %
+RESULT KILL by Fable B's own gate: the reductions are not the cost (var 1 / 2 not run)

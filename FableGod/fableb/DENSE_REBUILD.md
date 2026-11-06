@@ -17,6 +17,43 @@ on a GPU. v1 is kept as `DENSE_REBUILD_v1.md`. Source for every [K]: `~/Leap/TAB
 - **New in v2:** a ks plan per shape (section 2), a row-parallel GDN step that makes the 16-row step cost what the 2-row
   one does (section 3), a gate kernel without its serial chains, the expert id glue as one kernel, a pad-free row frame.
 
+## 0b. GPU verdicts on v2's items [K Leap, Fri 6 Nov morning; all in TABLE_350]
+
+| item | verdict | numbers |
+|---|---|---|
+| K split per shape (DN-KS) | PASS | FLAT -4.19 ms in the engine; out_proj at ks 6 |
+| single-call attention | PASS | FLAT -4.06 (att_single) / -4.18 (fs4); att_single is in the stack |
+| in_proj at ks 2 | PASS | 13 % faster than ks 1; nt 2 / 4 do not help |
+| row-parallel GDN step, v1 and the redraft | **KILL on time** (bits fine) | S 16: 149-183 us against 91-93; S 2: 47-50 against 37-39 |
+| gate kernel k2c | **KILL** | 15.2 us against 4.5 chained; k2b alone is already fast |
+| a\|b and k\|v folds, expert glue kernel, pad frame | not run yet | |
+
+- So sections 3a and 3b are dead for the check. The kept-prefix state formula of 3a stays a candidate for the commit replay.
+- Lesson: independent simd_sum reductions do not overlap on this GPU, and a part B time measured per call in isolation
+  (k2b's 10 us) can vanish in a chain. Price a small kernel from its chained time only.
+- Section 4's two [G] rows (-0.5 and -0.25) are withdrawn. The price after this round stays ~21-22 ms at 16 rows.
+
+## 0c. The gated-delta step, third try: `kernels/gdn_step3.py` (compiles, 6 variants; not run)
+
+- Leap's ask after the chunk form's KILL: keep the reference's grid (one simdgroup per state row), make a row step cheaper.
+- New base [K]: 57.9 us per call at 16 rows, 2.08 ms per check. ~13 us at 2 rows, so ~3.2 us per extra row.
+- Reading [P]: with ~220 simdgroups in flight that is ~115 ns per (simdgroup, row). The chunk form showed the chain is
+  not the cost, so the amount of work per row step is. A row step holds two cross-lane reductions (simd_sum).
+- VAR 1: one reduction of a float3 per row (state.k, state.q, k.q); out = b + delta (k.q). VAR 2: the same with k.q
+  read from an input. VAR 0 is the reference loop as the control.
+- ABL arms (timing only): 1 = no reductions, 2 = no k / q loads. They say what a row step pays for.
+- CPU check (`gdn_step3_check.out`): outputs within 2.2e-7 of the loop, 0.05 % round to a different 16-bit float; the
+  state update keeps the reference's expression (bitwise in the emulation; Leap to confirm on the GPU). FAST.
+- **Line [G]: PASS <= 46 us chained at S 16 (-0.43 ms per check), KILL > 53.** If ABL 1 does not drop the time by >= 25 %,
+  the reductions are not the cost and neither variant can pass: stop there.
+
+- **GPU ablation [K Leap]: KILL by my gate.** us per call at S 16: reference 73.9 in this harness, 79.8 without the
+  reductions, 78.6 with constant k / q, 69.4 without both. Neither carries the per-row cost; VAR 1 / 2 were not run.
+- **Prefetch arms added to the same file (PF, compiles, not run).** PF 1 fetches v, g, beta of all rows before the loop,
+  PF 2 also k and q, PF 4 parks y and stores it once after the loop. Suspects: a cold device load of v[t] on every row's
+  dependent chain, and 6,144 simdgroups writing single values into shared cache lines of y on every row.
+  PF changes no value and no expression, so a PF win would be an exact gain. Line: >= 25 % off VAR 0 at S 16, else stop.
+
 ## 1. The fill model [P from part B]
 
 `t = 1.6 us + 1.15 us x max(KG / ks, tiles x KG / C)`, with KG = K / 64, C = simdgroups in flight.
@@ -77,6 +114,12 @@ on a GPU. v1 is kept as `DENSE_REBUILD_v1.md`. Source for every [K]: `~/Leap/TAB
   by 2.9e-7; 0.10 % of outputs round to a different 16-bit float. So it is FAST, not bitwise.
 - Expected [G]: 28-40 us at 16 rows instead of 57.5, i.e. -0.6..-1.1 ms per 16-row check. I count -0.5.
 - **Line for Leap (chained, layer 4, 16 rows): PASS <= 40 us per call, KILL > 50.** Outputs within 1e-5 of the loop.
+- **GPU result [K Leap, Fri ~08:3x]: bits fine (<= 0.03 % of outputs differ, state 2.5e-7), time KILL.** Chained at S 16:
+  121.7-128.9 us against the reference's 64.5-86.3. Cause: 48 threadgroups against the reference's 1,536, and the
+  substitution on 128 threads. The -0.5 ms of section 4 is withdrawn until a redraft passes.
+- **Redraft: `kernels/gdn_chunk2.py` (compiles, not run).** A tiny table kernel plus one simdgroup per (value head, block
+  of 4 or 8 state rows): 768-1,536 threadgroups. Same algebra, same line. It pays only if independent simd_sums
+  pipeline on this GPU; if not, the idea is dead for the check and stays useful for the commit only.
 - Side gain for the commit: the state after any kept prefix m is the same last step with n = m. A replay then needs only
   d_i, k_i and g, with no loop. That fits the lazy commit's pack.
 
@@ -108,7 +151,7 @@ on a GPU. v1 is kept as `DENSE_REBUILD_v1.md`. Source for every [K]: `~/Leap/TAB
 | row-parallel GDN step [G, halved] | -0.5 |
 | gate kernel k2c [G, halved] | -0.25 |
 | router on qmm16c8, if the flip check passes [P] | -0.6 |
-| **after this round** | **~21 (20-22)** |
+| **after this round** (-0.5 less while the GDN step is KILLed: ~21.5) | **~21 (20-22)** |
 
 - At 2 rows: 35.8 - 8.1 - 2.4 - 0.25 - 0.5 (pads) - 0.6 = ~24.
 - The expert glue kernel is -0.6..-0.8 ms more, outside the dense part.

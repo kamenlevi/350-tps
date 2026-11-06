@@ -19,7 +19,15 @@ cd "${SN_ROOT:-$HOME/BigMoE}" || exit 1
 mkdir -p data/sat data/stack data/r57/snap
 LOG="$PWD/data/sat/sat.log"
 say() { echo "$(date '+%m-%d %H:%M:%S') $*" >> "$LOG"; }
-STACK=${SN_STACK-R57_NAX=1,REF2_NAX_1CQ=1,REF2_DN_KS=1,REF2_GDN_LAZY=1,R57_INERT=CD16,R57_FASTTAX=1}
+STACK=${SN_STACK-R57_NAX=1,REF2_NAX_1CQ=1,REF2_DN_KS=1,REF2_GDN_LAZY=1,D7BNAX_32=1,R57_INERT=CD16,R57_FASTTAX=1}
+# stackr (the orchestrator Fri 08:4x: the shipping CODE config carries a relax gate): the stack with MoonShots' relax v2 (DELTA
+# 0.5 + SPAN) IN PLACE OF CD16 (INERT asserts against both relaxed rules), = the pre-flight's clean f2k mix; 12 HumanEval only.
+# Line (pre-registered Fri 08:4x, before arming): PASS = stackr >= stack x 1.03 on code (pair-mean geo steady), KILL = stackr <
+# stack x 0.97, else BETWEEN; stackr vs qall, kept per check and tokens per task beside. Its env goes to data/stack/stackr_env.txt.
+STACKR=${SN_STACKR-R57_NAX=1,REF2_NAX_1CQ=1,REF2_DN_KS=1,REF2_GDN_LAZY=1,D7BNAX_32=1,R57_FASTTAX=1,R57_RELAX_DELTA=0.5,R57_RELAX_SPAN=1}
+# d7x (Leap Fri 08:4x, d7b_nax dd9066d3): qall + D7BNAX_32=1 (17-row D7b drafts as two qmm16c halves), 12 HumanEval only (D7b
+# drafts code). Line (pre-registered Fri 08:5x): KEPT CLAUSE OK = kept per check within 1 % of qall's on code; tok/s beside
+# (expected ~+2 %, under the noise floor: no speed verdict). D7BNAX_32=1 also rides in stack and stackr.
 avail_gb() { vm_stat | awk '/page size of/ {ps=$8} /^Pages (free|speculative|purgeable):/ || /^File-backed pages:/ {v=$NF; sub("[.]","",v); s+=v} END {printf "%.1f", s*ps/1e9}'; }
 A=${SN_AVAIL:-$(avail_gb)}
 fits() { awk -v a="$A" -v n="$1" 'BEGIN {exit !(n <= a)}'; }
@@ -29,7 +37,7 @@ cp scripts/r57_screen_fast.py data/r57/snap/r57_screen_sat.py && cp scripts/rela
   data/r57/snap/ && cp scripts/c45_runner.sh data/r57/snap/c45_runner_sat.sh || exit 2
 RUN="/bin/bash data/r57/snap/c45_runner_sat.sh"
 export C45_OUT="$PWD/data/sat" C45_SWAP0=$(sysctl -n vm.swapusage | awk '{gsub("M","",$6); print $6 / 1024}') C45_ALARM=1200 \
-  MG=${SN_MG:-4} C45_DEADLINE=${SN_DEADLINE:-$(date -v+40M +%H%M)} C45_SCREEN=data/r57/snap/r57_screen_sat.py C45_REFTOK=
+  MG=${SN_MG:-4} C45_DEADLINE=${SN_DEADLINE:-$(date -v+50M +%H%M)} C45_SCREEN=data/r57/snap/r57_screen_sat.py C45_REFTOK=
 K="humaneval/HumanEval/68,humaneval/HumanEval/16,humaneval/HumanEval/91,humaneval/HumanEval/6,humaneval/HumanEval/79"
 K="$K,humaneval/HumanEval/19,humaneval/HumanEval/161,humaneval/HumanEval/17,humaneval/HumanEval/56,humaneval/HumanEval/141"
 K="$K,humaneval/HumanEval/101,humaneval/HumanEval/63,ifeval/1220,ifeval/1561,multi/de3,multi/zh15"
@@ -37,16 +45,31 @@ QA="BIGMOE_EXT_BUILD=build_qom,R57_REFTOK=,R57_FAST=QOM,R57_D17=1,R57_D7B=code,R
 QA="$QA,REF2_SMALL_NATIVE=1,R57_D7BNAX=1,REF2_OOO_1C=1"
 printf '%s\n' "# Sat 7 Nov stacked FAST (BigMoE sat_night.sh, $(git rev-parse --short HEAD)): screen scripts/r57_screen_fast.py; env (comma list):" \
   "$QA,$STACK" > data/stack/stack_env.txt
+printf '%s\n' "# Sat 7 Nov stacked FAST + relax v2 for CODE (BigMoE sat_night.sh, $(git rev-parse --short HEAD)): screen scripts/r57_screen_fast.py;" \
+  "# env (comma list; R57_RELAX_LOG optional):" "$QA,$STACKR" > data/stack/stackr_env.txt
+KC=$(echo "$K" | tr ',' '\n' | grep '^humaneval/' | paste -sd, -)   # stackr runs the 12 HumanEval only (chat has no relax gate)
 rm -f data/r57/st*_${CC}_*
 say "stacked FAST start (pid $$, NO-SWAP $A GB -> C $CC, deadline $C45_DEADLINE, stack '$STACK')"
-for a in "stq:$QA" "sts:$QA,$STACK" "stqm:$QA" "stsb:$QA,$STACK" "stqb:$QA"; do
-  R57_KEYS=$K C45_ARMS="${a%%:*}_$CC:$CC:${a#*:}" $RUN
+RR="$QA,$STACKR,R57_RELAX_LOG=$PWD/data/sat/stackr_relax.jsonl"
+for a in "stq:$QA" "sts:$QA,$STACK" "str:$RR" "s7x:$QA,D7BNAX_32=1" "stqm:$QA" "s7xb:$QA,D7BNAX_32=1" "strb:$RR" \
+         "stsb:$QA,$STACK" "stqb:$QA"; do
+  KK=$K; case "${a%%:*}" in str|strb|s7x|s7xb) KK=$KC ;; esac
+  R57_KEYS=$KK C45_ARMS="${a%%:*}_$CC:$CC:${a#*:}" $RUN
   say "${a%%:*} rc=$?"
 done
+# never-wait's speed ceiling (the orchestrator Fri 09:0x; ~/FableGod/far/NEVERWAIT_TEST.md section 3, Method B, no new code):
+# the STACK with R57_WARMSPLIT=4 on the 12 HumanEval, one pass after the palindrome: every 4th check from the 3rd runs its own
+# full 16-row input cold, then warm with all its experts resident, both rolled back, before the real check commits.
+# Line (pre-registered Fri 09:0x, before arming), with S = this arm's median gate service per live check:
+#   PASS = median (cold16 - warm16) >= 0.6 x S; BETWEEN = 0.3-0.6 x S; KILL = < 0.3 x S (the wait is not where the logs say).
+#   Caveat (section 3): a sample is a full 16-row check, heavier than the live ones (Wed: 602 vs 138 misses); the samples'
+#   median misses are printed beside the live checks'. The ceiling ignores the late groups' own compute.
+R57_KEYS=$KC C45_ARMS="snw_$CC:$CC:$QA,$STACK,R57_WARMSPLIT=4" $RUN
+say "snw rc=$?"
 "${SN_PY:-$HOME/BigMoE/.venv/bin/python}" -I - "$CC" "$(date +%F)" "${SN_FANLOG:-$HOME/Library/Logs/fanwatch.log}" >> "$LOG" 2>&1 <<'EOF'
 import datetime as D, json, math, re, statistics as S, sys
 C, day, fanlog = sys.argv[1], sys.argv[2], sys.argv[3]
-g = lambda xs: math.exp(sum(map(math.log, xs)) / len(xs)) if xs else float("nan")
+g = lambda xs: (lambda ys: math.exp(sum(map(math.log, ys)) / len(ys)) if ys else float("nan"))([x for x in xs if x and x > 0])
 win, t0 = [], None
 try:
     for ln in open(fanlog):
@@ -65,7 +88,7 @@ for ln in open("data/sat/c45.log"):
     if m:
         arm_t.setdefault(m.group(3), {})[m.group(2)] = D.datetime.fromisoformat(f"{day} {m.group(1)}")
 hit = {t for t, v in arm_t.items() if "run" in v and "done" in v and any(a < v["done"] and b > v["run"] for a, b in win)}
-P = {"qall": ("stq", "stqm", "stqb"), "stack": ("sts", "stsb")}
+P = {"qall": ("stq", "stqm", "stqb"), "stack": ("sts", "stsb"), "stackr": ("str", "strb"), "d7x": ("s7x", "s7xb")}
 runs = {}
 for t in sum(P.values(), ()):
     try:
@@ -106,6 +129,45 @@ v = ("MISSING" if nc == 0 else "PASS" if rc >= 1.20 and (nh == 0 or rh >= 0.97) 
 L.append(f"Verdict stacked FAST (pre-registered Fri 08:3x){' INDICATIVE at C < 224' if int(C) < 224 else ''}: {v}: code "
          f"{100 * (rc - 1):+.1f} % over {nc}, chat {100 * (rh - 1):+.1f} % over {nh} (PASS code >= +20 % AND chat >= -3 %; "
          f"KILL code < +10 %)")
+rr, nr = ratio(pm(P["stackr"], lambda r: r["tpsw"], "code"), pm(P["stack"], lambda r: r["tpsw"], "code"))
+rq, _ = ratio(pm(P["stackr"], lambda r: r["tpsw"], "code"), pm(P["qall"], lambda r: r["tpsw"], "code"))
+vr = "MISSING" if nr == 0 else ("PASS" if rr >= 1.03 else "KILL" if rr < 0.97 else "BETWEEN")
+L.append(f"Verdict stackr (pre-registered Fri 08:4x){' INDICATIVE at C < 224' if int(C) < 224 else ''}: {vr}: code vs stack "
+         f"{100 * (rr - 1):+.1f} % over {nr}, vs qall {100 * (rq - 1):+.1f} % (PASS >= +3 % vs stack; KILL < -3 %)")
+r7, n7 = ratio(pm(P["d7x"], lambda r: r["tpsw"], "code"), pm(P["qall"], lambda r: r["tpsw"], "code"))
+k7, _ = ratio(pm(P["d7x"], kept, "code"), pm(P["qall"], kept, "code"))
+L.append(f"d7x kept clause (pre-registered Fri 08:5x): {'MISSING' if n7 == 0 else 'OK' if abs(k7 - 1) <= 0.01 else 'NOT OK'}: "
+         f"kept {100 * (k7 - 1):+.2f} % vs qall on code over {n7} (within 1 %); tok/s {100 * (r7 - 1):+.1f} % (no speed verdict)")
+try:                                                     # never-wait's speed ceiling (R57_WARMSPLIT samples of arm snw)
+    ws = [s for e in json.load(open(f"data/r57/snw_{C}_warmsplit.json")) for s in e.get("samples", [])]
+    ck = json.load(open(f"data/r57/snw_{C}_checks.json"))
+    live = [(c, x) for e in ck if not e.get("paused") for c, x in zip(e.get("svc", []), e.get("miss", []))]
+    S_ = S.median([c for c, _ in live]) if live else float("nan")
+    d_ = [s["cold"][1] - w[1] for s in ws if s.get("cold") for w in s.get("warm", []) if w[0] == s["cold"][0]]
+    mc = S.median([s["cold"][2] for s in ws if s.get("cold")]) if ws else float("nan")
+    ml = S.median([x for _, x in live]) if live else float("nan")
+    cd = S.median(d_) if d_ else float("nan")
+    vn = "MISSING" if not d_ else ("PASS" if cd >= 0.6 * S_ else "KILL" if cd < 0.3 * S_ else "BETWEEN")
+    L.append(f"Verdict never-wait ceiling (pre-registered Fri 09:0x){' INDICATIVE at C < 224' if int(C) < 224 else ''}: {vn}: "
+             f"median cold16 - warm16 {cd:.1f} ms over {len(d_)} samples vs S {S_:.1f} ms (PASS >= 0.6 S, KILL < 0.3 S); "
+             f"sample misses {mc:.0f} vs live {ml:.0f} per check")
+except (OSError, ValueError, KeyError, TypeError) as e_:
+    L.append(f"never-wait ceiling: MISSING ({type(e_).__name__})")
+rl = [r.get("rlx") for t in P["stackr"] for r in runs[t].values() if r.get("rlx")]
+sp = [r.get("spn") for t in P["stackr"] for r in runs[t].values() if r.get("spn")]
+if rl or sp:
+    L.append(f"stackr relaxed accepts {sum(x.get('relaxed', 0) for x in rl)}; span: rows {sum(x.get('rows', 0) for x in sp)}, span rows "
+             f"{sum(x.get('span_rows', 0) for x in sp)}, relaxed {sum(x.get('relaxed', 0) for x in sp)}")
+try:                                                     # EvalSuite's same-scores runner reads ONE code file (Fri 09:2x rule):
+    envl = lambda f: [x for x in open(f).read().splitlines() if x and not x.startswith("#")][-1]   # stackr if its line PASSed,
+    pick = "stackr" if vr == "PASS" else "stack"                                                   # else the stack (CD16)
+    open("data/stack/code_env.txt", "w").write(
+        f"# CODE profile for EvalSuite's same-scores run (sat_night.sh, Sat {C}): {pick} (stackr verdict {vr}; rule: stackr if "
+        f"PASS, else stack). Screen scripts/r57_screen_fast.py. One comma-separated env line:\n"
+        + envl(f"data/stack/{pick}_env.txt") + "\n")
+    L.append(f"code_env.txt = {pick} (stackr verdict {vr})")
+except (OSError, IndexError) as e_:
+    L.append(f"code_env.txt NOT written ({type(e_).__name__})")
 open("data/sat/sat_report.txt", "w").write("\n".join(L) + "\n"); print("\n".join(L))
 EOF
 say "report rc=$? (data/sat/sat_report.txt)"

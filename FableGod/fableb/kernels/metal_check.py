@@ -27,15 +27,25 @@ for name, tmpl, insts in (("gdn_w", "typename T, int S_C", ["half, 16", "half, 2
                           ("hc_d", "typename T, int PEND", ["half, 1", "half, 0"]),
                           ("gdn_chunk", "typename T, int S_C, int NSG", ["half, 16, 16", "half, 2, 8", "half, 16, 32"]),
                           ("hc_k2c", "typename T, int LR, int HC, int NP, int NC, int D", ["half, 320, 4, 16, 352, 2560"]),
+                          ("gdn_chunk2", "typename T, int S_C, int RB", ["half, 16, 8", "half, 16, 4", "half, 2, 8"]),
+                          ("gdn_chunk2:TAB", "typename T, int S_C", ["half, 16"]),
+                          ("gdn_step3", "typename T, int S_C", ["half, 16"]),
                           ("eprep", "typename TS, int K_C, int M_C, int R4, int HAS_Q, int HAS_SPLIT, int HAS_NL",
                            ["float, 10, 16, 2, 1, 1, 1", "half, 10, 2, 0, 0, 0, 0"])):
-    if not os.path.exists(os.path.join(HERE, name + ".py")):
+    if not os.path.exists(os.path.join(HERE, name.split(":")[0] + ".py")):
         continue
-    m = load(name)
+    tab = name.endswith(":TAB")
+    m = load(name.split(":")[0])
+    if tab:
+        import types
+        m = types.SimpleNamespace(HDR=m.HDR, SRC=m.TAB_SRC, IN=m.TAB_IN, OUT=m.TAB_OUT, TYPES={"dots": "float"})
     for inst in insts:
         with tempfile.TemporaryDirectory() as d:
             f = os.path.join(d, "k.metal")
-            open(f, "w").write(wrap(m, tmpl, inst))
+            variants = [(v, a, pf) for v in (0, 1, 2) for a in (0, 3) for pf in (0, 7)] + [(0, 0, 1), (0, 0, 2), (0, 0, 4)] if name == "gdn_step3" else [None]
+            src = "".join(wrap(m, tmpl, inst, "#define VAR %d\n#define ABL %d\n#define PF %d\n" % va + m.SRC).replace("kfn", "kfn%d%d%d" % va).replace("k_inst", "k_inst%d%d%d" % va).replace(PRE + m.HDR, "" if i else PRE + m.HDR) + "#undef VAR\n#undef ABL\n#undef PF\n"
+                          for i, va in enumerate(variants)) if variants[0] else wrap(m, tmpl, inst)
+            open(f, "w").write(src)
             p = subprocess.run(["xcrun", "-sdk", "macosx", "metal", "-std=metal4.0", "-c", f, "-o", os.path.join(d, "k.air")],
                                capture_output=True, text=True)
             errs = [l for l in p.stderr.splitlines() if "error" in l]

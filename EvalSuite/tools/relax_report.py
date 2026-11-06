@@ -360,6 +360,37 @@ def report(arm_names, tag, modes=False, do_score=False, tok=None, outfile=None):
                 f"{len(q['blunders']):>6}{1e4 * len(q['blunders']) / max(q['tokens'], 1):>7.2f}{q['long']:>5}"
                 f"{q['kld_q'][0]:>9.5f}{q['kld_q'][3]:>9.5f}{('-' if dr is None else f'{dr:.2f}'):>7}"
                 f"{fmt_pct(q['dev_q'][0]):>8}{fmt_pct(q['dev_q'][3]):>8}")
+    top_sets = ("humaneval", "humanevalx", "humanevalt")   # PREREG_relax_drift amendment 2: the code-only top-up
+    for a in arms:
+        if "humanevalt" not in allq[a]:
+            continue
+        rows_, lq = [], [[0.0, 0] for _ in range(4)]
+        for k, pr in sorted(arms[a]["prompts"].items()):
+            n_ = len(pr["row"]["completion_ids"])
+            if pr["row"]["set"] in top_sets and n_ >= LONG and pr["replay"] is not None:
+                qs = quarters(n_)
+                acc = [[0.0, 0] for _ in range(4)]
+                for t in tokens(pr):
+                    acc[qs[t["pos"]]][0] += t["kld"]; acc[qs[t["pos"]]][1] += 1
+                for i in range(4):
+                    lq[i][0] += acc[i][0]; lq[i][1] += acc[i][1]
+                rows_.append((k, n_, [x / m if m else 0.0 for x, m in acc]))
+        keys_ = {k for k, _, _ in rows_}
+        tok_ = sum(n_ for _, n_, _ in rows_)
+        bl_ = [b for s in top_sets if s in allq[a] for b in allq[a][s]["blunders"] if b[0] in keys_]
+        per = 1e4 * len(bl_) / tok_ if tok_ else None
+        pq = [x / m if m else 0.0 for x, m in lq]
+        mx_ = max((q_[3] for _, _, q_ in rows_), default=0.0)
+        ok = per is not None and per <= 1.0 and pq[3] <= 0.02 and mx_ <= 0.05
+        say(f"\n== code-only top-up (PREREG_relax_drift amendment 2): arm {a}, {len(rows_)} code rows >= {LONG} tokens over "
+            f"{', '.join(s for s in top_sets if s in allq[a])} ({tok_} tokens): blunders {len(bl_)} = "
+            + ("-" if per is None else f"{per:.2f}") + f"/10K (line <= 1), pooled q4 KLD {pq[3]:.5f} (line <= 0.02), largest "
+            f"row q4 {mx_:.5f} (line <= 0.05): " + ("PASS" if ok else "FAIL")
+            + ("" if len(rows_) >= 20 else f" (only {len(rows_)} long rows: the orchestrator decides if enough)"))
+        say(f"  information: the code-only q4 / q1 ratio " + (f"{pq[3] / pq[0]:.2f}" if pq[0] > 0 else "-")
+            + f" (q1 {pq[0]:.5f})")
+        for k, n_, q_ in rows_:
+            say(f"  {k}: {n_} tokens, KLD q1 {q_[0]:.5f}, q4 {q_[3]:.5f}")
     code_sets = ("humaneval", "humanevalx", "agentlong")   # PREREG_relax_drift: every code row of >= 512 tokens, pooled
     for a in arms:
         qs_ = [allq[a][s] for s in code_sets if s in allq[a]]

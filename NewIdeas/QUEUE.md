@@ -104,10 +104,10 @@ MEASUREMENTS THAT GATE THE PLAN (no gain themselves):
 
   | piece (ms per check) | today | budget | cut | what it takes (Leap's part B, 87c9009) |
   |---|---|---|---|---|
-  | dense GPU (flat in rows) | ~36 [K] | 12 | -24 (x0.33) | The time sits in ks-1 narrow GEMVs (out_proj / o_proj at 81 GB/s, a\|b, k\|v, shared gate\|up) and the 12-chunk SDPA fallback (3.2). Shape fixes -12 -> ~24 [P]; DN-KS (ks per shape) is -7.74 of them [K, Leap's microbench 7ebf2d7; engine FLAT A/B next]; every kernel at 220 GB/s -> 16-17; 12 needs ~250 GB/s and ~1/3 of today's kernels. Leap's realistic target this round: 16-20 |
+  | dense GPU (flat in rows) | ~36 [K] | 12 | -24 (x0.33) | The time sits in ks-1 narrow GEMVs (out_proj / o_proj at 81 GB/s, a\|b, k\|v, shared gate\|up) and the 12-chunk SDPA fallback (3.2). Shape fixes -12 -> ~24 [P]; DN-KS (ks per shape): engine FLAT -4.19 [K, Leap 919392c, A-B-A, bitwise-deterministic; microbench -7.74, some narrow calls already overlapped]; every kernel at 220 GB/s -> 16-17; 12 needs ~250 GB/s and ~1/3 of today's kernels. Leap's realistic target this round: 16-20 |
   | SSD + other waits | ~18 (SSD busy 13.2 [K]) | ~5 | -13 | the misses hidden: never-wait / prefetch (item 4) |
   | experts, 16 rows | 3c-N ~60 [K] all-resident (~35.6 [P] on real QOM code) | 25 | the kernel switch | FAST-NAX ~25 [K] all-resident (+0.98 ms per row vs +3.25): the budget is met there. Real blocks: the engine A/B cut the cycle ~108 -> ~91 ms (-17) [K, 12 HumanEval, C 224] |
-  | draft | 9.1 [K] | 5 | -4 | DRAFTOFF prices -1.4..-1.7; the rest from the drafter's own pass (projections' floor ~1.7-1.9) |
+  | draft | 9.1 [K] | 5 | -4 | The drafter has the dense pass's problem: D17's 17-row block falls off the 16-row NAX path onto MLX qmm at 52-57 GB/s (~53 MB per propose = ~0.25 ms at 220 GB/s). D17-NAX (two 16-row halves; output exact): bench -3.3 per propose [K, contended; engine A/B next]. DRAFTOFF -1.4..-1.7 |
   | cycle | 98.5 [K] | 46.7 | x0.47 | |
   | K per 16-row check | 9.38 [K] | 14 | x1.49 | the drafter track (D98) |
 
@@ -126,7 +126,12 @@ MEASUREMENTS THAT GATE THE PLAN (no gain themselves):
   - MEASURED Fri 08:1x, BigMoE's FAST-NAX engine A/B on real blocks: the cycle went ~108 -> ~91 ms (-17) at K 10.55 ->
     10.36 [K]. With 3c-N's real-block expert term at ~35.6 [P], FAST-NAX's sits at ~19 [P], under the 25 budget. What
     is left for 300: the dense pass, the SSD + other waits, the draft, and K.
-  - Correct this line again from Leap's DN-KS FLAT A/B.
+  - MEASURED Fri 08:15, Leap's DN-KS engine A-B-A: FLAT 55.2 -> 51.1 ms (-4.19) [K]. FAST (bits move vs ks 1), so its
+    gate is the same-scores run.
+  - Tonight's stack, priced from these parts [P, additive pieces, 12 HumanEval, C 224]: FAST-NAX's ~91 ms cycle, minus
+    DN-KS 4.2, att_single 2.4 (R-62) and D17-NAX 1.5-3.3 (if its engine A/B passes today) = ~81-83 ms at K 10.36,
+    which is ~125-128 tok/s. CD16's x1.15 [P, lexer replay] on top makes ~144-147. The palindrome measures it.
+  - Correct this line again from D17-NAX's engine A/B and tonight's palindrome.
 
 GPU ORDER, Fri 6 -> Sat 7 Nov (set by NewIdeas Fri 08:0x at the orchestrator's request; goal: by Saturday morning, the
 stacked code number AND whether it is publishable). Every owner sizes its chunk from its own path's measured times and

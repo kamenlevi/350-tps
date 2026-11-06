@@ -62,3 +62,54 @@ Written before any row of this check.
   - About 2.5 h on a shared lock, MEM ~36-45 GB, no timing line.
 - **Slot:** today by day if the build is ready by ~12:00, ending by 15:00 (the orchestrator). Otherwise tonight, first.
 - **Code:** the new scoring stage in evalsuite/, the runner, and BigMoE's script under a pin.
+
+## Recipe (BigMoE Fri 08:3x; the orchestrator Fri 08:3x: the base is NAX6-N; added 08:17, before any row)
+- **Screen:** ~/BigMoE/scripts/r57_screen_fast.py at commit 6c08636, which adds two things:
+  - SETOF knows `agentlong`;
+  - R57_QOM_SETS turns QOM's FAST rule on for agent turns, which before ran exact.
+- **Pin:** BigMoE's tracked scripts/ and bigmoe/ must equal 6c08636 (`git diff --quiet 6c08636`) with nothing untracked
+  there, and ext/build_qom's .so sha256 must be ff69fa24a745. This is checked before each FAST process.
+  - A wrapper (tools/r57_wrap.py) records every module the process loaded, with its sha256, in
+    results/agentfast/<tag>_modules.json.
+- **Env, as BigMoE's c45 runner:**
+  ```
+  R57_PRESET=45 R57_REPS=1 R57_WARM=1 R57_REFTOK= BIGMOE_EXT_BUILD=build_qom R57_FAST=QOM R57_D17=1 R57_D7B=code
+  R57_HC8=1 REF2_HC8_FAST=1 R57_DNR=1 R57_HCB=1 REF2_SMALL_NATIVE=1 R57_D7BNAX=1 REF2_OOO_1C=1
+  R57_QOM_SETS=humaneval,ifeval,multi,agentlong R57_NAX=1 REF2_NAX_1CQ=1
+  ```
+  - C 224, CAP 1024.
+  - R57_RELAX_*, R57_INERT, R57_NOCOM, R57_QOM_SPLIT and EVALSUITE_BIGMOE_CODE are unset. With EVALSUITE_BIGMOE_CODE
+    set, evalsuite.env would put another bigmoe first on the path.
+- **Rows:** tools/agentfast.py rows turns <tag>_tokens.json into results/agentfast_fwd/ and agentfast_rev/ decode rows.
+  Each row is cut after its first EOS or at the item's 1024.
+- **Engaged (else VOID):**
+  - every agent row's run has QOM optional uses (pf.qom_opt > 0 in <tag>_runs.json);
+  - draft17 is in the module manifest.
+- **The scoring reference:** `ref2tnaxn` (NAX6-N on the converted store, snap/bigmoe-da8e7a6, the OOO env as runner
+  44), through the new stage `tfwin`.
+  - The self-check keys: results/ref2tnax's humaneval/HumanEval/27, ifeval/3409 and gsm8k/707.
+- **Smoke first** (NewIdeas' GPU order: the first gap, after MTP Head's PORT when memory is short): FAST on
+  agentlong/edit10 (the shortest prompt), then tfwin (the self-check plus that row).
+  - A smoke failure stops the run.
+  - Its row is information only; it is not one of the 34.
+- **Then the check:** FAST forward (key order), FAST reverse, then both scorings, then tools/agentfast.py report.
+  - It starts by 12:30 (NewIdeas), else Saturday by day.
+  - No step starts unless it can end by 15:00.
+
+## Status Fri 09:01: runner 47's partial run, BigMoE's fix, the re-pin (before the remaining rows)
+- **Runner 47 (08:19-08:57):**
+  - The smoke passed. tfwin's self-check held; edit10 gave 93 tokens, 0 deviations, 0 blunders. The smoke row is
+    information only.
+  - FAST forward's first process kept edit00-05. The screen stops a process at HARD = 600 s of running time.
+  - FAST reverse's first process crashed. A run that started just before HARD got 0 checks, and the stats raised
+    IndexError. The tokens are dumped at the end, so all 7 of its prompts were lost.
+- **BigMoE's fix, 9c82d1d (Fri 09:0x):** r57_screen_fast.py gains 6 lines and nothing else. A 0-check run's stats read
+  nan, and the tokens are written after every run. `git diff 6c08636 9c82d1d` verified it; the other two changed files
+  are new shell scripts the screen does not run.
+  - So the run path is 6c08636's, and edit00-05 stand.
+  - The pin moves to 9c82d1d for the remaining rows.
+- **The remaining rows (runner 48):** each order's prompts run in chunks of 2-3 per process (well inside 600 s), their
+  rows appended. A prompt that a chunk misses runs alone. The two orders keep different histories:
+  - forward: the first process's 6 prompts, then chunks in key order;
+  - reverse: chunks from write16 down.
+

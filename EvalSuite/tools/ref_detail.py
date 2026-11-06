@@ -34,7 +34,7 @@ def main(arm, ref="ref2t", others=OTHERS):
             sc.setdefault(n, {}).update(dr.SCORERS[s]({k: d[k] for k in ks}, its))
         tot = {n: 100 * sum(sc[n][k][1] for k in ks) / len(ks) for n in ARMS}
         print(f"\n== {s}: {len(ks)} rows; % correct: " + ", ".join(f"{n} {tot[n]:.1f}" for n in ARMS))
-        for r in dict.fromkeys((ref, "ref2b")):
+        for r in [x for x in dict.fromkeys((ref, "ref2b")) if x in V]:
             fd = [first_diff(V[arm][k]["completion_ids"], V[r][k]["completion_ids"]) for k in ks]
             dv = [x for x in fd if x is not None]
             print(f"   vs {r}: token-identical {len(fd) - len(dv)}/{len(ks)}; first divergence median "

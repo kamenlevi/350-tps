@@ -1366,6 +1366,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
     if "keep" not in A6:                                 # A6 keep: MLX's buffer cache stays warm for the next request
         mx.clear_cache()
     sm = np.array(sm)
+    if sm.ndim != 2:                                     # Fri 09:0x (EvalSuite): a run cut before its first check (HARD) has no
+        sm = np.zeros((0, 6))                            # per-check stats; sm[:, 0] on a 1-D array raised IndexError
     if cold_ and U3C_DUMP and FG["dump"]:               # U3C: per (check, layer) ids / sure / keep, -1 / False padded to 17 rows
         os.makedirs(U3C_DUMP, exist_ok=True)
         recs = [(c_, L_, np.array(i_), np.array(s_), np.array(k_)) for c_, L_, i_, s_, k_ in FG["dump"]]
@@ -1476,6 +1478,10 @@ for n_p, (s, key) in enumerate(PICK):
         agree = same(r["out"], want)
         ok = (agree >= m or TIER) and not r["cut"]          # REF2-T is its own reference (tokens compared across runs)
         TOK.setdefault(key, {}).setdefault(arm, []).append(r["out"])
+        try:                                             # Fri 09:0x (EvalSuite): written after every run too, so a later crash
+            json.dump(TOK, open(os.path.join(OUT, f"{TAG}_tokens.json"), "w"))   # keeps the finished keys' tokens
+        except OSError:
+            pass
         note = ""
         if REFTOK:                                       # REF2-T's own reference (R57_REFTOK, e.g. s45t_B gate+t)
             rt_ = REFTOK.get(key, {}).get(REFARM, [None])[0]

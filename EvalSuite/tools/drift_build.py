@@ -2,9 +2,11 @@
 only in EvalSuite's venv and the chat template (jinja2) only in BigMoE's:
   .venv/bin/python tools/drift_build.py dump                 # HumanEval+'s problems outside the core 60 -> results/drift/he_rest.json
   ~/BigMoE/.venv/bin/python tools/drift_build.py build       # -> data/items/dec_humanevalx.jsonl, dec_agentlong.jsonl
+  ~/BigMoE/.venv/bin/python tools/drift_build.py buildt      # -> data/items/dec_humanevalt.jsonl (amendment 2's top-up)
 dec_humanevalx: the 104 HumanEval+ problems not in dec_humaneval, with its template (data._he_user) and max_tokens 768;
 build first checks that the template still gives the core 60's saved prompt ids. dec_agentlong: dec_agent's 17 write /
-edit turns (real code into files) with max_tokens 1024 instead of 128."""
+edit turns (real code into files) with max_tokens 1024 instead of 128. dec_humanevalt (PREREG_relax_drift amendment 2): 41
+HumanEval+ problems (task ids 0, 4, ... 160) asking for the function plus a pytest module of >= 15 tests, max_tokens 1536."""
 import hashlib, json, os, sys
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT)
@@ -49,5 +51,28 @@ def build():
     print(f"{os.path.relpath(keys, ROOT)}: {len(rows) + len(ag)} keys, sha256 {sha(keys)}")
 
 
+T_USER = ("Complete the following Python function. Then write a pytest test module for it with at least 15 test "
+          "functions that cover normal cases and edge cases. Reply with the function and the tests in one ```python code "
+          "block.\n\n```python\n{prompt}```")
+
+
+def buildt():
+    tok = D.tokenizer()
+    probs = {it["task_id"]: it for it in D.load("dec_humaneval")}
+    probs.update({r["task_id"]: r for r in json.load(open(REST))})
+    assert len(probs) == 164, len(probs)
+    pick = [f"HumanEval/{i}" for i in range(0, 164, 4)]
+    rows = [dict(key=f"humanevalt/{t}", set="humanevalt", task_id=t, entry_point=probs[t]["entry_point"],
+                 prompt=probs[t]["prompt"], max_tokens=1536, user=T_USER.format(prompt=probs[t]["prompt"]),
+                 prompt_ids=D.chat(tok, T_USER.format(prompt=probs[t]["prompt"]))) for t in pick]
+    assert len(rows) == 41
+    D.write("dec_humanevalt", rows)
+    p = os.path.join(D.ITEMS, "dec_humanevalt.jsonl")
+    print(f"{os.path.relpath(p, ROOT)}: sha256 {sha(p)}")
+    keys = os.path.join(OUT, "keys_T.txt")
+    open(keys, "w").write("\n".join(r["key"] for r in rows) + "\n")
+    print(f"{os.path.relpath(keys, ROOT)}: {len(rows)} keys, sha256 {sha(keys)}")
+
+
 if __name__ == "__main__":
-    {"dump": dump, "build": build}[sys.argv[1]]()
+    {"dump": dump, "build": build, "buildt": buildt}[sys.argv[1]]()

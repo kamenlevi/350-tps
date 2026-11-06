@@ -31,7 +31,11 @@ say "STEP B start (pid $$, NO-SWAP $A GB -> C $CC, arms: $ARMS${STEPB_SMOKE:+, S
 rc_all=0
 for arm in $ARMS; do
   case $arm in fri|fri2) ENV="$BASE";; nax|nax2) ENV="$BASE R57_NAX=1 REF2_NAX_1CQ=1";; friks) ENV="$BASE REF2_DN_KS=1";;
-    naxks) ENV="$BASE R57_NAX=1 REF2_NAX_1CQ=1 REF2_DN_KS=1";; *) say "unknown arm $arm"; continue;; esac
+    naxks) ENV="$BASE R57_NAX=1 REF2_NAX_1CQ=1 REF2_DN_KS=1";; friks2) ENV="$BASE REF2_DN_KS=1";;
+    friksc) ENV="$BASE REF2_DN_KS=1 STEPB_D7BNAX=$HOME/Leap/data/d17nax/d7b_nax_cand.py";;
+    b|b2) ENV="$BASE REF2_DN_KS=1 D7BNAX_32=1";; batt) ENV="$BASE REF2_DN_KS=1 D7BNAX_32=1 STEPB_ATT_SINGLE=1";;
+    bfs4) ENV="$BASE REF2_DN_KS=1 D7BNAX_32=1 REF2_FATT_VERIFY=1 REF2_FATT_R8=1";;
+    friks32) ENV="$BASE REF2_DN_KS=1 D7BNAX_32=1 STEPB_D7BNAX=$HOME/Leap/data/d17nax/d7b_nax_cand.py";; *) say "unknown arm $arm"; continue;; esac
   tag="stepb_${arm}_${CC}${STEPB_SMOKE:+_smoke}${STEPB_TAGX:+_$STEPB_TAGX}"
   if [ -n "$STEPB_DRY" ]; then say "WOULD RUN [$arm]: env $ENV $RUNS FLAT2_TAG=$tag $PY -B stepb.py $CC"; continue; fi
   if [ -e "$HOME/.local/share/quiet/PAUSE" ] || [ -e "$HOME/.local/share/quiet/HOLD" ]; then say "PAUSE / HOLD: $arm skipped"; rc_all=1; continue; fi

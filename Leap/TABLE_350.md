@@ -8342,3 +8342,173 @@ screen); GPU tests small, on share locks.
 - **DN-KS step 2 (pre-registered above):** FLAT A/B on zero's FLAT-2 harness (scripts/stepb/run_stepb.sh), arms fri, friks,
   fri2 (A-B-A, one quiet lock, C by the ladder). PASS: FLAT -4.0 ms or more against the mean of the two A arms. KILL:
   < 2.0. VOID if the A arms differ by > 2.0.
+- **DN-KS step 2 RESULT (Fri 08:11-08:15, quiet lock, C 224; A-B-A on zero's FLAT-2 harness, 5 measured passes per arm; data/stepb/out/stepb_{fri,friks,fri2}_224_ab_*): PASS.**
+  - FLAT: fri 55.17, fri + REF2_DN_KS 51.05, fri 55.30 ms. That is -4.19 ms against the A mean; the A arms agree within
+    0.13 ms (line: PASS -4.0 or more).
+  - Caveat: friks had 86 steady zero-miss cycles, under FLAT-2's own 100 minimum, so its verdict line reads INVALID. Its
+    all-checks check + commit per measured pass agrees anyway: 47.6-48.2 vs 51.5-52.7 ms, about -4.0 ms.
+  - DN-KS engaged (COUNTS dn_ks 89,760 in friks, 0 in fri / fri2). The probe's warm 2-row check alone: 43.88 / 41.28 /
+    43.80 ms (-2.6).
+  - The engine gain is about half the chained bench's -7.7: in the check some narrow calls (k / v, a|b beside in_proj)
+    already overlapped other work. The chains serialize them.
+  - Determinism (08:2x, share lock): every DN-KS shape at its ks, 59 repeats + 30 interleaved with other work, at 2 and 16
+    rows: 0 differ. The warm repeats in friks were bitwise == the live check (4 of 4). Its 'last forward == live' was 0
+    of 2 (fri / fri2: 2 of 2); that is the probe's last re-run after the sweeps and the drafter probe, not
+    kernel noise. It is noted and does not gate this result.
+  - FAST: adoption is EvalSuite's same-scores gate. BigMoE stacks REF2_DN_KS=1 tonight (their message 08:0x).
+- **DRAFTER PROFILE (STEPB_DRAFT=1, same run; propose re-run on a copy of the drafter cache, chained replay of its calls):**
+  - propose ~8.8 ms warm (walls 8.74-8.84; the loop's draft 9.1-9.2).
+  - With R57_D17 the draft block has 17 rows, one more than d7b_nax's NaxQL takes (<= 16 -> qmm16c). So every block
+    projection falls back to MLX's quantized_matmul at 52-57 GB/s:
+    - gate|up 2560 -> 7680: 219 us each, x10;
+    - down 7680 -> 2560: 219 us, x5;
+    - q 2560 -> 4096 and o 4096 -> 2560: 107 us each, x5 each;
+    - k / v 2560 -> 1024: 33 us, x10;
+    - 2560 -> 640: 22 us, x10.
+  - The context-row k / v (2 rows) run qmm16c (36 us). SDPA is 64 us x5.
+  - Replayed kinds sum to 5.9 of the 8.8 ms.
+  - So the drafter has the dense pass's own problem: a wrong kernel for the shape, not the bytes (~53 MB per propose:
+    ~0.25 ms at 220 GB/s).
+- **D17-NAX, pre-registered Fri 08:2x (the drafter's 17-32-row calls on qmm16c; drafts are verified, so the output stays
+  exact):**
+  - NaxQL takes 17-32 rows as two 16-row qmm16c halves, with per-shape ks for the narrow shapes. Switch D7BNAX_32=1, off
+    by default.
+  - Expected -1.5..-2.5 ms per propose (weights read twice unless the halves share the SLC).
+  - Line: drafter probe walls, A/B in one quiet lock. PASS: propose -1.5 ms or more. KILL: < 0.5. Kept per check within
+    1 % on the engine's own blocks (BigMoE's A/B).
+- **D17-NAX bench (Fri 08:19, share lock beside BigMoE's shared run at 100 % GPU, so both forms are inflated;
+  scripts/d17nax_bench.py -> data/d17nax_bench.txt).** 17-row calls on the drafter's shapes, MLX vs NaxQL halves,
+  round-robin, cold copies (us; per-propose saving in ms):
+
+  | shape | ks | MLX | halves | per propose |
+  |---|---|---|---|---|
+  | gate\|up | 2 | 322.7 | 141.8 | -1.81 |
+  | down | 4 | 412.2 | 143.7 | -1.34 |
+  | q | | 131.1 | 72.7 | -0.29 |
+  | o | | 123.9 | 106.1 | -0.09 |
+  | k\|v | | 24.9 | 30.1 | +0.05 |
+  | 2560 -> 640 | | 14.7 | 33.2 | +0.19 |
+
+  - Net -3.30 ms per propose. Bits vs MLX <= 6.4e-3 (qmm16c's own numerics; drafts only).
+  - So the candidate takes halves only for weights >= 4 MB. Candidate data/d17nax/d7b_nax_cand.py; the live d7b_nax.py is
+    unchanged.
+  - The engine A/B loads it through stepb's preload (STEPB_D7BNAX), arms friks / friks32 / friks2.
+- **D17-NAX engine A/B RESULT (Fri 08:22-08:26, quiet lock, C 224, A-B-A on the DN-KS base; data/stepb/out/stepb_{friks,friks32,friks2}_224_d17_*): PASS on time.**
+  - Drafter probe propose walls (warm): friks 8.74-8.88, friks32 6.63-6.85, friks2 8.78-8.89 ms, so -2.1 ms per propose
+    (line -1.5).
+  - The loop's own draft per cycle: 9.10-9.15 / 7.08-7.13 / 9.11-9.15 ms (-2.0).
+  - FLAT: 50.36 / 48.94 / 50.92 ms (-1.70 vs the A mean). All three arms carry FLAT-2's INVALID label (86 zero-miss cycles
+    each, the same in every arm, so the comparison holds).
+  - The halves path: 60 qmm16c calls per propose (10 before), 81 concatenates (31). Replayed kinds sum 3.3-3.5 ms (5.9
+    before). A true 32-row kernel (one weight read, no concats) is the next -0.5..-1 ms.
+  - Kept: not measured here (2-row checks); the line's kept clause (within 1 %) waits for BigMoE's A/B on real blocks.
+  - Installed Fri 08:26:28: d7b_nax.py dd9066d3 (switch D7BNAX_32=1, off by default; off = the old calls). Backup
+    data/d17nax/d7b_nax_before.py (376ceee4).
+- Combined so far on a 2-row FLAT: fri 55.2 -> + DN-KS 51.0..50.6 -> + D17-NAX 48.9 ms (-6.3 ms, ~11 %).
+- **SDPA-1 pre-registered Fri 08:3x: the 12-chunk SDPA fallback (head dim 256; 144 calls per check, ~3.1 ms chained) vs
+  the two single-call forms ref2 already has, on the new base.**
+  - Base: DN-KS + D7BNAX_32. Arms: b; batt (R-62 att_single, set after import ref2 by stepb); bfs4 (F1's fatt_verify +
+    F1-R8, REF2_FATT_VERIFY=1 REF2_FATT_R8=1); b2. One quiet lock, C by the ladder, 5 measured passes each.
+  - Line per form, FLAT vs the mean of b / b2: PASS -1.5 ms or more, KILL < 0.5. VOID if b / b2 differ by > 1.5.
+  - Both forms are FAST (bits differ from REF2-T past 512 keys / F1's own reference). The better PASS goes into the stack;
+    EvalSuite's gate decides adoption.
+- **SDPA-1 RESULT (Fri 08:39-08:44, quiet lock, C 224; data/stepb/out/stepb_{b,batt,bfs4,b2}_224_sdpa_*): both single-call
+  forms PASS.**
+  - FLAT: b 48.22, b2 48.57 (A mean 48.40, within 0.35); **batt (att_single) 44.34 = -4.06; bfs4 (fatt_verify + F1-R8)
+    44.22 = -4.18** (line -1.5).
+  - check + commit per pass: 46.9-48.0 vs batt 43.4-44.1 and bfs4 43.2-43.8. The warm 2-row check alone: 39.05 / 40.08 vs
+    36.56 / 36.35.
+  - Engaged: att_single 5,280 calls; fatt_verify 5,280 + fatt_r8 5,112.
+  - The gain is about 1.7x R-62's -2.4 estimate, as part B's chain (3.1 ms) suggested.
+  - Pick: they are within noise of each other. att_single is bitwise == REF2-T below 512 keys (R-62), so it is exact for
+    short contexts and FAST past them. fs4 is FAST everywhere but already in EvalSuite's F1 track. The stack's call
+    (EvalSuite's gate).
+- **Running total on the 2-row FLAT (fri, C 224): 55.2 -> DN-KS 50.6 -> + D17-NAX 48.4-48.9 -> + single-call SDPA 44.2-44.3
+  ms: -11 ms (-20 %), all installed off by default or already in ref2.**
+- **GDN-CHUNK GPU check (Fable B's row-parallel delta step, kernels/gdn_chunk.py; Fri 08:45-08:48, share lock beside
+  EvalSuite's shared run; scripts/gdn_chunk_check.py -> data/gdn_chunk_check.txt): KILL.**
+  - Bits fine: y max relative error <= 6.9e-4, 0.01-0.03 % of bf16 outputs differ, state <= 2.5e-7, at S 1-16.
+  - Time, chained over 36 layers:
+    - NSG 16: 121.7 us at S 16 vs gated_delta_step 86.3; 83.3 vs 53.7 at S 2.
+    - NSG 32: 128.9 vs 64.5 at S 16; 40.4 vs 33.5 at S 2.
+  - So 1.4-2x slower; line PASS <= 40 us at S 16, KILL > 50.
+  - Why: one threadgroup per value head (48 threadgroups) against the reference's 1,536. Phase 3's forward substitution
+    runs on 128 threads per head, 16 dependent steps.
+  - Redesign note for Fable B: the substitution and the state update are independent per state row dv. So a threadgroup
+    per (head, dv block) can recompute the head's small k.k / k.q tables and own its rows, giving ~768+ threadgroups.
+- **HC-K2C GPU check (Fable B's kernels/hc_k2c.py vs hc8r kernel 7 k2b; Fri 08:46, share lock; scripts/hc_k2c_check.py ->
+  data/hc_k2c_check.txt): KILL.**
+  - Bits fine (mix1 <= 2.9e-5, xsum <= 3.4e-6).
+  - Chained over 96 calls: k2b 4.46 us, k2c 15.21 us (line PASS <= 6, KILL > 8).
+  - k2b alone chains at ~4.5 us. Part B's ~10 us per k2b in the engine replay includes its wait on k1c's partials, so
+    this item is worth at most ~0.5 ms.
+- **GDN-CHUNK v2 (Fable B's gdn_chunk2.py: TAB + MAIN, RB state rows per threadgroup; Fri 08:50, share lock with ~5 % GPU
+  free beside EvalSuite): KILL.**
+  - Bits as v1 (fine).
+  - S 16 chained over 36: RB 8 (768 threadgroups) 149.2 vs 91.0 us; RB 4 (1,536) 183.0 vs 93.0. S 2: 47.4 / 50.2 vs
+    37.2 / 39.3.
+  - Fable B's own rule: dead for the check. The kept-prefix state formula stays a candidate for the commit replay.
+- **WIDE-NT bench (Fri 08:47, share lock, contended; scripts/wide_bench.py -> data/wide_bench.txt).**
+  - in_proj qkv|z: ks 2 132.5 vs ks 1 152.5 us (-13 %; err 8e-4), ~-0.5..-0.7 ms per check. nt 2 / 4 do not help.
+  - attention q: ks 1 is best.
+  - Goes into DN-KS v2 (REF2_DN_KS=2, the extended table) so tonight's REF2_DN_KS=1 stays as BigMoE measured it.
+- **NEW-BASE KERNEL TABLE (Fri 08:57, quiet lock, C 224, arm batt = fri + DN-KS + D7BNAX_32 + att_single, 3c-N experts;
+  data/stepb/stepb_batt_224_new_report.txt).**
+  - Warm 2-row check alone 35.64 ms (fri this morning: 43.88). Drafter propose 6.4-6.8 ms.
+  - 16-row dense kernels, chained (ms per check):
+
+    | kernel | ms | GB/s |
+    |---|---|---|
+    | in_proj | 4.11 | 212 |
+    | HC k3c | 2.63 | 143 |
+    | HC k1c | 2.34 | 193-196 |
+    | gated_delta_step | 2.08 | 118 |
+    | out_proj / o_proj (ks 6) | 1.84 | 238 |
+    | HC k2b | 0.94 | |
+    | attention q | 0.91 | 239 |
+    | router (8-bit MLX) | 0.90 | 79 |
+    | shared gate\|up (ks 8) | 0.61 | 159 |
+    | SDPA single call | 0.52 | |
+    | shared down | 0.36 | |
+    | a\|b | 0.29 | |
+    | 8-bit 640 x 2,560 | 0.27 | |
+    | HC write | 0.26 | |
+    | prework | 0.25 | |
+    | k\|v | 0.22 | |
+    | the rest (glue, norms, rope, qsa) | ~1.2 | |
+
+    Sum ~19.6 ms of chained kernel time.
+  - Fit over the 4-bit kinds: t_sync 6.9 us, B 241 GB/s (the narrow-kernel intercept of 33 us is gone).
+  - Experts (3c-N here): 10.6 ms at 2 rows, 56.4 ms at 16 rows (153 GB/s on the upper-bound bytes, 1.81x the read floor).
+    FAST-NAX gives ~25 at 16.
+  - Next levers by size:
+    - HC reads (5.9 ms, k3c at 143 GB/s): -1..-2;
+    - in_proj ks 2 (DN-KS v2): -0.5;
+    - the 16-row GDN step: -1, needs a kernel, since the chunk form is dead;
+    - the 8-bit router on a K-split: -0.5, needs a route-flip check;
+    - the expert id glue: -1;
+    - the drafter's small 17-row calls + concats: -0.5..-0.8.
+- **QMM32 (Fri 09:01, share lock, GPU free; scripts/qmm32.py, qmm32_bench.py -> data/qmm32_bench.txt).**
+  - qmm16c with two 16-row blocks per simdgroup sharing each decoded weight fragment (one weight read).
+  - qmm32c == the two halves bitwise at every shape and ks.
+  - 17-row calls (us), MLX / halves / qmm32c:
+
+    | shape | MLX | halves | qmm32c |
+    |---|---|---|---|
+    | gate\|up | 216 | 92 | 74 |
+    | down | 218 | 98 | 71 |
+    | q | 116 | 59 | 47 |
+    | o | 109 | 55 | 41 |
+    | k\|v | 30 | 18.5 | 17.9 |
+    | 2560 -> 640 | 20 | 15 | 16 |
+  - Per propose: -0.44 ms vs the halves, -3.0 vs MLX. With the GPU free, even the small shapes beat MLX as halves; the
+    08:19 bench that set the 4 MB threshold was contended.
+  - Staged as D7BNAX_32=2 (candidate data/d17nax2/d7b_nax_cand.py: qmm32c for every eligible 17-32-row call, ks <= 5).
+    =1 stays the halves BigMoE pre-flights.
+- **GDN-STEP3 (Fable B's kernels/gdn_step3.py, ablation arms on the reference grid; Fri 09:03, share lock;
+  scripts/gdn_step3_check.py): KILL by Fable B's own gate.**
+  - var 0 == mlx_lm's kernel bitwise.
+  - S 16 chained: mlx_lm 67.1, var 0 73.9, no simd_sum 79.8, k / q constants 78.6, both 69.4 us. So neither the
+    reductions nor the k / q loads are the per-row cost.
+  - Next suspect: each row step's uncached global loads of v / g / beta (16 dependent rounds). Ablation to try: all
+    S rows' inputs preloaded into threadgroup memory before the time loop.

@@ -13,6 +13,7 @@
   live16diag ref  R-56's diagnostic: where the REF2 live loop first leaves REF2's AR in bits (live16diag.py)
   relax ref --arm A    RELAX (docs/PREREG_relax_2026-11-02.md): the gate / R1 arm A on the live loop (relax.py);
   relax-replay ref --arm A   REF2-T replays arm A's logged checks (replay.py)
+  tfwin ref --run RUN  a run's committed tokens scored by the exact reference along its own prefix (tfwin.py)
   live16b ref --arm A  R-56b-e (arms in live16b.ARMS: REF2b, REF2-T, REF2-T / REF2c-T + OOO): every token + every kept row vs
                        the arm's own AR (live16b.py)
 Variants sharing weights (ref, floor, plan*) run in one process; ar4 and frugal load their own runtimes."""
@@ -220,7 +221,7 @@ def mem_free_gb():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("stage", choices=["gen-tf", "prefill", "tfstep", "decode", "live16", "live16diag", "live16b", "relax",
-                                      "relax-replay"])
+                                      "relax-replay", "tfwin"])
     ap.add_argument("variants", nargs="*", default=["ref"])
     ap.add_argument("--C", type=int, default=0, help="expert slots per layer (default 128 prefill, 192 decode)")
     ap.add_argument("--tests", default="mc,tf")
@@ -234,6 +235,8 @@ def main():
     ap.add_argument("--keys", default="", help="decode: only the items whose keys this file lists (whitespace-separated)")
     ap.add_argument("--smoke", action="store_true", help="tiny run: 8 MC items, 2 TF items, no files written")
     ap.add_argument("--arm", default="", help="live16 (R-56): ref2 or stock; relax: control, A, D, C or B")
+    ap.add_argument("--run", default="", help="tfwin: the run whose decode rows the reference scores")
+    ap.add_argument("--self", default="ref2tnax", help="tfwin: the exact run of the self-check (its own rows)")
     a = ap.parse_args()
     a.C = a.C or (128 if a.stage == "prefill" else 192)
     vs = [M.variant(n) for n in a.variants]
@@ -289,6 +292,9 @@ def main():
         if (relax if a.stage == "relax" else replay).main(rt, st, a, log) == "yield":
             st.gate.check()
             sys.exit(75)                          # yielded to a quiet ticket (cli.gpu --share asks again later)
+    elif a.stage == "tfwin":                      # a run's tokens scored by the exact reference along its prefix (tfwin.py)
+        from . import tfwin
+        tfwin.main(rt, st, a, log)
     elif a.stage == "live16b":                    # R-56 on REF2b: every token + every kept row vs REF2b's AR (live16b.py)
         from . import live16b
         if live16b.main(rt, st, a, log) == "yield":

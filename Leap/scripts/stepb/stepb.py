@@ -24,8 +24,14 @@ _anc = [m.start() for m in re.finditer(r"(?m)^import evalsuite\.env\b.*$", F2_GE
 assert len(_anc) == 1, f"step B: 'import evalsuite.env' found {len(_anc)} times at column 0 in the harness"
 _eol = F2_GEN.index("\n", _anc[0])
 F2_GEN = F2_GEN[:_eol + 1] + "import stepb_k as _SBK; _SBK.patch()        # Leap step B: wrap mx before any mlx import\n" \
+    + "_SBK.preload('d7b_nax', os.environ.get('STEPB_D7BNAX'))   # Leap: a candidate drafter module, not installed\n" \
     + F2_GEN[_eol + 1:]
-F2_INFO["stepb"] = "stepb_k.patch() after import evalsuite.env"
+_r2 = [m.start() for m in re.finditer(r"(?m)^import ref2\b.*$", F2_GEN)]
+assert len(_r2) >= 1, "step B: no 'import ref2' at column 0 in the harness"
+_eol2 = F2_GEN.index("\n", _r2[0])
+F2_GEN = F2_GEN[:_eol2 + 1] + ("if os.environ.get('STEPB_ATT_SINGLE') == '1':   # Leap step B: R-62's single-call SDPA (FAST)\n"
+                               "    ref2.CFG['att_single'] = True\n") + F2_GEN[_eol2 + 1:]
+F2_INFO["stepb"] = "stepb_k.patch() after import evalsuite.env; STEPB_ATT_SINGLE after import ref2"
 F2_GENPATH = os.path.join(F2_CFG["out"], f"{F2_CFG['tag']}_generated.py")
 open(F2_GENPATH, "w").write(F2_GEN)
 F2ON, F2H, F2C = [False], None, []

@@ -388,3 +388,18 @@ def sync_chains(clock=time.perf_counter, n=200, reps=7):
     finally:
         K["on"] = on
     return res
+
+
+def preload(name, path):
+    """put a candidate module (a file not installed in ~/Leap/scripts) into sys.modules under the live name, so the
+    harness's `import <name>` gets it; nothing when path is empty"""
+    if not path:
+        return None
+    import importlib.util, os, sys
+    p = os.path.expanduser(path)
+    spec = importlib.util.spec_from_file_location(name, p)
+    m = importlib.util.module_from_spec(spec)
+    sys.modules[name] = m
+    spec.loader.exec_module(m)
+    print(f"[stepb] preloaded {name} from {p}", flush=True)
+    return m

@@ -8,3 +8,33 @@
 11-06 07:54:01 run stepb_nax_224 (swap 10131 MB)
 11-06 07:55:06 done stepb_nax_224 rc=0:   step B calibration: round trip 140 us (p10-p90 123-174), dependent dispatch 2.18 us; read floor (KB: cold / warm GB/s) 16: 4 / 2, 64: 17 / 242, 256: 48 / 43,  FLAT-2 VERDICT: INVALID (FLAT 54.47 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +29.47 ms from it); only 7 steady zer 
 11-06 07:55:06 STEP B end (rc 0)
+11-06 08:11:00 STEP B start (pid 5257, NO-SWAP 49.5 GB -> C 224, arms: fri friks fri2; md5 probe b598ebaf k bb488d26)
+11-06 08:11:00 run stepb_fri_224_ab (swap 12445 MB)
+11-06 08:12:25 done stepb_fri_224_ab rc=0:   step B calibration: round trip 136 us (p10-p90 120-167), dependent dispatch 2.30 us; read floor (KB: cold / warm GB/s) 16: 3 / 2, 64: 6 / 6, 256: 27 / 262144, FLAT-2 VERDICT: KILL (FLAT 55.17 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +30.17 ms from it) 
+11-06 08:12:26 run stepb_friks_224_ab (swap 12445 MB)
+11-06 08:13:46 done stepb_friks_224_ab rc=0:   step B calibration: round trip 138 us (p10-p90 123-174), dependent dispatch 2.22 us; read floor (KB: cold / warm GB/s) 16: 16384 / 16384, 64: 65536 / 9, 256:  FLAT-2 VERDICT: INVALID (FLAT 51.05 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +26.05 ms from it); only 86 steady ze 
+11-06 08:13:46 run stepb_fri2_224_ab (swap 12445 MB)
+11-06 08:15:11 done stepb_fri2_224_ab rc=0:   step B calibration: round trip 138 us (p10-p90 123-174), dependent dispatch 2.24 us; read floor (KB: cold / warm GB/s) 16: 2 / 72, 64: 65536 / 65536, 256: 262 FLAT-2 VERDICT: KILL (FLAT 55.30 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +30.30 ms from it) 
+11-06 08:15:11 STEP B end (rc 0)
+11-06 08:21:45 STEP B start (pid 58459, NO-SWAP 48.0 GB -> C 224, arms: friks friks32 friks2; md5 probe b598ebaf k d27a87fe)
+11-06 08:21:45 run stepb_friks_224_d17 (swap 12389 MB)
+11-06 08:23:10 done stepb_friks_224_d17 rc=0:   step B calibration: round trip 140 us (p10-p90 124-174), dependent dispatch 2.17 us; read floor (KB: cold / warm GB/s) 16: 3 / 3, 64: 8 / 6, 256: 262144 / 262 FLAT-2 VERDICT: INVALID (FLAT 50.36 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +25.36 ms from it); only 86 steady ze 
+11-06 08:23:10 run stepb_friks32_224_d17 (swap 12389 MB)
+11-06 08:24:36 done stepb_friks32_224_d17 rc=0:   step B calibration: round trip 138 us (p10-p90 123-172), dependent dispatch 2.40 us; read floor (KB: cold / warm GB/s) 16: 2 / 56, 64: 65536 / 13, 256: 34 / 5 FLAT-2 VERDICT: INVALID (FLAT 48.94 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +23.94 ms from it); only 86 steady ze 
+11-06 08:24:36 run stepb_friks2_224_d17 (swap 12381 MB)
+11-06 08:25:56 done stepb_friks2_224_d17 rc=0:   step B calibration: round trip 136 us (p10-p90 123-172), dependent dispatch 2.32 us; read floor (KB: cold / warm GB/s) 16: 1 / 2, 64: 9 / 5, 256: 25 / 24, 102 FLAT-2 VERDICT: INVALID (FLAT 50.92 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +25.92 ms from it); only 86 steady ze 
+11-06 08:25:56 STEP B end (rc 0)
+11-06 08:38:58 STEP B start (pid 69285, NO-SWAP 52.0 GB -> C 224, arms: b batt bfs4 b2; md5 probe b598ebaf k d27a87fe)
+11-06 08:38:58 run stepb_b_224_sdpa (swap 13119 MB)
+11-06 08:40:24 done stepb_b_224_sdpa rc=0:   step B calibration: round trip 140 us (p10-p90 123-175), dependent dispatch 2.19 us; read floor (KB: cold / warm GB/s) 16: 5 / 3, 64: 17 / 8, 256: 57 / 34, 10 FLAT-2 VERDICT: INVALID (FLAT 48.22 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +23.22 ms from it); only 86 steady ze 
+11-06 08:40:24 run stepb_batt_224_sdpa (swap 13111 MB)
+11-06 08:41:44 done stepb_batt_224_sdpa rc=0:   step B calibration: round trip 138 us (p10-p90 124-175), dependent dispatch 2.48 us; read floor (KB: cold / warm GB/s) 16: 2 / 1, 64: 20 / 6, 256: 27 / 26, 10 FLAT-2 VERDICT: INVALID (FLAT 44.34 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +19.34 ms from it); only 86 steady ze 
+11-06 08:41:44 run stepb_bfs4_224_sdpa (swap 13111 MB)
+11-06 08:43:19 done stepb_bfs4_224_sdpa rc=0:   step B calibration: round trip 142 us (p10-p90 122-175), dependent dispatch 2.22 us; read floor (KB: cold / warm GB/s) 16: 1 / 7, 64: 65536 / 44, 256: 37 / 18 FLAT-2 VERDICT: INVALID (FLAT 44.22 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +19.22 ms from it); only 89 steady ze 
+11-06 08:43:19 run stepb_b2_224_sdpa (swap 13103 MB)
+11-06 08:44:39 done stepb_b2_224_sdpa rc=0:   step B calibration: round trip 139 us (p10-p90 122-177), dependent dispatch 2.21 us; read floor (KB: cold / warm GB/s) 16: 3 / 2, 64: 11 / 5, 256: 16 / 35, 10 FLAT-2 VERDICT: INVALID (FLAT 48.57 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +23.57 ms from it); only 86 steady ze 
+11-06 08:44:39 STEP B end (rc 0)
+11-06 08:57:17 STEP B start (pid 78807, NO-SWAP 50.8 GB -> C 224, arms: batt; md5 probe b598ebaf k d27a87fe)
+11-06 08:57:17 run stepb_batt_224_new (swap 12076 MB)
+11-06 08:58:02 done stepb_batt_224_new rc=0:   step B calibration: round trip 138 us (p10-p90 122-177), dependent dispatch 2.32 us; read floor (KB: cold / warm GB/s) 16: 1 / 2, 64: 6 / 10, 256: 23 / 262144 FLAT-2 VERDICT: INVALID (FLAT nan ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +nan ms from it); only 0 steady zero-mi 
+11-06 08:58:02 STEP B end (rc 0)

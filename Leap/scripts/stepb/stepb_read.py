@@ -166,6 +166,27 @@ def extra(paths):
                     dots["2"] = pr["dot"]
                 if pr.get("dot16"):
                     dots["16"] = pr["dot16"]
+    for p in paths:                                      # the drafter (STEPB_DRAFT=1)
+        d = json.load(open(p))
+        for r_ in d["runs"]:
+            for pr in r_.get("probes") or []:
+                dr = pr.get("draft")
+                if not dr:
+                    continue
+                if dr.get("error"):
+                    print(f"\n== drafter at check {pr['check']}: ERROR {dr['error']}")
+                    continue
+                R = [r for r in dr.get("replay") or [] if "us_chain" in r]
+                tot = sum((r["us_chain"] - r["us_null"]) * r["n"] for r in R) / 1e3
+                print(f"\n== drafter at check {pr['check']}: propose walls {[round(w, 2) for w in dr.get('wall', [])]} ms; "
+                      f"{len(dr.get('krec') or [])} wrapped calls; replayed kinds (>= 3 calls) sum {tot:.2f} ms")
+                for r in sorted(R, key=lambda r: -(r["us_chain"] - r["us_null"]) * r["n"])[:25]:
+                    us = r["us_chain"] - r["us_null"]
+                    print(f"  {r['name'][:34]:34s} | {r['sig'][:70]:70s} | {r['n']:3d} | {r['bytes'] / 1024:8.1f} KB | "
+                          f"{us:7.1f} us | {r['bytes'] / max(1e-9, us * 1e-6) / 1e9:6.0f} GB/s")
+                from collections import Counter
+                cnt = Counter(x[2] for x in dr.get("krec") or [])
+                print("  wrapped calls by name: " + ", ".join(f"{k} {v}" for k, v in cnt.most_common(14)))
     cal = meta.get("stepb_cal") or {}
     if cal.get("sync_chains"):
         print("\n== t_sync: dependent chains of a kernel with almost no bytes (threads x threadgroup: us per kernel)")
