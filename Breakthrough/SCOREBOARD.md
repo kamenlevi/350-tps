@@ -3525,3 +3525,44 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
     - So the engine A/B (BigMoE; Leap's engine side) is open for code. For chat, never-wait needs a pool at or above the
       published one, or a chat read at the engine's own pool.
     - Adoption still needs EvalSuite same-scores on code, and the speed needs the engine test (FAR's spec section 3).
+- Fri 21:3x: PRE-REGISTRATION, NW3 = NEVER-WAIT v3 (b) at its worst case (NewIdeas QUEUE dc9aff8 S1 + 6fd0224; Leap's
+  TABLE_350 "NEVER-WAIT v3 staged"). It runs in Saturday's map right after T1, before step 0.
+  - **v3 in the engine.** A cold demand use goes late (nw1). (a) A cold QOM optional use is dropped (weight 0). (b) A
+    cold LSB sidecar whose base is resident runs at 3 bits now (MSB only) instead of waiting.
+  - **(a) changes nothing on the map.** The QOM masks already drop a cold optional use (keep 0, weight 0), and nw1's
+    late flags lie within keep (FAR's check_masks.py).
+  - **(b) is run at its worst case.** It cannot be modelled from residency: the map's pools hold whole experts, and the
+    engine's sidecar pool is separate. So every unsure answer row (draft cf < 0.9, the engine's R57_U3_THR default, or no
+    draft) is given a cold sidecar on ranks 0-1:
+    - those ranks run at 3 bits on time (records3's MSB-3 record, the engine's 3-bit read, through dm_t3);
+    - a late rank (a cold base) stays 4-bit and late, as in v3;
+    - ranks 2-9 stay 4-bit, as in every map arm, so D against nw1 is (b) alone.
+    If the worst case passes, (b) passes at any coldness.
+  - **Built and installed** (21:35; dm_common.py 9e970279, dm_ablations.py 4d6bef35; old files *.pre_nw3): scripts/dm_s7/
+    nw3_patch.py (anchored), test_nw3.py, install_nw3.sh. CPU tests ALL OK on the installed files (data/dm_s7/nw3_install/):
+    - FAR's whole never-wait suite still passes (old arms bit-equal to the pre-never-wait harness);
+    - test_nw3: old arms bit-equal to the live harness (baseline, twin, nw1, nw0, the t3 gate); nw3 through a 4-bit stand-in
+      == nw1 (2.6e-16); nw3 at 3 bits == an independent reference (2.6e-16), with power (late ranks at 3 bits, the sure
+      rows gated, no 3-bit term: 2e-3 to 6e-3 away); counts (3-bit terms == the masks', prompt rows never); guards;
+      measure() end to end; no state leaks.
+  - **Arms** (code = the 12 windows; twins = nw1 at the same pool, run Fri 13:xx):
+    1. `qom_0_live_ball_c208_nw3c+code`: the control, the same rows through the same path at 4 bits. That path's summation
+       order alone moves near-ties (on record, t4_all: 0.33 / 2.15 / 1.58 % with every rank on it).
+    2. `qom_0_live_ball_c208_nw3+code` and 3. `qom_0_live_ball_nw3+code`: they decide.
+    4. `qom_0_live_ball_nw3` and 5. `qom_0_live_ball_c208_nw3` (36 windows): chat on record.
+  - **Lines** (NewIdeas: the usual lines vs REF2-T plus D vs nw1), per pool:
+    - PASS: VERDICT2 code (all-row <= 1.34 % AND non-tie <= 0.87 %) AND D vs nw1 <= +0.40 points ("clean" <= +0.15);
+    - BETWEEN: all-row in (1.34, 2.0] %, or D in (+0.40, +0.80];
+    - KILL: all-row > 2.0 %, or D > +0.80.
+    - nw3 PASS = PASS at both pools; PASS at the published pool only = pool-conditional, as in nw1's rule.
+    - The control is reported beside it. If its own D against nw1 is over +0.20, nw3 is also read against the control,
+      with a note on how much of nw3's D is the path rather than 3 bits.
+    - A failed worst case is not a KILL of (b): the engine's count of 3-bit sidecars per check (NWCNT) says how much of the
+      bound it really meets.
+    - Chat (on record): VERDICT2 per domain (IFEval 5.42 [2.22], multi 3.69 [1.63]), and D vs nw1 with McNemar.
+  - **Predictions** [G], from t3_all (+0.59 code / +5.09 IFEval / +4.25 multi against its control, all on uncertain rows)
+    and M-18 (sure rows' ranks 0-1 at 3 bits: +0.12 code):
+    - code: D +0.2 to +0.5 at either pool; PASS 55 %;
+    - chat: IFEval / multi D +1 to +3 points; VERDICT2 FAIL likely at 208 slots, a coin toss at the published pool;
+    - the control: D within +-0.15 on code.
+  - Saturday's list: the 8 leftover 24 GB arms moved to data/sun_extra.txt (Sunday night; NewIdeas 6fd0224).

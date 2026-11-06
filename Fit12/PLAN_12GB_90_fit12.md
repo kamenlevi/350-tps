@@ -137,3 +137,32 @@ rule: tokens per check, time per check from the table above, and divergences vs 
   the exact check (= ex on 5 / 16 here), and the map scored top-2 at theta 0.8 a code KILL (1.63 %). The 12 GB exact loop
   (ex) runs 18.4-18.9 tok/s on HumanEval (T3t 18.9 and T3R 18.42, both quiet; kp2 18.58 share). The 40.8 quoted as the
   12 GB exact line is T3R2's t80ck2 full-output number.
+
+## What the 12 GB exact loop (arm ex) is exact to (Fri 6 Nov 21:3x; fact-check for FULL's paper, from code + records, no run)
+- ex = DFlash2 L1-20 (4-bit) drafts 15 tokens per check; the exact check verifies them in <= 4-row calls (4 rows nearly
+  always), stopping at the first miss. Pinned bt_b12 8db71cc537 with the suite's env (B12_LATE3=2,10): multi-row calls take
+  the verify flags FL_MR, every one of the top-10 ranks read and waited for (NF = 10; bt_b12.py l.370-373, 459-463). Tier
+  plan 4433333333: ranks 0-1 at 4 bits, ranks 2-9 at 3 bits (MSB-3). No rank is late in ex.
+- The late rule (cold MSB-3 ranks 2-9 read after phase A and added half a layer late) is the 1-row path with B12_ALLWAIT=0
+  (the default): AR decode, and in ex only a possible 1-row tail call at the token cap, where drafts are truncated.
+- So ex is not bit-identical to the line's one-token decoding. The 1-row path keeps the late rule (pool-dependent bits)
+  and uses decode-width arithmetic (WV1: widths 2-4 are bitwise equal; WV3: a width-1 forward differs). What holds: ex is
+  deterministic and independent of pool state (Fri kp2 ex = Thu c51's g1 arms on 16 / 16), and every committed token is
+  the greedy argmax of the 12 GB computation at 2-4 rows per call. Near-tie tokens depend on the draft pattern through
+  keep-1 replays until PR1 (Lever 3 RESULT).
+- Amendment (Fri 21:3x, found while testing the new reader on kp2's log): the harness also recorded a 40-s PAUSE (171-211 s
+  into kp2), inside HumanEval/68's arms (its t80ck2a took 48 s). /68 was already left out, so the numbers above stand.
+
+## 12GB-CLEAN (pre-registered Fri 6 Nov 21:3x; the orchestrator 21:3x, NewIdeas QUEUE f2243e8; runs Saturday morning)
+- One clean number for the release: the 12 GB VERIFIED-GREEDY loop (arm ex; not exact) ALONE in its own process, so its
+  lifetime peak footprint is its own. Replaces the mix of four runs and subsets (18.38-18.9; 11.39 GB from a six-arm process).
+- Run: /Users/kamen/Fit12/scripts/ex16.sh (task b8qfeow0m, armed 21:37) -> fit_t3.py arm ex only, no ports, F12_RERUN=1,
+  all 16 of T3R2's HumanEval prompts, greedy, cap 256, C_m 47 / C_l 32, quiet lock (~8 min). Start: Saturday from 06:00 at
+  the first 10 clear minutes (no other quiet lock / ticket, no MEM > 5 GB lock, no PAUSE / HOLD; 1 minute once
+  /Users/kamen/Fit12/data/scr/ex16/GO exists); deadline 18:00. Guards: swap +1 GB, 30 min. DONE file at the end.
+- Reported by /Users/kamen/Fit12/scripts/ex16_read.py (tested on kp2's log and on two FAKE runs, one with a PAUSE):
+  decode tok/s per prompt and their GEOMETRIC MEAN (the headline), pooled tok/s, end-to-end tok/s, tokens and ms per
+  check, SSD GB per check (own reads), the process's lifetime peak phys_footprint (RUSAGE_INFO_V4, GB and GiB), the
+  engine's settings lines verbatim (tier plan, C_m / C_l, pools, HC, late ranks), and any voided prompt.
+- No pass / fail line: a measurement. Validity: every counted prompt PAUSE-free (a paused prompt is re-run once, then left
+  out and named); the lifetime peak must be under 12 GB (the line); rc 0 and a 'done' line.

@@ -19,9 +19,9 @@ LIVE in a release config:
 | PURGE-1 volatile expert tier 64/32 | adapted | 45 GB EXACT default | Leap -> BigMoE | 0365ada | MAC |
 | M-29 aligned zero-copy reads + copy split | engineering | 45 GB store (native + p11 + pad) | MoonShots -> BigMoE | 055d827, 37b9f8b | MAC |
 | chat switch (drafter by task) | adapted | 45 GB EXACT default | MTP Head | 0365ada | SD |
-| QOM (sure rows skip cold ranks 2-9) | adapted | 45 GB FAST stack | NewIdeas + BigMoE | 5bb2743 | MD |
-| 3-bit ranks 0-1 on drafter-sure rows (U3) | new signal (published mechanism) | 45 GB FAST stack | NewIdeas + Breakthrough | T103, T106 | MD |
-| Q1-UNION (sure rows keep the check's union) | adapted (OEA) | RELAX B, code + math answers | NewIdeas | T993, T985 | MD |
+| QOM (sure rows skip cold ranks 2-9; at thr 0 every drafted row is sure) | adapted | 45 GB FAST stack (code sets) | NewIdeas + BigMoE | 5bb2743; r57_screen_fast.py:233-240 | MD |
+| 3-bit kept experts on drafted rows (U3's t3, inside QOM at thr 0) | new signal (published mechanism) | 45 GB FAST stack | NewIdeas + Breakthrough | T103, T106; r57_screen_fast.py:233-240 | MD |
+| Q1-UNION (sure rows keep the check's union) | adapted (OEA) | RELAX B, code + math answers, and inside QOM (q1u) on the code sets | NewIdeas | T993, T985 | MD |
 | comment rule (relaxed acceptance only in comments) | adapted (relaxed acceptance is published; the comment-only span was found nowhere in 2 web checks) | RELAX B | MoonShots | T1350, BigMoE 5b1d00f | SD |
 | B12LL cold ranks half a layer late | published (KTransformers' Expert Deferral) | 12 GB default | Breakthrough | T1057 | MD |
 | 11-bit scale pack (from LOSSLESS45) | published | the p11 store | MoonShots | 055d827 | AGPU |
@@ -55,7 +55,7 @@ To fix before the freeze (NewIdeas):
 | 45 GB | chat | IFEval | E x1.46 [K, paired] | E PASS alone; E + HC8 KILL (84 vs 90) | ships EXACT until E runs without HC8 |
 | 45 GB | agent turns | 17 long agent turns | - | AGENTFAST FAIL (85 blunders; QOM-KEEP carries it) | ships EXACT (stated limit) |
 | 45 GB | FAST | 12 MBPP | 71.3 [K, qall, C 224] | none on MBPP yet | coverage check tonight |
-| 12 GB | EXACT (two-pass loop) | HumanEval | 18.4-18.9 [K, 11.4 GB lifetime] | exact to its own reference; near-ties depend on the draft pattern until PR1 is installed | stands, with that caveat |
+| 12 GB | VERIFIED GREEDY (not exact: 2-4-row verify calls round differently from one-token decoding) | HumanEval | 18.4-18.9 [K, 4 runs mixed; clean run Sat morning] | deterministic; not bit-exact; the ~12x comparison withdrawn | stands as verified greedy, with that label |
 | 12 GB | FAST (top-2, theta 0.95) | HumanEval | ~36 [P, modelled] | map code PASS 1.22 %; the 12 GB FAST arm's T0 same-scores was KILL on 5 Nov (HumanEval+ 80.0 vs 91.7, IFEval 84 vs 90; T1039) | needs a measured run + a new same-scores (map STEP0-P1C queued Sat night) |
 | 12 GB | FAST (theta 0.8, t80ck2) | HumanEval | 38.7-40.3 [K] | map code KILL 1.63 % | not releasable |
 
@@ -66,7 +66,8 @@ near-ties (BigMoE, Fri), so FAST quality is certified under 2 prompt orders.
 Missing before a release table is complete:
 - 45 GB EXACT quiet tok/s per workload (HumanEval, MBPP, math, IFEval) on the certified kernel at the release C.
 - 45 GB FAST stack: MBPP, math and IFEval speed; same-scores on MBPP; the chat launch (E without HC8) and its gate.
-- 12 GB: PR1 installed (or the caveat printed); the theta 0.95 point measured and gated; MBPP, math and chat numbers.
+- 12 GB: the clean verified-greedy run (alone, all 16 prompts, own footprint: Sat morning); the theta 0.95 point
+  measured and gated; MBPP, math and chat numbers. No 12 GB exact claim.
 - Lifetime phys_footprint for every released config (the RAM line is the lifetime peak, not MLX's peak).
 - Everything at 2 prompt orders (FAST depends on cache state).
 
@@ -74,7 +75,7 @@ Missing before a release table is complete:
 
 | piece | content | owners | time |
 |---|---|---|---|
-| Paper A (core) | exact 16-row speculative decoding of a 125B MoE on a laptop: batch-invariant kernels on the GPU and matrix units, streamed experts, the 45 GB and 12 GB exact lines | BigMoE (engine), Leap (kernels), EvalSuite (certification), Fit12 + Breakthrough (12 GB) | ~2-3 days |
+| Paper A (core) | exact 16-row speculative decoding of a 125B MoE on a laptop: batch-invariant kernels on the GPU and matrix units, streamed experts, the 45 GB exact line (12 GB: verified greedy, not exact) | BigMoE (engine), Leap (kernels), EvalSuite (certification), Fit12 + Breakthrough (12 GB) | ~2-3 days |
 | Paper B (FAST) | drafter-certainty expert gating (Q1, Q1-UNION, QOM, U3), the comment rule, how lossy modes are gated (decision map + same-scores), and the negative results (agent turns, CD16, never-wait, split) | NewIdeas + Breakthrough + EvalSuite | ~2 days |
 | Note C | SSD on Apple silicon: the wake penalty, wake-ahead ping, zero-copy reads, queue mixing | MoonShots | ~1 day |
 | Note D | M5 kernels for MoE decode: NAX tiles, DN-KS (split-K per shape), att_single, QMM32 | Leap | ~1 day |
@@ -83,16 +84,15 @@ Missing before a release table is complete:
 
 The public findings notes (~/FableGod/findings/) are the changelog; the 12 GB note already carries a dated correction.
 
-## 4. Proposed freeze (the orchestrator's lean, checked against the windows)
+## 4. Freeze and nights (UPDATED Fri 21:3x: Kamen wants everything finished by Sunday and published by Tuesday at the latest)
 
-- Fri night (now): the stack palindrome (no CD16) -> same-scores (HumanEval + math) -> both long-code top-ups -> MBPP
-  coverage -> map (T1 xs arms, 24 GB arms).
-- Sat night: one A/B of the dense levers that pass by Saturday (HC reads, GDN step, in_proj ks 2); the 12 GB theta 0.95
-  point measured + gated; MBPP speed of the stack.
-- Sun night: EvalSuite's F1; any last lever A/B; the chat launch (E without HC8) + its gate if built.
-- Mon (end of day): CONFIG FREEZE. Nothing enters after it; bisects only before it.
-- Mon night + Tue night: final quiet measurements of the frozen configs under 2 prompt orders: 45 GB EXACT and FAST on
-  HumanEval, MBPP, math, IFEval; 12 GB EXACT and FAST on HumanEval and MBPP; lifetime footprints; any quality row still
-  missing.
-- Wed 11 Nov: publish, if Kamen confirms. Risk: a failed gate costs a night, and Mon / Tue have no slack, so every gate
-  must have passed by Monday's freeze.
+- Fri night (from ~00:30, after the HOLD): the stack palindrome (+ T16 / B's rule / C 256 arms) -> Leap's 6-min idle
+  check -> EvalSuite's gate on the winner + both long-code top-ups + MBPP -> the map (T1, nw3).
+- Saturday by day: S0 async post (if the idle check shows >= ~8 ms per check), S1 NW v3 (map arm, then the engine
+  A/B), S2 small built items, S3 leftovers, S4 short gate, S5 the final number in the evening.
+- FREEZE Saturday ~20:00: the S5 config is the release config. Anything after that is post-release research.
+- Saturday night (Sun ~01:30-10:00): CERT, the release certificate on the frozen config. HumanEval+ 164, math 100 and
+  MBPP 100 in 2 orders; IFEval only if a chat FAST profile ships. Plus the final quiet speed numbers per workload
+  (45 GB EXACT and FAST, 12 GB verified greedy) and lifetime footprints, where the window allows.
+- Sunday: fill the paper from the owners' report files. Monday night is the fallback for anything CERT misses.
+- Publish by Tuesday at the latest, if Kamen confirms date, scope and venue.

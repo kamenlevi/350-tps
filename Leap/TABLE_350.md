@@ -8602,3 +8602,63 @@ screen); GPU tests small, on share locks.
   - nw_check with REF2_PATH = v2: (w) / (f) / (c) / (l) all PASS on both forms.
   - Measuring NW's own overhead (the extra call + write per layer when nothing is late) needs BigMoE's r57 side
     (NW_ON around verify passes only). Then a TOGGLE A/B in one process.
+
+## ENGINE GAP HUNT (Leap, Fri 2026-11-06 21:0x-21:1x; the orchestrator 21:0x: "dense ~33-36 ms per check in situ vs your
+19.6 ms of chained kernels: where are the other ~13-16 ms?")
+- Constraint: the evening's free memory (~15-31 GB, Kamen's apps open) does not fit the 45 GB engine. So the runs used
+  small uniform pools with no victim tier (C 48 / 128), on BigMoE's sat STACK env (FAST-NAX + DN-KS + LAZY + D7BNAX_32=1
+  + R57_FASTTAX).
+- Tool: gpu_util_sampler.sh (ioreg 'Device Utilization %', ~10-20 Hz, no sudo) joined with stamped probe windows
+  (stepb STEPB_DENSE / STEPB_FULL; gap_read.py).
+- **The dense pass in situ at 16 rows, experts stubbed (no post, no reads), unsynced: 25.0 / 24.9 ms per forward (C 48 /
+  C 128, 80 / 60 forwards). 20 ms inside the forward call (Python build; the GPU starts every 4 layers) + ~5 ms final
+  eval wait. GPU busy 87-89 % over the window (incl. the rollbacks between forwards), so ~22 ms of GPU work per forward,
+  GPU-bound.**
+- The same forward's synced per-piece split sums 32-39 ms: one eval per piece, each paying a fresh command-buffer start.
+  **So the "dense 33-36 ms" of the check's split is that accounting, not GPU time. The real gap over the 19.6 ms of
+  chained kernels is ~2-3 ms (glue kernels + dependent dispatches) + ~1-3 ms of GPU idle (the start lag before the first
+  4-layer submit).**
+- Hence the full all-resident 16-row check ~51 ms (FAST-NAX, C 224, this morning's probe) = dense ~25 + expert path ~26.
+  The real-block check + commit (61.2 at C 224 with residual misses; 78.5 in BigMoE's A/B) adds misses / spins and the
+  commit. The expert path and the waits hold most of the check, not dense glue.
+- FULL 16-row check at C 128 (real experts, warm repeats): 119.6 ms per forward, GPU 'busy' 78 %. NOT representative:
+  the small uniform pools churn (2,545 misses per 2-row pass), and the GPU's spin-waits count as busy. The full check's
+  GPU-busy vs wall needs C 224 (next free 45 GB slot).
+- The expert path blocks the forward: the full check spends ~44.5 ms inside the forward call at C 224 against ~10-12 ms of
+  leaf Python (gdn 2.3-2.8, att 1.6-2.6, HC 2-2.3, experts 3.2-6.1 ms). So the forward waits on the GPU inside the
+  expert path (~25 ms). Whether that leaves the GPU idle between layers is the next measurement at C 224.
+- Data: data/stepb/out/stepb_bstackd_48_gap*, stepb_bstackf_128_gap3_*, gpu_util_gap*.txt; scripts/stepb/gap_read.py,
+  gpu_util_sampler.sh.
+- **NEVER-WAIT v3 staged (Fri 21:1x; data/nw3/ref2_cand.py md5 dcd5f4f8; NOT live).** Diagnosis of BigMoE's NW v1 KILL
+  (stalled calls 17 vs 17, +6.5 ms per check):
+  - v1 left cold QOM optional uses and cold LSB sidecars (resident base) at -1. So each layer's own call still waited on
+    the release, which lands with the layer's demand reads.
+  - v3 with NW on: cold demand -> late (as before); cold optional -> dropped now (weight 0; the loader's -2 anyway); a
+    cold sidecar with a resident base -> 3-bit now (U3's -2, lossy: the spec's 8.1 'cheaper answer'). FAST-NAX skipped
+    pairs read nothing (v2).
+  - NWCNT has 8 fields (+ optional dropped, + sidecars 3-bit).
+  - nw_check PASS (warm / force / cold / layer 47; the new paths are not exercised by its scenarios).
+  - Waiting for BigMoE's fday data on the waited pairs' kinds and the orchestrator's go.
+- The C 224 gap run (full 16-row check GPU-busy vs wall) is slotted ~01:35 after BigMoE's ticket. Arm bstackF (the
+  stack env, normal pools, STEPB_FULL / STEPB_DENSE 60 each), on NewIdeas' queue word.
+- **NEVER-WAIT v3: install + engine A/B, pre-registered Fri 21:3x (the orchestrator's go 21:3x).**
+  - Install: Saturday after BigMoE's night ticket and the HOLD.
+    - Bit check 1 (qomsplit_check with REF2_PATH = v3: off == the live one-call) + nw_check, then the atomic install, OFF
+      by default (REF2_NEVERWAIT arms, ref2.NW_ON per verify pass).
+    - The v3 vs live diff sits entirely inside the NW-active block, so off == today by construction.
+  - A/B (BigMoE's harness, 12 HumanEval, C 224, A-B-B-A): the sat STACK vs STACK + R57_NEVERWAIT=1 (v3).
+    S = the stack's median gate service per check (~14 ms in fday).
+    - PASS: median check >= 0.5 x S shorter AND kept per check within 2 %.
+    - KILL: < 0.2 x S shorter, or kept down > 2 %.
+    - BETWEEN otherwise.
+    - Report the NWCNT fields (late / dropped-optional / 3-bit sidecars per check).
+  - Quality: v3 adds lossy parts beyond nw1's map PASS (cold optional uses dropped now, cold sidecars 3-bit). NewIdeas
+    decides whether they need their own map arm or a short same-scores check on code, planned in the same window.
+- **NEVER-WAIT v3 quality / speed gates (NewIdeas 21:4x, QUEUE dc9aff8 S1).**
+  - Its own map arm first: Breakthrough preps nw3 tonight on the CPU. Cold sidecars at 3 bits (LSB-on-miss) are a new
+    lossy path; the worst-case bound (every rank 0-1 term of unsure rows at 3 bits) stands in if residency can't be
+    modelled.
+  - The engine A/B runs speed-only beside it. NewIdeas' line replaces mine above: PASS >= +8 % tok/s, KILL < +3 %. It
+    reports NWCNT (3-bit sidecars, optional uses dropped, late groups per check).
+  - Note: BigMoE's 'stalled calls' counts calls that issued a read, not waits.
+  - Adoption: map PASS + S4's short same-scores gate.

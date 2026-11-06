@@ -350,3 +350,16 @@ ABLATIONS["qom_0_live_ball_c208_nw1s"] = nw_mask(_NWD + "qom_0_live_ball_c208_nw
 ABLATIONS["qom_0_split0.99_live_ball_c208"] = q1_union(_NWD + "qom_0_split0.99_live_ball_c208")   # tier 2: the stack's twin at 208 slots
 ABLATIONS["qom_0_split0.99_live_ball_c208_nw1"] = nw_mask(_NWD + "qom_0_split0.99_live_ball_c208_nw1", 1)   # tier 2: the stack at 208 slots
 ABLATIONS["qom_0_split0.9_live_ball_nw1"] = nw_mask(_NWD + "qom_0_split0.9_live_ball_nw1", 1)   # tier 2: split 0.9 + nw1 (twin qom_0_split0.9_live_ball)
+
+# ---- NEVER-WAIT v3 (b) (Breakthrough, Fri 2026-11-06 21:3x; NewIdeas QUEUE dc9aff8 S1; scripts/dm_s7/nw3_patch.py) -------
+def nw3_mask(path, thr=0.9, bits=3):
+    """nw1 (nw_mask(path, 1)) + v3's (b) at its worst case: every UNSURE answer row's (draft cf < thr, or no draft; the
+    engine's R57_U3_THR default 0.9) ranks 0-1 at `bits` from records3 on time (dm_t3; 3 = the MSB-3 record, as the
+    engine's -2 sidecar slot; 4 = the control, rebuilt 4-bit through the same path), except a late rank (a cold base:
+    4-bit, written one layer late as in nw1). v3's (a) changes nothing on the map: QOM's masks drop a cold optional use."""
+    def setup():
+        PERT.update(rmask=path, renorm=False, nw=1, nw3=True, gate=("t3u", thr), t3=bits, t3k=2)
+    return setup
+ABLATIONS["qom_0_live_ball_c208_nw3"] = nw3_mask(_NWD + "qom_0_live_ball_c208_nw1")   # NW v3 at 208 slots (twin: qom_0_live_ball_c208_nw1)
+ABLATIONS["qom_0_live_ball_nw3"] = nw3_mask(_NWD + "qom_0_live_ball_nw1")             # NW v3 at the published pool (twin: qom_0_live_ball_nw1)
+ABLATIONS["qom_0_live_ball_c208_nw3c"] = nw3_mask(_NWD + "qom_0_live_ball_c208_nw1", bits=4)   # the control: the same rows and path at 4 bits

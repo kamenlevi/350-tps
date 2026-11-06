@@ -5,7 +5,26 @@ docstring-free HumanEval). Read first: `~/TrainLab/K_PLAN_1106.md`. CPU replays 
 Marks: [K] measured by its owner, [P] my replay / arithmetic on stored walks, [G] judgement. K = kept per check with the
 engine's 0.3 confidence cut (MTP Head's 9.57 / 5.94 are the same walks without the cut; mine reproduce them: 9.58 / 5.93).
 
-## 0. The answer
+## Update Fri 21:2x: the engine's numbers on CD16, and what replaces it
+
+- **CD16's speed held in the engine, its quality did not [K, BigMoE c966c0d, data/fday].** MBPP12: kept 6.48 -> 9.38
+  (x1.449; my line >= 1.30), tok/s +23.7 %, tokens per task x1.02, but tests 11 / 12 -> 8 / 12 in both passes: my KILL
+  line. HumanEval, inside the stack: kept in all / kept exact on the same blocks x1.19-1.27 (replay x1.24-1.26).
+- **Why it failed:** runaway text. The drafter's free comment or docstring text leaves the 125B's distribution at its
+  first or second deviating token (ranks 11 to 6,395, margins -6 to -20), and then the 125B follows the babble with its
+  own argmax until the cap. The risk I had named for MBPP (drafter text replacing the 125B's plan) is what happened; the
+  HumanEval pair could not show it, since its docstrings are copies.
+- **So item 2 below changes:** CD16 is still the only lever of that size on K, but it is not shippable. Every arm that
+  keeps text wholesale (CD16, C16, G16, D16's docstrings) is withdrawn.
+- **What replaces it is small: T16** (`build_1106/GUARD.md`): a comment or docstring row is kept only if the 125B ranks
+  the draft in its top 3 at p >= 0.1 p1. Replay: kept x1.08 on HumanEval, x1.15 on MBPP12 (x1.04 / x1.08 with the gain
+  halved) [P]. Built as a module-only change, self-tests pass, sent to BigMoE for tonight's ticket with an MBPP12 line.
+- **For the 300 / 200 gate:** the kept-tokens wall has no safe lever of CD16's size. On HumanEval the safe pieces are
+  T16 (comments) and the exact copy path for the copied docstring (MATCH: x1.04 kept at 16 rows, x1.20 at 32, the latter
+  blocked by the lossy preset's 16-row assert).
+- Still owed: one read of tonight's T16 / relax v2 numbers against `build_1106/GUARD.md` sections 5-6, then stop.
+
+## 0. The answer (first list, 10:50; item 2 is amended by the update above)
 
 1. **K 14 on MBPP-like code is not reachable with any drafter in sight [P].** With comments and docstrings accepted and an
    autoregressive drafter that had the 125B's own features at every step, MBPP would still keep 13.3-13.6. It needs code
@@ -200,3 +219,16 @@ On the engine's 12 HumanEval, qall against qall + CD16 [P from other prompts of 
   HumanEval+ answers.
 - Ceilings use the drafter's own picks on the right prefix after a fixed row (the first-order selector re-walked).
 - The 12 engine prompts and the walk's 12 fresh HumanEval+ answers are different tasks; only averages compare.
+
+## 7. TRIED lines for the recorder (I write only here)
+
+- CD16-MBPP12 (engine, BigMoE c966c0d): qall vs qall + R57_INERT=CD16 on 12 MBPP | wall: kept | exact: no | verdict:
+  speed PASS (K x1.449, tok/s +23.7 %, tokens x1.02), quality KILL (tests 11 / 12 -> 8 / 12, both passes): the drafter's
+  wholesale comment / docstring text runs away | 11-06 | BigMoE docs/WED_TESTS.md, data/fday.
+- INERT wholesale arms G16 / D16 / C16: withdrawn without a run (each keeps one of the two failing kinds of text) | 11-06.
+- INERT-T16 (guarded: top-3 at 0.1 p1 on comment + docstring rows, cut floor 0.8): BUILT, CPU self-tests pass; replay kept
+  x1.08 HumanEval, x1.15 MBPP12; engine pending (Sat 00:30 ticket) | 11-06 | ~/FableGod/goal/build_1106/GUARD.md.
+- K-WALL kills (CPU replays, `K_WALL_lines_1106.md`): ALIGN (comment text between anchor and row as the cause of the
+  depth decay), a picker on deep code rows, PROMPT-NAME lookup, span-boundary rules, a looser cut under CD16; BETWEEN:
+  ALPHA (fresh names, x1.02), REFRESH at D = 4; PASS as a ceiling only: an autoregressive tail past depth 4 (x1.24 MBPP /
+  x1.12 HumanEval on top of CD16, priced as no gain at 1.35 ms per chain step) | 11-06.

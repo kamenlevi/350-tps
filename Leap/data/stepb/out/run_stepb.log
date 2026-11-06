@@ -56,3 +56,19 @@
 11-06 09:39:24 run stepb_stack_224_ceil (swap 12592 MB)
 11-06 09:40:44 done stepb_stack_224_ceil rc=0:   step B calibration: round trip 137 us (p10-p90 121-175), dependent dispatch 2.24 us; read floor (KB: cold / warm GB/s) 16: 1 / 2, 64: 65536 / 65536, 256: 2621 FLAT-2 VERDICT: INVALID (FLAT <= 47.50 ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +22.50 ms from it); only 8 steady  
 11-06 09:40:44 STEP B end (rc 0)
+11-06 21:07:25 STEP B start (pid 57788, NO-SWAP 15.9 GB -> C 48, arms: bstackd; md5 probe 419be2a1 k d27a87fe)
+11-06 21:07:25 run stepb_bstackd_48_gap (swap 9247 MB)
+11-06 21:08:10 done stepb_bstackd_48_gap rc=134: 
+11-06 21:08:10 STEP B end (rc 1)
+11-06 21:08:59 STEP B start (pid 61871, NO-SWAP 30.2 GB -> C 48, arms: bstackd; md5 probe de78d2f2 k d27a87fe)
+11-06 21:08:59 run stepb_bstackd_48_gap (swap 9247 MB)
+11-06 21:09:44 done stepb_bstackd_48_gap rc=0:   step B calibration: round trip 138 us (p10-p90 110-196), dependent dispatch 2.23 us; read floor (KB: cold / warm GB/s) 16: 5 / 16384, 64: 5 / 3, 256: 10 / 56, FLAT-2 VERDICT: INVALID (FLAT nan ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +nan ms from it); only 0 steady zero-mi 
+11-06 21:09:44 STEP B end (rc 0)
+11-06 21:10:45 STEP B start (pid 66246, NO-SWAP 31.2 GB -> C 48, arms: bstackd; md5 probe ba59047d k d27a87fe)
+11-06 21:10:45 run stepb_bstackd_48_gap2 (swap 9247 MB)
+11-06 21:11:30 done stepb_bstackd_48_gap2 rc=0:   step B calibration: round trip 138 us (p10-p90 118-192), dependent dispatch 2.29 us; read floor (KB: cold / warm GB/s) 16: 1 / 16384, 64: 9 / 8, 256: 27 / 16, FLAT-2 VERDICT: INVALID (FLAT nan ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +nan ms from it); only 0 steady zero-mi 
+11-06 21:11:30 STEP B end (rc 0)
+11-06 21:12:53 STEP B start (pid 70548, NO-SWAP 31.2 GB -> C 128, arms: bstackf; md5 probe 63221d8d k d27a87fe)
+11-06 21:12:53 run stepb_bstackf_128_gap3 (swap 9247 MB)
+11-06 21:13:53 done stepb_bstackf_128_gap3 rc=0:   step B calibration: round trip 131 us (p10-p90 100-180), dependent dispatch 2.47 us; read floor (KB: cold / warm GB/s) 16: 1 / 1, 64: 4 / 5, 256: 9 / 16, 1024 FLAT-2 VERDICT: INVALID (FLAT nan ms; lines: PASS <= 30, BETWEEN 30-36, KILL > 36; 350 tok/s itself needs <= 25 at K 12: +nan ms from it); only 0 steady zero-mi 
+11-06 21:13:53 STEP B end (rc 0)

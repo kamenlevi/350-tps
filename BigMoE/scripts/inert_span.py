@@ -35,7 +35,11 @@ rows (or are used copies).
 
 Arms (R57_INERT): CD16 / CD32  comments + docstrings whole;  D16 / D32  docstrings whole, comments on rule C;
 G16 / G32  docstrings whole, comments guarded;  C16  comments whole only. The number = rows per check. Unset = exact: r57
-never calls this module. R57_INERT_LOG=<path>: one JSON line per relaxed accept (region, mode, texts, rank, dlm).
+never calls this module.
+Fri 6 Nov, after CD16 failed MBPP12 on quality (the drafter's free text ran away: BigMoE data/fday): the GUARDED arms.
+T16  comments + docstrings, every row kept only when the 125B ranks the draft in its top 3 at p >= 0.1 p1 (rule C's form);
+TC16 the same on comments only;  U16 top-8 at 0.01 p1 (looser, not the safe pick). No row is kept wholesale in these arms.
+Every arm that keeps text wholesale (CD16, C16, D16's docstrings, G16) is NOT quality-safe on text the 125B writes fresh. R57_INERT_LOG=<path>: one JSON line per relaxed accept (region, mode, texts, rank, dlm).
 COPYRUN (R57_COPYRUN=64, exact, needs R57_COPY and R57_ROWS=64): copyrun_extend() below.
 Replay twin and tests: precheck_inert.py, test_inert.py beside this file."""
 import json
@@ -43,6 +47,14 @@ import math
 
 RULE_C = ("R2", 3, 0.1)          # rule C as shipped: the draft's rank < 3 and p(d) >= 0.1 p1
 RULE_TOP8 = ("R2", 8, 1e-12)     # the 125B's top-8, any p
+# Fri 6 Nov (after CD16's MBPP12 quality KILL: wholesale text ran away). The guarded forms: a row inside a span is kept
+# only if the 125B itself ranks the draft near its top. The 4th field is the row's confidence FLOOR in the running-
+# confidence cut before the check (the check still decides the row): a block is cut later inside a span, but not never.
+# 0.8 = at most ~5 low-confidence guarded rows per block; the replay's tok/s is flat between 0.8 and 1.0 and the floor
+# bounds the rows wasted if the engine refuses more than the replay expects (kwall_replay.py lift, guard_lift.out).
+RULE_T3 = ("R2", 3, 0.1, 0.8)      # T16: rule C's form on every row of a span
+RULE_T8 = ("R2", 8, 0.01, 0.8)     # U16: the 125B's top-8 at p >= 0.01 p1
+TYP = {"typ3": RULE_T3, "typ8": RULE_T8}
 ARMS = {
     "CD16": dict(doc="whole", com="whole", rows=16),
     "CD32": dict(doc="whole", com="whole", rows=32),
@@ -51,6 +63,9 @@ ARMS = {
     "G16": dict(doc="whole", com="guard", rows=16),
     "G32": dict(doc="whole", com="guard", rows=32),
     "C16": dict(doc=None, com="whole", rows=16),
+    "T16": dict(doc="typ3", com="typ3", rows=16),      # comments + docstrings, top-3 at 0.1 p1 on every row
+    "TC16": dict(doc=None, com="typ3", rows=16),       # comments only
+    "U16": dict(doc="typ8", com="typ8", rows=16),      # comments + docstrings, top-8 at 0.01 p1 (looser; not the safe pick)
 }
 
 
@@ -159,12 +174,15 @@ def classify(rxc, scan, dtexts, atexts, arm):
                 if cm == "whole":
                     if "\n" not in d:
                         mode = "whole"
+                elif cm in TYP:
+                    if "\n" not in d:
+                        mode = TYP[cm]
                 elif rxc.comment_draft_ok(d):
                     mode = RULE_C if cm == "ruleC" else RULE_TOP8
         elif s_.in_doc():
             kind = "docstring"
             q = s_.s.dq
-            if arm["doc"] == "whole" and q not in d and (a is None or q not in a):
+            if arm["doc"] in ("whole", "typ3", "typ8") and q not in d and (a is None or q not in a):
                 dt = False
                 if arm.get("doctest", True):
                     dt = s_.doctest()
@@ -172,7 +190,7 @@ def classify(rxc, scan, dtexts, atexts, arm):
                         c_ = s_.copy(); c_.feed(d)
                         dt = c_.doctest()
                 if not dt:
-                    mode = "whole"
+                    mode = "whole" if arm["doc"] == "whole" else TYP[arm["doc"]]
         out.append((kind, mode, ct))
         s_.feed(d)
     return out
@@ -184,7 +202,8 @@ def pre_block(rxc, scan, dr, cfl, dtexts, arm, used=None):
     at 16 rows; past the 15th only while the rows are whole (or used copies, used[j]) when the arm runs longer blocks."""
     cls = classify(rxc, scan, dtexts, None, arm)
     whole = [c[1] == "whole" for c in cls]
-    cfl2 = [1.0 if whole[j] else float(cfl[j]) for j in range(len(cfl))]
+    floor = [1.0 if w else (c[1][3] if isinstance(c[1], tuple) and len(c[1]) > 3 else 0.0) for w, c in zip(whole, cls)]
+    cfl2 = [max(float(cfl[j]), floor[j]) for j in range(len(cfl))]      # whole rows sure; guarded rows floored
     n = len(dr)
     if arm["rows"] > 16 and n > 15:                      # a 16-row arm leaves the block as the engine built it
         n = 15

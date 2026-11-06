@@ -191,11 +191,11 @@ def _row_rm(n):
 # d = 0 writes it straight after layer L's own write (the self-check: the twin up to the order of two adds).
 # One MoE call per layer per forward chunk, so the stash holds exactly the current chunk's rows; the mask resolves the
 # tail (no late flag at layers >= 48 - d), so nothing is pending when the last layer returns (asserted).
-NW = {"sl": None, "stash": {}, "inj": {}, "writes": 0, "terms": 0}
+NW = {"sl": None, "stash": {}, "inj": {}, "writes": 0, "terms": 0, "t3": 0}   # t3: NEVER-WAIT v3 (b)'s 3-bit terms (nw3)
 NWHC = {}     # id(layers[i].mlp_hyper_connection) -> i : the MLP-side read, by identity (both reads are (i, "hc"))
 NWDL = {}     # id(layers[i]) -> i
 def _nw_reset():
-    NW.update(sl=None, stash={}, inj={}, writes=0, terms=0)
+    NW.update(sl=None, stash={}, inj={}, writes=0, terms=0, t3=0)
 
 def _row_lm(n, li, p0):
     """This call's n rows' late flags [n, 10] at layer li, read at the row offset p0 the keep flags were read at
@@ -209,12 +209,25 @@ def _nw_late(path, rm):
     off (self-check i: the never-wait path with no late flag must reproduce the twin bit for bit)."""
     d = int(PERT["nw"])
     assert rm is not None and 0 <= d <= 2, "never-wait needs an rmask arm and a lateness of 0, 1 or 2 layers"
-    assert not any(PERT.get(k_) for k_ in ("t3", "gate", "reuse", "q", "topk")), "never-wait is not wired with t3 / gate / reuse / q / topk"
+    bad_ = ("reuse", "q", "topk") + (() if PERT.get("nw3") else ("t3", "gate"))   # NEVER-WAIT v3 (b): nw3 adds t3 + the t3u gate
+    assert not any(PERT.get(k_) for k_ in bad_), "never-wait is not wired with t3 / gate / reuse / q / topk (nw3: with reuse / q / topk)"
+    assert not PERT.get("nw3") or (PERT.get("gate", (None,))[0] == "t3u" and PERT.get("t3") in (3, 4) and int(PERT.get("t3k", 2)) == 2
+                                   and not PERT.get("t3keep") and not PERT.get("t3L")), "nw3: gate ('t3u', thr), t3 3 or 4, t3k 2, no t3keep / t3L"
     if PERT.get("nw_zero"): return np.zeros(rm.shape, bool)
     lm = np.load(path)["late"].astype(bool)
     assert lm.shape == rm.shape and not (lm & ~rm).any(), f"{path}: late must have keep's shape and lie within keep"
     assert d == 0 or not lm[:, lm.shape[1] - d:].any(), f"{path}: the mask must resolve the tail (no late flag in the last {d} layers)"
     return lm
+
+def _nw3_setup(g, a):
+    """NEVER-WAIT v3 (b), its worst case (Breakthrough, Fri 2026-11-06; nw3_patch.py): every UNSURE answer row (rows >= a
+    whose gate g < PERT['gate'][1]; no draft is -1 in _gate) is gated (CUR['k'] = 0: _t3_add serves its ranks 0-1 at
+    PERT['t3'] bits from records3, on time); CUR['rm3'] = keep & ~late is that path's rank mask, and the stock path keeps a
+    gated row's ranks 0-1 only where late (a cold base: 4-bit, written late as in nw1). Needs CUR['rm'] and CUR['lm']."""
+    n = len(g); u = np.zeros(n, bool); u[a:] = ~(g[a:] >= PERT["gate"][1])
+    kk = np.full(n, 10, np.int32); kk[u] = 0; CUR["k"] = kk
+    r, lm = CUR["rm"], CUR["lm"]; m = min(n, r.shape[0]); gr = np.flatnonzero(u[:m])
+    CUR["rm3"] = r & ~lm; r2 = r.copy(); r2[gr, :, :2] &= lm[gr, :, :2]; CUR["rm"] = r2
 
 def _nw_stash(li, delta):
     NW["stash"].setdefault(li, []).append(delta)          # this call's rows, in order
@@ -408,6 +421,9 @@ def _t3_add(block, li, x):
     if PERT.get("t3keep") or src is not None:             # the gated rows' own rank mask at this layer (rank-sorted)
         rm = CUR["rm"]; keep = np.ones((len(G), 10), bool); gi = p0 + G; ok_ = gi < rm.shape[0]
         keep[ok_] = rm[gi[ok_], li]
+    if PERT.get("nw3"):                                   # NEVER-WAIT v3 (b): the gated (unsure) rows' ranks 0-1 at PERT['t3']
+        r3 = CUR["rm3"]; keep = np.zeros((len(G), 10), bool); gi = p0 + G; ok_ = gi < r3.shape[0]   # bits, on time; not a late
+        keep[ok_] = r3[gi[ok_], li]; NW["t3"] += int(keep[:, :2].sum())     # rank (4-bit, written late on the stock path)
     if src is not None:                                   # every kept expert from src; ranks < t3k forced in (the _t3 masks drop them)
         keep[:, :int(PERT.get("t3k", 2))] = True
         yg = dm_t3.routed_kept(block, li, rows[mx.array(G.astype(np.int32))], src, keep)
@@ -420,7 +436,7 @@ CAPR = {"on": False, "L": {}, "x": False, "X": {}, "W": {}}  # DAY9 bytes side (
 TEARDOWN = []   # undo callables registered by a setup that changes the model itself (hc8w); run by clear()
 def clear():
     ACTIVE.clear(); PREV.clear(); PERT.clear(); CUR["k"] = None; CUR["rm"] = None; CUR["skip"] = None; CAPR["on"] = False; CAPR["x"] = False; CAPR["s"] = False
-    CUR["lm"] = None; _nw_reset()
+    CUR["lm"] = None; CUR["rm3"] = None; _nw_reset()
     while TEARDOWN: TEARDOWN.pop()()
 
 _BASE = {}
@@ -460,7 +476,7 @@ def _gate_k(nm, n):
     if spec[0] == "cert": k[_cert(nm, n, spec[1]) >= spec[2]] = spec[3]; return k
     if spec[0] == "acert": k[_acert(nm, n, *spec[1:5])] = spec[5]; return k
     if spec[0] == "t3cert": k[_cert(nm, n, spec[1]) >= spec[2]] = 0; return k   # 3-bit pass 1: certified rows via dm_t3
-    if spec[0] in ("t3mask", "t3keep"): return k        # set from the rank mask in measure()
+    if spec[0] in ("t3mask", "t3keep", "t3u"): return k   # set from the rank mask in measure() (t3u: NEVER-WAIT v3 (b), _nw3_setup)
     g = _gate(nm, n)
     if spec[0] == "top": k[g >= spec[1]] = spec[2]
     elif spec[0] == "t3": k[g >= spec[1]] = 0           # dm_t3 adds their top-2 (records3, PERT['t3'] bits)
@@ -511,6 +527,7 @@ def measure(model, windows, name, setup):
         if PERT.get("gate") == ("t3mask",):                 # the t3 rows = the rows whose mask drops rank 0 (Tue 11:0x): a
             kk = np.full(len(ids), 10, np.int32); r = CUR["rm"]; m = min(len(kk), r.shape[0])   # live cut's exact bonus
             kk[:m][~r[:m, :, 0].any(axis=1)] = 0; CUR["k"] = kk                                 # rows are not served twice
+        if PERT.get("nw3"): _nw3_setup(_gate(nm, len(ids)), a)   # NEVER-WAIT v3 (b): the unsure answer rows' ranks 0-1 at 3 bits
         l0 = _lsrc() if PERT.get("t3L") else None         # screen 7: this window's per-layer source counts
         tk, lp = run_window(model, ids)
         res[nm] = dict(dom=dom, a=int(a), off=int(off), tk=tk[a:].tolist(), lp=lp[a:].tolist())
@@ -558,6 +575,13 @@ def measure(model, windows, name, setup):
                 if NW["terms"] != nl_ or NW["stash"]:
                     extra += f"; WARNING never-wait used {NW['terms']} late terms, the mask holds {nl_} (rows misaligned)"
                     res[nm]["warn"] = extra
+                if PERT.get("nw3"):                         # NEVER-WAIT v3 (b): the 3-bit terms served == the masks' count
+                    r3 = CUR["rm3"]; n3 = int(r3[np.flatnonzero(CUR["k"][:r3.shape[0]] == 0), :, :2].sum())
+                    res[nm]["nw"].update(t3=NW["t3"], t3rows=int((CUR["k"][a:len(ids) - 1] == 0).sum()), bits=int(PERT["t3"]))
+                    extra += f"; nw3: {NW['t3']} rank 0-1 terms at {PERT['t3']} bits on {res[nm]['nw']['t3rows']} unsure rows"
+                    if NW["t3"] != n3:
+                        extra += f"; WARNING nw3 served {NW['t3']} terms at {PERT['t3']} bits, the masks hold {n3} (rows misaligned)"
+                        res[nm]["warn"] = extra
         if CUR["skip"] is not None:
             s = CUR["skip"][a:]; runs = np.diff(np.flatnonzero(np.diff(np.r_[0, s.astype(np.int8), 0])))[::2]
             extra += f"; chain skips {int(s.sum())}/{len(ids) - 1 - a} answer rows, longest run {int(runs.max()) if len(runs) else 0}"

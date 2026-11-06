@@ -3315,3 +3315,8 @@ so R-01 should find about the same slots, not ~1 GB more.
   drafter port -3.2 ms per check (exact loop ex 18.58 -> exd 18.93, +0.5 % from its draft part). exd = ex on 14 / 16: the
   known keep-1 replay dependence (WV3; PR1 not in the pinned engine), not a port bug. Correction: t80ck2 (40.8 in T3R2)
   is FAST, not the exact mode; the 12 GB exact loop is ~18.5 tok/s on HumanEval.
+
+## 12GB-CLEAN (pre-registered Fri 6 Nov 21:3x; the orchestrator 21:3x, NewIdeas QUEUE f2243e8)
+- The 12 GB verified-greedy loop (arm ex, not exact) alone on all 16 HumanEval prompts, quiet, Saturday morning after tonight's
+  chain: per-prompt decode tok/s + geometric mean, its own lifetime peak footprint, the engine's settings. Runner, gate,
+  report and validity: /Users/kamen/Fit12/PLAN_12GB_90_fit12.md '12GB-CLEAN'. Armed 21:37 (ex16.sh).

@@ -31,7 +31,12 @@ assert len(_r2) >= 1, "step B: no 'import ref2' at column 0 in the harness"
 _eol2 = F2_GEN.index("\n", _r2[0])
 F2_GEN = F2_GEN[:_eol2 + 1] + ("if os.environ.get('STEPB_ATT_SINGLE') == '1':   # Leap step B: R-62's single-call SDPA (FAST)\n"
                                "    ref2.CFG['att_single'] = True\n") + F2_GEN[_eol2 + 1:]
-F2_INFO["stepb"] = "stepb_k.patch() after import evalsuite.env; STEPB_ATT_SINGLE after import ref2"
+_sb = "(4 if SB_LO <= int(rows) <= 16 else 0)"            # r57's SB cadence (MTPLX's mid-loop async_eval every 4 layers)
+assert F2_GEN.count(_sb) == 1, f"step B: r57's SB cadence expression found {F2_GEN.count(_sb)} times"
+F2_GEN = F2_GEN.replace(_sb, "(STEPB_SBN[0] if SB_LO <= int(rows) <= 16 else 0)")
+_e2 = F2_GEN.index("\n", F2_GEN.index("_SBK.preload("))
+F2_GEN = F2_GEN[:_e2 + 1] + "STEPB_SBN = [int(os.environ.get('STEPB_SB_N', '4'))]   # Leap step B: the SB cadence, toggleable\n" + F2_GEN[_e2 + 1:]
+F2_INFO["stepb"] = "stepb_k.patch() after import evalsuite.env; STEPB_ATT_SINGLE after import ref2; SB cadence STEPB_SBN"
 F2_GENPATH = os.path.join(F2_CFG["out"], f"{F2_CFG['tag']}_generated.py")
 open(F2_GENPATH, "w").write(F2_GEN)
 F2ON, F2H, F2C = [False], None, []

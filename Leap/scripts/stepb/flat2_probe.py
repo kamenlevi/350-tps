@@ -24,6 +24,8 @@ import stepb_k as KB                                     # Leap's step 0 part B:
 SWEEP = tuple(int(x) for x in os.environ.get("FLAT2_SWEEP", "2,4,8,12,16").split(",") if x)
 KREP = int(os.environ.get("STEPB_KREP", "3"))            # kernel-level forwards per probe, at 2 rows and at 16 rows
 DPROBE = os.environ.get("STEPB_DRAFT") == "1"           # step B: the drafter's propose profiled once per probe (a cache copy)
+DENSE = int(os.environ.get("STEPB_DENSE", "0"))         # step B gap hunt: N unsynced 16-row forwards with the experts stubbed
+FULL = int(os.environ.get("STEPB_FULL", "0"))           # ... and N with the real experts (warm, after one loading forward)
 
 
 def sync_ms(mx, clock=time.perf_counter, n=300):
@@ -354,6 +356,41 @@ class Hooks:
             out["error"] = repr(e)[:300]
         return out
 
+    # ------------------------------------------------------------ step B: the dense pass alone (experts stubbed)
+    def _dense_probe(self, fwd, tok, dr_, m_, stubbed=True, n=None):
+        """the stashed block at 16 rows, DENSE times unsynced and once synced, with every MoE expert call returning zeros
+        (no post, no reads, no expert kernels): what is left is the dense pass + glue. Wall stamps for the GPU-utilization
+        sampler (gpu_util_sampler.sh)."""
+        ns = self.ns
+        mx, lay = ns["mx"], ns["lay"]
+        T_ = {type(l.mlp.switch_mlp) for l in lay}
+        saved = [(t_, t_.__call__) for t_ in T_]
+
+        def stub(self_, x, indices, *a, **kw):
+            return mx.zeros(x.shape[:-1] + (x.shape[-1],), x.dtype)
+
+        out = {}
+        try:
+            if stubbed:
+                for t_ in T_:
+                    t_.__call__ = stub
+            fwd([tok] + dr_, m_)                         # warm-up (with experts: loads the block's experts)
+            fwd([tok] + dr_, m_)
+            ws, bs = [], []
+            out["t_start"] = time.time()                 # unix time: the sampler's clock
+            for _ in range(n or DENSE):
+                _, r_ = fwd([tok] + dr_, m_)
+                ws.append(r_["wall"]); bs.append(r_["build"])
+            out["t_end"] = time.time()
+            out["wall"], out["build"] = ws, bs
+            out["synced"] = fwd([tok] + dr_, m_, True)[1]
+        except Exception as e:
+            out["error"] = repr(e)[:300]
+        finally:
+            for t_, c_ in saved:
+                t_.__call__ = c_
+        return out
+
     # ------------------------------------------------------------ the probe
     def _probe(self, L, n):
         ns, clock, SEG = self.ns, self.clock, self.SEG
@@ -432,6 +469,12 @@ class Hooks:
                 KB.K["cap"], KB.K["caps"] = False, []
                 res["k_real"].append(rk)
             sw, f = {}, self.full
+            if (DENSE or FULL) and f is not None and len(f["dr"]) + 1 >= 16:   # the gap hunt, first (small pools: no sweep)
+                if FULL:                                 # the real check at 16 rows, warm
+                    res["full16"] = self._dense_probe(fwd, L["tok"], *self.masks_for(16, fz), stubbed=False, n=FULL)
+                if DENSE:                                # the dense pass alone (experts stubbed)
+                    res["dense16"] = self._dense_probe(fwd, L["tok"], *self.masks_for(16, fz))
+                f = None
             if f is not None:
                 tok = L["tok"]
                 for r in SWEEP:
@@ -442,18 +485,18 @@ class Hooks:
                 if len(f["dr"]) + 1 >= 16:
                     dr_, m_ = self.masks_for(16, fz)
                     self.dot.update(on=self.dot.get("done16") is None, rows=16, res=[])
-                res["synced_16"] = fwd([tok] + dr_, m_, True)[1]
-                if self.dot["on"]:
-                    self.dot.update(on=False, done16=True); res["dot16"] = list(self.dot["res"])
-                res["k_16"] = []
-                for j_ in range(KREP):                   # part B at 16 rows
-                    KB.K["cap"], KB.K["caps"] = (j_ == 0 and not self.replayed.get("16")), []
-                    rk = fwd([tok] + dr_, m_, "k")[1]
-                    if KB.K["caps"]:
-                        rk["replay"] = KB.replay(0.0)
-                        self.replayed["16"] = True
-                    KB.K["cap"], KB.K["caps"] = False, []
-                    res["k_16"].append(rk)
+                    res["synced_16"] = fwd([tok] + dr_, m_, True)[1]
+                    if self.dot["on"]:
+                        self.dot.update(on=False, done16=True); res["dot16"] = list(self.dot["res"])
+                    res["k_16"] = []
+                    for j_ in range(KREP):               # part B at 16 rows
+                        KB.K["cap"], KB.K["caps"] = (j_ == 0 and not self.replayed.get("16")), []
+                        rk = fwd([tok] + dr_, m_, "k")[1]
+                        if KB.K["caps"]:
+                            rk["replay"] = KB.replay(0.0)
+                            self.replayed["16"] = True
+                        KB.K["cap"], KB.K["caps"] = False, []
+                        res["k_16"].append(rk)
             res["sweep"] = sw
             if DPROBE:
                 res["draft"] = self._draft_probe(L)

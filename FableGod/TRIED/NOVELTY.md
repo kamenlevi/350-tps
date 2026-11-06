@@ -8,6 +8,27 @@ before". Every ADOPTED / PASS lever in TRIED.md now ends in "novelty: <tag> (<pr
 - **engineering**: an implementation step, a fix, a measurement or a diagnostic, with no method claim.
 
 ## The answer, with facts
+- **Refresh Fri 6 Nov 21:3x (NewIdeas; tags are judgments on the records, with no new web check):**
+  - novelty.tsv now holds 309 tags: 36 published, 91 adapted, 5 new, 177 engineering. Still no lever in a release
+    config is tagged new.
+  - The comment rule (relaxed acceptance only in code comments) is adapted. Relaxed acceptance is published; the
+    comment-only span was found nowhere in two web checks. It is live in RELAX B.
+  - The SSD wake penalty + keepalive (MoonShots M-20) is a new finding on a known mechanism. It is now ADOPTED in the
+    45 GB EXACT default (Item 5, 4 Nov).
+  - QOM, as shipped, runs at thr 0. Every drafted row counts as sure (the bonus row stays exact), so its U3 part (kept
+    experts at MSB-3) and its Q1-UNION part act on every drafted row; drafter certainty enters only through the 0.3
+    live cut (r57_screen_fast.py:233-240; thresholds <= 0.3 are identical, TRIED CF03-EQ-CF0).
+  - Live levers that had no tag:
+
+    | lever | tag | why |
+    |---|---|---|
+    | NAX6 (exact) / FAST-NAX (its one-call under QOM) | adapted | grouped / gather MoE GEMMs are published (MonoMoE, ONNX Runtime's MoE GEMV); the M5 matrix-unit form and its bit-exactness are ours |
+    | DN-KS (ks per shape for narrow GEMVs) | published | split-K GEMV / GEMM (CUTLASS split-K, stream-K) |
+    | att_single (one SDPA call, not the 12-chunk fallback) | engineering | using the fused kernel |
+    | D7BNAX_32 / QMM32 (17-32-row drafter calls as two 16-row halves / one 32-row kernel) | engineering | |
+    | lazy GDN commit (bitwise) | engineering | recurrent-state rollback under speculation is known practice |
+    | DRAFT17 (a 17th draft row gated by the next segment's first draft cf) | adapted | the +1 bonus token is standard; the cf gate is ours |
+    | HC8 (8-bit hyper-connection mixers) | published | int8 weight-only quantization |
 - **215 ADOPTED / PASS levers:** 30 published, 55 adapted, 3 new, 127 engineering.
   - Tue 3 Nov 22:5x: 219 tags (30 published, 56 adapted, 3 new, 130 engineering). The same evening's merge fix
     (tried_merge.py keyed rows on their first word, so a session's sub-ideas under one ID collapsed into the first)

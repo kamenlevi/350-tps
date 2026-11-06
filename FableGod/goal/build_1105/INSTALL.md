@@ -1,5 +1,9 @@
 # R57_INERT build (GOAL session, Thu 5 Nov 2026, 18:2x-18:5x EET): install, arms, lines
 
+> **Superseded Fri 6 Nov 2026.** CD16 failed MBPP12 on quality in the engine (tests 11 / 12 -> 8 / 12; speed held): the
+> drafter's wholesale comment / docstring text runs away. CD16, C16, G16 and D16 are withdrawn. The guarded arm T16 and
+> its lines are in `build_1106/GUARD.md`; the account is in `K_WALL_1106.md` (update at the top).
+
 > (a quote from the project owner, kept private)
 engine's own tagger, and a ready-to-apply patch for BigMoE's relaxed screen. Design and replay numbers:
 `~/FableGod/goal/LOSSY350_GOAL.md`. Nothing outside `~/FableGod/goal/` was edited; no GPU was used.

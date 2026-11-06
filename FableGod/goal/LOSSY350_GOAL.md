@@ -1,5 +1,9 @@
 # LOSSY350_GOAL: the kept-tokens wall (GOAL session, Thu 5 Nov 2026; v1 16:27, v2 16:4x EET)
 
+> **Superseded Fri 6 Nov 2026.** CD16 failed MBPP12 on quality in the engine (tests 11 / 12 -> 8 / 12; speed held): the
+> drafter's wholesale comment / docstring text runs away. CD16, C16, G16 and D16 are withdrawn. The guarded arm T16 and
+> its lines are in `build_1106/GUARD.md`; the account is in `K_WALL_1106.md` (update at the top).
+
 Mission: LOSSY350-GOAL (the orchestrator, ~15:55). Wall: tokens kept per check, lossy track, 45 GB, code first.
 Read first: `~/FableGod/fablec/AUDIT_1105.md` (its corrections to GOAL.md are adopted below), `~/TRIED/TRIED.md` (the whole
 drafter section, lines 713-924, and the kept / acceptance lines 1226, 1256, 1269, 1274-1276), `~/EvalSuite/docs/RESULT_relax_2026-11-05.md`

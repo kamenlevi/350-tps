@@ -32,7 +32,8 @@ A-B-B-A (passes 112.7 / 115.0), with no freezes.
 - HumanEval is flattered by prompt copying.
 - Against Kamen's publish trigger (lossy, code): 45 GB 113.9 [K] (the stack without CD16 ~128-130 [P], measured tonight) vs
   250-330 (x2.0-2.9 to go);
-  12 GB code-valid ~36 [P] vs 90-130 (x2.5-3.6 to go). The 12 GB EXACT loop is 18.4-18.9 (not 40.8; see 12 GB LINE).
+  12 GB code-valid ~36 [P] vs 90-130 (x2.5-3.6 to go). The 12 GB verified-greedy loop (not exact) is 18.4-18.9
+  (not 40.8; see 12 GB LINE).
 
 200 STACK (NewIdeas Fri 21:0x; Kamen Fri ~21:0x via the orchestrator: >= 200 tok/s lossy at 45 GB on code by Saturday
 evening, measured and gated, workload named; then publish). Built levers that can still stack, on 12 HumanEval at C 224:
@@ -40,19 +41,40 @@ evening, measured and gated, workload named; then publish). Built levers that ca
 | lever | switch | factor on HE-12 | quality status | needs tonight |
 |---|---|---|---|---|
 | the stack (base) | FAST-NAX + DN-KS + lazy + D7BNAX_32 + att_single | ~131-137 tok/s [P: 157.9 with CD16 / CD16's x1.15-1.21] | gate tonight | palindrome arm (armed) |
-| relax v2 (MoonShots M-44) | R57_RELAX_DELTA=0.5, R57_RELAX_SPAN=1 | x1.08-1.15 [P: kept x1.10-1.23 replay; v1 +10 % kept [K], host-light now] | RELAX B (v1) passed decision 4; v2's decisions == v1 on 3,296 checks | stackr arm (armed); the gate if it wins |
-| MATCH + 32-row checks | R57_COPY=g2, R57_ROWS=32 (+ D7BNAX_32=2) | x1.10-1.20 [P: K 9.57 -> 12.35 on HE+ (x1.29) [K, walk], minus ~0.8-1 ms per added row on FAST-NAX] | exact verification: outputs move only through FAST's keep sets | BigMoE stub test on the FAST engine, then arms stackm + stackrm |
-| Leap's cycle items (DN-KS v2, k3c, expert id glue, HC reads) | per item | x1.02-1.06 [P: -1.5..-5 ms of ~80] | numerics-only (FAST) | only what Leap has installed by 00:00 |
-| C 256 (~50 GB) | C | x1.03-1.05 [P] | none needed | only with Kamen's yes |
+| relax v2 as armed (stackr) | R57_RELAX_DELTA=0.5, R57_RELAX_SPAN=1, NO R57_RELAX_GATE | x1.08-1.15 [P] | CORRECTED Fri 21:2x (the orchestrator; verified in r57_screen_fast.py:161-162 and RESULT_relax_2026-11-05.md:11): ungated DELTA is R1 on CODE tokens too, i.e. C's form, which FAILED decision 4 (HumanEval+ 90.0 vs 95.0). B passed only because its relax touched comment rows alone. My earlier "RELAX B passed" on this row was wrong | SPEED-ONLY tonight, excluded from code_env |
+| B's shipped rule (stackb) | R57_RELAX_SPAN=1 + R57_RELAX_SPAN_RULE=R2:2:0.25, no DELTA | x1.02-1.03 [K-based: B's comment rule +1.8 % kept on HE+] | B's rule passed decision 4 (under B's expert gate, not QOM) | if BigMoE can dry-run it by 00:30; line PASS >= stack x 1.02, KILL < x0.98; gate-eligible |
+| MATCH + 32-row checks | R57_COPY=g2, R57_ROWS=32 | was x1.10-1.20 [P] | - | DROPPED Fri 21:0x (Leap: a fast 32-row one-call verify is several days across two repos, ~+20 ms per check if built) |
+| guarded CD16: G16 / D16 / C16 (GOAL's INERT) | R57_INERT=G16 / D16 / C16 | - | OUT (GOAL Fri 21:10, from the failed run's logs: each keeps one of the two failing kinds wholesale, docstrings or comments) | not counted |
+| T16 (GOAL; READY Fri 21:18, build_1106 GUARD.md, inert_span.py sha1 0ca24e0d8db5; CPU self-tests 38 + 26 OK): comment + docstring rows kept only if the 125B ranks the draft top-3 with p >= 0.1 p1 | R57_INERT=T16 | HE tok/s x1.02-1.04 (halved from replay x1.04-1.06), MBPP x1.08-1.12 [P, GOAL] | MBPP12 line: PASS verdicts equal on >= 11 / 12 in each pass pair, no cap run where the control ended, tokens <= 1.05; KILL >= 2 flips, or such a cap run, or tokens >= 1.15; VOID if anything kept outside the rule | tonight's MBPP12 pair, then stackt = stack + T16 + MATCH-16 (~136-140 [P]); exclusive with relax v2 |
+| MATCH at 16 rows (exact copy check) | R57_COPY=g2 | x1.03-1.04 [K walk: K x1.038 on HE+] | exact verification | BigMoE: confirm it runs under R57_FAST (32 rows cannot: the R == 16 assert, line 246) |
+| Leap's engine-gap hunt | - | x1.03-1.05 [K-based, Leap 19f6789] | numerics-only | DONE Fri 21:2x: no big gap. The "dense ~33-36" was synced per-piece accounting; in situ unsynced dense at 16 rows is ~25 ms, GPU-bound. The real glue gap over the 19.6 ms chain is <= 2-4 ms. Open lead: does the GPU idle between layers while the expert path blocks the forward (~25 ms)? Leap's 5-min C 224 run tonight |
+| S2 small built items (the orchestrator's sweep): D7BNAX_32=2 (-0.75 ms per cycle; code tokens identical to =1), DSUB (-1.0 ms per propose), SVH (-0.79 ms per check), plus Leap's glue fix | per item | x1.04-1.08 [P: -3..-6 ms] | kernel-only / bitwise on code (D7BNAX_32=2); SVH is FAST | DSUB and SVH live only in ~/Leap/data/r57_session_vocab.diff; they need wiring Saturday |
+| C 256 | C | x1.03-1.05 [P] | none needed | a REGULAR arm tonight (the orchestrator Fri 21:1x): peak ~43.2 GB [P] = 38.9 at C 224 + 32 x 0.134, inside the 45 GB lifetime line; needs NO-SWAP >= 47.2 GB at grant, else C 224; line PASS >= +3 % vs the same arm at C 224 AND lifetime peak <= 45.0 GB |
 
-- Stacked product [P]: low 131 x 1.08 x 1.10 x 1.02 = ~160; high 137 x 1.15 x 1.20 x 1.05 x 1.05 = ~208. So 200 on HumanEval-12
-  needs the upper end of every factor. MBPP stays ~90-110 [P] (qall 71.3 [K]; no CD16; MATCH ~x1.0 there). The only
-  large MBPP lever, a guarded CD16 (G16 x1.505 / D16 x1.306 [P, lexer replay]), cannot stack with relax v2 (INERT
-  asserts against both relaxed rules) and needs an MBPP12 quality run first.
+- Stacked product [P], REVISED Fri 21:2x (no MATCH-32, no G16 / D16, gap x1.03-1.05): base 131-137 x (relax v2
+  1.08-1.15 OR T16 1.04) x MATCH-16 1.03 x Leap's items 1.02-1.06 x C 256 1.03-1.05 x gap 1.03-1.05 = ~151-191 on
+  HumanEval-12. 200 is OUT OF REACH on priced factors. Only the open GPU-idle lead or an unpriced find could close it.
+  MBPP ~98-110 [P].
+- Where the check's time is now [K, Leap 19f6789]: all-resident 16-row check on FAST-NAX at C 224 = 51 ms = dense ~25 +
+  expert path ~26 (bytes-bound, ~180 GB/s cold). Real blocks add 10-27 ms of miss spins and commit (check + commit
+  61-78.5). So the levers left are the expert path's bytes / streaming rate and the waits; C 256 measures the waits
+  tonight.
 - Not stackable (KILLed today): CD16 (MBPP quality), never-wait and SPLIT-NAX (engine). Not built: bigger drafters.
-- Tonight's ticket, reshaped (asked of BigMoE): qall / stack / stackr / stackm / stackrm, palindrome, 12 HumanEval. d7x
-  and the 4 chat prompts drop: chat ships EXACT, so the chat clause is moot. The winning arm's env becomes the CODE
-  profile that EvalSuite gates; both long-code top-ups run on it.
+- ARMED Fri 21:2x (BigMoE ee1faec, ticket bas0fbhp9, waits on the HOLD, window 00:30-06:00; dry-run end to end):
+  MATCH-16 2-prompt check -> T16 MBPP12 pair (GOAL's line in sat_mbpp_verdicts.py) -> palindrome qall / stack / stackr /
+  stackrm (both SPEED ONLY) / stackt / stackb / qallm / mirror (13 passes) -> C 256 stack + winner -> ceiling. ~45 of
+  65 min. code_env = the fastest PASSING of {stackt, stackb}, else the stack. Reports: data/sat/sat_report.txt; envs in
+  data/stack/.
+- Tonight's ticket, reshaped (asked of BigMoE, Fri 21:0x; revised 21:1x):
+  (1) T16 ONLY (NewIdeas Fri 21:1x, to BigMoE): if GOAL's module + CPU test land by 23:45, the MBPP12 pairs mq / mt /
+      mtb / mqb on GOAL's line (~7 min). Otherwise NO INERT arm tonight; no fallback to G16 / D16 (unsafe).
+  (2) The palindrome on 12 HumanEval: qall / stack / stackr / stackrm (stackr + MATCH-16, if it runs under FAST) /
+      stackt (stack + T16 + MATCH-16, only if T16 passed). Lines: PASS >= stack x 1.03, KILL < stack x 0.97.
+  (3) The stack and the winning arm again at C 256 (NO-SWAP >= 47.2 GB at grant; line PASS >= +3 % vs C 224 AND lifetime
+      peak <= 45.0 GB).
+  (4) The CODE profile EvalSuite gates is the fastest PASSING arm among {stackt, stackb}, else the stack (stackr /
+      stackrm are speed-only). If T16 is in it, tonight's MBPP
+      check is T16's MBPP decision 4.
 
 MEASURED (quality measured; speed measured or priced):
 1. RELAX ship, B on code + E on chat (45). Speed [K, EvalSuite RESULT 8797f54, C 160, paired]:
@@ -143,7 +165,9 @@ PRE-REGISTERED, NOT RUN (by expected gain on 45 GB code; lines in QUEUE Thu 19:0
    157.9 tok/s), kept +4.6 %. Per check: check 68.8 -> 75.3 ms, gate service 14.0 -> 15.6, misses 37 -> 39, stalled layer
    calls 17 -> 17. The NW counters show 24 late groups and 57 late uses per check, with 0 stalls of its own.
    - My +10-15 % was wrong. I priced it from the 13.5-15 ms gate service, which is a spin bound that OOO already
-     overlaps. NW removed no stalled calls and added ~6.5 ms of late work. At C 224 there is little wait to remove.
+     overlaps. NW did not cut the gate service (14.0 -> 15.6 ms) and added ~6.5 ms of late work. At C 224 there is
+     little wait to remove. (CORRECTED Fri 21:2x, Leap: 'stalled layer calls' counts calls that issued any read, not
+     waits; BigMoE's ext line 881.)
    - NW stays out of tonight's gate. The per-set NW gate (BigMoE ebf9bbd) stays in the code, unused.
    - If it and SPLIT-NAX both pass, ONE same-scores run covers stack + split 0.99 + NW (the map passed that
      combination).
@@ -193,7 +217,7 @@ MEASUREMENTS THAT GATE THE PLAN (no gain themselves):
   | piece (ms per check) | FAST-NAX run [K] | + new base | budget | gap | next levers |
   |---|---|---|---|---|---|
   | dense GPU (flat in rows) | ~33-36 [K, probes] | ~25-28 [K, -8.2: DN-KS + att_single] | 12 | -13..-16 | Chained 16-row kernels now sum 19.6 (in_proj 4.1, HC reads 5.9, GDN step 2.1, out / o_proj 1.8, ...). Next: HC reads -1..-2, GDN step -1, expert id glue -1, in_proj ks 2 -0.5, router -0.5. 12 needs ~250 GB/s and ~1/3 of the kernels; Leap's realistic target is 16-20 |
-  | misses (the GPU's spin on them) | ~13.5-15 [K] gate service (35-37 per check) | same | ~0 | NOT removable by NW | CORRECTED Fri 15:5x: never-wait's engine arm removed no stalled calls (17 -> 17) and added ~6.5 ms (engine KILL). The service is mostly overlapped at C 224; the removable wait is small and unmeasured |
+  | misses (the GPU's spin on them) | ~13.5-15 [K] gate service (35-37 per check) | same | ~0 | NOT removable by NW | CORRECTED Fri 15:5x: never-wait's engine arm did not cut the gate service (14.0 -> 15.6 ms) and added ~6.5 ms (engine KILL). The service is mostly overlapped at C 224; the removable wait is small and unmeasured |
   | experts + commit + rest | ~28-32 [K, the check's remainder] | same | ~30 (25 + 4.7 left over) | ~0 | FAST-NAX ~25 at 16 rows all-resident [K] |
   | draft (the loop's) | 10.1 [K] | ~8.1 [K, D17-NAX -2.0] | 5 | -3 | QMM32 -0.44 per propose [K bench]; the small 17-row calls + concats -0.5..-0.8 |
   | cycle | 89.3-90.1 [K] | ~79-80 [P] | 46.7 | x0.59 | |
@@ -305,7 +329,70 @@ ends it by the next item's start.
   2. EvalSuite, 16:15-16:55: the MBPP check's NAX6-N reference on the 100 MBPP tasks (exact, no stack env), chunked to
      end by 16:55. The stack + CD16 arms stay tonight.
   3. Fit12's 10-min kp2 only if EvalSuite's build is not ready; else the next window.
+- HOLD Fri 21:17 (Kamen is using the laptop): no GPU runs and no locks. The orchestrator's gate lifts it from 00:30 once
+  the Mac has been idle 10 min, so tonight may start late; BigMoE's NOTAFTER moves to ~06:00. Tonight's chain may run
+  on into Saturday, which is likely open all day.
+- SATURDAY DAY WINDOW (NewIdeas Fri 21:2x, the orchestrator asked; order by expected gain; every lossy piece is gated
+  before it ships):
+  S0. (the orchestrator Fri 21:2x, on top) The ASYNC POST. The check's graph build (59.6 of 68.8 ms) includes the gate's
+      per-layer wait for router ids, so Python blocks once per layer. If the GPU idles there, that is ~10-19 ms per
+      check, +14-30 % [P].
+      - Leap's 6-min C 224 GPU-busy run after BigMoE's ticket decides it: idle >= ~8 ms per check -> BigMoE + Leap build
+        it Saturday morning, then a quiet A/B on BigMoE's pre-registered line.
+      - It is scheduling only, so a token-equality check replaces the gate; if tokens differ, it joins S4.
+      - This is the one lever that could reach 200 (~150-175 x 1.14-1.30 = ~171-227 [P]).
+  S1. NW v3 (Leap, staged, off by default). v3 changes what nw1's map PASS covered: cold QOM optional uses are dropped
+      (QOM skips them anyway), and a cold LSB sidecar with a resident base is served at 3 bits (LSB-on-miss: new and
+      lossy). So it needs a map arm first: nw3 on the code windows (+ chat for the record), Breakthrough, ~15-20 min.
+      Then BigMoE's engine A/B vs the gated stack, 12 HumanEval, quiet. Line: PASS >= +8 %, KILL < +3 %. [P] +5-15 %
+      if v3 removes the stalled calls nw1 left (17 per check, the ~14 ms miss spin).
+      NW3 MAP ARM QUEUED (Breakthrough 5db7365, 21:35; SCOREBOARD 'Fri 21:3x: PRE-REGISTRATION, NW3'), right after T1 in
+      tonight's map:
+      - (a) changes nothing on the map. (b) runs as the WORST-CASE bound: every unsure answer row's ranks 0-1 at 3 bits,
+        because sidecar residency can't be modelled.
+      - Arms: a 4-bit control (the path's summation order), code at 208 slots and at the published pool, then both
+        pools on all 36 windows (chat on the record).
+      - Lines per pool: PASS = VERDICT2 code AND D vs nw1 <= +0.40 (clean <= +0.15); BETWEEN to 2.0 % / +0.80; KILL
+        above. A failed bound is not a KILL of (b): the engine's NWCNT then says how much of the bound it meets.
+      - Prediction [G, Breakthrough]: code D +0.2..+0.5 (PASS 55 %). If the night doesn't reach it by 09:15, it runs in
+        Saturday's day window.
+  S2. Leap's glue fix (submit every 2 layers instead of 4; its in-process A/B runs in tonight's 6-min slot) plus
+      whatever cycle items Leap installs by noon (expert id glue, HC reads, GDN step). One quiet A/B. Bitwise-equal
+      tokens mean no gate is needed; otherwise they join S4's gate. [P] +2-5 %.
+  (Map order, NewIdeas Fri 21:2x: tonight's Breakthrough map runs T1 (xs) and then nw3, if prepped. The 24 GB arms yield
+  to Saturday's S-items and move to Sunday night.)
+  S3. Tonight's leftovers: T16 (if it missed 23:45: MBPP12 pair, then stackt), C 256 (if NO-SWAP was short), MATCH-16
+      (if its 2-prompt check failed).
+  S4. A short gate on the final stack (EvalSuite designs "short"): HumanEval 60 + math 50 in 2 orders, MBPP if T16 is
+      in, and the 41-problem long-code top-up (blunders).
+  S4 stays SHORT on Saturday (EvalSuite docs/PREREG_s4_2026-11-07.md, ~1.5-2 h): it decides Kamen's Saturday number.
+  CERT, the release certificate at a larger n (the orchestrator Fri 21:2x, from Fable FULL's paper 3.7: decision 4 at n 50
+  is thin; RELAX's math verdict moved on 4 items):
+      - Set: full HumanEval+ 164, math 100, MBPP 100 (the walk's set), all in 2 orders; IFEval 100 x 2 only if a chat
+        FAST profile ships (chat EXACT needs none). Lines tightened to the larger n; EvalSuite sizes and pre-registers.
+      - When (the orchestrator, Fri 21:3x): FREEZE at Saturday ~20:00, and the S5 config is what CERT runs. CERT runs
+        Saturday night (Sun ~01:30-10:00), so its verdicts are in before Sunday's paper fill. Monday night is the
+        fallback only. Anything that lands after the freeze is post-release research. ~4-6 h [G]; EvalSuite is sizing it.
+      - The paper quotes each verdict from its report path.
+      - PRE-REGISTERED Fri 21:25 (EvalSuite docs/PREREG_cert_2026-11-08.md):
+        - Lines: per set and order, decision 4 vs NAX6-N (the stack's exact base); pooled over 728 pairs, delta > -2 pt
+          AND p >= 0.05; long-code <= 1 blunder per 10K. Reports go to results/cert/CERT_*.txt.
+        - GPU: ~1.5 h of NAX6-N reference decodes (154 rows) + ~3.5 h of CERT (364 rows x 2 orders ~2.3 h + long-code
+          41 ~1.2 h).
+        - Slots (NewIdeas): the reference decodes run SATURDAY MORNING, right after tonight's chain, while S0 is built
+          on the CPU; they do not depend on the config. CERT runs Saturday night. No IFEval: chat ships EXACT.
+        - BigMoE maps 'mathx' in SETOF (dec_mathx).
+  12GB-CLEAN ARMED (Fit12 ex16.sh): from Sat 06:00 it starts after 10 clear min (no quiet lock / ticket, no >5 GB lock,
+      no PAUSE / HOLD), ~8 min quiet, then writes ~/Fit12/data/scr/ex16/DONE; deadline Sat 18:00. CERT's reference
+      decodes gate on that DONE file (or start by 10:00 if it is absent).
+  12GB-CLEAN (the orchestrator Fri 21:3x; Fit12 runs it): the 12 GB verified-greedy loop ALONE on all 16 prompts, quiet,
+      ~5 min, with its own lifetime peak footprint (Fit12's harness). Slot: Saturday morning, first after tonight's chain,
+      just before CERT's reference decodes.
+  S5. Saturday evening: the final measured number. 12 HumanEval palindrome at C 256 (if it passed) on the final stack,
+      MBPP12 speed, and lifetime footprints.
 - Tonight, Sat 00:30 -> ~10:00:
+  0. (Fri 21:2x) Right after BigMoE's ticket, before EvalSuite's runner 49: Leap's ~5-min C 224 run (does the GPU idle
+     between layers while the expert path blocks the forward?). EvalSuite starts ~5-8 min later.
   1. BigMoE's stacked FAST palindrome on 12 HumanEval: today's all-in vs all-in + every lever that passes today
      (FAST-NAX, DN-KS, CD16, FASTTAX att_single, lazy commit if wanted), plus FAR-G1. FAST-NAX is in (its BETWEEN on
      record). Plus one SPLIT-NAX arm (stack + split 0.99, ~7 min; speed only, outside the gated
@@ -334,8 +421,13 @@ ends it by the next item's start.
 - Fable B's v2 (ks / tile plans per shape) lands by ~11:00 and feeds Leap's next builds.
 
 12 GB LINE (CORRECTED Fri 13:2x; Fit12 PLAN_12GB_90_fit12.md 'Lever 3 RESULT', re-read by NewIdeas):
-- The 12 GB EXACT loop runs 18.4-18.9 tok/s on HumanEval [K: T3t 18.9 and T3R 18.42 quiet, kp2 18.58 share], 11.4 GB
-  lifetime footprint.
+- RE-CORRECTED Fri 21:3x (Fit12 via the orchestrator / FULL): the 12 GB loop is VERIFIED GREEDY, not exact. It is
+  ordinary verified speculative decoding: the greedy argmax from 2-4-row verify calls, all ten ranks read. It is
+  deterministic, but 2-4-row calls round differently from one-token decoding, and near-tie tokens follow the draft
+  pattern. The ~12x claim against the published exact run is withdrawn (not like-for-like).
+- The 12 GB verified-greedy loop runs 18.4-18.9 tok/s on HumanEval [K: T3t 18.9 and T3R 18.42 quiet, kp2 18.58 share;
+  four runs and prompt subsets mixed]. The 11.39 GB lifetime footprint came from a six-arm process. A clean run is
+  slotted Saturday morning.
 - The 40.8 quoted before as "the 12 GB exact line" is T3R2's t80ck2, which is FAST. It commits pass-1-certified rows
   (theta 0.8, cf 0.9) without the exact check (= the exact loop on 5 of 16 prompts in kp2), and the map scored that
   setting a code KILL (1.63 % vs the 1.34 % line).

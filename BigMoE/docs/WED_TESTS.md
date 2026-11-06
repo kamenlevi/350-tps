@@ -443,3 +443,11 @@ open 1236 / 1096 (> 0, as GOAL's line asks). The answers show why: CD16 keeps co
 drafter's comments loop ("the string, the string, ...") until the answer is spent (mbpp/16), or the code it writes after its
 own comments differs (mbpp/319). **Verdict: KILL on quality** (speed PASS). CD16 is in tonight's STACK and in the env files
 EvalSuite gates; that decision went to NewIdeas at once.
+
+**Correction (Fri 21:3x, read with Leap's NW v3 question):** the per-check "stalled layer calls" field (C3-R8, the ext's
+`stalled` stat) is NOT a wait. ensure() counts `stalled += !jobs.empty()` (bigmoe_ext.cpp:881): every layer call that issued any
+SSD read. Never-wait's late reads are still issued in their layer's call, so 17 vs 17 says nothing about waits. The day run's
+split per check (medians, checks >= 2): graph build (it includes the sync-free gate's per-layer waits for router ids) 59.6 ->
+66.1 ms (+6.5), eval wait 7.5 -> 7.3, gate service 14.0 -> 15.6, SSD io 11.3 -> 12.8, misses 37 -> 39. No wait disappeared; the
+per-layer pipeline got 6.5 ms slower. In the ext the release is per layer call, after all of that call's non-optional reads
+land; an optional-only miss is never read (-2) but resolves with that release.

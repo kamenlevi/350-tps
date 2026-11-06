@@ -196,7 +196,8 @@ def ends_span(kind, s):
 
 
 # ---------------------------------------------------------------------------------------------- the loop
-def run(S, arm=None, conv="B", ext=(), forgive=None, census=None, cut=CUT, over=None, refresh=0, bern=None, seed=0, d0=None):
+def run(S, arm=None, conv="B", ext=(), forgive=None, census=None, cut=CUT, over=None, refresh=0, bern=None, seed=0, d0=None,
+        pi_dev=1.0, lift=1.0):
     """the official loop. arm: an INERT arm or None (exact). ext: extra acceptance rules (K_WALL ideas). over: a draft
     override (an idea that changes the draft before the check): over(x, a, j, q, s_, d) -> token or None. forgive: a set
     of stop classes an oracle drafter gets right (ceilings). After an overridden or forgiven row the chain is the
@@ -239,8 +240,12 @@ def run(S, arm=None, conv="B", ext=(), forgive=None, census=None, cut=CUT, over=
                         if q == a + 1 + j:
                             use_tf = True
                 ds = dec(d) if d >= 0 else " \x00"
-                if arm is not None and INM.classify(RXC, s_, [ds], None, arm)[0][1] == "whole":
-                    cfj = 1.0                                   # pre_block: a row inside a span is sure in the cut
+                if arm is not None:
+                    m_ = INM.classify(RXC, s_, [ds], None, arm)[0][1]
+                    if m_ == "whole":
+                        cfj = 1.0                               # pre_block: a row inside a span is sure in the cut
+                    elif isinstance(m_, tuple) and len(m_) > 3:
+                        cfj = max(cfj, lift)                    # a guarded row: its confidence floor in the cut
                 rc *= cfj
                 if rc < cut:
                     stop = ("cut", None); break
@@ -258,9 +263,13 @@ def run(S, arm=None, conv="B", ext=(), forgive=None, census=None, cut=CUT, over=
                         if mode == "whole":
                             state = [kind, own_end(x, q, kind), q, 0]; ok = True
                         elif mode is not None:
-                            dl, rk = PI.top8(x, q, d)
-                            if INM.rule_ok(mode, dl, rk):               # the draft ends the span sooner than the 125B
-                                q = own_end(x, q, kind) + 1; ok = True
+                            dl, rk = PI.top8(x, q, d)                   # the 125B's own rank / margin for the draft, on its own text
+                            if INM.rule_ok(mode, dl, rk):
+                                if ends_span(kind, ds):                 # the draft ends the span sooner than the 125B
+                                    q = own_end(x, q, kind) + 1
+                                else:                                   # a guarded row kept inside the span
+                                    state = [kind, own_end(x, q, kind), q, 0]
+                                ok = True
                         if not ok:
                             why = stop_class(x, q, s_, ds, ts, arm, kind)
                             ok = rule_ext(x, a, j, q, s_, d, ds, t, ts, why, ext, arm) if ext else None
@@ -274,8 +283,17 @@ def run(S, arm=None, conv="B", ext=(), forgive=None, census=None, cut=CUT, over=
                                 stop = why; break
                 else:
                     kind, mode, _ = INM.classify(RXC, s_, [ds], None, arm)[0]
+                    guarded = arm.get("com") not in (None, "whole") or arm.get("doc") not in (None, "whole")
                     if kind == state[0] and mode == "whole":
                         state[3] += 1
+                    elif kind == state[0] and isinstance(mode, tuple):  # a guarded row on the drafter's own text: the 125B's
+                        if rng.random() < (pi_dev(kind, j) if callable(pi_dev) else pi_dev):   # not on disk: kept with these odds
+                            state[3] += 1
+                        else:
+                            stop = ("dev-guard", None); break
+                    elif kind == state[0] and ends_span(kind, ds) and guarded and rng.random() >= (
+                            pi_dev(kind, j) if callable(pi_dev) else pi_dev):
+                        stop = ("dev-guard", None); break               # a guarded arm: the span's end is exact, same odds
                     elif kind == state[0] and ends_span(kind, ds):
                         if conv == "A":
                             s_.feed(ds); k += 1
@@ -630,3 +648,71 @@ def tail_main(sets):
 
 if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] in ("tail", "all"):
     tail_main(sets)
+
+
+def guard_main(sets):
+    """Fri 21:2x, the guarded INERT forms (build_1106/inert_span.py): K by replay. pi = the odds that a guarded row on the
+    drafter's own text is kept (the 125B's view of that text is not on disk); the engine's failed CD16 run gives 0.85-0.87
+    for rule C's form on polluted text (data/fday logs), so 0.85 is the centre, 0.7 and 1.0 the range"""
+    G = load_mod("inert_span_1106", f"{HERE}/build_1106/inert_span.py")
+    keys = set(open(f"{HERE}/mbpp12_1106/mbpp12_keys.txt").read().strip().split(","))
+    mb = sets[0][1]
+    m12 = [x for x in mb if "mbpp/" + re.search(r"mbpp(\d+)", x["name"]).group(1) in keys]
+    m90 = [x for x in mb if len(x["ids"]) - x["gen"] < 500]
+    arms = [("CD16 (wholesale; failed MBPP quality)", G.parse_arm("CD16")), ("T16 comments + docstrings, top-3 at 0.1 p1", G.parse_arm("T16")),
+            ("TC16 comments only, the same guard", G.parse_arm("TC16")), ("U16 top-8 at 0.01 p1", G.parse_arm("U16")),
+            ("rule C as shipped (comments, no cut lift)", dict(doc=None, com="ruleC", rows=16, name="RC", doctest=True))]
+    global INM
+    INM = G
+    for label, S in (("HumanEval+ fresh 12", sets[1][1]), ("MBPP12 (the engine set)", m12), ("MBPP 90 (answers that finish)", m90)):
+        ex = run(S, None, "B")
+        print(f"\n=== {label}: exact kept {ex['kept']:.2f}, rows {ex['rowsper']:.2f}")
+        for nm, arm in arms:
+            out = []
+            for pi in ((1.0,) if arm["name"] == "CD16" else (0.7, 0.85, 1.0)):
+                rs = [run(S, arm, "B", pi_dev=pi, seed=sd) for sd in ((0,) if pi == 1.0 else (0, 1, 2, 3, 4))]
+                k = np.mean([r["kept"] for r in rs]); rw = np.mean([r["rowsper"] for r in rs]); ln = np.mean([r["lenr"] for r in rs])
+                t = np.mean([1000 * r["E"] / (r["checks"] * 50 + r["rows"] * 1.1) for r in rs]) / (1000 * ex["E"] / (ex["checks"] * 50 + ex["rows"] * 1.1))
+                out.append(f"pi {pi:.2f}: kept {k:5.2f} (x{k / ex['kept']:.3f}) rows {rw:5.2f} tok/s x{t:.3f} len {ln:.3f}")
+            print(f"  {nm:44s} " + " | ".join(out))
+
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "guard":
+    guard_main(sets)
+
+
+# the odds a guarded row is kept, by depth, measured on the 125B's own text (guard_pi.py, Fri 21:14): T3 on comment / docstring rows
+PI_T3 = {"he": {"comment": [0.98, 0.95, 0.89, 0.85, 0.79, 0.75, 0.69, 0.64, 0.58, 0.51, 0.49, 0.44, 0.41, 0.38, 0.38],
+                "docstring": [1.00, 1.00, 1.00, 1.00, 1.00, 0.99, 0.99, 0.97, 0.96, 0.93, 0.90, 0.87, 0.85, 0.81, 0.78]},
+         "mbpp": {"comment": [0.96, 0.87, 0.77, 0.69, 0.61, 0.55, 0.48, 0.43, 0.37, 0.33, 0.31, 0.27, 0.25, 0.23, 0.22],
+                  "docstring": [0.98, 0.94, 0.89, 0.83, 0.78, 0.73, 0.69, 0.63, 0.61, 0.57, 0.53, 0.51, 0.48, 0.44, 0.41]}}
+
+
+def lift_main(sets):
+    """T16 with the cut's floor for guarded rows at 1.0 (sure) / 0.9 / 0.8 / none, the odds after a deviation by depth"""
+    G = load_mod("inert_span_1106", f"{HERE}/build_1106/inert_span.py")
+    keys = set(open(f"{HERE}/mbpp12_1106/mbpp12_keys.txt").read().strip().split(","))
+    mb = sets[0][1]
+    m12 = [x for x in mb if "mbpp/" + re.search(r"mbpp(\d+)", x["name"]).group(1) in keys]
+    m90 = [x for x in mb if len(x["ids"]) - x["gen"] < 500]
+    global INM
+    INM = G
+    costs = ((62, 2.8), (51, 1.1))
+    for label, S, dom in (("HumanEval+ fresh 12", sets[1][1], "he"), ("MBPP12 (the engine set)", m12, "mbpp"), ("MBPP 90 (answers that finish)", m90, "mbpp")):
+        ex = run(S, None, "B")
+        te = [1000 * ex["E"] / (ex["checks"] * f0 + ex["rows"] * r0) for f0, r0 in costs]
+        print(f"\n=== {label}: exact kept {ex['kept']:.2f}, rows {ex['rowsper']:.2f}; tok/s at 62 + 2.8 per row {te[0]:.1f}, at 51 + 1.1 per row {te[1]:.1f}")
+        pf = lambda kind, j, _d=dom: PI_T3[_d][kind][min(j, 14)]
+        for nm in ("T16", "TC16"):
+            for lf in (1.0, 0.9, 0.8, 0.0):
+                rs = [run(S, G.parse_arm(nm), "B", pi_dev=pf, seed=sd, lift=lf) for sd in range(8)]
+                k = np.mean([r["kept"] for r in rs]); rw = np.mean([r["rowsper"] for r in rs]); ln = np.mean([r["lenr"] for r in rs])
+                t = [np.mean([1000 * r["E"] / (r["checks"] * f0 + r["rows"] * r0) for r in rs]) for f0, r0 in costs]
+                print(f"  {nm:5s} cut floor {lf:.1f}: kept {k:5.2f} (x{k / ex['kept']:.3f})  rows {rw:5.2f}  tok/s x{t[0] / te[0]:.3f} | x{t[1] / te[1]:.3f}  tokens per task {ln:.3f}")
+        r = run(S, G.parse_arm("CD16"), "B")
+        t = [1000 * r["E"] / (r["checks"] * f0 + r["rows"] * r0) for f0, r0 in costs]
+        print(f"  CD16 (reference): kept {r['kept']:5.2f} (x{r['kept'] / ex['kept']:.3f})  rows {r['rowsper']:5.2f}  tok/s x{t[0] / te[0]:.3f} | x{t[1] / te[1]:.3f}")
+
+
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "lift":
+    lift_main(sets)

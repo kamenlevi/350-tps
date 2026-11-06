@@ -40,6 +40,7 @@ def one_pass(ns, H, ids, arm, fset, mode, label, at=(), real_cap=0):
     2 rows (maxd 1, cut t ~0) unless real_cap: then the engine's own blocks (its t cut, up to 16 rows) for real_cap tokens"""
     say, clock = ns["say"], ns["time"].time
     H.new_pass(mode, at)
+    w0_ = clock()                                        # step B: wall stamps of the pass (GPU-utilization sampler join)
     ns["F2ON"][0] = mode != "meas"
     del ns["F2C"][:]                                     # run() stamps each cycle's start and the loop's end here
     t_, cap0 = clock(), ns["CAP"]
@@ -73,7 +74,7 @@ def one_pass(ns, H, ids, arm, fset, mode, label, at=(), real_cap=0):
         + (f"prewarm {pw['ids']} residents put back in {pw['ms']:.0f} ms ({pw['miss']:.0f} read); " if pw else "no prewarm; ")
         + f"pools at the end {pools[0]} base / {pools[1]} sidecar residents; {clock() - t_:.1f} s{r['bad']}"
         + ("; cut (time budget)" if r["cut"] else "") + (f"; hook errors {hk['errors']}" if hk["errors"] else ""))
-    return dict(mode=mode, label=label, pc=pc, bad=r["bad"], cut=r["cut"], out=r["out"], n=r["n"], tps=r["tps"], tpsw=r["tpsw"],
+    return dict(mode=mode, label=label, t_start=w0_, t_end=clock(), pc=pc, bad=r["bad"], cut=r["cut"], out=r["out"], n=r["n"], tps=r["tps"], tpsw=r["tpsw"],
                 kept=r["kept"], checks=r["checks"], fast=r["fast"], pf=r["pf"], commit=hk["commit"], probes=hk["probes"],
                 prewarm=pw, errors=hk["errors"], pools=pools, probed=sorted(at), real=bool(real_cap), period=period)
 
@@ -120,12 +121,18 @@ def main(ns, cfg, info, hooks=None, prewarm=True):
             if not prewarm:
                 H.pool_prev = None                       # the control: passes start from the prefill's pools
             if tg_key:                                   # A B A B ...: pass j runs value j % 2 (read per call by ref2)
-                ns["ref2"].CFG[tg_key] = tg_vals[j % 2]
+                if tg_key.startswith("ns:"):             # a harness variable held in a 1-element list (e.g. ns:STEPB_SBN)
+                    ns[tg_key[3:]][0] = tg_vals[j % 2]
+                else:
+                    ns["ref2"].CFG[tg_key] = tg_vals[j % 2]
             r_ = one_pass(ns, H, ids, arm, fset, "meas", f"measured pass {j + 1}" + (f" [{tg_key}={tg_vals[j % 2]}]" if tg_key else ""))
             r_["toggle"] = tg_vals[j % 2] if tg_key else None
             runs.append(r_)
         if tg_key:                                       # the paired read-out: per value, the passes' check + commit and cycles
-            ns["ref2"].CFG[tg_key] = tg_vals[0]
+            if tg_key.startswith("ns:"):
+                ns[tg_key[3:]][0] = tg_vals[0]
+            else:
+                ns["ref2"].CFG[tg_key] = tg_vals[0]
             by = {}
             for r_ in runs[1:]:
                 if r_.get("toggle") is None:
