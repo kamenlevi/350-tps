@@ -26,8 +26,12 @@
   - For scale: FLAT-2's real-block passes ran ~104.5 ms per check at 14.4 kept, ~138 tok/s, with a few misses. That was one
     HumanEval prompt (#68), a workload that prompt copying flatters.
   - Fri 03:4x, with the split live: computed expert groups fell to 0.63x / 0.49x of plain FAST's, and tok/s did not rise at
-    C 224 (BigMoE, 12 HumanEval prompts; NOT PASS, heat-disturbed; clean first passes 96.3 / 95.8 / 99.2 tok/s). The check's
-    time sits in the fixed part and the SSD waits, so the expert-cost lines above pay only after those fall.
+    C 224 (BigMoE, 12 HumanEval prompts; NOT PASS, heat-disturbed; clean first passes 96.3 / 95.8 / 99.2 tok/s).
+    - Check + commit fell only 6 / 5 % (98.8 -> 92.9 / 93.7 ms), and kept tokens fell 4.2 / 1.7 %, so the net is
+      ~0..+1.5 % (NewIdeas, Fri 04:1x). Prices from expert tiles had predicted +11-19 %.
+    - So the expert GPU time is mostly per-row work, not per-group reads: 11.1 ms at 2 rows, 57.0 ms at 16 (Leap,
+      all-resident). NewIdeas took the split out of the FAST all-in; split 0.99 is re-tested once the fixed-cost cuts
+      bring the cycle to <= ~80 ms.
   - The check is GPU-bound (Leap, Fri 03:5x, from the same synced records). Each piece's GPU time is its synced time minus
     the 0.133 ms round trip. They sum to 47.8 ms, about the whole unsynced check, so the 13.4 ms CPU graph build is hidden
     behind GPU work.
