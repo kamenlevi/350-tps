@@ -4,7 +4,7 @@
 > drafter's wholesale comment / docstring text runs away. CD16, C16, G16 and D16 are withdrawn. The guarded arm T16 and
 > its lines are in `build_1106/GUARD.md`; the account is in `K_WALL_1106.md` (update at the top).
 
-Task (the orchestrator 18:1x, Kamen: "build everything so we get actual numbers"): the INERT CPU pre-check through the
+> (a quote from the project owner, kept private)
 engine's own tagger, and a ready-to-apply patch for BigMoE's relaxed screen. Design and replay numbers:
 `~/FableGod/goal/LOSSY350_GOAL.md`. Nothing outside `~/FableGod/goal/` was edited; no GPU was used.
 Marks: [K] measured, [P] replay / arithmetic, [G] judgement.

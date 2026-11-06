@@ -1,5 +1,5 @@
 #!/bin/sh
-# DLOG capture (MTP Head, Sun 11-01; Kamen 19:5x "Yes, start it", via the orchestrator): the 125B's own de / ru / ja answers on
+> (a quote from the project owner, kept private)
 # fresh MGSM prompts from the 45 GB default's live loop (D-23's preset, DFlash2 + cut, C 224), every kept row's training data
 # (DFlash2's h, the MTP head's widened stream, the 125B's top-32) -> data/dlog/n1101/ (sticky/dlog_capture.py). A data run: no
 # timing claims. Quiet ticket (one 45 GB process at a time), resumable. Gate as D-23: settle 30 s, NO-SWAP >= 44 GB; stop if

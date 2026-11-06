@@ -1,7 +1,7 @@
 #!/bin/bash
 # EvalSuite runner 21, 2026-10-24 (detached, from a live evalsuite session). Orchestrator ~15:30: core verdicts on Leap's
 # L1-17 (fewer experts per token on B12LL), normal priority (not [low]), against the 4-bit ref and against B12LL; adopting
-# one is Kamen's call. Fit12's hook (15:35): fit_hook.load_b12ll_budget("", topk=8) = b12llk8 (each verify row keeps its
+> (a quote from the project owner, kept private)
 # top-8, renormalized) and load_b12ll_budget("", topp=0.8) = b12llka80 (the smallest rank prefix holding >= 80 % of the
 # top-10 router weight); prefill, one-row calls and the MTP head keep top-10. First the hook's no-ops (topk=10 =
 # b12llk10, topp=1.0 = b12llka100) on 6 rows each: they must give B12LL's tokens exactly, else the runner stops. A stage

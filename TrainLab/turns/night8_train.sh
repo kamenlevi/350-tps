@@ -1,5 +1,5 @@
 #!/bin/sh
-# E1 + E5 overnight (MTP Head, Sun 11-01; Kamen ~21:00 "Yes, tonight only" via the orchestrator: E1 and E5 ready by morning).
+> (a quote from the project owner, kept private)
 # Data: Fable's E1 set from tonight's DLOG files (sticky/e15_set.py: 20K answer tokens per language de / ru / ja), built once
 # night7_chain's main ticket (D-23c + DLOG) is done. Phases in order, each resumable / skipped when done (data/e15_<phase>.done):
 # E1 train (L1-20 recipe, full body) -> E1 walk -> E5 train (DFlash-X branch, body frozen, lr 1e-4) -> E5 walk -> read-out

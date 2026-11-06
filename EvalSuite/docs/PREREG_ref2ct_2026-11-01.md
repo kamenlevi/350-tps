@@ -5,7 +5,7 @@ Written before any REF2c-T row.
   bundle (att_single + padded in_proj)". NewIdeas' night order: BigMoE C45 -> MTP Head D-23 -> EvalSuite REF2c-T.
 - **Freeze:** Leap 11:5x, "REF2c FROZEN at Leap commit 91cd316": `ref2.CFG["att_single"] = True` and
   `ref2.CFG["gdn_inproj"] = True` on REF2-T as it is; FATT16 left out; MTPLX_FUSED_GDN_INPROJ kept unset.
-- **Stakes:** decision 4 (Kamen 10-27, "Yes, u can") lets a new 45 GB reference replace the current one if it scores the
+> (a quote from the project owner, kept private)
   same. A PASS lets NewIdeas make REF2c-T the 45 GB exact mode. Leap expects ~-6 ms per check: att_single ~-5,
   in_proj ~-0.5 to -0.9.
 
@@ -83,7 +83,7 @@ Written before any REF2c-T row.
   - Why: Kamen 20:3x lets big runs continue through Monday with no day hold. Kamen 20:2x moved MTP Head's DLOG (up to
     2 h) ahead of runner 36. Runner 36 takes one FIFO ticket per chunk, so its chunks can interleave with Leap's runner
     62 and NewIdeas' after-queue items.
-- MTP Head may train a small drafter during Part 1 (Kamen ~21:00, "Yes, tonight only": small training shares the GPU
+> (a quote from the project owner, kept private)
   only with non-timed runs if the memory gate passes). It starts only 5 min after a `decode ref2ct` grant and exits
   within 30 s of each unlock. It stops at +1 GB swap and stays off during Part 2.
   - Outputs (tokens) do not depend on another process. Part 1's AR tok/s is information only and is labelled as shared.

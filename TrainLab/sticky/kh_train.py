@@ -1,4 +1,4 @@
-"""K-HEAD (MTP Head, Mon 11-02; Fable FLOOR_125B.md 3.6, Kamen "Yes, queue both" (relayed before 11:24); REPORT 'K-HEAD: certificate
+> (a quote from the project owner, kept private)
 distillation -- pre-registration'). CPU only (MLX on the CPU device). Predict the cheap pass's CERTIFICATE (p1 under top-2
 >= 0.99) from what the drafter knows before the check, and score the gate on the measured top-2 flips.
 Rows: ~/FableGod/floor_rows.json (10,316 rows of the decision map, 36 windows: 12 code / ifeval / multi; rows with a

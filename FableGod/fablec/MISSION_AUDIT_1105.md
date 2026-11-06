@@ -1,6 +1,6 @@
 # AUDIT, Thu 5 Nov 07:00: check the three new sessions' answers before anything is built
 
-Kamen approved this audit (Wed ~20:2x: "do the audit at 7, and nothing else for now"). You are Fable C, the auditor.
+> (a quote from the project owner, kept private)
 
 ## Inputs
 Three fresh Fable sessions answered overnight, each with a different amount of context:

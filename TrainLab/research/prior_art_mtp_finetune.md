@@ -13,7 +13,7 @@ FastMTP (Cai et al., arXiv 2509.18362, Sept 2025; https://arxiv.org/html/2509.18
   => most of FastMTP's gain is TEACHING RECURSION to a head trained for one step. The 125B's stock head already chains
   (Chat1000: P(first j right) 0.85 / 0.71 / 0.61 / 0.51 ...), so its headroom is domain adaptation, a smaller lever.
 - Scale gap: FastMTP ~10^8+ tokens; the Mac does ~60-130K training tokens per 45-min turn on the 125B (trunk prefill
-  dominates), i.e. <= ~1M tokens before claudesub's end.
+  dominates), i.e. <= ~1M tokens before account-1's end.
 
 Also seen (not used): MTP-D "Self-Distillation for Multi-Token Prediction" (arXiv 2603.23911): self-distillation during
 pre-training, not a drafter fine-tune. vLLM speculators docs (MTP, FastMTP-style weights beta = 0.6).

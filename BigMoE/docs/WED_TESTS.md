@@ -145,7 +145,7 @@ started on Breakthrough's "map batch done" (log data/morning_1104.log):
   then l2c / l2f / l2f2 / l2c2 (14 prompts) + traced l2ct / l2ft (W1B's six). Line (pre-registered ~15:0x, before any run):
   KEEP if every token == REF2-T AND stall per check <= -20 % AND >= +3 % geo steady; KILL if < +1 % or the next-demand
   penalty > 0.05 ms per burst; else BETWEEN. Stage 2 = SAMELAYER-T's trained forecast (weights asked of MTP Head).
-- **ALL-IN FAST for code (Kamen 15:0x via the orchestrator: "i know there is a way to at least 300 tps on fast mode"):**
+> (a quote from the project owner, kept private)
   r57_screen switches R57_HC8 (Leap's hc8r.hc8_install + ref2 hc8_fast, v4), R57_DNR (ref2.dense_native_convert) and
   R57_HCB (ref2 hc_b), each off unless set. scripts/allin_wed.sh at C 224 on the 12 HumanEval, all arms on ext/build_l2:
   u3c (U3C len) / allin (+ D7b code drafter + HC8 + DENSE-N-RAM + hc_b) / allinf (allin + lever 2) / allin2 / u3c2, then a

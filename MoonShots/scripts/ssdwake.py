@@ -1,4 +1,4 @@
-"""M-20 SSDWAKE (MoonShots, Mon 2026-11-02 22:0x; Kamen's "genuinely new idea" ask via the orchestrator 21:5x; pre-registered
+> (a quote from the project owner, kept private)
 in ~/NewIdeas/QUEUE.md M-20 before any timing): does the internal SSD charge a wake-up (power-state) penalty on the first
 reads after the short idle gaps the 45 GB route leaves between layers? Each layer's demand misses go out as one burst
 after its router (~3.6 misses per layer per check at C 256, 9 pieces per miss), and the SSD idles while the GPU computes

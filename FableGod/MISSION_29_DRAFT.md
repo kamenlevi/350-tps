@@ -1,6 +1,6 @@
 # MISSION 29: THE DRAFT, HIDDEN. Take the drafter off the critical path.
 
-(Draft by the orchestrator for Kamen, Mon 2 Nov 2026 ~21:5x. This is the earlier "draft, hidden" mission, updated with tonight's results.)
+> (a quote from the project owner, kept private)
 
 **Why.** Cloud's ladder (task 15, ~/FableGod/CLOUD_ANSWER_ROAD350.md) needs the draft hidden. Today the draft runs serially before every check:
 - DFlash2 4-bit (D7b): 6.3 ms on the GPU, which goes into this week's exact default

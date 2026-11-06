@@ -1,4 +1,4 @@
-# Breakthrough plan (claudesub horizon 18:00 Thu 2026-10-22; updated 17:06; goals: STATE.md "Breakthrough")
+# Breakthrough plan (account-1 horizon 18:00 Thu 2026-10-22; updated 17:06; goals: STATE.md "Breakthrough")
 Bar (Kamen 2026-10-21 17:10): decode TASK results. Line: frugal on a pinned copy of BigMoE v3 (v3f). HANDOVER "STATE" = truth.
 B12 (load_b12(0.10, mtp=True) + B12_NORM=mass): FAIL as judged with the guard; BORDERLINE once the guard's math damage is
 removed (NewIdeas re-score). B8 verdict (eager, guard off both sides) lands ~19:00 in ~/EvalSuite/results/report_b8.txt.

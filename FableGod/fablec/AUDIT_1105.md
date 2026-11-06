@@ -1,6 +1,6 @@
 # AUDIT 1105: the overnight answers, checked before anything is built (Fable C, Thu 5 Nov 2026, 07:0x-08:xx EET)
 
-Brief: `~/FableGod/fablec/MISSION_AUDIT_1105.md` (Kamen's approval Wed ~20:2x; the orchestrator's two "Added" sections).
+> (a quote from the project owner, kept private)
 Inputs: `~/FableGod/cloud3/live/cloud3/REPORT_P0..P3.md` + `REQUESTS.md` (Cloud Fable 3), `~/FableGod/far/FAR.md`,
 `~/FableGod/zero/ZERO.md`, `~/FableGod/goal/GOAL.md`, `~/FableGod/full/FULL.md` (+ Round 2). Measured sources for the
 re-derivations: `~/FableGod/KERNEL90.md` (lines 97-114), `~/FableGod/DAY9_2026-11-02.md` (line 93, the C0 timeline; line 875,

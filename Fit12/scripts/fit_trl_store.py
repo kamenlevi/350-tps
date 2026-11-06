@@ -1,4 +1,4 @@
-"""Fit12 TRL store (Wed 4 Nov 2026 14:3x; the orchestrator relaying Kamen: "if it was published work and it works, we should
+> (a quote from the project owner, kept private)
 have tested it"; map screen 7 with NewIdeas). B10-r's data-aware trellis codes (QTIP-style: RHT + bf16 row RMS + BlockLDLQ +
 bitshift trellis L 12 on 16 x 16 tiles, the 3INST table = Leap's decodable code), encoded for EVERY expert of the chosen
 layers, from B10-r's own capture (/Users/kamen/Fit12/data/b10rcap: layers 2 7 12 18 24 30 36 41 46; fit rows R0..R7 = the

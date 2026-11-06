@@ -56,7 +56,7 @@ Files (~/Breakthrough, commits 9f5db8c and 34a5350): `SCOREBOARD.md` (budgets), 
   reads/token x 2.77 MB x 21.5 tok/s = ~6.6 GB/s (45 % of 14.6); frugal mode would read ~14/token (~0.8 GB/s, 6 %),
   so there compute and dispatch (~46 ms/token eager on the fork's older base) become the limit. Memory GB/s not
   measured in these runs. CPU: trace replays, one core at nice 10, minutes.
-- Usage: the three research helpers cost ~0.69M subagent tokens (198k + 226k + 262k); usage-pace said SLEEP at 22:17 (10 % of the new window).
+- Usage: the three research helpers cost ~0.69M subagent tokens (198k + 226k + 262k); pacer said SLEEP at 22:17 (10 % of the new window).
 
 ## Questions for Kamen (from the brief)
 1. Does ~1000 tok/s mean one conversation, or the total across parallel streams? One stream needs ~16 kept tokens per

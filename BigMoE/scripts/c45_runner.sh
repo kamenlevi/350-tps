@@ -11,7 +11,7 @@
 # shared_cat + draft_fused + ref2 att_rope / idx_prep / hc_write; its every-token check, in place of Leap's runner 61); A2
 # c45_Cr = the control again (the one controlled OOO A/B: A-L-B-K-A2 puts B in the middle, L and K next to it); then
 # C45_PRIOR=1's P c45p_C (SEED45: ext/build_prior's BIGMOE_EVICT_PRIOR=30, LRU + popularity prior, each prompt's prior held
-# out: data/seed45/prior45.npz; residency only; on OOO, vs B); then C45_BIG's c45o_C (Kamen 15:22 "Yes, try ~50 GB", via
+> (a quote from the project owner, kept private)
 # the orchestrator: the default at C ~300 / ~320). Every later C of the list: c45o_C only (sizing on the default).
 # Each run logs per check: demand SSD busy, gate service on misses, draft ms (NewIdeas 11:5x: SSD- or compute-bound at
 # each C), and per kept token: SSD MB + misses. Every token checked against S45-T's REF2-T reference
@@ -112,7 +112,7 @@ for C in ${1:-224 240 256 272}; do
       [ $? = 1 ] && break
     fi
     rc=0
-    for CB in $C45_BIG; do                                   # Kamen 15:22 "Yes, try ~50 GB": the default at C ~300 / ~320 if
+> (a quote from the project owner, kept private)
       one $CB c45o_$CB; rc=$?                                # NO-SWAP >= peak + 4 GB (52 / 55 GB), else skipped
       [ $rc = 1 ] && break
     done

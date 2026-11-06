@@ -1,7 +1,7 @@
 """TrainLab training text (2026-10-21): one shuffled token stream from local sources, disjoint from every held-out text.
 
 Held out (never trained on): ~/BigMoE/FINDINGS.md, ~/MoonShots/scripts/*.py, GSM8K test items 200-399 (defer35's three
-segments), ~/EvalSuite/data (the gate's corpora), and the claudesub transcripts (TrainLab's chat held-out segment).
+segments), ~/EvalSuite/data (the gate's corpora), and the account-1 transcripts (TrainLab's chat held-out segment).
 Sources and token budgets: Claude Code transcripts of the main account (user and assistant text, tool calls, the head
 of tool results), Python from site-packages, Swift from ~/OjoX, markdown notes of the research repos, GSM8K test items
 outside 200-399, multilingual text if data/multi/*.txt exists.

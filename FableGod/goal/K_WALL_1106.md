@@ -1,6 +1,6 @@
 # K wall: kept tokens per 16-row check on average code (GOAL, Fri 6 Nov 2026, first list 10:50 EET)
 
-Mission (the orchestrator 10:1x, Kamen: "Yes, you can use a fable session"): raise K toward ~14 on average code (MBPP,
+> (a quote from the project owner, kept private)
 docstring-free HumanEval). Read first: `~/TrainLab/K_PLAN_1106.md`. CPU replays only; nothing outside this folder written.
 Marks: [K] measured by its owner, [P] my replay / arithmetic on stored walks, [G] judgement. K = kept per check with the
 engine's 0.3 confidence cut (MTP Head's 9.57 / 5.94 are the same walks without the cut; mine reproduce them: 9.58 / 5.93).

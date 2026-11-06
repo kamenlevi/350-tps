@@ -6,7 +6,7 @@
 cd $HOME/TrainLab
 LOG=logs/turns.log
 say() { echo "$(date '+%m-%d %H:%M:%S') after_night: $*" >> $LOG; }
-orch() { $HOME/.local/share/usage-pace/orch_addr.sh 2>/dev/null | sed 's|.*/||; s|\.sock$||'; }
+orch() { $HOME/.local/share/pacer/orch_addr.sh 2>/dev/null | sed 's|.*/||; s|\.sock$||'; }
 fwd() { peer say --to ojox-bd "$1" > /dev/null 2>&1; O=$(orch); [ -n "$O" ] && echo "$1" | peer send "$O" - > /dev/null 2>&1; }
 noswap() { vm_stat | awk '/page size of/ {ps=$8} /^Pages (free|speculative|purgeable):/ || /^File-backed pages:/ {v=$NF; sub("[.]","",v); s+=v} END {printf "%d", s*ps/1e9}'; }
 hm() { date +%H%M | sed 's/^0*//;s/^$/0/'; }

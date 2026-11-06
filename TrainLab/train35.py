@@ -1,5 +1,5 @@
 """TrainLab: can cheap LoRA self-distillation make the 35B proxy tolerate expert dataflows that give SSD reads slack?
-(2026-10-21; charter: ~/.local/share/usage-pace/TASKS.md, "Trainable dataflow").
+(2026-10-21; charter: ~/.local/share/pacer/TASKS.md, "Trainable dataflow").
 
 Model, segments and reference are NewIdeas' defer35.py harness (unsloth Qwen3.6-35B-A3B-MLX-8bit, routed experts
 requantized to 4-bit g64 on load; 3 frozen held-out segments of 1365 tokens; exact reference ref_1365.npz), so a flow's

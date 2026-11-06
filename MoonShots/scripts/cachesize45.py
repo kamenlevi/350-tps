@@ -1,4 +1,4 @@
-"""CACHE-SIZE45 (MoonShots, Sun 2026-11-01; the orchestrator 15:1x with Kamen's "Yes, run it"): how much RAM gets the exact
+> (a quote from the project owner, kept private)
 45 GB default under ~15 SSD misses per kept token? CPU replay, the M-17 harness (scripts/laysz45.py) past C 256.
 Pools per layer as the preset splits them (stream._tier_layer, BIGMOE_TIER_CL 112): C_m = (C x 2,764,800 - 112 x 770,048) //
 2,162,688 MSB-3 base slots + 112 LSB sidecar slots; RAM = REF2-T's lifetime peak 38.0 GB at C 224 + 0.13 GB per C unit.

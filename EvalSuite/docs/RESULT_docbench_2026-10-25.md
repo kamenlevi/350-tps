@@ -13,7 +13,7 @@
   - Against the 27B 6-bit as is: −5.38 points, p = 8e-13.
   - Documents with every field right: 62 % (9B Q8) against 78 % (27B Q4) and 83 % (27B 6-bit).
   - The 27B Q4 was made from Kamen's 6-bit file, one extra rounding step compared with a 4-bit made from BF16. It still won.
-  - Caveat: Qwen3.8 is two releases newer than Qwen3.5. The same-family control (Qwen3.5-27B Q4) was dropped (slow link; Kamen asked for 3.8), so this is "9B Q8 against the newest 27B" and mixes size with generation.
+> (a quote from the project owner, kept private)
 
 ## Table (150 documents, 930 fields; field accuracy %, per type and language)
 

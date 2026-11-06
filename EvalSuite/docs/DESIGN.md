@@ -5,7 +5,7 @@ intelligence" to the 4-bit reference, rather than "thinking in a different way e
 benchmark cannot answer that cheaply: ~270K decode tokens (~3.5 h at ~20 tok/s per model) detect only ~3-point drops.
 So the statistics come from prefill-only tests (teacher-forced logits, letter-probability multiple choice), and decode
 is spent on small paired capability checks. Every number is read against two anchors. Brief:
-~/.local/share/usage-pace/briefs/quality_suite.md.
+~/.local/share/pacer/briefs/quality_suite.md.
 
 ## Anchors
 - **floor** (two runs of the same weights): the reference weights through MTPLX/mlx-lm's stock top-k combine (experts

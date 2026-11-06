@@ -1,5 +1,5 @@
 #!/bin/bash
-# Sat 7 Nov 00:30: the '200 STACK' night (Kamen Fri 21:0x: ">= 200 tok/s lossy at 45 GB by tomorrow", quality-gated, then publish;
+> (a quote from the project owner, kept private)
 # NewIdeas QUEUE ae954df / 4b2c45c + Fri 21:3x-21:5x; the orchestrator Fri 21:2x). Arms on scripts/r57_screen_fast.py (the merged
 # FAST screen; qall = its flags off), the outside code frozen at the start. Phases, in this order:
 #   0. MATCH's copy check at 16 rows (R57_COPY=g2: an exact copy check, never run under R57_FAST before): a 2-prompt check of

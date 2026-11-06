@@ -1,4 +1,4 @@
-"""DAY9 Q1 / Q2 bytes side (MoonShots, Mon 2026-11-02; orchestrator 10:3x relaying Kamen's "run all 9 tests" order):
+> (a quote from the project owner, kept private)
 expert SSD reads and MB per kept token at C 256 with the adopted M-17 per-layer sizes when the check's drafter-sure rows
 verify with fewer experts. ROUTE_350 Q1: top-2 (ranks 0-1 at today's 4-bit tier, the model's own gate weights) on rows
 whose drafter confidence is >= theta, exact top-10 elsewhere. Q2 / NEW-1: bands >= 0.999 top-2, 0.99-0.999 top-4,

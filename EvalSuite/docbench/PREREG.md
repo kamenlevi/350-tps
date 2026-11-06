@@ -5,7 +5,7 @@ Written 2026-10-25 20:45 EET, before any comparison run. Only the Qwen3.5-4B smo
 ## The two claims (Kamen doubts both)
 
 1. Hyperscience's team: Qwen3.5-9B at Q4 is much worse than at Q8 for document processing.
-2. Kamen's dad: the 9B at Q8 is much better than a bigger model quantized to fit the same RAM (about 18 GB, the 9B's BF16 size).
+2. A user: the 9B at Q8 is much better than a bigger model quantized to fit the same RAM (about 18 GB, the 9B's BF16 size).
 
 ## Set (frozen)
 
@@ -53,7 +53,7 @@ All run with mlx_lm 0.31.3 (`~/BigMoE/.venv324`) on this Mac. Every in-memory qu
 | 6 | `38-27b-q6` | Kamen's Qwen3.8-27B 6-bit as is (21 GB, a little over the 9B's BF16 size) |
 | 7 | `36-35b-a3b-q4` | Kamen's Qwen3.6-35B-A3B 4-bit (MoE, 3B active) as is; bonus, reported only |
 
-mlx-community/Qwen3.5-27B-4bit, the same-family control, was dropped at 20:45. The download link was slow, and Kamen asked for the 3.8-27B ("not 3.5"). If it is ever run, it is judged by the claim-2 rule as the same-family control.
+> (a quote from the project owner, kept private)
 
 ## Procedure (identical for every config)
 

@@ -1,7 +1,7 @@
 # PREREG: RELAX ship mode, the long-row drift re-check for B on code (Thu 2026-11-05 08:29; before any row)
 
 Written before any re-check row.
-- **Request:** the orchestrator, Thu after my 08:21 BIG note on RELAX's ship verdict BETWEEN. Its pick to Kamen: "ship Friday after a
+> (a quote from the project owner, kept private)
   long-row drift re-check passes". Prepared now; the GPU runs only after Kamen's yes.
 - **Why:** ship (B on code + E on chat) passed decision 4. B failed mission 7's drift bar on HumanEval+ at 6.04, but on
   only 4 rows of >= 512 tokens (KLD q1 0.00157, q4 0.00948). Math, with 23 long rows, passed at 0.89.
@@ -55,7 +55,7 @@ Written before any re-check row.
 - **The report:** tools/relax_report.py gains a pooled long-code drift line, which is not pinned.
 
 ## Amendment 1 (Thu 2026-11-05 09:03; before any re-check row): the converted store, the bridge, E8
-- **Why:** Kamen said yes (Thu 08:52, "Ship after the check", via the orchestrator). The orchestrator then set the order:
+> (a quote from the project owner, kept private)
   the drift re-check first, then E8, then T0's leftover if time remains. Both checks run after Thursday's records3
   conversion (on NAX6 Part 1's PASS), so their REF2-T replays must read the store layout that is valid then. The night's
   code (snap/bigmoe-6c64148 on build_next, snap/leap-faff8e5) reads only the row-major store.

@@ -15,7 +15,7 @@ STOPAT=$(date -j -f "%Y-%m-%d %H:%M" "2026-11-03 15:00" +%s)
 left_min() { echo $(( (STOPAT - $(date +%s)) / 60 )); }
 late() { [ $(date +%s) -ge $STOPAT ]; }
 while pgrep -f "turns/(e2_cap|e2_train_x|kh_walk|match_walk|copygate_job|et_job|dd_job|turn74|turn75)" > /dev/null; do sleep 20; done
-say "v11 start: waiting for 00:30 (Kamen's schedule), then BigMoE's ticket"
+> (a quote from the project owner, kept private)
 # 1. the big-test window opens at 00:30 (Tuesday)
 while :; do t=$(hm); [ "$t" -ge 30 ] && [ "$t" -lt 1500 ] && [ "$(date +%d)" = "03" ] && break; sleep 60; done
 # 2. BigMoE first

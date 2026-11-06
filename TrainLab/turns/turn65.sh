@@ -1,5 +1,5 @@
 #!/bin/sh
-# MTP Head's ONE night ticket (Kamen 20:2x "Yes, move it up", via the orchestrator: DLOG third tonight, right after D-23c and
+> (a quote from the project owner, kept private)
 # ahead of M-16 / r36 / runner 62): D-23c v2 (turn62, <= ~30 min, its own gate + v2b fallback), then the DLOG capture (turn64)
 # with the ticket's time left (TL_LIMIT from run_locked), ending at the target (30K answer tokens per language).
 # A short memory grant at the start retries D-23c's gate for up to ~10 min. A D-23c crash does not stop DLOG.

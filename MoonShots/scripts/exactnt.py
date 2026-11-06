@@ -214,6 +214,6 @@ for name, doms in GROUPS:
                 verdict = mod / base - 1
 call = "PASS" if verdict >= 0.15 else ("KILL" if verdict < 0.08 else "BETWEEN")
 say(f"\nLines (QUEUE M-15): EXACT-NT chat MOD at rho 0.25 {100 * verdict:+.1f} % (PASS >= +15 %, KILL < +8 %) -> {call}. "
-    f"The rule is a served-model change (strict gate + Kamen); the loop stays bit-exact vs its own AR decode.")
+> (a quote from the project owner, kept private)
 say(f"({time.time() - t0:.0f} s)")
 open(OUT, "w").write("\n".join(lines) + "\n")

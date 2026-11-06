@@ -1,4 +1,4 @@
-"""R-50b (Kamen via the orchestrator, Thu 2026-10-29 20:5x: "did you test it" -> does R-50 carry over to the 45 GB setup?;
+> (a quote from the project owner, kept private)
 Leap, pre-registered Thu 21:00 EET in ~/Leap/TABLE_350.md '## R-50 SLOTCALL' / R-50b): 16-row check time, gather vs
 slot, at the 45 GB line's REF2 configuration (C 192) with the needed experts resident (warm checks).
 Harness: EvalSuite's REF harness (load_streamed + its install), C = 192, PF1 for prefills only, REF2 + SB on, no drafter.

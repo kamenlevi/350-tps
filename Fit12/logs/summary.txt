@@ -1899,7 +1899,7 @@ your turn after 0s: quiet lock held until 02:59. Measure now, and `peer unlock` 
 02:37:53 SCR queue runner end
 14:33:19 SCR queue runner start (pid 55922): screens from /Users/kamen/Fit12/data/queue.txt
 14:33:19 SCR queue: screen t3p
-14:38:19 SCR t3p: waiting, another session's run: - Run a larger-than-RAM MoE at Q4 ~40 tok/s on the Mac [idle] ~/OjoX: "BigMoE (claudesub):
+14:38:19 SCR t3p: waiting, another session's run: - Run a larger-than-RAM MoE at Q4 ~40 tok/s on the Mac [idle] ~/OjoX: "BigMoE (account-1):
 14:38:57 SCR runner start: SCREENS '' (pid 57418)
 14:38:57 SCR runner end
 14:39:22 SCR queue runner start (pid 57753): screens from /Users/kamen/Fit12/data/queue.txt

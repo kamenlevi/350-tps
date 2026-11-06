@@ -1,6 +1,6 @@
 # Fit12 plan and pre-registrations (speed of the <12 GB setup)
 
-Started Fri 2026-10-23 16:45 (claudesub2, Pro). Owner of B12 quality: Breakthrough; verdicts: Eval suite; chief: NewIdeas.
+Started Fri 2026-10-23 16:45 (account-2, Pro). Owner of B12 quality: Breakthrough; verdicts: Eval suite; chief: NewIdeas.
 
 ## Target (orchestrator 17:30): B12LL = B12 + B12_LATE3=2,10 + B12_NORM=mass + MTP 3:3:0
 - Eval suite run 1: PASS 5/5 (~/EvalSuite/results/report_b12ll.txt). Speed (Breakthrough day_spd, 00:30 Fri):
@@ -1634,7 +1634,7 @@ PF2 (layer-major, experts read once per prompt) sized by this: at 64K, each extr
 so going from 4 chunks to 1 would save <= ~16-19 s (~8-10 %) and needs the 65K-token MoE transient. At <= 16K, PFR
 already uses one chunk. So PF2 is small now; it is not worth a build before the decode-side levers.
 
-## Rapid screens, batch 1 (Mon 26 Oct 17:41; Kamen's rule, usage-pace RULES.md 'Rapid screening': one screen <= 10 min of machine time, line first)
+## Rapid screens, batch 1 (Mon 26 Oct 17:41; Kamen's rule, pacer RULES.md 'Rapid screening': one screen <= 10 min of machine time, line first)
 - PLA (per-layer pool sizes; CPU replay, 1 core, ~5 min; /Users/kamen/Fit12/scripts/fit_pla.py, engine-faithful LRU as
   fit_v3replay.py; expA traces, MTP-like checks R 4 / A 3, counted from token 400): per-layer C_m / C_l chosen greedily on
   2 sets, judged on the other 2 (both folds), same pool bytes as uniform C_m 51 / C_l 20. Control: the best UNIFORM split of
@@ -1819,7 +1819,7 @@ so R-01 should find about the same slots, not ~1 GB more.
   PASS: every hash (logits, sha256, kv, head) of every run = the reference run at the same position; prompt 1 fresh = warm in
   both arms; every clean peak (and the first run's lifetime peak) <= 11.95 GB; mean warm decode >= +4 % at 8.5K.
   KILL: any mismatch or peak > 11.95. Locks: 10 min per process (32K: 20 min). ~50 min of GPU in all.
-- (21:47) Rule note: PRN (batch 1) screened static expert pruning, which Kamen had ruled out ("No I don't want to use half of
+> (a quote from the project owner, kept private)
   the experts"; orchestrator 18:44). It stays killed and is out of scope: no pruning or merging screens from now on.
 - R-14 HC12 [port of Leap's R-09; NewIdeas 22:50 message; written Mon 26 Oct 22:36, before any run]. Finding first: bt_b12 runs HC8
   (B12_HC=8), i.e. MTPLX's EAGER HC chain with 8-bit down / up mixers and a bf16 inject [4, 10240]. Leap's X5 merges down +
@@ -3028,7 +3028,7 @@ so R-01 should find about the same slots, not ~1 GB more.
   15:01:00 (a Breakthrough ticket queued at 15:00 goes first); nothing starts if it wakes after 15:20; slot over if r47 has
   not started by 16:15; hard stop 16:45.
 - Heat: T3R ran at FAN_CAP 5000 and reached die 86 C / SSD 72 C after ~6 min (heat pause); T3P at cap 7000 ran 6.5 min clean.
-  A higher cap during the slot is asked of the orchestrator (Kamen at school): ARMED (wed_boost.sh Wed 14:55 if Kamen idle
+  A higher cap during the slot is asked of the orchestrator (the owner away): ARMED (wed_boost.sh Wed 14:55 if Kamen idle
   >= 10 min: base 6000 / top 7000 until 15:45).
 - AMENDMENT (NewIdeas 19:27, QUEUE 1ba42c3, before any run): the verdict needs >= 12 of the 16 prompts counted (excluded =
   paused twice); with fewer it is no verdict, and the pooled ratio is still reported (t3r2_verdict.py checks it).

@@ -67,7 +67,7 @@ for t in 1 2 3; do                                # E1's set: 20K per language; 
   set -- $(tot); [ "$1" -ge 15000 ] && break      # a 75-min re-ticket before runner 62 would delay the E1 / E5 slot past 09:30)
   [ $(df -g $HOME | awk 'NR==2 {print $4}') -ge 114 ] || { say "free disk under 114 GB: no DLOG"; break; }
   say "DLOG: $2 answer tokens so far (min language $1); ticket $t"
-  PEER_QUEUE_TIMEOUT=21600 peer lock quiet --queue 75m "MTP Head DLOG: drafter training data capture at C 160 (Kamen's go): 125B de/ru/ja answers + taps / top-32, ~32 GB, no timing (turn66)" >> $LOG 2>&1 || exit 1
+> (a quote from the project owner, kept private)
   N=$(wc -l < logs/turn_job.out)
   ./run_locked.sh 75 turns/turn66.sh
   tail -n +$((N + 1)) logs/turn_job.out | grep -q "Traceback\|DLOG-ONPATH-FAIL" && { say "DLOG failed (see logs/turn_job.out): stopping"; exit 1; }

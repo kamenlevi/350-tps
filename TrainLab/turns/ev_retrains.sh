@@ -6,7 +6,7 @@
 #     HumanEval+ (24) + MBPP (100).
 #   x4 (data/e2_x4): HumanEval+ only. The MBPP walk set is the first 100 of E2's MBPP answers in capture order, inside
 #     x2 / x4's training data.
-# Slot: NewIdeas orders it (the orchestrator 23:3x, Kamen's open window). NOTBEFORE="YYYY-MM-DD HH:MM" (default now).
+> (a quote from the project owner, kept private)
 # Gate: no other quiet lock / ticket, NO-SWAP >= 12 GB, disk >= 101 GB, 3 clear minutes; start by Sat 21:00. Share lock
 # MEM 6 GB. Swap guard +2 GB. ~25 min.
 # Logs: data/ev_retrains.log (this); per variant data/d02b_walk_ev_<v>.txt (+ npz, gitignored).

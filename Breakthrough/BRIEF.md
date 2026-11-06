@@ -9,7 +9,7 @@ Approved by Kamen on 2026-10-19 (~21:50). A separate long-term project. It must 
 - **Small:** 6-12 GB of RAM, so any 16 GB Mac runs it without problems.
   - Lower bar: 45-50 tok/s on a Mac like Kamen's (M5 Pro, 64 GB, 2 TB SSD).
   - Target: 50-75 tok/s on the cheapest Mac mini you can buy now, which implies ~100-150 tok/s on Kamen's Mac (his stated lower bar there).
-    - Kamen (answered 2026-10-19 evening, via the orchestrator): "the cheapest Mac mini" = the base Mac mini, 16 GB RAM and a 256 GB SSD, with the base chip of the current lineup (Oct 2026: the M6, $899; its 256 GB SSD reads ~3.2 GB/s). The model's files must fit on that 256 GB disk too (~100 GB at most).
+> (a quote from the project owner, kept private)
   - Ideal: 400-600 tok/s on Kamen's Mac.
 - **Ultra-light:** at most 4 GB of RAM (runs on an 8 GB Mac), 30-50 tok/s.
 - **Speed:** with the model comfortably in RAM on Kamen's Mac, ~1000 tok/s.
@@ -27,13 +27,13 @@ Working definition (orchestrator's, approved in chat): the same scores within no
 - Measured today: a mid-size matvec costs bytes / ~300 GB/s + ~20 us per dependent kernel; a cold expert read has a ~0.34 ms floor; LRU at a 25% cache hits ~73%; experts are independent in raw coordinates (lossless coding caps at ~6-8%).
 
 ## Approach
-- Research first: ~/.local/share/usage-pace/RULES.md "Research first". Search the principles and related fields, run a prior-art pass, and give each idea a "Prior art" line.
+- Research first: ~/.local/share/pacer/RULES.md "Research first". Search the principles and related fields, run a prior-art pass, and give each idea a "Prior art" line.
 - Hunt for ideas that change the math (far fewer bytes per token at the quality bar), not engineering polish.
 - Score every idea on four numbers: bytes per token (RAM and SSD), real RAM footprint (including OS file cache and Python), sustained tok/s, and quality (suite + agreement).
 
 ## Resources and rules
-- Folder ~/Breakthrough (git): IDEAS.md, SCOREBOARD.md, research/ for briefs. Start from ~/MoonShots/IDEAS.md, ~/MoonShots/PRIOR_ART.md, ~/.local/share/usage-pace/briefs/, and MoonShots' handover note (HANDOVER_FROM_MOONSHOTS.md, arriving soon).
-- GPU only in gaps and at night: `peer lock quiet --queue`, never ahead of main-track jobs. Usage: about 15-20% of each window; usage-pace session name `breakthrough` (priority med).
+- Folder ~/Breakthrough (git): IDEAS.md, SCOREBOARD.md, research/ for briefs. Start from ~/MoonShots/IDEAS.md, ~/MoonShots/PRIOR_ART.md, ~/.local/share/pacer/briefs/, and MoonShots' handover note (HANDOVER_FROM_MOONSHOTS.md, arriving soon).
+- GPU only in gaps and at night: `peer lock quiet --queue`, never ahead of main-track jobs. Usage: about 15-20% of each window; pacer session name `breakthrough` (priority med).
 - Never change the main engines (~/BigMoE, ~/SpecDecode) directly. Hand ideas over as patches with a one-command A/B.
 - RULES.md applies in full: pacing, locks, memory guard, disk floor 100 GB, no parallel fan-outs over 3, utilization reported in every RESULT.
 - Send the orchestrator (session "AI/LLM project recommendations") a RESULT only when final. Posting anything publicly is Kamen's call.
