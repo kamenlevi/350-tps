@@ -474,6 +474,9 @@ if NW:                                                   # a cold demand expert 
     assert FAST and os.environ.get("REF2_OOO_1C") == "1", "R57_NEVERWAIT needs a FAST arm on the one-call (REF2_OOO_1C=1)"
     assert os.environ.get("REF2_NEVERWAIT") == "1", "R57_NEVERWAIT arms ref2 with REF2_NEVERWAIT=1: set both"
     assert all(hasattr(ref2, a_) for a_ in ("NW_RESET", "NW_ON", "NWCNT")), "R57_NEVERWAIT needs Leap's never-wait ref2"
+NWC = os.environ.get("R57_NWCNT", "1") == "1"            # R57_NWCNT=0 (NewIdeas Sat 04:5x): NW without ref2's per-layer counters. Their lazy
+                                                         # graph (a sort + 8 sums per layer call) ran at the post-c2 readback: S1's NW spent
+                                                         # ~2.4 ms/check more outside tpsw's c0..c2 window. Engagement then: the run's nwk
 QSPLIT = float(os.environ["R57_QOM_SPLIT"]) if os.environ.get("R57_QOM_SPLIT") else None   # ported from r57_screen.py (Fri 10:0x,
 assert QSPLIT is None or FAST == "QOM", "R57_QOM_SPLIT is a QOM-KEEP option (R57_FAST=QOM)"   # NewIdeas' SPLIT-NAX arm): the rows'
 QC1C = os.environ.get("R57_QCNT1C") == "1"               # draft cf reach ref2's one-call as t["qom"][2]; R57_QCNT1C sums ref2.QCNT_1C's
@@ -1052,6 +1055,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
     lh_ = []                                             # R57_LOGHASH: per check, the verify logits' hash
     q1c_ = []                                            # per check, R57_QCNT1C: [kept, dropped, groups computed, split drops]
     nw_ = []                                             # per check, R57_NEVERWAIT: ref2.NWCNT summed over the layer calls
+    c0s_ = []                                            # per check: c0 - td in s (the full-period rate, NewIdeas Sat 04:5x)
     rows_, cb_, bld_, wt_, wsf_ = [], [], [], [], []     # per check: verified rows, SSD bytes (the per-row cost split, 11-01
                                                          # lead), graph-build s, eval-wait s (A6 / K-80's split), warm-split flag
     WSPL = []                                            # this run's warm-split samples
@@ -1061,6 +1065,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         BG.ext.trace(); BG.ext.trace_reads(); BG.ext.trace_cov()
         stl_, off_ = [], time.clock_gettime(time.CLOCK_UPTIME_RAW) - time.perf_counter()
     td = c_prev = time.perf_counter()
+    nk0_ = (ref2.COUNTS.get("nw_calls", 0), ref2.COUNTS.get("nw_late_calls", 0))   # host-side NW path counters (no GPU sync)
     hist = 0.0
     if mtp:                                              # the prompt's pairs (W[u], token u + 1), the last one with tok; in the
         ref2.remove()                                    # timed window (D-23d kept its 0.03-0.34 s out), as DFlash2's window
@@ -1076,6 +1081,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             cut = True
             break
         c0 = time.perf_counter()
+        c0s_.append(c0 - td)
         if out[1:]:
             cyc.append(c0 - c_prev)
         c_prev = c0
@@ -1215,7 +1221,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             EM.STATE.capture = {}
         nwl_ = None
         if nwp_:                                         # R57_NEVERWAIT: this real check's late groups, counted by ref2
-            ref2.NW_RESET(); ref2.NWCNT = []; ref2.NW_ON = True
+            ref2.NW_RESET(); ref2.NWCNT = [] if NWC else None; ref2.NW_ON = True
         if QC1C:
             ref2.QCNT_1C = []                            # R57_QCNT1C (ported Fri 10:0x): this real check's one-call counters
         try:
@@ -1431,6 +1437,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                  keep=K2, warm=np.array(FG["warm"]), prompt_len=len(ids), len_rule=U3C_LEN)
         FG["dump"] = None
     return dict(lh=lh_, out=out[:CAP], n=min(len(out), CAP), tps=min(len(out), CAP) / dec, drafter=drafter, hist=hist, a6=a6,
+                nwk=[ref2.COUNTS.get("nw_calls", 0) - nk0_[0], ref2.COUNTS.get("nw_late_calls", 0) - nk0_[1]] if NW else None,
                 rlx=rst if RLX_D > 0 else None,      # R57_RELAX_DELTA: rows checked, kept exact / in all, relaxed accepts
                 spn=sst if SPAN else None,           # R57_RELAX_SPAN: rows checked, kept exact / in all, relaxed, span rows
                 inert=dict(ist, arm=INERT["name"]) if INERT is not None else None,   # R57_INERT: rows checked, kept exact / in
@@ -1442,6 +1449,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                 pc=dict(rows=rows_, kept=kept, ck=[1e3 * x for x in ck_t], drf=[1e3 * x for x in drf[:len(ck_t)]],
                         miss=sm[:, 0].tolist(), io=(1e3 * sm[:, 1]).tolist(), svc=(1e3 * sm[:, 2]).tolist(), mb=[x / 1e6 for x in cb_],
                         nw=nw_, q1c=q1c_,        # R57_NEVERWAIT / R57_QCNT1C: per-check counters (empty when off)
+                        c0=[round(1e3 * x, 3) for x in c0s_],   # ms from the decode start (td) to each check's c0
                         uses=sm[:, 4].tolist(), stl=sm[:, 5].tolist(),   # C3-R8: expert groups and stalled layer calls per check
                         bld=[1e3 * x for x in bld_], wt=[1e3 * x for x in wt_], ws=wsf_), wspl=WSPL,
                 tpsw=sum(kept[2:]) / max(sum(wl[2:]), 1e-9), cut=cut, bad=bad, stall=stall,   # tpsw: steady state, checks >= 2
@@ -1524,7 +1532,7 @@ for n_p, (s, key) in enumerate(PICK):
         RUNS.append(dict(key=key, arm=arm, type=typ, bad=r["bad"], cut=r["cut"], P=len(ids),
                          **{k_: r[k_] for k_ in ("drafter", "hist", "a6", "n", "tps", "tpsw", "kept", "checks", "cyc", "ck",
                                                  "drf", "miss", "io", "mb", "mpk", "mem", "copy", "fast", "pf", "lh", "inert")},
-                         d7b=draft is DRAFT4, rlx=r.get("rlx"), spn=r.get("spn")))   # Thu 18:5x / Fri 10:0x: relaxed / span / INERT
+                         d7b=draft is DRAFT4, rlx=r.get("rlx"), spn=r.get("spn"), nwk=r.get("nwk")))   # Thu 18:5x / Fri 10:0x: relaxed / span / INERT
                                                          # stats were computed but never written (the pre-flight's MISSING)
         m = min(len(want), r["n"])
         agree = same(r["out"], want)
