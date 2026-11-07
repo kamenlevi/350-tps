@@ -9,6 +9,8 @@ _PAUSE = os.path.expanduser("~/.local/share/quiet/PAUSE")
 # timing hygiene for benchmarks: seconds waited on PAUSE at pass boundaries, and gaps > 15 s between passes (a quiet
 # window's SIGSTOP hold or a thermostat freeze); a timed run with either is not a clean measurement
 PAUSED = {"pause_s": 0.0, "gap_s": 0.0, "n_gap": 0, "t_last": 0.0}
+_PAUSE_EVERY = float(os.environ.get("BIGMOE_PAUSE_EVERY_MS", "0") or 0) / 1e3   # Leap seams (a), Sat 15:xx: the PAUSE stat at most
+                                                         # every N ms (0 = every pass, as before); it sat in the check's first SB group
 import mlx.core as mx
 import mlx.core as _mx
 _BUILD = "build" if _mx.__version__ == "0.32.2" else "build" + _mx.__version__.replace(".", "")[1:]   # 0.32.4 -> build324
@@ -127,8 +129,10 @@ class Gate:
         t = time.perf_counter()
         if PAUSED["t_last"] and t - PAUSED["t_last"] > 15.0:   # > a prefill chunk; quiet holds are minutes
             PAUSED["gap_s"] += t - PAUSED["t_last"]; PAUSED["n_gap"] += 1
-        while os.path.exists(_PAUSE):
-            time.sleep(0.2)
+        if not _PAUSE_EVERY or t - PAUSED.get("t_chk", -1e9) >= _PAUSE_EVERY:
+            PAUSED["t_chk"] = t
+            while os.path.exists(_PAUSE):
+                time.sleep(0.2)
         PAUSED["t_last"] = t1 = time.perf_counter(); PAUSED["pause_s"] += t1 - t
         self.seq += 1
         return self.seq

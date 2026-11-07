@@ -3327,3 +3327,6 @@ so R-01 should find about the same slots, not ~1 GB more.
 - t80ck1u MEASURED (Sat 08:19-08:21, quiet, alone, 16 HumanEval, 12 GB FAST candidate): 46.33 tok/s whole decode geometric
   mean (pooled 44.34), full-period 49.14, end to end 24.49; lifetime 11.245 GB; x2.52 the verified-greedy loop. Details:
   /Users/kamen/Fit12/PLAN_12GB_90_fit12.md 't80ck1u MEASURED'. EvalSuite's entry point: fit_t3.py F12_IDS_OUT (same section).
+- WIRED A/B (Sat 15:49-15:55): mx.set_wired_limit on the 12 GB loop (t80ck1u) = x1.004 whole decode, tokens W = B 16 / 16:
+  KILL at 12 GB; the first-check excess (4.7 % of decode) stays: cold pools after prefill, not un-wiring. Details:
+  /Users/kamen/Fit12/PLAN_12GB_90_fit12.md 'WIRED A/B RESULT'.

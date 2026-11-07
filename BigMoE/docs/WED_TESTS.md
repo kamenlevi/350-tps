@@ -685,3 +685,44 @@ NewIdeas (PLAN 220 #2 slot): v1' carries REF2_GDN_LAZY=1 but no R57_GDNB, so its
   Sunday bundle. The whole decode / full period gains (+3.1 % / +1.6 %) are acceptance (kept 10.59 / 10.31 vs 10.10: QOM's pass-to-pass
   noise), which is why the line judges on the cycle. Matches Leap's prior: the body saves ~nothing and the engaged lazy commit costs on
   full accepts more than it saves on partial ones.
+
+### Sat 15:14-15:21: xsafe p1a = PLAN 220 1a (Leap eprep + GDN TG 2, ref2 d6f736fb) + BigMoE #4 (R57_DQ1) on v1' + wired: BETWEEN
+scripts/xsafe_ab.sh (a317590; reusable: new deep-frozen snapshot, exact-env bits on LOGHASH, B / X / X / B at C 256, NewIdeas' cycle
+line, ref2 COUNTS engagement). Snapshot eba45a4 (345 files frozen; frozen ref2 == live d6f736fb modulo paths). Data data/xs_p1a, 07dbca9.
+
+| | median cycle | whole decode | full period | kept / check | check 0 | peak |
+|---|---|---|---|---|---|---|
+| B = v1' + wired | 63.66 ms | 176.6 | 171.3 | 10.69 | 65 ms | 42.9 GB |
+| X = + REF2_EPREP + REF2_GDN_TG + R57_DQ1 | 63.82 ms (+0.16 ms, +0.26 %) | 169.8 | 163.4 | 10.30 | 63 ms | 42.9 GB |
+
+- **Verdict (NewIdeas' exact-safe line): BETWEEN.** BITS PASS (43 / 43 verify-logits hashes, 3 / 3 tokens; gdn_tg engaged 3,348 calls
+  in the exact arm; eprep is a QOM one-call path, so it engages only in FAST). Engaged in X only: gdn_tg 29,376, eprep 24,192 calls.
+- Leap priced -0.5..-0.7 ms per check; the engine shows +0.16 ms: no cycle gain in v1' + wired. The whole decode / full period
+  differences (-3.8 % / -4.6 %) are acceptance (kept 10.30 vs 10.69), QOM's pass-to-pass noise; the cycle is the judge.
+
+### Sat 15:32-15:39: xsafe p4s = Leap's GPU-idle seams (a-e) + BigMoE #4 on v1' + wired: PASS, cycle -1.31 % (snapshot 3c962ca)
+Seams located by Leap (TABLE_350 7fee5b8: a blocking eval / readback drains the queue; ~2.5 ms of GPU idle per cycle). X = v1' + wired +
+BIGMOE_PAUSE_EVERY_MS=50 (a, bigmoe/gated.py) + R57_S0CARRY=1 (c, screen; 56f011f) + REF2_SB_FIRST=1 (b) + REF2_PLE_LATE=1 (d) +
+REF2_COMMIT_SUB=9 (e) (Leap's ref2 1f85c231) + R57_DQ1=1 (#4). scripts/xsafe_ab.sh; data data/xs_p4s, b6cd335.
+
+| | median cycle | whole decode | full period | kept / check | check 0 | peak |
+|---|---|---|---|---|---|---|
+| B = v1' + wired | 63.88 ms | 175.4 | 169.8 | 10.77 | 68 ms | 42.9 GB |
+| **X = + seams a-e + DQ1** | **63.05 ms (-0.84 ms, -1.31 %)** | **178.8 (+2.0 %)** | 173.2 (+2.0 %) | 10.67 | 64 ms | 42.9 GB |
+
+- **Verdict (NewIdeas' exact-safe line): PASS** (cycle <= -1 % AND bits). BITS PASS: 43 / 43 verify-logits hashes, 3 / 3 tokens; engaged in
+  the exact arm sb_first 27, ple_late 27, commit_sub 104; in X (both passes) sb_first 481, ple_late 481, commit_sub 912. -> the
+  Sunday-night exact-safe bundle (no new gate; NewIdeas 15:3x).
+- **Per-check read-out (scripts/xs_strat.py, information; Leap 15:4x's method), X - B medians, checks >= 2:**
+
+| class (share of checks) | p1a cycle | p1a check + commit | p4s cycle | p4s check + commit |
+|---|---|---|---|---|
+| full, misses <= 100 (~50 %) | -0.95 | -1.10 | -0.57 | -0.64 |
+| full, misses > 100 (~7.5 %) | -0.07 | -0.65 | **-4.70** | -5.70 |
+| partial, misses <= 100 (~41 %) | +0.10 | -0.13 | **-1.70** | -1.57 |
+| partial, misses > 100 (1.4 %) | -0.45 | -0.61 | -4.16 | -4.41 |
+| class-weighted cycle | -0.45 ms (-0.73 %) | | **-1.40 ms (-2.22 %)** | |
+
+  p1a's flat partial class (Leap's question) is now -1.70 ms: (d) / (e) act on partials as designed. The high-miss checks gain most
+  (-4.7 ms): with the first submit earlier and the stats / PAUSE reads off the path, the GPU starts before the demand reads land.
+  The read-out's p1a partial row equals Leap's own (n 172 / 184, +0.10, -0.13).

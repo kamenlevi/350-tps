@@ -234,6 +234,31 @@ def _src_tg():
     """
 
 
+def kernel_tgr(q, k, v, g, beta, state, mask=None, R=2):
+    """variant TG with T a runtime input (rows <= TMAX 32 in threadgroup memory): one compiled kernel for every T, the
+    same values and arithmetic as TG (so bitwise == mlx_lm). ref2's REF2_GDN_TG path; T > 32 or a mask -> None"""
+    B, T, Hk, Dk = k.shape
+    Hv, Dv = v.shape[2:]
+    if mask is not None or T > 32 or g.ndim != 3 or Dv % (4 * R):
+        return None
+    if "tgr" not in _K:
+        src = (_src_tg().replace("for (uint e = tid; e < (uint)(TT * Dk); e += 128)", "for (uint e = tid; e < (uint)(T * Dk); e += 128)")
+               .replace("for (uint e = tid; e < (uint)(TT * NDV); e += 128)", "for (uint e = tid; e < (uint)(T * NDV); e += 128)")
+               .replace("for (uint e = tid; e < (uint)TT; e += 128)", "for (uint e = tid; e < (uint)T; e += 128)")
+               .replace("for (int t = 0; t < TT; ++t)", "for (int t = 0; t < T; ++t)")
+               .replace("(b_idx * TT + t)", "(b_idx * T + t)").replace("(b_idx * TT + e)", "(b_idx * T + e)")
+               .replace("y += b_idx * TT * Hv * Dv", "y += b_idx * T * Hv * Dv")
+               .replace("threadgroup InT ks[TT][Dk], qs[TT][Dk], vs[TT][NDV];", "threadgroup InT ks[TMAX][Dk], qs[TMAX][Dk], vs[TMAX][NDV];")
+               .replace("threadgroup float gs[TT];", "threadgroup float gs[TMAX];").replace("threadgroup InT bs[TT];", "threadgroup InT bs[TMAX];"))
+        assert "TT" not in src.replace("TMAX", ""), "kernel_tgr: a TT left"
+        _K["tgr"] = mx.fast.metal_kernel(name="leap_gated_delta_step_tgr", input_names=["q", "k", "v", "g", "beta", "state_in", "T"],
+                                         output_names=["y", "state_out"], source=src)
+    return _K["tgr"](inputs=[q, k, v, g, beta, state, T], template=[("InT", q.dtype), ("StT", state.dtype), ("Dk", Dk), ("Dv", Dv),
+                                                                     ("Hk", Hk), ("Hv", Hv), ("R", R), ("TMAX", 32)],
+                     grid=(32, Dv // R, B * Hv), threadgroup=(32, 4, 1),
+                     output_shapes=[(B, T, Hv, Dv), state.shape], output_dtypes=[q.dtype, state.dtype])
+
+
 def kernel_tg(q, k, v, g, beta, state, mask=None, R=1):
     """variant TG (see _src_tg); no row mask (the verify / commit calls pass none)"""
     assert mask is None
@@ -317,9 +342,9 @@ def check():
             m = mx.array(rng.random((1, T)) < 0.8) if masked else None
             y0, s0 = gated_delta_kernel(q, k, v, g, b, st, m)
             for R in ((1, 2, 4, 8) if not PRE_ONLY else ()) + (tuple(("pre", r_) for r_ in (1, 2)) if not TG_ONLY else ()) \
-                    + (tuple(("tg", r_) for r_ in (1, 2, 4)) if not masked else ()):
+                    + (tuple(("tg", r_) for r_ in (1, 2, 4)) + (("tgr", 2),) if not masked else ()):
                 if isinstance(R, tuple):
-                    y1, s1 = (kernel_tg if R[0] == "tg" else kernel_pre)(q, k, v, g, b, st, m, R=R[1])
+                    y1, s1 = {"tg": kernel_tg, "tgr": kernel_tgr, "pre": kernel_pre}[R[0]](q, k, v, g, b, st, m, R=R[1])
                 else:
                     y1, s1 = kernel(q, k, v, g, b, st, m, R=R)
                 mx.eval(y0, s0, y1, s1)
@@ -347,7 +372,7 @@ def bench(reps=5, n=36):
         for name, fn in [("mlx_lm", lambda s: gated_delta_kernel(q, k, v, g, b, s)),
                          ("R2", lambda s: kernel(q, k, v, g, b, s, R=2)), ("R4", lambda s: kernel(q, k, v, g, b, s, R=4)),
                          ("R8", lambda s: kernel(q, k, v, g, b, s, R=8)), ("P1", None), ("P2", None),
-                         ("T1", None), ("T2", None), ("T4", None), ("mlx_lm2", None)]:
+                         ("T1", None), ("T2", None), ("T4", None), ("TR2", None), ("mlx_lm2", None)]:
             if TG_ONLY and name[0] in "RP":
                 continue
             ts = []
@@ -359,6 +384,8 @@ def bench(reps=5, n=36):
                     vi = v if y is None else v + 0 * y[..., :1].astype(v.dtype)
                     if name.startswith("mlx_lm"):
                         y, _s = gated_delta_kernel(q, k, vi, g, b, sts[i])
+                    elif name.startswith("TR"):
+                        y, _s = kernel_tgr(q, k, vi, g, b, sts[i], R=int(name[2:]))
                     elif name.startswith("T"):
                         y, _s = kernel_tg(q, k, vi, g, b, sts[i], R=int(name[1:]))
                     elif name.startswith("P"):
@@ -380,3 +407,31 @@ if __name__ == "__main__":
         check()
     if "bench" in what:
         bench()
+
+
+def check_tg_all(R=2, seeds=(1, 2, 3)):
+    """TG (R) vs mlx_lm's kernel for EVERY T in 1 .. 16 (each T is its own compiled kernel), engine shapes, no mask"""
+    import numpy as np
+    from mlx_lm.models.gated_delta import gated_delta_kernel
+    bad = n = 0
+    for sd in seeds:
+        rng = np.random.default_rng(100 + sd)
+        for T in range(1, 17):
+            q, k, v, g, b, st = _inputs(rng, T)
+            y0, s0 = gated_delta_kernel(q, k, v, g, b, st)
+            y1, s1 = kernel_tg(q, k, v, g, b, st, R=R)
+            mx.eval(y0, s0, y1, s1)
+            n += 1
+            bad += not (bool(mx.array_equal(y0, y1)) and bool(mx.array_equal(s0, s1)))
+    say(f"GDN TG {R} vs mlx_lm, every T 1-16 x {len(seeds)} seeds: {n - bad} of {n} bitwise")
+    return bad
+
+
+def precompile_tg(R=2):
+    """ref2's REF2_GDN_TG: build TG R's kernels for T 1-16 at the engine's shapes now (each T is its own pipeline)"""
+    for T in range(1, 17):
+        q = mx.zeros((1, T, 16, 128), mx.bfloat16)
+        v = mx.zeros((1, T, 48, 128), mx.bfloat16)
+        y, s = kernel_tg(q, q, v, mx.ones((1, T, 48), mx.float32), mx.zeros((1, T, 48), mx.bfloat16),
+                         mx.zeros((1, 48, 128, 128), mx.float32), R=R)
+        mx.eval(y, s)

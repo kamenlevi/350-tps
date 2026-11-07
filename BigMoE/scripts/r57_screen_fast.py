@@ -278,6 +278,8 @@ A6 = set(filter(None, os.environ.get("R57_A6", "").replace("+", ",").split(","))
 A6_POOLS = int(os.environ.get("R57_A6_POOLS", "24"))
 TCPU = os.environ.get("R57_TCPU") == "1"                 # Sat 07:0x (NewIdeas FIRSTCHK): main-thread CPU ms per check (build, wait); A6 rep1 too
 DQ1 = os.environ.get("R57_DQ1") == "1"                   # PLAN 220 #4 (NewIdeas Sat 14:1x): the draft and its quality (cf) in ONE eval
+S0CARRY = os.environ.get("R57_S0CARRY") == "1"           # Leap seams (c), Sat 15:xx: a check's stats / disk-bytes start = the last check's end
+                                                         # reads (no MoE runs between), so none sit before the check's first submit
 # WARMSPLIT (NewIdeas 11-02 07:3x, Monday night; lead ~/.local/share/pacer/leads/2026-11-01_per_row_cost_opus.md step 1):
 # R57_WARMSPLIT=N: every Nth check from the 3rd drafts all 15 (a 16-row check) and, before the real one, runs the identical
 # input cold at 16 rows (rolled back), then warm (all its experts now resident) at 1 / 4 / 8 / 16 rows, each rolled back.
@@ -1066,6 +1068,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
     nw_ = []                                             # per check, R57_NEVERWAIT: ref2.NWCNT summed over the layer calls
     c0s_ = []                                            # per check: c0 - td in s (the full-period rate, NewIdeas Sat 04:5x)
     tc_ = []                                             # per check, R57_TCPU: [build, wait] main-thread CPU ms
+    se_ = None                                           # R57_S0CARRY: the last check's end (stats, disk bytes)
     rows_, cb_, bld_, wt_, wsf_ = [], [], [], [], []     # per check: verified rows, SSD bytes (the per-row cost split, 11-01
                                                          # lead), graph-build s, eval-wait s (A6 / K-80's split), warm-split flag
     WSPL = []                                            # this run's warm-split samples
@@ -1163,7 +1166,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             if (trim := dcache[0].offset - a) > 0:
                 DF._trim_recent_cache(dcache, trim)
         ref2.apply()
-        s0, b0_ = stats(), disk_read_bytes()
+        s0, b0_ = se_ if (S0CARRY and se_ is not None) else (stats(), disk_read_bytes())
         c1 = time.perf_counter()
         drf.append(c1 - c0)                              # the drafter's share of the cycle: the SSD idles (R-70D's window)
         t1_ = time.thread_time() if TCPU else 0.0
@@ -1382,12 +1385,13 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         model.commit_verified_window(cache, snap.states, keep_tokens=k + 1, verified_tokens=len(dr) + 1)
         mx.async_eval(states(cache))                     # SB: the commit replay submitted alone
         c2 = time.perf_counter()
-        sm.append(stats() - s0)
+        s_e_ = stats(); sm.append(s_e_ - s0)
         if QC1C:
             q1c_.append([int(x_) for x_ in np.array(mx.stack(q1l_).sum(axis=0))] if q1l_ else [0, 0, 0, 0])
         if nwp_:                                         # [late groups, late uses, late mass, L47 drops, L47 rank-0 stalls, forced]
             nw_.append(nwl_ if NWM == "2" else [float(x_) for x_ in np.array(mx.stack(nwl_).sum(axis=0))] if nwl_ else [0.0] * 8)   # NW v3: 8 fields (Leap dcd5f4f8); 2: lazy
-        rows_.append(len(dr) + 1); cb_.append(disk_read_bytes() - b0_)
+        b_e_ = disk_read_bytes(); se_ = (s_e_, b_e_)
+        rows_.append(len(dr) + 1); cb_.append(b_e_ - b0_)
         ck_t.append(c2 - c1); kept.append(k + 1); wl.append(c2 - c0)
         if STALL:
             stl_.append([round(x + off_, 6) for x in (c0, c1, cb, ce, c2)] + [len(dr) + 1, k])
@@ -1710,6 +1714,7 @@ try:                                                     # never let the side lo
         _rt = tuple(os.path.expanduser(p_) for p_ in ("~/Leap/", "~/TrainLab/", "~/Breakthrough/", "~/BigMoE/data/r57/snap/"))
         json.dump(sorted([m_, f_] for m_, f_ in ((m_, getattr(sys.modules.get(m_), "__file__", None)) for m_ in list(sys.modules))
                          if f_ and f_.startswith(_rt)), open(os.path.join(OUT, f"{TAG}_modules.json"), "w"))   # under Leap / TrainLab /
+        json.dump(dict(getattr(ref2, "COUNTS", {})), open(os.path.join(OUT, f"{TAG}_counts.json"), "w"))   # + ref2's call counters
                                                          # Breakthrough (live) or a snapshot: a freeze leaves no live ones
     if STALL:
         json.dump(dict(laymap=LAYMAP, runs=STL, anchor=[time.time(), time.clock_gettime(time.CLOCK_UPTIME_RAW)]),   # wall

@@ -9260,3 +9260,79 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   stream with the group terms summed in k3c's order (KS5, 640-thread groups) 42.4.
 - **Verdict: HC8 k3c tail KILL** (no bitwise form faster); **k2b fold not built** (a cross-threadgroup "last block"
   sync for <= ~0.2-0.3 ms per check: risk over gain before Monday). HC8's remaining levers change bits (1b).
+
+## PLAN 220 1a BUNDLE (eprep + GDN TG 2): built, bitwise in the exact env, engaged (Leap, Sat 2026-11-07 15:04-15:09)
+- **GDN TG 2** (scripts/gdn_step_r.py kernel_tg R 2: every row's inputs in threadgroup memory first, 2 dv rows per
+  simdgroup, one kernel per T): every T 1-16 x 3 seeds 48 / 48 bitwise == mlx_lm's kernel (y and state); 61.9 vs 68.3 us
+  per 16-row call (-9 %); a runtime-T form keeps only -2 % (66.7), so T is compiled in (T 1-16 precompiled at apply).
+  ref2 d6f736fb (9948a7e): REF2_GDN_TG=1 patches mlx_lm's gated_delta_kernel (only then; bf16 q / k / v / beta, fp32 g
+  and state, no mask, T <= 16; else mlx_lm's own).
+- **eprep** (ref2 3b184972, 40025f0): REF2_EPREP=1; 400 / 400 cases bitwise at the kernel level.
+- **Exact env (NAX6-N, C 224, HumanEval 68 / 16, ifeval/1220, CAP 64): fcpx0 vs fcpx2 (both switches on): the
+  verify-logits hash equal on all 43 checks, tokens 3 / 3; TG engaged 3,348 calls (eprep 0: no QOM in the exact env).**
+- FAST v1' + wired (fcpe, C 256, 3 HumanEval): TG 2,628 calls, **eprep 576 = every QOM one-call (ooo_1c_qom 576)**;
+  tokens == fcpw's 3 / 3; decode 161.3 tok/s at CAP 64 (fcpw 159.5; noise at this size).
+- Price [P]: TG ~-0.23 ms + eprep ~-0.3..-0.5 ms per 16-row check = ~-0.5..-0.7 ms (~-1 % per cycle). The judge is
+  BigMoE's B / X / X / B engine A/B (NewIdeas' line: cycle >= 1 % lower; KILL if >= 0.5 % worse).
+- **Correction (method only):** the FCP pair lines ("tokens equal 3 / 3") were computed from runs.json's absent 'out'
+  field (None == None). Re-checked from the tokens files: fcpa vs fcpb, fcpa vs fcpw, fcpx0 vs fcpx1, fcpx0 vs fcpx2,
+  fcpw vs fcpe are all 3 / 3 equal, so every claim stands. fcp_read.py now reads the tokens files.
+
+## PLAN 220 (4): THE CYCLE'S GPU-IDLE SEAMS, located (Leap, Sat 2026-11-07 15:12-15:22, quiet; scripts/fcp/fcp_seams.py)
+- FCP_SEAMS on v1' + wired (C 256, HumanEval 68 / 16 / 91, CAP 128): every mx.eval / async_eval timed, marks at c0 /
+  c1 / cb / ce / c2 and around the draft's two readbacks (np.array(pth), np.array(cf): implicit evals), a 1 kHz sampler
+  of the main thread. A blocking eval or readback drains the GPU queue, so the time from its end to the next submit is
+  GPU idle. Medians over checks >= 4 (no probe snapshots there; checks 1-3 carry ~0.2-0.3 ms of the probe's own work).
+
+| per cycle, ms | partial (n 6) | full (n 9) |
+|---|---|---|
+| draft: c0 -> its blocking eval (draft_fused.py:179) | 1.49 | 0.63 |
+| draft: the readbacks (GPU busy: the drafter's tail + round trips) | 4.12 | 4.23 |
+| **idle A': readback end -> the check's first submit** (post-draft Python 0.16-0.18 + c1 -> the first SB async_eval) | **2.47** | **1.27** |
+| **idle B: the check's eval -> the commit's submit** (accept logic + the commit build) | **1.22** | **0.32** |
+| C: commit sent -> the next draft's submit (idle only on a full accept; a partial's 2.9 ms replay runs here) | 0.23 | 0.19 |
+
+- **GPU idle ~1.8 ms per full-accept cycle, ~3.7 per partial: ~2.5 ms per cycle at 38.5 % partial** (Friday's ioreg
+  read: 2.5-3.6).
+- Where the main thread is in those seams (sampler):
+  - Gate.new_pass's os.path.exists(PAUSE) per check (~0.1-0.3, in the check's first SB group); the screen's
+    disk_read_bytes / stats (~0.1-0.3, instrumentation at check start).
+  - On partials only: a ThreadPool future wait (~0.8; MTPLX's PLE n-gram lookahead / stage), the PLE n-gram rows'
+    memmap gathers (~0.4), and the commit build before its single submit (~0.9: 35 GDN replays + the PLE layer, then
+    one async_eval).
+- **Exact-safe levers (host scheduling only; BigMoE's loop, MTPLX via ref2's wrapper), ~-1..-1.4 ms per cycle [P]
+  (x1.016-1.022):**
+  - (a) the PAUSE stat off the pass path (a flag a watcher thread sets, or every Nth pass);
+  - (b) the first SB async_eval after layer 0 instead of 2 (the GPU starts ~0.35 ms sooner);
+  - (c) instrumentation (stats, disk_read_bytes) after the first submit;
+  - (d) on partials, the PLE stage started at the accept decision (overlapping the commit build), not awaited at the
+    next check;
+  - (e) the commit's GPU work submitted in pieces (the GDN replays first, then the PLE layer).
+
+## PLAN 220 seams (b) / (d) / (e) in ref2, default off: bitwise, engaged (Leap, Sat 2026-11-07 15:2x-15:31; BigMoE 15:3x ask)
+- ref2 d6f736fb -> 1f85c231 (atomic swap, self_test True; backup data/seams/ref2_before.py). Installed only when switched
+  on; scheduling only (no value changes):
+  - **REF2_SB_FIRST=1 (b):** at the PLE-carrying layer (index 1; config ple_layer_ids [2]) of a 5-16-row pass outside the
+    commit, mx.async_eval(layer 0's output) before layer 1 runs. MTPLX's own cadence (qwen4_exp.py:6490) sends after
+    layer 1 with SB 2.
+  - **REF2_PLE_LATE=1 (d):** MTPLX's _forward stages the PLE n-gram rows before layer 0's graph (memmap gathers + a
+    page-touch pool, GPU idle). For 5-16-row passes outside the commit the stage is deferred to the PLE layer's call:
+    the same inputs and history (layer 0 does not touch layer 1's cache). A deferral never consumed is dropped and
+    counted (ple_late_stale). With (b) the gathers overlap layer 0's GPU work.
+  - **REF2_COMMIT_SUB=N (e):** inside the commit, mlx_lm's gated_delta_update sends every N replays' new states
+    (mx.async_eval) while Python builds the rest. The last group rides r57's own async_eval.
+- **Exact env (NAX6-N, C 224, 3 prompts): fcpx0 vs fcpx3 (all three on, N 9): verify-logits hash equal on all 43 checks,
+  tokens 3 / 3;** engaged sb_first 27, ple_late 27 (0 stale), commit_sub 104.
+- FAST v1' + wired (fcpf): engaged sb_first 42, ple_late 42, commit_sub 92; tokens == fcpw 3 / 3.
+- Time: BigMoE's xsafe A/B (X = v1' + wired + BIGMOE_PAUSE_EVERY_MS=50 + R57_S0CARRY=1 + these + R57_DQ1=1). The seams
+  read prices the whole set at ~-1..-1.4 ms per cycle [P].
+- **1a bundle (eprep + TG 2 + DQ1) A/B: BETWEEN** (BigMoE 15:21, 07dbca9: cycle +0.16 ms, bits PASS 43 / 43, both
+  engaged). The priced -0.5..-0.7 ms per check did not reach the engine cycle.
+- **Re-read of BigMoE's p1a files (p1ab1 / 2 vs p1ax1 / 2, per check, CPU only):** X kept fewer tokens per check (mean
+  10.16 vs 10.84: FAST acceptance diverges), so per-prompt cycle medians mix different check populations. Pooled per
+  check: check+commit -1.13 ms (median), cycle -0.46 (mean -0.74). Stratified, X-B medians:
+  - full accept, misses <= 100 (~52 %): check+commit -0.94, cycle -0.71, draft +0.19;
+  - full, > 100 misses: check -0.65, cycle -0.07;
+  - partial, <= 100 misses (~39 %): check -0.13, cycle +0.10.
+  - **Class-weighted cycle ~-0.34 ms (-0.55 %): a real gain under the 1 % line (BETWEEN stands), not ~0.** Read-outs of
+    FAST A/Bs should stratify by accept type x miss band. Open: why the partial class gains ~0.

@@ -212,6 +212,10 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "hc8_fast": os.environ.get("REF2_HC8_FAST") == "1", "hc8_np": int(os.environ.get("REF2_HC8_NP", "20")),
        "keep_caches": os.environ.get("REF2_KEEP_CACHES") == "1",   # KEEP-C: remove() keeps _DN / _SN / _HC8 (default off)
        "eprep": os.environ.get("REF2_EPREP") == "1",   # PLAN 220 #3e: _ooo_1c_call's id glue as one dispatch (eprep_k; default off)
+       "gdn_tg": os.environ.get("REF2_GDN_TG") == "1",   # PLAN 220 1a: the 1-16-row GDN step as gdn_step_r's TG 2 (bitwise; default off)
+       "sb_first": os.environ.get("REF2_SB_FIRST") == "1",   # PLAN 220 seam (b): layer 0's output sent before layer 1 (default off)
+       "ple_late": os.environ.get("REF2_PLE_LATE") == "1",   # PLAN 220 seam (d): the PLE stage at layer 1, not before layer 0 (default off)
+       "commit_sub": int(os.environ.get("REF2_COMMIT_SUB", "0") or 0),   # PLAN 220 seam (e): send the commit's GDN replays every N (0 off)
        "hc8_v": int(os.environ.get("REF2_HC8_V", "4")),
        "ooo_1c": os.environ.get("REF2_OOO_1C") == "1", "small_native": os.environ.get("REF2_SMALL_NATIVE") == "1",
        "nax_1cq": os.environ.get("REF2_NAX_1CQ") == "1",
@@ -228,7 +232,7 @@ _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
               kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
               fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0, ooo_1c_qom=0, nax_1cq=0, qom_split=0,
-              gdn_lazy=0, gdn_lazy_rows=0, gdn_lazy_flush=0, dn_ks=0, nw_calls=0, nw_late_calls=0, nw_writes=0, eprep=0)
+              gdn_lazy=0, gdn_lazy_rows=0, gdn_lazy_flush=0, dn_ks=0, nw_calls=0, nw_late_calls=0, nw_writes=0, eprep=0, gdn_tg=0, sb_first=0, ple_late=0, ple_late_stale=0, commit_sub=0)
 QCNT_1C = None                                       # Fri 11-06: a list -> each one-call's post-drop work (see the notes)
 NW_ON = False                                        # NEVER-WAIT (Fri 11-06): runtime switch, read per one-call (armed by
 NWCNT = None                                         # CFG["neverwait"]); NWCNT: a list -> per one-call float32 counters
@@ -1654,6 +1658,50 @@ def _hc_write(hyper, block_out, inject):
         _CARRY[0] = (y, hyper, block_out, inject)
     return y
 
+_IN_COMMIT = [False]                                   # PLAN 220 seams (d) / (e): inside MTPLX's commit
+_PLE_DEFER = [None]                                    # (d): a forward's deferred PLE stage (the embedding, its args)
+_CSUB = []                                             # (e): the commit's replayed GDN states not sent yet
+
+def _dec_call(self_, x, *a, **k):
+    """PLAN 220 seams (b) / (d) (CFG sb_first / ple_late; installed only when one is on). At the PLE-carrying layer
+    (layer 1 here; the only DecoderLayer with .ple) of a 5-16-row pass outside the commit: (b) layer 0's output goes to
+    the GPU first (mx.async_eval: MTPLX's cadence sends after layer 1 with SB 2), so the GPU works while Python stages
+    and builds; (d) the PLE rows MTPLX's _forward deferred are staged now, with the same inputs and the same history
+    (layer 0 does not touch layer 1's cache), so the same values. Scheduling only: bitwise."""
+    if _ON[0] and getattr(self_, "ple", None) is not None and not _IN_COMMIT[0] and 5 <= x.shape[1] <= 16:
+        if CFG["sb_first"]:
+            mx.async_eval(x)
+            COUNTS["sb_first"] += 1
+        if _PLE_DEFER[0] is not None:
+            emb_, args_ = _PLE_DEFER[0]
+            _PLE_DEFER[0] = None
+            _ORIG["ple_stage"](emb_, *args_)
+            COUNTS["ple_late"] += 1
+    return _ORIG["dec_call"](self_, x, *a, **k)
+
+def _ple_stage(self_, input_ids, cache, state_idx):
+    """PLAN 220 seam (d): MTPLX's _forward stages the PLE rows before layer 0's graph (memmap gathers + a page-touch
+    pool: GPU idle); a 5-16-row pass outside the commit defers it to the PLE layer's call (_dec_call)"""
+    if _PLE_DEFER[0] is not None:                      # a deferral its forward never consumed: drop it (that forward took
+        _PLE_DEFER[0] = None                           # MTPLX's exact graph path for the rows)
+        COUNTS["ple_late_stale"] += 1
+    if _ON[0] and CFG["ple_late"] and not _IN_COMMIT[0] and 5 <= input_ids.shape[1] <= 16:
+        _PLE_DEFER[0] = (self_, (input_ids, cache, state_idx))
+        return None
+    return _ORIG["ple_stage"](self_, input_ids, cache, state_idx)
+
+def _gdu(*a, **k):
+    """PLAN 220 seam (e): mlx_lm's gated_delta_update; inside the commit, every CFG commit_sub replays' new states are
+    sent to the GPU (mx.async_eval) while Python builds the rest. Scheduling only: bitwise."""
+    out = _ORIG["gdu"](*a, **k)
+    if _IN_COMMIT[0] and CFG["commit_sub"]:
+        _CSUB.append(out[1])
+        if len(_CSUB) >= CFG["commit_sub"]:
+            mx.async_eval(*_CSUB)
+            _CSUB.clear()
+            COUNTS["commit_sub"] += 1
+    return out
+
 def _commit(self, cache, snapshot_states, *, keep_tokens, verified_tokens):
     """R-40 STEP 3t: the commit's lone PLE-layer replay must run in the verify forward's phase. MTPLX's attention_gate
     (the PLE gate) and GatedResidual's inject lower sigmoid differently in decode_verify (the compiled fused form) than
@@ -1664,15 +1712,35 @@ def _commit(self, cache, snapshot_states, *, keep_tokens, verified_tokens):
         any(isinstance(p, (list, tuple)) and len(p) == 3 for p in (snapshot_states or ()))
     if lazy:                                           # LAZY COMMIT (off: no entry is ever in the 3-leaf form)
         snapshot_states, wins = _lz_commit_pre(self, cache, snapshot_states, int(verified_tokens))
-    if not _ON[0] or not CFG["commit_phase"]:
-        ok = _ORIG["commit"](self, cache, snapshot_states, keep_tokens=keep_tokens, verified_tokens=verified_tokens)
-    else:
-        from mtplx.attention_context import attention_phase, model_forward_kind
-        with attention_phase("decode_verify"), model_forward_kind("target_verify"):
+    _IN_COMMIT[0] = True                               # PLAN 220 seams (d) / (e)
+    try:
+        if not _ON[0] or not CFG["commit_phase"]:
             ok = _ORIG["commit"](self, cache, snapshot_states, keep_tokens=keep_tokens, verified_tokens=verified_tokens)
+        else:
+            from mtplx.attention_context import attention_phase, model_forward_kind
+            with attention_phase("decode_verify"), model_forward_kind("target_verify"):
+                ok = _ORIG["commit"](self, cache, snapshot_states, keep_tokens=keep_tokens, verified_tokens=verified_tokens)
+    finally:
+        _IN_COMMIT[0] = False
+        if _CSUB:                                      # (e): the last group goes with the caller's own submit
+            _CSUB.clear()
     if lazy:
         _lz_commit_post(cache, wins, ok, int(keep_tokens), int(verified_tokens))
     return ok
+
+def _gdk(q, k, v, g, beta, state, mask=None):
+    """PLAN 220 1a (CFG gdn_tg / REF2_GDN_TG=1, installed only then): mlx_lm's gated_delta_kernel for 1-16 rows as
+    gdn_step_r's TG 2 form (every row's inputs in threadgroup memory first, 2 dv rows per simdgroup, one kernel per T).
+    Bitwise == mlx_lm's kernel (y and state) on every T 1-16 at the engine's shapes (gdn_step_r.check_tg_all: 48 / 48);
+    -9 % per 16-row call in a chain (61.9 vs 68.3 us; ~-0.23 ms per check). A mask, T > 16, a vector g or other dtypes
+    take mlx_lm's own kernel. COUNTS gdn_tg."""
+    if (_ON[0] and CFG["gdn_tg"] and mask is None and g.ndim == 3 and 1 <= k.shape[1] <= 16 and q.dtype == mx.bfloat16
+            and k.dtype == q.dtype and v.dtype == q.dtype and beta.dtype == q.dtype and g.dtype == mx.float32
+            and state.dtype == mx.float32 and tuple(k.shape[2:]) == (16, 128) and tuple(v.shape[2:]) == (48, 128)):
+        import gdn_step_r
+        COUNTS["gdn_tg"] += 1
+        return gdn_step_r.kernel_tg(q, k, v, g, beta, state, R=2)
+    return _ORIG["gdk"](q, k, v, g, beta, state, mask)
 
 def apply():
     """install the patches (idempotent) and switch them on"""
@@ -1705,6 +1773,22 @@ def apply():
         Q.QSAIndexer._prepare_kernel_supported = _idx_prep_ok
         _ORIG["hc_write"] = Q._hyper_residual_write                # R-73: CFG hc_write (exact-safe, off by default)
         Q._hyper_residual_write = _hc_write
+        if CFG["sb_first"] or CFG["ple_late"]:         # PLAN 220 seams (b) / (d): only when switched on
+            _ORIG["dec_call"] = Q.DecoderLayer.__call__
+            Q.DecoderLayer.__call__ = _dec_call
+        if CFG["ple_late"]:
+            _ORIG["ple_stage"] = Q.NGramEmbedding.stage
+            Q.NGramEmbedding.stage = _ple_stage
+        if CFG["commit_sub"]:                          # PLAN 220 seam (e)
+            import mlx_lm.models.gated_delta as _GDU
+            _ORIG["gdu"] = _GDU.gated_delta_update
+            _GDU.gated_delta_update = _gdu
+        if CFG["gdn_tg"]:                              # PLAN 220 1a: only when switched on (the default path untouched)
+            import mlx_lm.models.gated_delta as _GD
+            import gdn_step_r as _GSR
+            _ORIG["gdk"] = _GD.gated_delta_kernel
+            _GD.gated_delta_kernel = _gdk
+            _GSR.precompile_tg()                       # T 1-16 built now, not inside the first checks
         try:                                           # BIGMOE_SORT_VERIFY=1's verify-width path, if BigMoE is loaded
             import bigmoe.stream as BS
             _ORIG["swsorted"] = BS._switch_sorted

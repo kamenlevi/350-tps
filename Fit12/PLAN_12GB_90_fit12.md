@@ -224,3 +224,15 @@ rule: tokens per check, time per check from the table above, and divergences vs 
   check 0 runs ~500 ms over the later same-mode checks when it goes to pass 2 / exact, 3.6 s in all = 4.7 % of decode, so
   W <= +4.9 % whole decode; tokens W = B expected. On the verified-greedy loop (ex16) the same excess is 2.0 % of decode.
   Starts once /Users/kamen/Fit12/data/scr/wab/GO exists (after the usage hold) and 10 minutes are clear.
+
+## WIRED A/B RESULT (Sat 7 Nov 15:5x; wab.sh ran 15:49:51-15:55:07 under a quiet lock, rc 0, swap flat, no PAUSE; GO 14:01)
+- t80ck1u W (F12_WIRED=1: mx.set_wired_limit(55.66 GB), was 0) then B, each alone in its own process, 16 HumanEval, cap 256:
+  whole decode W 46.34 vs B 46.16 geometric mean (W / B x1.0039 per prompt), pooled 44.34 vs 44.21; full-period 49.18 vs 49.12
+  (x1.0013); end to end 24.33 vs 24.58 (x0.990: W's prefill 60.87 vs 59.25 s, +2.7 %, W ran first); lifetime 11.242 vs
+  11.244 GB; tokens W = B on 16 / 16 (= c1u16 too: three runs, one output).
+- Check 0 unchanged: the excess over later same-mode checks is 3.64 s (W) vs 3.82 s (B) = 4.7 % vs 4.9 % of decode; per
+  prompt 850 / 861, 888 / 914, 899 / 925, 896 / 912, 865 / 887, 815 / 833, 627 / 659 ms when check 0 goes exact.
+- VERDICT: KILL at 12 GB (no gain). The 12 GB first-check excess is not IOGPU un-wiring (Leap's 45 GB cause). It looks like
+  the first exact pass after prefill filling ranks 2-9 into cold pools (an expert-cache warm-up). Open lever, not routed:
+  prefetch the first check's ranks 2-9 during the prefill's tail (<= ~4.9 % whole decode [P]).
+- Findings note: /Users/kamen/FableGod/findings/2026-11-07_1555_12gb-wired-limit-null.md. Data /Users/kamen/Fit12/data/scr/wab.

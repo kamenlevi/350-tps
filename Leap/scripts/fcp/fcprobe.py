@@ -28,7 +28,10 @@ HZ = float(os.environ.get("FCP_HZ", "1000"))
 NOCLEAR = os.environ.get("FCP_NOCLEAR") == "1"
 WIRED = os.environ.get("FCP_WIRED") == "1"
 COMMIT = os.environ.get("FCP_COMMIT") == "1"   # PLAN 220: split each commit (ref2 lazy pre / MTPLX commit + the PLE forward / post)
-CSYNC = os.environ.get("FCP_CSYNC") == "1"     # + an eval of the cache states right after it: the commit's GPU time
+CSYNC = os.environ.get("FCP_CSYNC") == "1"
+SEAMS = os.environ.get("FCP_SEAMS") == "1"     # PLAN 220 (4): every eval / async_eval + the cycle marks, for the GPU-idle seams
+SEAM_RUN0 = int(os.environ.get("FCP_SEAM_RUN0", "3"))
+SEAMREC, MARKS = [], []     # + an eval of the cache states right after it: the commit's GPU time
 CREC = []   # the fix candidate: MLX's residency set (mx.set_wired_limit) keeps buffers wired
 S = {"on": False, "run": -1, "chk": -1, "phase": None, "wrapped2": False, "cur": None, "mtl": []}
 REC, CALLS, SAMP = [], [], []
@@ -123,6 +126,12 @@ def _caller(depth=2):
 
 def _wrap(kind, fn):
     def w(*a, **k):
+        if SEAMS and S["run"] >= SEAM_RUN0 and kind in ("mx.eval", "mx.async_eval"):
+            t0 = time.perf_counter()
+            try:
+                return fn(*a, **k)
+            finally:
+                SEAMREC.append((kind, t0, time.perf_counter(), _caller(), S["run"], S["chk"]))
         if not S["on"]:
             return fn(*a, **k)
         t0, c0 = time.perf_counter(), time.thread_time()
@@ -140,7 +149,7 @@ def _sampler():
     dt = 1.0 / HZ
     while True:
         time.sleep(dt)
-        if not S["on"]:
+        if not S["on"] and not (SEAMS and S["run"] >= SEAM_RUN0):
             continue
         f = sys._current_frames().get(main)
         key = []
@@ -244,9 +253,13 @@ def install():
 
 
 def mark(kind, chk=None):
-    """c1: check `chk` starts (chk 0 = a new prompt); cb: graph built; ce: eval done."""
+    """c1: check `chk` starts (chk 0 = a new prompt); cb: graph built; ce: eval done; c0 / c2: cycle start / commit sent."""
     if not S["wrapped2"]:
         _wrap_late()
+    if SEAMS:
+        MARKS.append((kind, time.perf_counter(), S["run"] + (1 if kind == "c1" and chk == 0 else 0), chk if kind == "c1" else S["chk"]))
+    if kind in ("c0", "c2", "rb0", "rb1"):
+        return
     if kind == "c1":
         if chk == 0:
             S["run"] += 1
@@ -272,6 +285,12 @@ def mark(kind, chk=None):
 def dump():
     os.makedirs(OUT, exist_ok=True)
     p = os.path.join(OUT, f"{TAG}_fcp.json")
-    json.dump(dict(rec=REC, calls=CALLS, samp=SAMP, noclear=NOCLEAR, crec=CREC, csync=CSYNC), open(p + ".tmp", "w"))
+    json.dump(dict(rec=REC, calls=CALLS, samp=SAMP, noclear=NOCLEAR, crec=CREC, csync=CSYNC, seams=SEAMREC, marks=MARKS), open(p + ".tmp", "w"))
     os.replace(p + ".tmp", p)
     print(f"[fcp] {len(REC)} check windows, {len(CALLS)} calls, {len(SAMP)} samples -> {p}", flush=True)
+    r2 = sys.modules.get("ref2")
+    if r2 is not None:
+        print(f"[fcp] ref2 COUNTS seams: sb_first {r2.COUNTS.get('sb_first')}, ple_late {r2.COUNTS.get('ple_late')}, "
+              f"ple_late_stale {r2.COUNTS.get('ple_late_stale')}, commit_sub {r2.COUNTS.get('commit_sub')}", flush=True)
+        print(f"[fcp] ref2 COUNTS: gdn_tg {r2.COUNTS.get('gdn_tg')}, eprep {r2.COUNTS.get('eprep')}, ooo_1c {r2.COUNTS.get('ooo_1c')}, "
+              f"ooo_1c_qom {r2.COUNTS.get('ooo_1c_qom')}; CFG gdn_tg {r2.CFG.get('gdn_tg')}, eprep {r2.CFG.get('eprep')}", flush=True)

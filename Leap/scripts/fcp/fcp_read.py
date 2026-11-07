@@ -120,7 +120,12 @@ for pr in os.environ.get("FCP_PAIRS", "").split():          # bitwise: each chec
         continue
     ks = [k for k in A if k in B]
     lh = [bool(A[k].get("lh")) and A[k].get("lh") == B[k].get("lh") for k in ks]
-    tok = [A[k].get("out") == B[k].get("out") for k in ks]
+    try:                                                     # tokens from <arm>_tokens.json (runs.json has no tokens:
+        TA = json.load(open(f"{D}/r57/{a}_tokens.json"))     # Sat 15:1x fix: the earlier .get("out") compared None to None)
+        TB = json.load(open(f"{D}/r57/{b}_tokens.json"))
+        tok = [k in TA and k in TB and TA[k] == TB[k] for k in ks]
+    except (OSError, ValueError):
+        tok = [False for _ in ks]
     print(f"pair {a} vs {b}: logits hash equal on every check in {sum(lh)} of {len(ks)} prompts "
           f"({sum(len(A[k].get('lh') or []) for k in ks)} checks); tokens equal in {sum(tok)} of {len(ks)}")
 
