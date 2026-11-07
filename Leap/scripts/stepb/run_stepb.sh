@@ -56,6 +56,10 @@ for arm in $ARMS; do
   while kill -0 $jp 2>/dev/null; do
     sleep 5
     if [ $(( $(swap_mb) - SW0 )) -gt 2048 ]; then say "SWAP GUARD: stopping $tag"; T=$(tree $jp); kill $T 2>/dev/null; sleep 20; kill -9 $T 2>/dev/null; break; fi
+    if [ -n "$STEPB_RSS_MAX_GB" ]; then                  # S2c 1d (BigMoE's guard 1): the arm's resident size over the line
+      r_=$(ps -o rss= -p "$(tree $jp | paste -sd, -)" 2>/dev/null | awk '{s += $1} END {printf "%d", s / 1048576}')
+      if [ "${r_:-0}" -gt "$STEPB_RSS_MAX_GB" ]; then say "RSS GUARD: ${r_} GB > $STEPB_RSS_MAX_GB GB: stopping $tag"; T=$(tree $jp); kill $T 2>/dev/null; sleep 20; kill -9 $T 2>/dev/null; break; fi
+    fi
   done
   wait $jp; rc=$?
   say "done $tag rc=$rc: $(grep -h -E 'FLAT-2 VERDICT|step B calibration' "$OUT/${tag}_screen.txt" 2>/dev/null | cut -c1-160 | tr '\n' ' ')"

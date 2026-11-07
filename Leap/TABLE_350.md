@@ -8912,3 +8912,137 @@ NewIdeas' line: an arm names the cause if its moe_pre live - replay falls by >= 
 - Next (step 1c): arms STEPB_QOS=1 (the decode thread at QOS user-interactive; pthread_set_qos_class_self_np, tested rc
   0) and BIGMOE_IDLE_MS=0.5 (the loader naps when idle), and both.
 - Data: data/stepb/gap_s2c.txt, out/stepb_bstackF_224_s2c_{base,ka0,vt0}*.
+
+## S2c STEP 1c: core placement (Leap, Sat 2026-11-07 01:09-01:13, quiet; no PAUSE, die max 67-77 C, fans 6500)
+Same probe as step 1b (real check 6, live synced per piece vs replay, thread CPU), C 224, SB 2. One process per arm.
+
+| arm | live - replay total (ms) | moe_pre | thread CPU live - replay (forward) | experts live - replay | real pass 2 check+commit |
+|---|---|---|---|---|---|
+| base | +10.77 | +5.67 | +5.58 | +1.70 | 63.58 |
+| STEPB_QOS=1 (decode thread QOS user-interactive) | +9.34 | +5.51 | +5.18 | +1.73 | 62.79 |
+| BIGMOE_IDLE_MS=0.5 (loader naps when idle) | +9.43 | +5.28 | +4.25 | +1.48 | **77.62** (pickup latency) |
+| both | +11.84 | +5.71 | +7.36 | +1.94 | 66.55 |
+
+- **No arm names the cause** (none falls by >= 4 ms). Ruled out:
+  - core placement via QOS;
+  - the loader's spin (and IDLE_MS slows the loop: not a fix);
+  - the keepalive and the tier copies (step 1b arms);
+  - look-ahead prefetch (off under gate+t);
+  - a host readback in the gated path (lazy post / spin).
+- Next suspect: MLX's buffer cache, which BigMoE's stream.py:486 caps at 1 GB (BIGMOE_MLX_CACHE_MB, default 1024).
+  - A live check after the drafter and the commit may allocate fresh Metal buffers (more CPU, plus waits in the
+    encode); the replay right after reuses the buffers the live check freed.
+  - Arm: BIGMOE_MLX_CACHE_MB=6144 vs base.
+- Data: data/stepb/gap_s2d.txt, out/stepb_bstackF_224_s2d_{base,qos,idle,qi}*.
+
+## S2c STEP 1d: MLX's buffer cache (Leap, Sat 2026-11-07 01:17-01:20, quiet; no PAUSE, die max <= 77 C)
+Same probe, C 224, SB 2. Arms set BIGMOE_MLX_CACHE_MB (BigMoE's stream.py:486 caps MLX's buffer cache at 1 GB). Guards:
+RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
+
+| arm | live - replay total (ms) | moe_pre | lifetime peak footprint | MLX cache, live (GB) | MLX peak, live / replay (GB) |
+|---|---|---|---|---|---|
+| 1 GB (base) | +10.37 | +5.61 | 39.3 GB | 0.978 -> 0.831 | 36.71 / 36.59 |
+| 3 GB | +11.24 | +5.74 | 39.7 GB | 0.959 -> 0.812 | 36.71 / 36.59 |
+| 5 GB | +8.75 | +5.54 | 39.7 GB | 0.959 -> 0.811 | 36.71 / 36.59 |
+
+- **Not the cause.** The cache stays under 1 GB in every arm, live and replay, so the cap never binds. The live check
+  moves ~0.15 GB cache -> active; its MLX peak is only 0.12 GB above the replay's.
+- **S2c, all measured tonight:**
+  - Out: look-ahead prefetch, gate readback, keepalive, tier copies, QOS user-interactive, loader nap, MLX cache size.
+  - What stands: the live check is ~+10 ms vs its own block replayed right after (synced; 6 runs). moe_pre is +5.6
+    (uniform +0.12 ms per layer: ~0.03 CPU + ~0.09 wait), and the Python thread spends ~+20 % CPU on identical code
+    in every piece.
+  - Verdict: BETWEEN (location named, mechanism not).
+  - Optional last test: replay the block right before the live check, to decide "first forward after the draft"
+    against "live-only".
+- Data: data/stepb/gap_s2e.txt, out/stepb_bstackF_224_s2e_{base,c3g,c5g}*.
+
+## S2c STEP 1e: KEEP REF2's CACHES ACROSS THE LOOP's PER-CYCLE remove() -- PASS (Leap, Sat 2026-11-07 01:24-01:26, quiet)
+**The in-loop excess is named and fixed.**
+- **Mechanism.** r57's loop calls ref2.remove() at every cycle start (the drafter runs without REF2) and ref2.apply()
+  before every check. remove() cleared REF2's per-weight caches: _SN (SMALL-N padded native copies), _DN, _HC8 (HC8
+  parameter views). So every live check rebuilt them on first use. That means a pad plus _dn_repack (MLX ops on the
+  GPU) for every SMALL-N weight, plus the Python rebuilds:
+  - the shared expert's gate|up / gate in all 48 layers: the uniform +0.12 ms per layer in moe_pre;
+  - GDN b|a (36 layers) and attention k / v (12 layers);
+  - the HC8 views.
+  The replay right after found them warm.
+- **Arm.** STEPB_KEEP_REF2C=1, a harness patch: the loop's remove() only switches REF2 off (_ON) and drops the D5
+  carry. The caches are identity-validated (e[0] is w), so the same arrays come back: the same bits by construction.
+- **Result.** C 224, SB 2, stack env; one process per arm; no PAUSE, die max 75.5 C.
+
+| | base | keep |
+|---|---|---|
+| live - replay total, synced (ms) | +9.39 (64.49 / 55.10) | **+0.48** (54.76 / 54.28) |
+| moe_pre / GDN / attention / experts, live - replay | +5.41 / +1.64 / +0.77 / +1.73 | -0.05 / +0.01 / +0.26 / +0.42 |
+| thread CPU, live - replay (forward) | +4.65 | +0.48 |
+| **real loop check+commit, unsynced (passes 2 / 3 / commit)** | 62.11 / 59.08 / 58.38 | **54.90 / 51.66 / 50.37** |
+| draft (ms) | 7.55 / 7.65 / 7.47 | 7.39 / 7.48 / 7.20 |
+| lifetime peak footprint | 38.6 GB | 39.4 GB (within tonight's 38.6-39.7 spread) |
+
+  - **-7.2 / -7.4 / -8.0 ms per 16-row check** in the unsynced loop. Cycle ~66-70 -> ~58-62 ms: ~+11-14 % tok/s on
+    HumanEval/68 at C 224.
+  - The pre-registered line (a fall of >= 7 ms in live - replay) is met: the fall is 8.9 ms. The replay's own time
+    doesn't move.
+- **Fix installed in live ref2 (01:3x), OFF by default:** REF2_KEEP_CACHES=1 / CFG["keep_caches"].
+  - remove() then sets _ON off and drops the D5 carry, keeping _DN / _SN / _HC8.
+  - ref2 dcd5f4f8 -> ddbc0621, atomic; backup data/keepc/ref2_before.py.
+  - self_test PASS. With the switch off, remove() clears as before; with it on, it keeps the caches (checked).
+- **Next:**
+  - BigMoE's engine A/B at C 256 vs stackb+S2 (NewIdeas: PASS >= +4 %, KILL < +1.5 %, lifetime peak <= 45.0 GB).
+  - The EXACT bitwise token check (NAX6-N, a few prompts, keep on vs off).
+  - An equivalent r57-side form: toggle ref2._ON instead of remove() / apply() per cycle.
+- **Data:** data/stepb/gap_s2f.txt, out/stepb_bstackF_224_s2f_{base,keep}*.
+
+## S2b f: THE TWO FOLDS, chained (Leap, Sat 2026-11-07 01:28, quiet; scripts/fold_bench.py)
+- Real shapes, 16 rows, 4-bit g64 native packs. DN-KS v1's ks per shape: qkv|z 16384 and q 12288 at ks 1, b|a 96 and
+  k / v 512 at ks 10.
+- Method: a dependent chain over distinct weight copies. Each layer's input depends on every output of the layer
+  before, so the unfolded calls of one layer stay independent of each other, as in situ. Round-robin, 7 rounds.
+
+| fold | unfolded per layer | folded per layer | saving per check | vs price | verdict |
+|---|---|---|---|---|---|
+| GDN: b\|a into qkv\|z (N 16384 + 96 + 32 pad = 16512, ks 1) | 124.0 us | 115.4 us | -0.31 ms (36 layers) | 1.6: 19 % | **KILL** |
+| attention: k\|v into q (N 12288 + 512 + 512 = 13312, ks 1) | 105.1 us | 79.2 us | -0.31 ms (12 layers) | 1.1: 28 % | **BETWEEN** |
+
+- Bits: each fold's rows == the unfolded calls at the same ks (bitwise, all segments). Against today's ks 10 for the
+  small calls, the max rel diff is 0 (b|a) and 1.1e-7 / 3.0e-8 (k / v). So a fold moves those rows to ks 1, the stock
+  K order.
+- Why so small: in the chain the small call already overlaps the big one. The unfolded GDN pair costs 124 us vs ~113 + 45
+  run alone.
+- Note: the fold's 32 all-zero pad rows did NOT come out as exact zeros after MLX quantize + repack. They are sliced
+  off, so this is harmless, but R-68's "a zero pack row gives exactly 0" doesn't hold for rows quantized from zeros by
+  MLX.
+- S2b now: a KILL, c KILL, a' (D5) no gain, f = GDN KILL / attention BETWEEN (-0.31 ms), e (eprep) priced ~0.4 ms
+  [P]. S2b is small; tonight's large lever is S2c's REF2_KEEP_CACHES (-7.2..-8.0 ms per check).
+- Data: data/fold_bench.txt.
+
+## CYCLE AUDIT for KEEP's bug class + the commit replay (Leap, Sat 2026-11-07 01:3x, CPU only; NewIdeas' ask)
+- **No other per-cycle rebuilds found.**
+  - ref2's other caches (_WCAT, _DNR, _SH, _NATIVE_FLAGS) are never cleared by remove().
+  - Leap's kernel modules (hc8r, qmm16c8, chain_fused, router_fused, glue_fused) keep lru_caches only.
+  - draft_fused clears its forms / masks only on uninstall. Its drafter attention mask is keyed by the growing context,
+    so it builds and evaluates one new mask per cycle (~0.1-0.3 ms).
+  - leapk's ".clear()" is a tile clear inside kernel source.
+- **One mergeable sync (r57).** Under FAST rules, mx.eval(dl_, rk_) (target log-prob gap and rank of each draft) is a
+  second host round trip right after mx.eval(am, tp). Building them first and evaluating all four together saves
+  ~0.13-0.2 ms per cycle, same bits.
+  - The QOM-counter readbacks after the commit run only when counters exist. The measured cycle tail is ~0, so they
+    don't wait on the commit.
+- **The commit is bimodal exactly by partial acceptance.** The real commit pass (keep arm), commit ms per check against
+  kept / verified rows:
+
+  | check | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
+  |---|---|---|---|---|---|---|---|---|---|---|---|---|
+  | kept / rows | 13/16 | 15/15 | 13/16 | 16/16 | 12/12 | 16/16 | 14/15 | 14/14 | 16/16 | 16/16 | 12/13 | 16/16 |
+  | commit (ms) | 4.8 | 0.4 | 4.6 | 0.4 | 0.4 | 0.4 | 4.7 | 0.4 | 0.4 | 0.2 | 3.9 | 0.4 |
+
+  So kept < rows costs 3.9-4.8 ms, and a full accept ~0.4 (MTPLX returns early).
+  - On a partial accept, MTPLX's commit_verified_window replays 35 separate gated_delta_update calls over the kept rows
+    from the pre-verify state (~92 us each at 16 rows, ~3.2 ms), plus the PLE-carrying layer's FULL forward over the
+    kept rows, experts included. All lazy: r57 submits it with async_eval right after the check.
+  - With the GPU ~96 % busy it adds nearly fully to the cycle: ~1.5 ms per cycle on HumanEval/68 (1/3 partial), more
+    on lower-acceptance prompts. KEEP doesn't change it.
+  - Exact lever (kernel work, after the freeze): the verify pass checkpoints each GDN state at rows 8 and 12 (~140 MB of
+    extra writes per check), and the commit replays <= 4 rows from the nearest checkpoint. Same arithmetic, so
+    bitwise-safe. Price ~1-3 ms per cycle by the partial-check share. Intermediate: one dispatch for the 35 replays.

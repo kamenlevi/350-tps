@@ -42,6 +42,9 @@
 # S67_KEEPLOCK=1 (Fri 2026-11-06 23:4x, nw3_first.sh): keep the share lock from one arm to the next (the next arm's lock
 # renews it), so another session's runner cannot start in the few seconds between arms; it is released whenever the runner
 # waits (a guard, no arm to pick, a lock not granted), after a stopped arm and when the batch is over. Unset: as before.
+# S67_STOP_EXIT=1 (Sat 2026-11-07 01:3x, nw3_first.sh re-keyed): end the batch after a stopped arm, and whenever a guard would
+# make it wait, instead of waiting and retrying, so the caller claims the next gap itself (a retry here raced EvalSuite's
+# runner 49 at the end of BigMoE's quiet ticket, 01:29). Unset: as before.
 DM=~/FableGod/decision_map; PY=~/BigMoE/.venv/bin/python; LOG=~/Breakthrough/data/s67_slot.log; Q=$HOME/.local/share/quiet
 ARMS="qom_0_live_ball_c147_t3 s7_ref s7_ref3 s7_cal s7_cal_all q1u_0.9_live_bonus9g qom_0.5_live_bonus5g s7_trl"   # DENSE-3 off tonight (the orchestrator 19:5x)
 D3=qom_0_live_ball_c147_t3+dense3; D3SHA=ec71be4478bc606f   # Leap's dense3.py as smoked (17:00)
@@ -146,6 +149,7 @@ while :; do
   w=$(why_not)
   if [ -n "$w" ]; then
     [ -n "$HELD" ] && { peer unlock >> $LOG 2>&1; HELD=; say "lock released (waiting)"; }
+    [ -n "$S67_STOP_EXIT" ] && { say "S67_STOP_EXIT: the batch ends instead of waiting ($w); its caller claims the next gap"; break; }
     need=3; [ "$w" != "$last" ] && say "waiting: $w"; last=$w; sleep 10; continue; fi
   need=$((need - 1)); [ $need -gt 0 ] && { sleep 10; continue; }
   last=; runs=$((runs + 1)); [ $runs -gt ${S67_MAXRUNS:-40} ] && { say "${S67_MAXRUNS:-40} runs used; left: $(todo)"; break; }   # Fri 04:0x: was 14, which ended Friday's 20-arm list at 03:45 with 8 arms left
@@ -172,6 +176,7 @@ while :; do
   if [ -n "$S67_KEEPLOCK" ] && [ -z "$stopped" ]; then HELD=1; else peer unlock >> $LOG 2>&1; HELD=; fi
   if [ -n "$stopped" ]; then need=3; say "stopped $PICK for: $stopped"; else need=1; fi
   say "$PICK ended (rc $rc, $([ "$(nwin $PICK)" = "$(expect $PICK)" ] && echo "done, $(expect $PICK) windows" || echo 'NOT done')); left: $(todo); $([ -n "$HELD" ] && echo "lock kept for the next arm" || echo unlocked)"
+  [ -n "$stopped" ] && [ -n "$S67_STOP_EXIT" ] && { say "S67_STOP_EXIT: the batch ends after a stopped arm (its caller claims the next gap)"; break; }
   [ $(date +%s) -ge $DEADLINE ] && break
 done
 [ -n "$HELD" ] && { peer unlock >> $LOG 2>&1; HELD=; say "lock released (batch over)"; }

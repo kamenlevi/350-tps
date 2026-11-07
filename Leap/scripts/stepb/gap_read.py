@@ -103,6 +103,12 @@ def main(argv):
                             parts.append(f"block {p_}: wall {med([d_['wall'][i] for i in ii[1:]]):.2f} (build "
                                          f"{med([d_['build'][i] for i in ii[1:]]):.2f}), misses {sum(d_['miss'][i] for i in ii):.0f}")
                         print(f"      {lab:5s} ({len(d_['wall'])} forwards; the first per block dropped): " + "; ".join(parts))
+                    mm = s2.get("mem") or {}             # S2c 1d: MLX's memory around the live check and the replay (GB)
+                    for nm_ in ("live", "rep"):
+                        q_ = mm.get(nm_) or {}
+                        if q_:
+                            print(f"      MLX memory, {nm_:4s}: active {q_.get('active0', float('nan')):.2f} -> {q_.get('active1', float('nan')):.2f}, "
+                                  f"cache {q_.get('cache0', float('nan')):.3f} -> {q_.get('cache1', float('nan')):.3f}, peak {q_.get('peak', float('nan')):.2f} GB")
                     if s2.get("live_seg") and s2.get("replay_seg"):   # step 1b: the live check vs its block replayed, per piece
                         sync = d["meta"].get("sync_ms", 0.13)
 

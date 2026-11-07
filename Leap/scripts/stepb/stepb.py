@@ -35,7 +35,13 @@ _r2 = [m.start() for m in re.finditer(r"(?m)^import ref2\b.*$", F2_GEN)]
 assert len(_r2) >= 1, "step B: no 'import ref2' at column 0 in the harness"
 _eol2 = F2_GEN.index("\n", _r2[0])
 F2_GEN = F2_GEN[:_eol2 + 1] + ("if os.environ.get('STEPB_ATT_SINGLE') == '1':   # Leap step B: R-62's single-call SDPA (FAST)\n"
-                               "    ref2.CFG['att_single'] = True\n") + F2_GEN[_eol2 + 1:]
+                               "    ref2.CFG['att_single'] = True\n"
+                               "if os.environ.get('STEPB_KEEP_REF2C') == '1':   # Leap S2c 1e: the loop's per-cycle ref2.remove()\n"
+                               "    def _soft_remove(_r=ref2):                  # switches REF2 off but keeps its per-weight caches\n"
+                               "        _r._ON[0] = False                       # (_DN / _SN / _HC8: identity-validated, so the same bits)\n"
+                               "        _r._CARRY[0] = None\n"
+                               "    ref2.remove = _soft_remove\n"
+                               "    print('[stepb] STEPB_KEEP_REF2C: ref2.remove() keeps _DN / _SN / _HC8', flush=True)\n") + F2_GEN[_eol2 + 1:]
 _sb = "(4 if SB_LO <= int(rows) <= 16 else 0)"            # r57's SB cadence (MTPLX's mid-loop async_eval every 4 layers)
 assert F2_GEN.count(_sb) == 1, f"step B: r57's SB cadence expression found {F2_GEN.count(_sb)} times"
 F2_GEN = F2_GEN.replace(_sb, "(STEPB_SBN[0] if SB_LO <= int(rows) <= 16 else 0)")

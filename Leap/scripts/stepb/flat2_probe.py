@@ -194,6 +194,9 @@ class Hooks:
         self.full = dict(dr=list(L["dr"]), fk=L.get("fk_"), sq=L.get("sq_"), cg=list(L["cg_"]) if gated else None,
                          c16=L.get("c16"), R_=L.get("R_", 16))
         if S2C and getattr(self, "real_pass", False) and not L.get("mtp"):   # S2c step 1b: the LIVE check synced per piece (the same
+            mx_ = self.ns["mx"]                                  # S2c 1d: MLX's memory around the live check (GB)
+            self.mem_live = dict(active0=mx_.get_active_memory() / 1e9, cache0=mx_.get_cache_memory() / 1e9)
+            mx_.reset_peak_memory()
             self._live_saved = self._seg_install()               # wrappers as the probe's synced replay of its block)
             self.SEG["rec"] = []
             self.SEG["on"] = True
@@ -205,6 +208,9 @@ class Hooks:
             self._live_saved = None
             self.live_seg = [list(x) for x in self.SEG["rec"]]
             self.live_cpu = [list(x) for x in self.SEG.get("cpu", [])]
+            mx_ = self.ns["mx"]
+            (getattr(self, "mem_live", None) or {}).update(active1=mx_.get_active_memory() / 1e9, cache1=mx_.get_cache_memory() / 1e9,
+                                                          peak=mx_.get_peak_memory() / 1e9)
             self.SEG["rec"] = []
         n = len(L["kept"]) + 1                           # this check, 1-based
         if self.mode == "probe" and n in self.at and not L.get("mtp"):
@@ -688,11 +694,16 @@ class Hooks:
                 live_ = getattr(self, "live_seg", None)  # alternating with the previous checks' blocks; step 1b: the
                 livec_ = getattr(self, "live_cpu", None)  # live check per piece vs its block replayed synced (+ thread CPU)
                 self.live_seg = self.live_cpu = None
+                mem_ = dict(live=getattr(self, "mem_live", None),
+                            rep=dict(active0=mx.get_active_memory() / 1e9, cache0=mx.get_cache_memory() / 1e9))
+                mx.reset_peak_memory()
                 r1_ = fwd(real, rmask, True)[1]
+                mem_["rep"].update(active1=mx.get_active_memory() / 1e9, cache1=mx.get_cache_memory() / 1e9,
+                                   peak=mx.get_peak_memory() / 1e9)
                 res["s2c"] = self._s2c_probe(fwd, real, rmask)
                 r2_ = fwd(real, rmask, True)[1]
                 res["s2c"].update(live_seg=live_, replay_seg=r1_["seg"], replay_seg2=r2_["seg"], live_cpu=livec_,
-                                  replay_cpu=r1_.get("cpu"), replay_cpu2=r2_.get("cpu"))
+                                  replay_cpu=r1_.get("cpu"), replay_cpu2=r2_.get("cpu"), mem=mem_)
                 raise _SkipRest
             if not self.dot["res"] or self.dot["rows"] != len(real):
                 self.dot.update(on=self.dot.get("done2") is None, rows=len(real))

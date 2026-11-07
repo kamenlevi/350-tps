@@ -210,6 +210,7 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "dense_native": os.environ.get("REF2_DENSE_NATIVE") == "1",
        "dense_native_nt": int(os.environ.get("REF2_DENSE_NATIVE_NT", "1")),
        "hc8_fast": os.environ.get("REF2_HC8_FAST") == "1", "hc8_np": int(os.environ.get("REF2_HC8_NP", "20")),
+       "keep_caches": os.environ.get("REF2_KEEP_CACHES") == "1",   # KEEP-C: remove() keeps _DN / _SN / _HC8 (default off)
        "hc8_v": int(os.environ.get("REF2_HC8_V", "4")),
        "ooo_1c": os.environ.get("REF2_OOO_1C") == "1", "small_native": os.environ.get("REF2_SMALL_NATIVE") == "1",
        "nax_1cq": os.environ.get("REF2_NAX_1CQ") == "1",
@@ -1721,6 +1722,9 @@ def reset_counts():
 
 def remove():
     _ON[0] = False
+    if CFG["keep_caches"]:                           # KEEP-C (Sat 11-07, Leap S2c): r57 calls remove() before every draft and
+        _CARRY[0] = None                             # apply() before every check; the per-weight caches below are
+        return                                       # identity-validated (e[0] is w), so keeping them changes no bit
     _DN.clear()                                      # DENSE-N: drop the native copies (and their weight references)
     _HC8.clear()                                     # HC8-1P: drop the cached parameter views
     _SN.clear()                                      # SMALL-N: drop the padded copies

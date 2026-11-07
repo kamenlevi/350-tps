@@ -3575,3 +3575,44 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
     2-min NW self-check (record only; nw3's control arm checks the patched path on the GPU), then T1.
   - Driver: scripts/dm_s7/nw3_first.sh. The runner now keeps its share lock between arms (S67_KEEPLOCK=1), so EvalSuite's
     runner 53 cannot start in the gap between two code arms.
+
+- Sat 01:4x: NW3 CODE AT 208 SLOTS: PASS [K] (D +0.18 vs nw1, just over the "clean" +0.15); the control is clean (D +0.06).
+  The published pool's arm was still to run (below). Read: scripts/dm_s7/nw3_read.sh -> data/nw3_code_read.txt (code_read.py).
+
+  | arm (12 code windows, 3366 rows) | all-row | non-tie | tie rows | vs nw1 at 208 slots (0.68 % [0.27]) |
+  |---|---|---|---|---|
+  | `qom_0_live_ball_c208_nw3c+code` (control) | 0.74 % (25) | 0.30 % | 30.0 % | D +0.06; only-arm / only-twin 7 / 5, z +0.58 |
+  | `qom_0_live_ball_c208_nw3+code` | 0.86 % (29) | 0.45 % | 28.0 % | D +0.18; 13 / 7, z +1.34 (non-tie 8 / 2, z +1.90) |
+
+  - nw3 against its control: 12 / 8, z +0.89 (non-tie 8 / 3, z +1.51). The control's own D is under +0.20, so the read
+    against nw1 stands. VERDICT2 PASS on both arms. No flip difference is significant (|z| < 1.96).
+  - Against the predictions [G]: code D +0.2 to +0.5 -> +0.18, at the low edge; the control within +-0.15 -> +0.06.
+  - Timeline: nw3_first.sh saw the end of runner 49's first instance at 00:54, claimed at 00:56, and ran the control and the
+    208-slot arm by 01:01 (121 s each). The published-pool arm was stopped twice by others' quiet windows (01:03, 01:30) and
+    wrote nothing (a stopped arm writes nothing).
+  - OVERLAP 01:29:09-01:30:31: that arm went in at the end of a quiet window, and runner 49's process 7 (C 224, MEM 46 GB)
+    started 4 s later. Runner 49 passes its gate (others' MEM locks, then NO-SWAP memory) BEFORE taking its share lock, and
+    retries a lock refused for a quiet window every 60 s with no new check. 82 s side by side; swap +0.37 GB (6.61 -> 6.97);
+    runner 49's process 7 ended rc 0 (same-scores, no timing). My arm stopped itself for BigMoE's quiet ticket at 01:30:31;
+    I stopped the driver at 01:31.
+  - RE-KEYED (NewIdeas 01:3x: "take the NEXT runner-49 chunk boundary instead of runner 49's end"). The claim (a share lock,
+    MEM 18 GB) goes in DURING a runner-49 process. The arm starts once runner 49's gate logs that it waits behind the claim,
+    or once runner 49 already waited behind a MEM lock and its log has not moved for 75 s, or once runner 49 is over; always
+    with NO-SWAP >= 25 GB. The s67 runner now ends after a stopped arm or a wait instead of retrying (S67_STOP_EXIT=1; unset
+    = as before), and the driver claims again (at most 6 rounds). Re-armed 01:40:14 during runner 49's process 8; at 01:40:57
+    runner 49 logged "stack fwd process 9: another session's MEM job holds a shared lock: waiting (day rule)" and the arm went.
+
+- Sat 01:4x: NW3 CODE VERDICT: PASS AT BOTH POOLS [K] (nw3 PASS on code under the pre-registered rule; clean at the published
+  pool). Sent to BigMoE and NewIdeas at once (S1's NW v3 engine A/B, final v1); BigMoE queued that A/B within minutes. Arm run
+  01:41:21-01:43:39, alone (runner 49 waited behind the lock from 01:40:57; swap flat at 6.97 GB).
+
+  | pool | arm | all-row | non-tie | D vs nw1 | McNemar vs nw1 (all-row; non-tie) | line |
+  |---|---|---|---|---|---|---|
+  | published | `qom_0_live_ball_nw3+code` | 0.71 % (24) | 0.30 % | +0.12 (nw1 0.59 % [0.18]) | 12 / 8, z +0.89; 7 / 3, z +1.26 | PASS, clean |
+  | 208 slots | `qom_0_live_ball_c208_nw3+code` | 0.86 % (29) | 0.45 % | +0.18 (nw1 0.68 % [0.27]) | 13 / 7, z +1.34; 8 / 2, z +1.90 | PASS |
+  | 208 slots | control `..._c208_nw3c+code` | 0.74 % (25) | 0.30 % | +0.06 | 7 / 5, z +0.58 | clean |
+
+  - (b) ran at its worst case (every unsure answer row's ranks 0-1 at 3 bits on time), so on code it passes at any coldness.
+  - Predictions [G]: code D +0.2 to +0.5 -> +0.12 / +0.18 (both under the range; PASS 55 % -> PASS); control +-0.15 -> +0.06.
+  - Next on record: nw3's two 36-window arms (chat: IFEval / multi VERDICT2 and D vs nw1) in map_rest.sh, after the CERT
+    reference decodes.

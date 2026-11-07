@@ -1352,7 +1352,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         if QC1C:
             q1c_.append([int(x_) for x_ in np.array(mx.stack(q1l_).sum(axis=0))] if q1l_ else [0, 0, 0, 0])
         if nwp_:                                         # [late groups, late uses, late mass, L47 drops, L47 rank-0 stalls, forced]
-            nw_.append([float(x_) for x_ in np.array(mx.stack(nwl_).sum(axis=0))] if nwl_ else [0.0] * 6)
+            nw_.append([float(x_) for x_ in np.array(mx.stack(nwl_).sum(axis=0))] if nwl_ else [0.0] * 8)   # NW v3: 8 fields (Leap dcd5f4f8)
         rows_.append(len(dr) + 1); cb_.append(disk_read_bytes() - b0_)
         ck_t.append(c2 - c1); kept.append(k + 1); wl.append(c2 - c0)
         if STALL:

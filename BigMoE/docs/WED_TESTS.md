@@ -493,3 +493,30 @@ Sat 00:4x, pre-registered): PASS >= +2 %, KILL < 0 %; tokens equal on all 12 -> 
   data/stack/stackb_s2_env.txt.
 - SESSION-VOCAB counters: chk_out 0, svh_extra 3 == dsub_extra 3; svh_calls 273 / 270 per pass.
 - New best: **stackb + S2 at C 256, 146.8 tok/s** (peak 42.8 GB), pending EvalSuite's gate.
+
+### Sat 01:3x: S2c REF2_KEEP_CACHES=1 (scripts/s2c_ab.sh, data/s2c): EXACT proof PASS + engine A/B PASS +10.2 % -> joins v1
+
+Leap's fix: ref2.remove() before each draft no longer drops REF2's per-weight caches, so checks stop re-padding and re-packing them.
+- **EXACT bitwise proof** (NAX6-N exact env = Leap's nfnc env, C 224, CAP 64): keep off vs on gives identical tokens on 3 of 3
+  prompts (HumanEval/68, /16, ifeval/1220; 64 tokens each).
+- **Engine A/B at C 256** (12 HumanEval palindrome, quiet, no freeze): stackb + S2 149.1 tok/s (148.1, 150.0) vs + KEEP 164.2
+  (161.6, 166.5) = **+10.2 % (PASS >= +4 %)**. Median cycle 75.8 -> 66.9 ms; lifetime peak 43.1 GB (<= 45.0).
+- **New best: stackb + S2 + KEEP at C 256, 164.2 tok/s, 43.1 GB** (gate: S4).
+
+### Sat 01:46-01:53: S1 NW v3 engine A/B at C 256 (scripts/s1_ab.sh, data/s1; quiet, no freeze): PASS +9.0 % -> joins v1
+
+Base B = v1 candidate stackb + S2 + KEEP; NW = B + R57_NEVERWAIT=1 + REF2_NEVERWAIT=1 (Leap's ref2 v3, ddbc0621; the r57 side
+gated per set). The 2-prompt NW check was clean. The nw3 map had PASSed at both pools (Breakthrough 01:4x).
+
+| arm (12 HumanEval, C 256) | geo steady tok/s (passes) | kept / check | median cycle | lifetime peak |
+|---|---|---|---|---|
+| B | 165.3 (159.3, 170.6) | 10.98 | 67.4 ms | 43.9 GB |
+| NW v3 | 180.3 (180.4, 180.1) | 11.02 | 65.8 ms | 43.9 GB |
+
+- **Verdict:** PASS, +9.0 % (line: >= +8 % AND peak <= 45.0 GB). Caveat: B's two passes differ by 7 %, so the margin is within
+  the noise. The pre-registered line holds.
+- **NWCNT per check (medians):** late groups 18, late uses 37.5, late mass 4.3, L47 drops 0, L47 stalls 0, optional dropped now
+  496.5, sidecars 3-bit 0.
+- **Tokens:** NW vs B identical on 6 and 6 of 12 (floor B1 vs B2: 8). NW v3 is lossy (its 3-bit sidecar / drop paths), so it goes
+  to S4's gate.
+- **NEW BEST: stackb + S2 + KEEP + NW v3 at C 256, 180.3 tok/s geo steady on the 12 HumanEval, peak 43.9 GB** (gate: S4).

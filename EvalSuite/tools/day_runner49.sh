@@ -62,9 +62,11 @@ mem_busy() {    # another session's shared run with MEM > 5 GB (our own reasons 
 freegb() { .venv/bin/python -c "import sys; sys.path.insert(0, '.'); from evalsuite.cli import free_gb; print(int(free_gb()))"; }
 swapgb() { sysctl -n vm.swapusage | awk '{gsub("M", "", $6); print int($6 / 1024 + 0.5)}'; }
 SWAP0=$(swapgb)
-bm_pin() {      # BigMoE's scripts/*.py and bigmoe/ == 6c08636 (tracked), no untracked .py there, the build_qom .so
-  git -C "$BM" diff --quiet "$BMC" -- 'scripts/*.py' bigmoe 2>/dev/null || return 1
-  [ -z "$(git -C "$BM" status --porcelain -- 'scripts/*.py' bigmoe 2>/dev/null)" ] || return 1
+bm_pin() {      # BigMoE's bigmoe/ == $BMC (tracked), nothing untracked there, the build_qom .so. Not scripts/*.py (Sat 01:17:
+                # a live edit of r57_screen_fast.py stopped the run; the run executes the snapshot screen, and ext_pin
+                # pins every module a process loaded, live scripts/ included)
+  git -C "$BM" diff --quiet "$BMC" -- bigmoe 2>/dev/null || return 1
+  [ -z "$(git -C "$BM" status --porcelain -- bigmoe 2>/dev/null)" ] || return 1
   [ "$(shasum -a 256 "$BM"/ext/"$EB"/*.so | cut -c1-12)" = "$QOMSO" ]
 }
 bm_loaded() {   # manifest: every module the FAST process loaded from ~/BigMoE equals its file at 6c08636 (else VOID)
@@ -86,7 +88,7 @@ MAN
 }
 pin() {
   { shasum snap/leap-faff8e5/*.py snap/leap-52cf2c9/*.py snap/leap-52cf2c9/ms_gdn/* tools/r57_wrap.py tools/r57rows.py \
-      tools/d4x.py tools/relax_report.py tools/mbpp_score.py "$SCREEN" results/drift/keys_T.txt data/items/dec_humanevalt.jsonl \
+      tools/d4x.py tools/relax_report.py tools/mbpp_score.py tools/rows_text.py "$SCREEN" results/drift/keys_T.txt data/items/dec_humanevalt.jsonl \
       data/items/dec_mbpp.jsonl \
       data/items/dec_math.jsonl data/items/dec_ifeval.jsonl data/items/dec_humaneval.jsonl
     (cd snap/bigmoe-da8e7a6 && find bigmoe ext -type f ! -path '*__pycache__*' | sort | xargs shasum)
@@ -207,9 +209,9 @@ fast() {        # tag, keys, label: one stack process (all its keys), under this
   python3 - "$AF/${tag}_runs.json" <<'ENG' >> "$LOG" 2>&1 || { say "stack $3: QOM not engaged on code: VOID: runner stops"; exit 5; }
 import json, sys
 runs = json.load(open(sys.argv[1]))
-code = [r for r in runs if str(r.get("key", "")).startswith(("humaneval/", "mbpp/"))]
+code = [r for r in runs if str(r.get("key", "")).startswith(("humaneval/", "humanevalt/", "mbpp/"))]
 qom = [r["key"] for r in code if (r.get("pf") or {}).get("qom_opt", 0) > 0]
-print(f"engaged: QOM optional uses on {len(qom)} of {len(code)} code (HumanEval / MBPP) runs; types "
+print(f"engaged: QOM optional uses on {len(qom)} of {len(code)} code (HumanEval / humanevalt / MBPP) runs; types "
       f"{sorted({str(r.get('type')) for r in runs})}; inert {sum(1 for r in runs if r.get('inert'))}, relaxed "
       f"{sum(1 for r in runs if r.get('rlx'))}, span {sum(1 for r in runs if r.get('spn'))} runs")
 sys.exit(0 if len(qom) == len(code) else 1)
@@ -227,6 +229,7 @@ order() {       # run, label, keys (comma list): chunks of 10 per process; any m
   while :; do
     m=$(missing "$run" "$all"); [ -z "$m" ] && break
     i=$((i + 1)); tries=$((tries + 1)); [ "$tries" -le 30 ] || { say "$lab: 30 processes without all rows: runner stops"; exit 3; }
+    while [ -e "$AF/${TAGP}${lab}${i}_tokens.json" ] || [ -e "$AF/${TAGP}${lab}${i}_modules.json" ]; do i=$((i + 1)); done   # a restart
     tag="${TAGP}${lab}${i}"
     fast "$tag" "$(echo "$m" | tr ',' '\n' | head -10 | paste -sd, -)" "$lab process $i"
     [ -s "$AF/${tag}_tokens.json" ] && $PY tools/r57rows.py "$AF/${tag}_tokens.json" "$run" --append >> "$LOG" 2>&1
@@ -309,10 +312,12 @@ print(",".join(sorted(x["key"] for x in r if x["set"] in ("math", "humaneval")))
 RKEYS=$(echo "$KEYS" | tr ',' '\n' | tail -r | paste -sd, -)
 say "the stack: $(echo "$KEYS" | tr ',' '\n' | grep -c .) keys per order"
 PHASE="the stack's same-scores run"; CURENV=("${STACKENV[@]}"); EXTRAENV=(); TAGP=es_st_; IFECOPY=1
+[ -s "$AF/es_st_fwd1_modules.json" ] && [ -s results/stack_fwd/decode.jsonl ] && { REFMAN="$AF/es_st_fwd1_modules.json"; say "restart: reference manifest $REFMAN"; }
 order stack_fwd fwd "$KEYS"
 order stack_rev rev "$RKEYS"
 V=""
 for o in fwd rev; do
+  $PY tools/rows_text.py "stack_$o" >> "$LOG" 2>&1      # r57rows writes ids only; d4x's scorers read text (Sat 01:2x)
   $PY tools/d4x.py "stack_$o" ref2t ref2t.r2 > "results/stack_${o}_d4.txt" 2>&1
   ./bin/evalsuite report --variant "stack_$o" --decode --ref ref2t > "results/report_stack_${o}_vs_ref2t.txt" 2>&1
   say "stack $o: $(grep '^D4X:' "results/stack_${o}_d4.txt" | tail -1)"
@@ -406,6 +411,7 @@ print(f"the stack run and the MBPP run share {len(set(a) & set(b))} outside modu
 CM
 MV=""
 for o in fwd rev; do
+  $PY tools/rows_text.py "mbpp_stack_$o" >> "$LOG" 2>&1
   $PY tools/mbpp_score.py d4 "mbpp_stack_$o" "$MREF" > "results/mbpp_${o}_d4.txt" 2>&1
   say "MBPP $o: $(grep '^mbpp (n' "results/mbpp_${o}_d4.txt" | tail -1) -> $(grep '^MBPP:' "results/mbpp_${o}_d4.txt" | tail -1)"
   MV="$MV $o: $(grep '^MBPP:' "results/mbpp_${o}_d4.txt" | tail -1)"

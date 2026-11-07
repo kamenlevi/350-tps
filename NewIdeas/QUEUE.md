@@ -11,6 +11,11 @@
 ## flattered by prompt copying (its answers re-emit the prompt's signature and docstring), so code gains are given per set.
 Tags: [K] = measured, [P] = priced from measured parts, [G] = a guess. 45 = the 45 GB line, 12 = the 12 GB line.
 
+NEWEST MEASURED 45 GB CODE NUMBER, Sat 01:4x: 164.2 tok/s [K, BigMoE c02f807, re-derived]. stackb + S2 + REF2_KEEP_CACHES
+at C 256, quiet A/B on 12 HumanEval: +10.1 % vs 149.1 for stackb + S2 in the same run; cycle 75.8 -> 66.9 ms; lifetime
+peak 43.1 GB. KEEP passed its EXACT proof (3 / 3 prompts, tokens equal), so it adds no quality risk. Gate: S4 on v1 =
+(stackb | stack) + S2 + KEEP. Against 200: x1.22 to go. S1 (NW v3; its map PASSED at both pools) is next, at most
+~7 ms of the 66.9 ms cycle (x1.12), so ~175-185 [P] if it lands at its ceiling.
 TONIGHT'S MEASURED 45 GB CODE NUMBER, Sat 00:2x (pending the same-scores gate, runner 49): 144.9 tok/s [K, BigMoE
 data/sat/sat_report.txt, 7bc69bb; re-derived by NewIdeas]. This is stackb at C 256 (the stack + B's shipped rule +
 R57_COPY=g2), quiet, 12 HumanEval, palindrome passes 145.5 / 144.3, kept 11.34 per check (cycle ~78 ms), lifetime peak 42.8 GB.
@@ -389,6 +394,16 @@ ends it by the next item's start.
      runs (no preemption mid-chunk). They go ahead of CERT's reference decodes and T1.
   7. S4 (the short gate, ~1.5-2 h) once S0-S3 are decided, by 16:00 at the latest; S5 after it; FREEZE ~20:00; CERT
      after the freeze.
+     FINAL ENV (NewIdeas Sat 01:1x, BigMoE asked; EvalSuite's S4 starts when data/stack/final_env.txt lands):
+     - v1 = stackb + S2 at C 256 (stackb_s2_env.txt: the stack + B span + g2 + SBN 2 + D7BNAX_32 2 + DSUB + SVH, QOM on
+       humaneval / mbpp; 146.8 tok/s, 42.8 GB). Code frozen in data/r57/snap/frozen_s4 and committed.
+     - BigMoE writes it when runner 49's CODE verdicts are in: the same-scores plus both long-code top-ups, the top-up
+       being B's rollback gate. MBPP coverage does not block it.
+     - If B rolls back or the same-scores fails, v1 = the stack + S2.
+     - S1 joins v1 if its engine A/B passes before then.
+     - S4 runs before runner 53 (runner 53 still ends by 16:00).
+     - v2 = v1 + any lever whose engine A/B passes by 14:00 (S1, S2b, an S2c fix), with a second short S4 starting by
+       16:00. Without one, v1 is the freeze config and S5 measures it.
   Share jobs (MTP Head's every-position walks for GOAL, ~25 min, 6 GB) run beside runner 49 or the map (peak + 8 GB
   free), never beside a quiet run. Disk floor 100 GB (105 GB free at 23:30): run df before writing any new big file.
 - SATURDAY DAY WINDOW (NewIdeas Fri 21:2x, the orchestrator asked; order by expected gain; every lossy piece is gated
@@ -483,6 +498,12 @@ ends it by the next item's start.
           per GDN layer, and the k|v -> q fold also applies. Leap benches both chained (bitwise vs the unfolded call at the
           same ks).
         - e and b: their own benches follow.
+      - FOLDS RESULT Sat 01:3x (Leap, chained, 16 rows, real shapes; both bitwise vs the unfolded calls at the same ks):
+        GDN b|a into qkv|z KILL (-0.31 ms per check, 19 % of 1.6); attention k|v into q BETWEEN (-0.31 ms, 28 % of 1.1).
+        In a chain the small call already overlaps the big one. S2b's bundle A/B is OFF for Saturday (f attention + e
+        ~0.4 [P] can ride a later bundle). Leap next: the EXACT bitwise proof for KEEP if BigMoE wants, and a CPU-only
+        audit of r57's cycle for more of KEEP's bug class (per-cycle clears / rebuilds; the commit's GDN replay, ~2 ms
+        average), priced in one quiet probe (PASS >= 2 ms per check).
       - STEP 1B RESULT Sat 00:54-00:56 (Leap, quiet, barrier kept: calibration minus stub, 16-row dense-only, wall per
         check):
         - HC reads 4.3 (attention-side 2.12; MLP-side, including the folded attention write, 2.20). HC write 0.14 (the
@@ -551,6 +572,83 @@ ends it by the next item's start.
         - Also reported per arm: gate service / experts, and any heat / PAUSE flag.
         - A named cause becomes a lever only through BigMoE's engine A/B at C 256: PASS >= +4 %, KILL < +1.5 %, last
           call 14:00. If (q) holds, the fix is a one-line QOS call in r57.
+      - STEP 1D RESULT Sat 01:09-01:13 (Leap, quiet; no PAUSE, die 67-77 C, fans 6500): neither arm names the cause.
+        - live - replay total: base +10.8, QOS user-interactive +9.3, loader IDLE_MS=0.5 +9.4, both +11.8 ms.
+        - moe_pre: +5.67 / +5.51 / +5.28 / +5.71. The live thread's extra CPU persists in every arm.
+        - The experts piece is +1.5..1.9 live. IDLE_MS slows the loop itself (check + commit 77.6 vs 63.6 ms, pickup
+          latency), so it is not a fix.
+        - Out so far: QOS / core placement, the loader nap, keepalive, VTIER, look-ahead, the router-id readback.
+      - Step 1e (granted, ~2 min quiet, next boundary): MLX's buffer cache.
+        - BigMoE's stream.py caps it at 1 GB (BIGMOE_MLX_CACHE_MB=1024, set for low-memory nights). A live check comes
+          after the drafter and the commit have churned that cache, so it allocates fresh Metal buffers, while the replay
+          reuses what the live check freed. That fits "same code, +20 % CPU, plus waits in the encode".
+        - Arm: BIGMOE_MLX_CACHE_MB=6144 vs base at C 224 (~39 GB + <= 5 GB). It names the cause if live - replay falls by
+          >= 4 ms.
+        - As a lever it must fit the 45 GB line: cached buffers count in the lifetime footprint, and C 256 is already
+          42.8 GB with 1 GB of cache.
+        - So BigMoE's A/B tests the largest cache that keeps C 256 <= 45.0 GB (~3 GB), or C 240 + more cache. PASS >= +4 %
+          at <= 45.0 GB lifetime, KILL < +1.5 %, last call 14:00.
+      - STEP 1E RESULT Sat 01:17-01:20 (Leap, quiet; no guard, no PAUSE): the MLX buffer cache is NOT the cause.
+        - live - replay: 1 GB +10.4, 3 GB +11.2, 5 GB +8.8 ms; moe_pre +5.61 / +5.74 / +5.54. Lifetime peaks 39.3-39.7 GB.
+        - The cache sat at 0.81-0.98 GB in every arm, live and replay, so the 1 GB cap never bound.
+        - All seven measured causes are out: look-ahead, gate readback, keepalive, tier copies, QOS, loader nap, MLX
+          cache size.
+        - What stands (6 runs tonight): a live check is ~+10 ms vs its own block replayed right after (synced).
+          moe_pre +5.6 (+0.12 ms per layer: ~0.03 CPU + ~0.09 wait), and the live thread spends ~20 % more CPU in
+          every piece. BETWEEN: S2c stops at the location.
+      - Step 1f (granted, ~2 min, the last S2c test today): replay the block once right BEFORE the live check, at the draft
+        cut.
+        - POSITION: if the live check then runs within ~3 ms of replay speed (the excess falls by >= 7 ms), the class is
+          "the first forward after the draft / loop phase": CPU clock ramp-up after waiting on the GPU, or cold
+          caches. A fix stays inside our process (keep the main thread busy through the draft wait, or a tiny warm
+          forward), and only an engine A/B prices it.
+        - LIVE-ONLY: if the excess stays >= 7 ms, the cause is inside the check. In between: BETWEEN.
+      - Step 1f REPLACED Sat 01:2x by a sharper arm (Leap found a candidate mechanism in the code):
+        - r57's loop calls ref2.remove() at every cycle start (the draft runs without REF2) and ref2.apply() before the
+          check (lines ~995 / ~1050). remove() clears REF2's per-weight caches (_SN, the SMALL-N padded native copies;
+          _DN; _HC8).
+        - So every live check re-pads and GPU-repacks every SMALL-N weight on first use (_sn_get -> _dn_repack), plus
+          the Python rebuilds. The replay right after finds them warm.
+        - It fits each piece: moe_pre +0.12 ms per layer is the shared expert's gate|up / gate; GDN +1.5 is b|a (36
+          layers); attention +0.9 is k / v (12 layers); the extra CPU is building and encoding those repacks.
+        - Arm "keep" (harness-only, ~2 min): the loop's remove() only switches REF2 off (_ON False) and keeps the caches.
+          They are validated by weight identity, so outputs stay bitwise the same: an EXACT-safe fix.
+        - Pre-registered: "keep" names the mechanism if live - replay falls by >= 7 ms. Lifetime peak logged per arm.
+        - If it holds, the fix is REF2_KEEP_CACHES (default off, self-test), or r57 toggling _ON instead of remove().
+          BigMoE's engine A/B at C 256 prices it: PASS >= +4 %, KILL < +1.5 %, lifetime peak <= 45.0 GB. Bitwise identity
+          is proven on the EXACT path (NAX6-N, a few prompts), since FAST tokens vary run to run.
+        - If it is bitwise and passes before runner 49's code verdicts (~05:30), it joins final v1. It would also speed
+          the EXACT line, but adoption there is BigMoE's and Kamen's call.
+      - S2C PASS Sat 01:3x (Leap, quiet, C 224, SB 2, stack env; re-derived): mechanism named and fixed.
+        - "keep" takes the live - replay excess from +9.39 to +0.48 ms, a fall of 8.9 (line >= 7).
+        - Per piece, base -> keep: moe_pre +5.41 -> -0.05, GDN +1.64 -> +0.01, attention +0.77 -> +0.26, experts +1.73
+          -> +0.42. Thread CPU +4.65 -> +0.48. The replay itself does not move (55.10 vs 54.28).
+        - The real loop, unsynced (3 passes x 11 checks): check + commit 62.11 / 59.08 / 58.38 -> 54.90 / 51.66 / 50.37
+          ms, i.e. -7.2 / -7.4 / -8.0 per 16-row check. The cycle goes ~66-70 -> ~58-62 ms, +11-14 % on this prompt.
+        - Lifetime peak 38.6 vs 39.4 GB (the kept copies are ~0.1 GB). No PAUSE.
+        - Fix: REF2_KEEP_CACHES=1 (a ref2 switch, default off; Leap installs it with a self-test).
+        - Next: BigMoE's engine A/B at C 256 vs stackb + S2 (PASS >= +4 %, KILL < +1.5 %, peak <= 45.0 GB), and the EXACT
+          bitwise proof (NAX6-N, >= 3 prompts, tokens equal). Both before ~05:30 -> final v1 includes it.
+        - [P] on the ~76 ms 12-HE cycle: -7.5 ms = x1.11, so ~163 tok/s from 146.8.
+        - EXACT-default adoption was flagged to the orchestrator as BigMoE's and Kamen's call.
+      - KEEP TICKET QUEUED Sat 01:4x (BigMoE task b3ac0xo32, fac4c0a; quiet, next boundary after runner 49's chunk and
+        nw3's share arms; its C 256 arm needs 47.2 GB NO-SWAP).
+        - (0) The EXACT proof: NAX6-N exact env, C 224, HumanEval/68, /16 and ifeval/1220, CAP 64, keep off vs on.
+          Tokens equal on all 3 = PROOF PASS.
+        - (1) The A/B at C 256: stackb + S2 vs + KEEP, 12 HumanEval b / k / k / b. PASS >= +4 % AND peak <= 45.0 GB;
+          KILL < +1.5 % or > 45.0 GB. Median cycle beside.
+        - KEEP joins v1 only with PROOF PASS and speed PASS: s4_final.sh gets an S4_KEEP=1 switch.
+        - RESULT Sat 01:4x (BigMoE c02f807): PROOF PASS (3 / 3 tokens equal) and speed PASS (+10.1 %, 164.2 vs 149.1;
+          cycle 75.8 -> 66.9 ms; 43.1 GB). KEEP is in v1 (NewIdeas' word to BigMoE, 01:4x).
+      - S1 UNBLOCKED Sat 01:4x: nw3's code map PASS at both pools (Breakthrough 7e08711: published 0.71 %, D +0.12,
+        clean; 208 slots 0.86 %, D +0.18). BigMoE's NW v3 engine A/B on v1 runs at the next boundary (PASS >= +8 %,
+        KILL < +3 %, peak <= 45.0 GB). It joins v1 if it passes before runner 49's code verdicts, else v2.
+      - POST-FREEZE BUNDLE (exact-safe; Leap's cycle audit Sat 01:4x found no other per-cycle rebuild of KEEP's class):
+        1. GDN state checkpoints at verify rows 8 / 12, so a partial commit replays <= 4 rows instead of 35 separate
+           gated_delta_update calls over all kept rows (3.9-4.8 ms on partial checks; ~1.5 ms per cycle on HE/68).
+           ~1-3 ms per cycle [P]. Leap may build it now on the CPU; GPU benches only in gaps that delay nothing.
+        2. The attention k|v fold (-0.31 ms). 3. eprep (~0.4 [P]). 4. Merging the draft-quality mx.eval into the
+           first one (~0.13-0.2 ms per cycle, same bits; BigMoE's r57).
         - The run (~3 min quiet): step 1b with thread CPU per synced piece, live vs replay. Pre-registered "extra wait":
           live - replay wall >= 0.08 ms per layer with |CPU live - CPU replay| <= 0.03 ms. More CPU live instead means
           encode contention.
