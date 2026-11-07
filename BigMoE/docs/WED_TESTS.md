@@ -860,3 +860,96 @@ Lifetime peaks over the prefill arms: exact 44.5 GB, **lossy 45.1 GB (> 45.0 on 
 - **FINDING 3: prefill is the weak spot:** ~100-124 tok/s (exact and lossy alike: the prefill path streams experts from SSD per 1024-row
   chunk). For comparison, Strata (Q2_0, ~40 GB RSS, whole model in RAM) reports ~226 tok/s at 4K on an M1 Max and ~1430 on an M5 Max.
 - Chat decode is slow vs code (IFEval 39.9 exact / 45.0 lossy vs HumanEval 99.4 / 181.4): HumanEval flatters (copying, long accepts).
+
+### Sun 00:10-00:29: CHS1, the CHAT150 strike's first chat A/Bs (scripts/chs.sh, data/chs; quiet; snapshot 94f0aad)
+> (a quote from the project owner, kept private)
+12 IFEval (N45's keys), C 256, one pass per arm. L = S5''s lossy config (data/stack/s5p_env.txt); E = exact + KEEP + wired + bundle.
+Report: data/chs/chs1_report.txt. "Whole decode" is pooled over the 12 runs (n / decode wall).
+
+| arm | config | whole decode | kept / check | ck + drf ms | misses / svc ms | peak GB | == AR |
+|---|---|---|---|---|---|---|---|
+| c0 / c0b | L (first / last) | 41.5 / 42.7 | 2.47 / 2.45 | 50.2+8.9 / 48.2+8.7 | 90.7 / 16.4 | 42.4 | 3 / 2 of 12 |
+| q1 | L + QOM_SETS incl. ifeval | 42.1 | 2.48 | 49.2+9.0 | 89.7 / 15.5 | 42.4 | 4 |
+| fa1 | L - FASTTAX | 42.3 | 2.52 | 50.2+8.9 | 88.3 / 15.3 | 42.4 | 3 |
+| fa2 | L - HC8 (R57_HC8 + REF2_HC8_FAST) | 40.3 | 2.46 | 52.4+8.5 | 86.5 / 15.6 | 43.6 | 4 |
+| fa3 | L - SVH - DSUB | 42.4 | 2.58 | 51.0+8.7 | 96.2 / 16.8 | 42.1 | 3 |
+| fa4 | L - DN_KS | 39.4 | 2.47 | 54.3+8.2 | 83.2 / 14.2 | 42.4 | 3 |
+| fa5 | L - RELAX_SPAN (+ rule) | 42.9 | 2.47 | 48.8+8.4 | 88.8 / 15.9 | 42.4 | 3 |
+| fa6 | L - all six | 36.7 | 2.60 | 61.0+8.7 | 92.3 / 15.6 | 43.3 | 4 |
+| e0 | E (exact) | 36.4 | 2.53 | 59.6+8.7 | 89.8 / 15.3 | 41.7 | 12 |
+| r1 | L + R1 on chat (R57_CHAT_RULE=R1) | 45.1 | 2.57 | 48.1+8.3 | 92.1 / 15.4 | 42.4 | 2 (62 relaxed accepts) |
+| qr1 | r1 + QOM_SETS incl. ifeval | 44.6 | 2.53 | 47.7+8.5 | 89.0 / 14.9 | 42.4 | 2 (63) |
+
+- **FINDING 1: QOM never engaged on chat (q1: qom_skip = qom_opt = 0, misses unchanged).** The FAST row gate (QOM / U3 sure rows)
+  ran only in the DFlash2 drafting branch, and chat drafts with the MTP head. Fixed in ce94a45 with R57_QOM_MTP=1|2: the gate on the
+  MTP head's drafts, with the bonus row exact (1, Breakthrough's M1-A) or gated (2, M1-B). It confirms Breakthrough's read:
+  L's chat reads as many MB per kept token as E (41.8 vs 40.2). chs2 measures it.
+- **FINDING 2: L's +15.6 % over E on chat (42.1 mean vs 36.4) comes from HC8 and DN_KS.** Dropping HC8 costs -4 % and DN_KS -6 %.
+  FASTTAX, SVH + DSUB and RELAX_SPAN do nothing measurable on chat (RELAX_SPAN made 0 relaxed accepts on IFEval). Dropping all
+  six gives E's speed (36.7). Note: dropping REF2_HC8_FAST alone (FU's old fa2) is a no-op, because R57_HC8=1 sets ref2's hc8_fast.
+- **FINDING 3 (C4): L's chat non-exactness is NOT in the six known-lossy levers.** No single drop restores chat == AR (2-4 of 12),
+  and neither does dropping all six (fa6: 4 / 12, first diffs at tokens 7-78). fa6 runs at E's speed, so the breaking lever adds no
+  chat speed. Leap: L's chat is run-to-run nondeterministic (c0 3 / 12 vs c0b 2 / 12 fits). chs3 runs a forward bisect from E
+  (+ OOO_1C + NAX_1CQ twice, + FAST=QOM + build_qom, + SMALL_NATIVE, + GDN_LAZY, + DNR, + HCB, + SBN 2, + COPY g2, + D7B).
+- **K1: R1 on chat = +7.1 %** (45.1 vs 42.1): kept 2.57 vs 2.46, 62 relaxed accepts over 12 prompts. This is a speed reading only:
+  with HC8 on, it is arm E8, which failed IFEval (84 vs 90) on 11-05. A gated K1 needs HC8 off on chat (per-set HC8 is not built).
+- Noise between the two L runs: 41.5 vs 42.7 (+-1.5 %). Lifetime peaks 41.7-43.6 GB (line 45.0).
+
+### Sun 00:30-00:49: CHS2, M1 / D1 / lever 2 on chat (scripts/chsb.sh, data/chs; quiet; snapshot 09ef078, ref2 388ca3f1)
+12 IFEval at C 256, one pass per arm. Report data/chs/chs2_report.txt; per-check read-out scripts/chs_strat.py (median check ms, ck by rows).
+L's chat whole decode varies run to run (41.5 / 42.7 / 44.8 / 43.7 over four L runs tonight: different outputs, different kept),
+so the per-check columns are the reliable read. L baseline = mean of x2c0 / x2c0b.
+
+| arm | config (on L unless E) | whole decode | kept | ck median / mean ms | drf ms | misses / check | svc ms | MB / check | peak GB |
+|---|---|---|---|---|---|---|---|---|---|
+| x2c0 / x2c0b | L | 44.8 / 43.7 | 2.62 / 2.50 | 44.0 / 48.9, 47.8 | 9.1 / 8.8 | 97.8 / 91.1 | 15.8 / 14.9 | 109.5 / - | 42.4 |
+| x2qm1 | QOM on MTP chat drafts, bonus row exact (M1-A) | 45.3 | 2.46 | 42.5 / 45.2 | 8.7 | 42.8 | 10.1 | 56.2 | 42.4 |
+| x2qm1s | M1-A + pool shift S16 | 45.8 | 2.41 | 41.8 / 44.0 | 8.4 | 38.3 | 9.2 | 52.1 | 42.4 |
+| **x2qm2** | **QOM on MTP chat drafts, bonus row gated (M1-B)** | **49.0** | 2.41 | **37.4 / 40.5** | 8.3 | **25.8** | **6.3** | **37.4** | 42.4 |
+| x2qm2s | M1-B + pool shift S32 | 52.0 | 2.72 | 39.3 / 42.4 | 9.3 | 28.2 | 7.9 | 40.9 | 42.3 |
+| x2rc8 | ranks >= 8 dropped on chat checks | 45.1 | 2.48 | 42.4 / 46.1 | 8.6 | 76.5 | 12.9 | 85.6 | 42.4 |
+| x2p4 | D1: MTP head Linears at 4-bit | 38.4 | 2.55 | 44.6 / 49.6 | **16.2** | 95.9 | 15.9 | 108.6 | 42.3 |
+| x2l2c | look-ahead on (gate+t+pf), lever 2's control | 42.4 | 2.49 | 44.7 / 49.5 | 8.5 | 88.6 | 14.8 | 101.0 | 42.4 |
+| x2l2f | lever 2 (forecast reads FC_F 4 / FS 2) | 40.7 | 2.53 | 49.9 / 52.7 | 8.7 | 92.2 | 15.0 | 463 | **48.8** |
+| x2e / x2ep4 | E / E + D1 | 36.6 / 36.9 | 2.53 / 2.57 | - / 59.4, 59.9 | 8.7 / 8.4 | 89.8 / 94.0 | 15.1 / 15.5 | - | 41.7 / 41.6 |
+
+- **M1 WINNER: M1-B (x2qm2, R57_QOM_SETS += ifeval, R57_QOM_MTP=2): +10.7 % whole decode (49.0 vs 44.3), check median 37.4 vs
+  44.0 ms (-15 %), misses per check 25.8 vs ~94 (-73 %), MB per check -66 %, svc 6.3 vs ~15.4 ms.** Every row count gains (1-2 rows
+  39.8 vs 42.5 ms, 3 rows 36.9 vs 45.6, 4 rows 39.9 vs 50.2, 5+ rows 49.0 vs 68.9). Lossy: chat == AR 2 / 12 (L's own is 2-3 / 12);
+  EvalSuite's IFEval gate decides. M1-A (bonus row exact) helps only the larger checks (+1-2 %).
+- Breakthrough's pool shift does not pay in the engine: its check medians are worse with it (S16 41.8 vs 42.5 for M1-A, S32 39.3
+  vs 37.4 for M1-B). x2qm2s's 52.0 whole decode is kept noise (2.72 vs 2.41).
+- **D1 KILL as implemented:** on L the 4-bit MTP head doubles the draft (16.2 vs 9.1 ms per check; 6.3 vs 4.0 ms per drafted row);
+  on E it is neutral and exact (8.4 vs 8.7 ms, 12 / 12 == AR). So it interacts with an L lever (a guess: ref2's hc8_fast read on the
+  head's own GatedResidual mixers, which nn.quantize turned 4-bit).
+- **Lever 2 KILL on chat:** 4x the SSD MB per check (150,268 forecast reads, 18,327 used), check +5 ms, lifetime peak 48.8 GB.
+  The look-ahead alone (x2l2c) costs ~+0.7 ms per check; L decodes without it (arm gate+t).
+- Rank cut 8 on chat: misses -22 %, check -1.6 ms median, +2 % whole decode; Breakthrough's map failed TOP8 on multi.
+
+### Sun 00:54-00:56: PF-A smoke, layer-major prefill (scripts/pfa_smoke.sh, data/pfa; quiet; snapshot 37f2114): WORKS, EXACT, x1.98
+Exact E, agent/edit10 (1,565 tokens = 2 chunks of <= 1024), CAP 16, LOGHASH. scripts/pflm.py wraps tier.prefill_call (the 45 GB path).
+| arm | prefill | TTFT | prefill tok/s | prefill SSD | tokens / logits hashes vs pa0 | lifetime peak |
+|---|---|---|---|---|---|---|
+| pa0 | chunk-major (today, no-logits) | 15.52 s | 101 | 109.4 GB | - | 43.4 GB |
+| pa1 | R57_PFLM=1: layer-major, full-E scratch, original ids | **7.84 s** | **200** | 63.6 GB | == / 2 of 2 bitwise | 43.3 GB |
+| pa2 | R57_PFLM=2: compact copy per call | 11.21 s | 140 | 63.6 GB | == / 2 of 2 bitwise | 44.9 GB |
+- Each layer's experts are read once per prompt (22,845 reads + 16,210 reuses over 96 calls) instead of once per chunk. On 2 chunks that
+  is -42 % SSD and x1.98 TTFT. Longer prompts should gain more (8 chunks for 7.9K); PFX (after CERT, chained after CHS4) measures them.
+- PFLM=1 is bitwise on these checks despite the full-E weight array (the gather kernel at 1,024- and 541-row chunks); PFLM=2 costs
+  +1.6 GB of peak and time for nothing.
+- Next: overlap the reads with compute (prefetch layer L+1 into a second scratch, +1.6 GB) and PF-D (pool-resident MSB reuse).
+
+### Sun 00:57-01:14: CHS3, C4's forward bisect from exact E (scripts/chsb.sh, data/chs; quiet; snapshot 5d92dcc): TWO "EXACT" LEVERS BREAK CHAT
+12 IFEval at C 256, E + one of L's remaining levers per arm (chs1: none of the six known-lossy levers explains L's chat != AR).
+| arm | E + | whole decode | check median ms | == AR (first diffs) |
+|---|---|---|---|---|
+| x3e | (nothing) | 37.0 | 54.6 | 12 / 12 |
+| **x3oc / x3oc2** | **REF2_OOO_1C + REF2_NAX_1CQ** (two runs) | 37.4 / 36.2 | 54.1 / 53.6 | **3 / 12, 4 / 12** (diffs differ between the runs: 62,4,44,... vs 62,22,44,...) |
+| **x3sn** | **REF2_SMALL_NATIVE** | 36.5 | 58.1 | **3 / 12** (78, 34, 44, ...) |
+| x3q | R57_FAST=QOM + build_qom + D17 (QOM off on chat) | 36.8 | 55.2 | 12 / 12 |
+| x3gl / x3dnr / x3hcb | REF2_GDN_LAZY / R57_DNR / R57_HCB | 36.8 / 35.6 / 36.6 | 55.1 / 57.0 / 54.6 | 12 / 12 each |
+| x3sbn / x3cp / x3d7 | R57_SBN=2 / R57_COPY=g2 / D7B + D7BNAX (+32) | 37.9 / 36.7 / 36.9 | 53.1 / 54.8 / 54.7 | 12 / 12 each |
+- **C4 ANSWER:** L's chat gain (+15 %) is HC8 + DN_KS, both lossy, so the IFEval gate decides them. L's chat NON-EXACTNESS comes from two
+  levers that were believed exact: **the one-call OOO (REF2_OOO_1C + NAX_1CQ), which is run-to-run NONDETERMINISTIC** (the two runs
+  diverge at different tokens), and **REF2_SMALL_NATIVE**. Neither speeds up chat (37.4 / 36.5 vs 37.0). M1-B's QOM needs the one-call on
+  the NAX path, so OOO_1C stays in the lossy chat config; its exactness / determinism is a bug for Leap (owner).

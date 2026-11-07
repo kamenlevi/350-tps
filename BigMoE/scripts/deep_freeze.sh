@@ -8,7 +8,7 @@ N=${1:?name}
 cd "${DF_ROOT:-$HOME/BigMoE}" || exit 1
 FZ="$PWD/data/r57/snap/frozen_$N"; SD=data/r57/snap/$N
 rm -rf "$FZ"; mkdir -p "$FZ/TrainLab_root" "$SD"
-cp scripts/r57_screen_fast.py "$SD/r57_screen_$N.py" && cp scripts/relax_delta.py scripts/relax_span.py scripts/inert_span.py "$SD/" \
+cp scripts/r57_screen_fast.py "$SD/r57_screen_$N.py" && cp scripts/relax_delta.py scripts/relax_span.py scripts/inert_span.py scripts/pflm.py "$SD/" \
   && cp scripts/c45_runner.sh "data/r57/snap/c45_runner_$N.sh" || exit 2
 cp -R "$HOME/Leap/scripts" "$FZ/Leap_scripts" && cp -R "$HOME/Leap/third_party" "$FZ/Leap_third_party" \
   && cp -R "$HOME/TrainLab/sticky" "$FZ/TrainLab_sticky" && cp "$HOME"/TrainLab/*.py "$FZ/TrainLab_root/" \

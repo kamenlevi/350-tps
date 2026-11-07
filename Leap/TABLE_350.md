@@ -9481,3 +9481,73 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   into the spin and do not shorten the check.** The 1a bundle showed the same (gains only on low-miss checks). **M1
   (misses) gates every GPU lever on chat.** My levers need measuring with misses removed (replays with the experts
   resident) until M1 lands.
+- **B1 re-scoped from fcpch's 1 kHz main-thread samples (checks with <= 3 rows, n 19):** of the ~48 ms build phase,
+  **~44 ms is inside mx.async_eval / mx.eval (MLX's C++ graph walk + Metal encode, plus throttle waits on the busy GPU)
+  and only ~4 ms in Python graph construction** (qwen4_exp / ref2 / bigmoe frames). The ~29 ms of main-thread CPU per
+  chat check is mostly MLX's per-dispatch encode cost: ~3,000 kernels per check at ~7 us each.
+  - So B1 is a dispatch diet, not a Python compile. Each removed kernel saves ~7 us of CPU and ~1.5-2 us of GPU.
+  - Today at 2 rows: ~60-65 dispatches per layer (HC glue, GDN glue, attention glue, MoE id / mask glue, pads).
+  - REF2_PAD_IN alone removes ~340 per check (~2.4 ms of CPU), invisible while the GPU binds.
+  - Target ~30 per layer: ~-12 ms of CPU per check [P].
+- **Dispatch diet, counted (v1f 2-row kernel records, per check):** ~1,600 wrapped kernel calls + ~480 glue flushes.
+  - By piece: GDN 396 (+158 glue), MoE dense 432 (+123), HC reads 480 (+157; hc_m 288, hc_a 192), attention 168
+    (+33), HC write 48, experts 48 (the one-call), PLE 12, rest ~16.
+  - Plan [P]: HC pads in-kernel + the k2b fold ~-300 (hc8f, built; its check is pending); GDNB's one-dispatch body
+    ~-180 (built: R57_GDNB); a fused MoE dense side (router + shared + tail) ~-240 (new); attention glue ~-60.
+  - **~-800..-1,000 dispatches = ~-6..-10 ms of encode CPU per check, plus ~-1.5..-2 ms of GPU.** It counts once M1 and
+    G1 / G2 bring the GPU under the CPU.
+- BigMoE 00:2x: L's chat arm (gate+t) has the look-ahead OFF already. QOM never engaged on chat (the FAST gate ran on
+  DFlash2 drafts only); fixed with R57_QOM_MTP=1|2 (M1-A / M1-B, chs2). C4: no single lever drop makes chat == AR.
+- **HC8-F (scripts/hc8f.py; ref2 388ca3f1, REF2_HC8_FOLD=1, default off): K2 folded into K3 for HC8 reads with <= 4 real
+  rows.** Every K3 threadgroup recomputes k2b's rinv / mix1 / xsum / inject in a prologue, in k2b's order. **Bitwise ==
+  k2b + k3c on the real rows: 30 / 30 cases (M 1-4 and 16).** One dispatch less per HC read (96 per chat check, plus its
+  dependency gap). Self_test True with the switch off and on. For the M1 winner's chat bundle with REF2_PAD_IN / GDNB /
+  eprep + TG 2.
+- **K1M + HC8-G + G2 priced (Sun 00:49-00:52, QUIET lock; data/hc8f_check.txt, data/hc8g.txt, data/g2_bench.txt,
+  data/hc8f/k1m_gr.txt; scripts/hc8f.py, hc8g.py, g2_bench.py, k1m_gr_check.py; live ref2 bb055eb4, installed 00:54,
+  self_test PASS, both new switches default off).**
+  - **K1M (exact, REF2_HC8_K1M=1):** HC8's K1 reads the M-row h / pending, with the pad rows' loads guarded in-kernel.
+    Its outputs equal K1's on the zero-padded inputs on all 16 rows. **96 / 96 kernel cases bitwise** (v4 and v5,
+    pending on / off, M 1-4). read_k1m (K1M + k2b + k3c) == hc8r.read(padded) on all 16 rows. **24 / 24 through
+    ref2._gr** (fold, fold + K1M, K1M vs the unfolded path).
+  - HC8 read timing, us per read (dependent chains of 48 reads over 8 cold weight sets, pending write on):
+
+    | M | v4 padded (today) | fold, padded | fold + K1M | K1M + k2b + k3c | HC8-G GEMV (best) |
+    |---|---|---|---|---|---|
+    | 1 | 54.1 | 54.1 | 46.8 | 46.9 | 34.9 |
+    | 2 | 54.2 | 55.7 | 48.6 | 46.5 | 40.8 |
+    | 3 | 53.9 | 57.1 | 49.9 | 46.8 | 56.2 |
+    | 4 | 53.8 | 59.3 | 52.3 | 47.3 | 66.3 |
+
+  - **Verdicts:**
+    - HC8-F (the fold) alone: **KILL**, +0.0..+0.53 ms per check. K3F's per-threadgroup k2b prologue costs more than
+      the k2b launch it removes.
+    - **K1M: PASS**, -0.62..-0.74 ms per check at 1-4 rows, bitwise. It replaces REF2_HC8_FOLD in the bundle (BigMoE
+      told 00:5x for CHS4).
+    - **HC8-G (FAST, REF2_HC8_G=2):** -12.0 / -5.7 us per read vs K1M at 1 / 2 rows (-1.15 / -0.55 ms per check);
+      slower at 3-4 rows, where the switch hands over to K1M. Error vs v4: max rel 9.5e-4 on mixed, 13 of 153,600
+      values differ (bf16 ulps); inject equal; written bitwise.
+  - HC8-G per kernel (sweep): K1G 14.3 / 18.5 / 39.2 us at M 1 / 2 / 4 (the 3.3 MB floor at 285 GB/s is 11.6 us);
+    K3G 18.7 / 21.3 / 29.3 us (includes ~2 us of the chain's dependency op). Both grow with M; at M 4 likely register
+    pressure (16 x M inputs per lane plus RPS x M sums).
+  - **G2 priced: experts at 1-4 rows are already near the machine's rate.** Quiet; real pools of layers 20 / 44
+    (native+p11+pad, all resident, C 512), top-10, skewed routing, no U3. Base record 2.06 MB, sidecar 0.72 MB.
+    us per layer call:
+
+    | M | base groups | MB per call | NAX6-N 1cq (L today) | 3c-N one-call | 3c-N / NAX |
+    |---|---|---|---|---|---|
+    | 1 | 10 | 22.1 | 120.5 (183 GB/s) | 105.8 (209 GB/s) | 0.877 |
+    | 2 | 18 | 40.8 | 196.6 (207 GB/s) | 185.2 (220 GB/s) | 0.942 |
+    | 3 | 26 | 58.3 | 268.7 (217 GB/s) | 271.5 (215 GB/s) | 1.011 |
+    | 4 | 34 | 75.4 | 338.2 (223 GB/s) | 348.3 (216 GB/s) | 1.030 |
+    | 8 | 61 | 135.9 | 585.6 (232 GB/s) | 664.4 (204 GB/s) | 1.135 |
+    | 16 | 102 | 228.5 | 984.8 (232 GB/s) | 1262.4 (181 GB/s) | 1.282 |
+
+  - **Reading:** a 2-row check's experts read ~2 GB, ~9.4 ms on L's kernel (not ~14 ms; the board's "~1 GB, ~3.5 ms"
+    floor was off by 2x). L's kernel is already at ~73 % of 285 GB/s. **G2's ceiling is ~-2.5 ms per 2-row check at
+    the bare floor.** 3c-N gives -0.55..-0.71 ms at 1-2 rows (FAST; it differs from NAX by up to 1.5-2e-2 relative).
+    It is not wired: 3c-N needs U3's -2 sidecar fallback (BigMoE's LP1 kernel patch) without LP1's loader change.
+  - **Sum of my GPU levers on a 1-2-row chat check:** K1M -0.7 (exact) + HC8-G -0.55..-1.15 (FAST) + 3c-N -0.55..-0.71
+    (FAST, unwired) + row-native in_proj ~-0.5 (FAST) = ~-2.3..-3.1 ms of ~43. Kernels alone do not move the 1-2-row
+    floor (BigMoE: ~39-42 ms even at < 30 misses). Next: measure where that floor goes (GPU busy, per-layer router-id
+    waits, encode) on L + M1-B before building more.

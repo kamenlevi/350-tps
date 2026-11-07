@@ -440,6 +440,16 @@ if CHATSW:                                               # the head's trained pa
     _TH.load_weights(_hp)
     _M.install(model.language_model.mtp, _TH, dtype=mx.bfloat16)   # touches the head's own modules only
     del _TH
+    if os.environ.get("R57_MTP_P4") == "1":              # D1 (MTP Head 2c7ce71, CHAT150 strike): the head's trained bf16 Linear
+        import mlx.nn as _nnp4                           # modules (fc, q / k / v / o, router, shared expert: 19) -> 4-bit g64.
+        _q0 = sum(1 for _, m_ in model.language_model.mtp.named_modules() if isinstance(m_, _nnp4.QuantizedLinear))
+        _nnp4.quantize(model.language_model.mtp, group_size=64, bits=4,   # Checkpoint + md5 pin unchanged; drafts change, an
+                       class_predicate=lambda p_, m_: isinstance(m_, _nnp4.Linear) and not isinstance(m_, _nnp4.QuantizedLinear)
+                       and m_.weight.dtype == mx.bfloat16 and m_.weight.shape[-1] % 64 == 0   # exact verify's outputs cannot.
+                       and "hyper_connection" not in p_)   # v1b (MTP Head 00:5x): NOT the head's 8 GatedResidual mixers (v1
+        mx.eval(model.language_model.mtp.parameters())     # caught them: L's HC8 read path then doubled the draft, 16.2 vs 9.1 ms)
+        _q1 = sum(1 for _, m_ in model.language_model.mtp.named_modules() if isinstance(m_, _nnp4.QuantizedLinear))
+        print(f"[r57] R57_MTP_P4 (v1b): {_q1 - _q0} of the MTP head's bf16 Linear modules at 4-bit g64 (MTP Head expects 11)", flush=True)
 import re
 from tokenizers import Tokenizer                         # NewIdeas' type rule (TrainLab scripts/type_rule.py, verbatim from
 _TKZ = Tokenizer.from_file(os.path.expanduser("~/BigMoE/models/bare/tokenizer.json"))   # d23c_mtptrunc.py rule()): the chat
@@ -485,6 +495,14 @@ if VTIER:                                                # NewIdeas' RANKED 33, 
         f"phys_footprint; macOS reclaims it before compression or swap)")
 PFCHUNK = int(os.environ.get("R57_PFCHUNK", "1024") or "1024")   # Sat 23:4x (orchestrator FLAG 2: 45.1 GB on a 7.9K prompt): prefill rows per chunk
 PFNOLOG = os.environ.get("R57_PFNOLOG") == "1"           # Sun 00:2x (Leap: prefill built full-vocab logits for every row, ~508 MB + ~45 ms per 1K chunk)
+PFLM = int(os.environ.get("R57_PFLM", "0") or 0)         # Sun 00:3x PF-A (scripts/pflm.py): prompts > one chunk prefill LAYER-major over the same
+if PFLM:                                                 # chunks, each layer's experts read from records3 once (a full-E scratch): 1 = the
+    assert PFLM in (1, 2) and TIER and not (A6 & {"pools", "warm"}), \
+        "R57_PFLM=1|2 needs R57_TIER (tier.prefill_call, the 45 GB path) and no A6 pools / warm capture"   # call on original ids,
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # 2 = on a compact copy (today's call shape, bitwise by
+    import pflm as PFLMM                                 # construction, ~+1.5 GB). Off (unset / 0): nothing here runs.
+    import bigmoe.tier as _BTP
+    PFLMM.install(_BTP, PFLM)
 if os.environ.get("R57_CACHE_GB"):                       # Sat 23:4x (FLAG 2): cap MLX's buffer cache (freed buffers kept for reuse) for the run
     _cl = int(float(os.environ["R57_CACHE_GB"]) * 1e9)
     say(f"R57_CACHE_GB: mx.set_cache_limit({_cl / 1e9:.2f} GB), was {getattr(mx, 'set_cache_limit', None) and mx.set_cache_limit(_cl) / 1e9:.2f} GB")
@@ -508,7 +526,17 @@ assert QSPLIT is None or FAST == "QOM", "R57_QOM_SPLIT is a QOM-KEEP option (R57
 QC1C = os.environ.get("R57_QCNT1C") == "1"               # draft cf reach ref2's one-call as t["qom"][2]; R57_QCNT1C sums ref2.QCNT_1C's
 assert not QC1C or hasattr(ref2, "QCNT_1C"), "R57_QCNT1C needs Leap's ref2 eb43fcc2 or later"   # [kept, dropped, groups, split drops]
 FG = dict(on=False, keep=None, sure=None, sure_np=None, t3=False,   # R57_FAST: this check's keep mask [rows, top-k] / U3's
-          cold=False, warm=None, cap=None, dump=None, chk=0, qom=False, qcf=None)   # qom: QOM's optional uses (bit 21)   # U3C: the request's warm table [48, 512], prefill capture, dump
+          cold=False, warm=None, cap=None, dump=None, chk=0, qom=False, qcf=None, rc=0)   # qom: QOM's optional uses (bit 21)   # U3C: the request's warm table [48, 512], prefill capture, dump
+# R57_RCUT_SETS=ifeval:8[,multi:8] (Sun 8 Nov, CHAT150 strike M1; Leap 00:1x proposal (b), NewIdeas' CH5 in its soft form): on
+# those prompt sets' real checks, ranks >= R of EVERY row are dropped as U3 drops them (the row's rank-0 id at weight 0: no read,
+# no renormalisation), on top of U3 / QOM's mask. Lossy (EvalSuite's IFEval gate). Decode checks only: prefill stays top-10.
+RCUT_SETS = {s_: int(r_) for s_, _, r_ in (x_.partition(":") for x_ in os.environ.get("R57_RCUT_SETS", "").split(",") if x_)}
+assert not RCUT_SETS or (FAST and all(1 <= r_ < 10 for r_ in RCUT_SETS.values())), "R57_RCUT_SETS needs R57_FAST (the gate's wrapper)"
+# R57_QOM_MTP=1|2 (Sun 8 Nov, CHAT150 M1; chs1 found QOM never engaged on chat: the FAST row gate ran on DFlash2 drafts only,
+# while chat drafts with the MTP head, so q1's qom_skip = qom_opt = 0): the gate on the MTP head's drafts too (sets listed in
+# R57_QOM_SETS). 1 = Breakthrough's M1-A (every drafted row sure at thr 0, the bonus row exact); 2 = M1-B's bonus row gated.
+QOM_MTP = int(os.environ.get("R57_QOM_MTP", "0") or 0)
+assert QOM_MTP in (0, 1, 2) and (not QOM_MTP or FAST == "QOM"), "R57_QOM_MTP=1|2 rides on R57_FAST=QOM"
 # R57_CBB=1 (the stale-slot check, the orchestrator 11-03 22:5x on Leap's S7B-PROBE 50de28c / fb999be: a slot the GPU read
 # earlier in the SAME command buffer can be re-read stale after the CPU rewrites it; across buffers it is fresh): every MoE
 # layer call starts a new command buffer (its input and routing evaluated first), so each earlier read of any slot sits in
@@ -559,7 +587,10 @@ if FAST:                                                 # EvalSuite's install_g
                                                              # stay clean (15:29: flagged ids in the graph -> a bad id at L5)
             if FG["t3"]:
                 self._bm["tier"]["nolsb"] = (sr, FG["sure_np"])   # _ooo_call_t3: those rows' ranks 0-1 at 3 bits
-        if FG["on"] and km is not None and indices.ndim >= 2 and indices.shape[-2] == km.shape[-2]:
+        if FG["rc"] and indices.ndim >= 2 and indices.shape[-1] > FG["rc"]:   # R57_RCUT_SETS: ranks >= R of every row
+            kr_ = mx.broadcast_to(mx.arange(indices.shape[-1]) < FG["rc"], indices.shape)
+            km = kr_ if km is None else (km.reshape(indices.shape) & kr_)
+        if (FG["on"] or FG["rc"]) and km is not None and indices.ndim >= 2 and indices.shape[-2] == km.shape[-2]:
             t = self._bm["tier"]
             assert t.get("scores") is not None, "the gate needs the fused combine's scores (BIGMOE_TIER_COMBINE)"
             t["scores"] = mx.where(km, t["scores"], mx.zeros_like(t["scores"]))
@@ -929,6 +960,22 @@ def states(cache):
 
 A6CAP = {}                                               # A6 pools: the last prefill chunk's routing, layer -> [1, rows, top-k]
 def prefill(ids, want_w=False, chunk=1024):
+    if PFLM and len(ids) > chunk:                        # R57_PFLM (PF-A): layer-major over the same chunks (one chunk: the path below)
+        pf1(True)
+        tap_reset(); TAP["on"] = True
+        ws = []
+        def _onc(k_, h_):                                # the chat switch: each chunk's widened stream for the MTP head
+            if want_w:
+                assert h_.shape[1] == min(chunk, len(ids) - k_ * chunk), h_.shape
+                mx.eval(h_)
+                ws.append((k_ * chunk, h_))
+        try:
+            cache, lg = PFLMM.prefill_layer_major(model, ids, chunk, states, on_chunk=_onc)
+            mx.eval(lg, states(cache), [x[-1] for x in TAP["x"]])
+        finally:
+            TAP["on"] = False
+            pf1(False)
+        return cache, lg[0, -1], taps(), ws
     pf1(True)
     cache, lg, ws = model.make_cache(), None, []
     tap_reset(); TAP["on"] = True
@@ -979,6 +1026,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         _rs = sum(int((np.array(BS.ext.lookup(sw._bm["tier"]["side"], list(range(512)))) >= 0).sum()) for sw in SW_
                   if not sw._bm.get("full") and (sw._bm.get("tier") or {}).get("side") is not None)
         pfst_ = [_rb, _rs, disk_read_bytes()]
+    lm0_ = (PFLMM.LMC["reads"], PFLMM.LMC["hits"], PFLMM.LMC["calls"]) if PFLM else None   # R57_PFLM: this prefill's scratch counters
     tpf_ = time.perf_counter()                           # Sat 17:2x (E5): prefill wall (+ the first token's readback) for end-to-end tok/s
     cache, last, T, ws = prefill(ids, mtp, chunk=PFCHUNK)
     if cold_:
@@ -1134,7 +1182,14 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         if mtp:
             if pend is not None:                         # the last check's kept rows -> the head's history
                 head.append(*pend)
-            dr, _ = head.draft_cut(min(MTP_K, maxd) if maxd else MTP_K, tcut)   # R57_CHATROWS: maxd = rows - 1
+            dr, mps_ = head.draft_cut(min(MTP_K, maxd) if maxd else MTP_K, tcut)   # R57_CHATROWS: maxd = rows - 1
+            if QOM_MTP and fz is not None and fz.get("q1u") and dr:   # R57_QOM_MTP (Sun 8 Nov, CHAT150 M1): the FAST row gate
+                sq_ = np.array([j_ < len(dr) and mps_[j_] >= fz["thr"] for j_ in range(len(dr) + 1)])   # on the MTP head's drafts
+                if QOM_MTP == 2 and len(mps_) > len(dr):  # (row j verifies dr[j]: its p, all at QOM's thr 0); the bonus row
+                    sq_[len(dr)] = mps_[len(dr)] >= fz["thr"]   # exact (1, M1-A) or (2, M1-B) gated by the chain's step past the cut
+                fst["gated"] += int(sq_.sum())
+                if not sq_.any():
+                    sq_ = None
         else:
             _d17 = D17 and R_ == 16                      # R57_D17: 17 positions, the 16th draft only gates the last row
             pth, cf = propose(mx.array([[tok] + [MASK] * (R_ if _d17 else min(R_, 32) - 1)]), ctx[None].astype(mx.bfloat16), dcache)
@@ -1272,7 +1327,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         FG.update(on=fk_ is not None or sq_ is not None, keep=mx.array(fk_) if fk_ is not None else None,   # R57_FAST
                   sure=mx.array(sq_) if sq_ is not None else None, sure_np=sq_, t3=bool(fz and fz.get("t3")),   # (in the graph)
                   cold=bool(fz and fz.get("cold")) and sq_ is not None, qom=bool(fz and fz.get("qom")) and sq_ is not None,
-                  qcf=mx.array(qcf_) if qcf_ is not None else None)
+                  qcf=mx.array(qcf_) if qcf_ is not None else None, rc=RCUT_SETS.get(fset, 0))   # R57_RCUT_SETS
         if PREROUTE and not mtp:                         # R57_PREROUTE: this check's capture; EvalSuite's block records
             PR.update(on=True, cur=None, y={}, blk={}, cap={}, dump=[] if PRDUMP else None)   # each layer's true top-10
             EM.STATE.capture = {}
@@ -1286,7 +1341,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                 lg = model(mx.array([[tok] + dr]), cache=cache)
         finally:
             FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, cold=False, qom=False, qcf=None,
-                      chk=FG["chk"] + 1)
+                      chk=FG["chk"] + 1, rc=0)
             PR["on"] = False
             if QC1C:
                 q1l_, ref2.QCNT_1C = ref2.QCNT_1C, None
@@ -1503,6 +1558,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                 nwk=[ref2.COUNTS.get("nw_calls", 0) - nk0_[0], ref2.COUNTS.get("nw_late_calls", 0) - nk0_[1]] if NW else None,
                 pfs=round(tpf_, 4),                      # E5: prefill wall s (end to end = n / (pfs + n / tps))
                 pfst=None if pfst_ is None else dict(res_base=pfst_[0], res_side=pfst_[1], gb=round((pfb_ - pfst_[2]) / 1e9, 3)),
+                pflm=None if lm0_ is None else dict(reads=PFLMM.LMC["reads"] - lm0_[0], hits=PFLMM.LMC["hits"] - lm0_[1],
+                                                     calls=PFLMM.LMC["calls"] - lm0_[2]),   # R57_PFLM: expert reads / reuses / calls
                 rlx=rst if RLX_D > 0 else None,      # R57_RELAX_DELTA: rows checked, kept exact / in all, relaxed accepts
                 spn=sst if SPAN else None,           # R57_RELAX_SPAN: rows checked, kept exact / in all, relaxed, span rows
                 inert=dict(ist, arm=INERT["name"]) if INERT is not None else None,   # R57_INERT: rows checked, kept exact / in
@@ -1598,7 +1655,7 @@ for n_p, (s, key) in enumerate(PICK):
         RUNS.append(dict(key=key, arm=arm, type=typ, bad=r["bad"], cut=r["cut"], P=len(ids),
                          **{k_: r[k_] for k_ in ("drafter", "hist", "a6", "n", "tps", "tpsw", "kept", "checks", "cyc", "ck",
                                                  "drf", "miss", "io", "mb", "mpk", "mem", "copy", "fast", "pf", "lh", "inert")},
-                         d7b=draft is DRAFT4, rlx=r.get("rlx"), spn=r.get("spn"), nwk=r.get("nwk"), pfs=r.get("pfs"), pfst=r.get("pfst")))   # Thu 18:5x / Fri 10:0x: relaxed / span / INERT
+                         d7b=draft is DRAFT4, rlx=r.get("rlx"), spn=r.get("spn"), nwk=r.get("nwk"), pfs=r.get("pfs"), pfst=r.get("pfst"), pflm=r.get("pflm")))   # Thu 18:5x / Fri 10:0x: relaxed / span / INERT
                                                          # stats were computed but never written (the pre-flight's MISSING)
         m = min(len(want), r["n"])
         agree = same(r["out"], want)

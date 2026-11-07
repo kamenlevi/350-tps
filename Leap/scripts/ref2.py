@@ -218,6 +218,9 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "commit_sub": int(os.environ.get("REF2_COMMIT_SUB", "0") or 0),   # PLAN 220 seam (e): send the commit's GDN replays every N (0 off)
        "tier_chunk": os.environ.get("REF2_TIER_CHUNK") == "1",   # F24: a tier call whose expert union exceeds the slots runs in row groups (default off)
        "tier_chunk_cap": int(os.environ.get("REF2_TIER_CHUNK_CAP", "0") or 0),   # test only: group at this union cap (0: the pools' own)
+       "hc8_fold": os.environ.get("REF2_HC8_FOLD") == "1",   # CHAT-150 G1 / B1: HC8 reads with <= 4 rows fold K2 into K3 (hc8f; bitwise; default off)
+       "hc8_k1m": os.environ.get("REF2_HC8_K1M") == "1",   # CHAT-150 G1: HC8 reads with <= 4 rows: K1 reads the M-row h / pending (no pad launches), then k2b + k3c, or K3F with hc8_fold (hc8f; bitwise; default off)
+       "hc8_g": int(os.environ.get("REF2_HC8_G", "0") or 0),   # CHAT-150 G1: HC8 reads with <= N (1-4) rows in GEMV form (hc8g; FAST: sums reordered, IFEval-gated; 0 off)
        "pad_in": os.environ.get("REF2_PAD_IN") == "1",   # CHAT-150 G1: native <= 16-row calls pad in the kernel (qmm26m; bitwise; default off)
        "hc8_v": int(os.environ.get("REF2_HC8_V", "4")),
        "ooo_1c": os.environ.get("REF2_OOO_1C") == "1", "small_native": os.environ.get("REF2_SMALL_NATIVE") == "1",
@@ -235,7 +238,7 @@ _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
               kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
               fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0, ooo_1c_qom=0, nax_1cq=0, qom_split=0,
-              gdn_lazy=0, gdn_lazy_rows=0, gdn_lazy_flush=0, dn_ks=0, nw_calls=0, nw_late_calls=0, nw_writes=0, eprep=0, gdn_tg=0, sb_first=0, ple_late=0, ple_late_stale=0, commit_sub=0, tier_chunk=0, tier_chunk_groups=0, pad_in=0)
+              gdn_lazy=0, gdn_lazy_rows=0, gdn_lazy_flush=0, dn_ks=0, nw_calls=0, nw_late_calls=0, nw_writes=0, eprep=0, gdn_tg=0, sb_first=0, ple_late=0, ple_late_stale=0, commit_sub=0, tier_chunk=0, tier_chunk_groups=0, pad_in=0, hc8_fold=0, hc8_k1m=0, hc8_g=0)
 QCNT_1C = None                                       # Fri 11-06: a list -> each one-call's post-drop work (see the notes)
 NW_ON = False                                        # NEVER-WAIT (Fri 11-06): runtime switch, read per one-call (armed by
 NWCNT = None                                         # CFG["neverwait"]); NWCNT: a list -> per one-call float32 counters
@@ -653,6 +656,30 @@ def _gr(self, hyper_input, pending=None):
     lead, rows = _rows(hyper_input)
     if rows > R:
         return orig(self, hyper_input, pending)
+    if ((rows <= CFG["hc8_g"] or (CFG["hc8_k1m"] and CFG["hc8_v"] in (4, 5))) and CFG["hc8_fast"] and rows <= 4
+            and "block_inject_weight" in self and hyper_input.dtype == mx.bfloat16
+            and (pending is None or all(t.dtype == mx.bfloat16 for t in pending))):
+        q8 = _hc8_params(self)
+        if q8 is not None:
+            bo, inj = (None, None) if pending is None else (pending[0].reshape(rows, -1), pending[1].reshape(rows, -1))
+            if rows <= CFG["hc8_g"]:                 # CHAT-150 G1 HC8-G: GEMV form (FAST: sums reordered)
+                import hc8g
+                mixed, written, inject = hc8g.read_g(q8, hyper_input.reshape(rows, -1), bo, inj, rps=4 if rows <= 2 else 8)
+                COUNTS["hc8_g"] += 1
+                COUNTS["hc8_fast"] += 1
+                return mixed.reshape(*lead, -1), written.reshape(hyper_input.shape), inject.reshape(*lead, -1)
+            import hc8f                              # CHAT-150 K1M: K1 on the M-row inputs (bitwise == the padded read)
+            if CFG["hc8_fold"]:
+                mixed, written, inject = hc8f.read_fold(q8, hyper_input.reshape(rows, -1), bo, inj, NP=CFG["hc8_np"],
+                                                        v=CFG["hc8_v"], M=rows)
+                COUNTS["hc8_fold"] += 1
+            else:
+                mixed, written, inject = hc8f.read_k1m(q8, hyper_input.reshape(rows, -1), bo, inj, NP=CFG["hc8_np"],
+                                                       v=CFG["hc8_v"])
+            COUNTS["hc8_k1m"] += 1
+            COUNTS["hc8_fast"] += 1
+            return (mixed[:rows].reshape(*lead, -1), written[:rows].reshape(hyper_input.shape),
+                    inject[:rows].reshape(*lead, -1))
     h16 = _pad16(hyper_input.reshape(rows, -1)).reshape(1, R, -1)
     p16 = None if pending is None else tuple(_pad16(p.reshape(rows, -1)).reshape(1, R, -1) for p in pending)
     q8 = _hc8_params(self) if "block_inject_weight" in self else None
@@ -660,7 +687,12 @@ def _gr(self, hyper_input, pending=None):
         bf = mx.bfloat16
         if CFG["hc8_fast"] and h16.dtype == bf and (p16 is None or all(t.dtype == bf for t in p16)):
             bo, inj = (None, None) if p16 is None else (p16[0].reshape(R, -1), p16[1].reshape(R, -1))
-            mixed, written, inject = _hc8r().read(q8, h16.reshape(R, -1), bo, inj, NP=CFG["hc8_np"], v=CFG["hc8_v"])
+            if CFG["hc8_fold"] and rows <= 4 and CFG["hc8_v"] in (4, 5):   # CHAT-150: K2 folded into K3 (hc8f, bitwise)
+                import hc8f
+                mixed, written, inject = hc8f.read_fold(q8, h16.reshape(R, -1), bo, inj, NP=CFG["hc8_np"], v=CFG["hc8_v"], M=rows)
+                COUNTS["hc8_fold"] += 1
+            else:
+                mixed, written, inject = _hc8r().read(q8, h16.reshape(R, -1), bo, inj, NP=CFG["hc8_np"], v=CFG["hc8_v"])
             COUNTS["hc8_fast"] += 1
             return (mixed[:rows].reshape(*lead, -1), written[:rows].reshape(hyper_input.shape),
                     inject[:rows].reshape(*lead, -1))

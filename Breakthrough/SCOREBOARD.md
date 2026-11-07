@@ -3678,3 +3678,80 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
   - Every measured non-tie cost ran 1.2-2x over Fable A's predictions. xs48's multi room is thin (0.67 vs 0.72).
   - Stand-alone VERDICT2: xs48 passes all three domains; xs40 passes code; xs32 fails code all-row (1.43 > 1.34).
   - Quality only: the speed side (a kernel that skips the zeroed inputs) is Fable A's to price. No speed is claimed.
+
+- Sun 00:1x: M1 (CHAT150 STRIKE, NewIdeas 7788571 / c16f510): THE 45 GB CHAT MISS LEVERS, RANKED. Bytes [P]: the
+  BYTES10 replay (NewIdeas' bytes10_replay_fix.py core, unchanged, + 9 rules and pool splits: scripts/m1/m1_replay.py).
+  Quality [K, map]: chat flips of the existing 45 GB-pool arms (scripts/m1/m1_quality.py). Data: data/m1/.
+  - **Calibration.** The replay's EXACT chat row is within ~5 % of the engine's N45 exact run (BigMoE, nie1/nie2,
+    676 checks each): 38.1 vs ~40 MB per kept token on IFEval.
+    - The engine reads 101 MB and 89.8 misses per check (~1.13 MB per miss, so ~74 % of misses are 0.77 MB LSB sidecars).
+      The replay reads 88.5 MB and 63 misses (55 % LSB).
+    - So the engine is LSB-heavier than the replay, and the sidecar levers below should do at least as well there.
+  - **Finding 1: QOM is not active on chat today.** In both the exact and the lossy (L) chat runs, the engine's
+    qom_skip = qom_opt = 0 and NW is idle, and L's chat reads the same bytes as exact (99.8 vs 101.2 MB per check). L's
+    chat gain is kernels, not misses.
+  - **Finding 2: on chat, QOM costs nothing; gating the bonus row is what costs.**
+    - QOM at cf 0 vs QOM at cf 0.5 (`qom_0_live` vs `qom_0.5_live`): z -0.54 / +0.70.
+    - The bonus row gated at cf 0.5 (`qom_0.5_live_bonus5g`): z +0.74 / +1.34.
+    - Every last row gated (`qom_0_live_ball`, DRAFT17's bound): z +4.10 / +5.69, but still inside the lines.
+  - **Finding 3: a pool split pays only under QOM.** Moving S base slots per layer to 2.81 S sidecar slots (equal bytes):
+    - EXACT: -1 % at S 16, +11 % at S 32 (no exact lever on its own);
+    - QOM0 + ball: -41 % more at S 32-48.
+    QOM frees the base pool (cold ranks 2-9 are no longer read), and the sidecars are where chat misses.
+
+  | # | lever (45 GB pool, live checks, LRU) | MB per kept, IFEval / multi (vs EXACT) | misses per check, IFEval (MSB + LSB) | svc [P, 15 ms x MB ratio] | chat quality on the map, all-row [non-tie] IFEval / multi; McNemar vs `qom_0.5_live` | verdict |
+  |---|---|---|---|---|---|---|
+  | - | EXACT (today) | 38.1 / 33.2 | 63.3 (28.6 + 34.7) | 15 ms | (no flips by construction) | - |
+  | 1 | QOM0: every drafted row skips its cold, non-union ranks 2-9; ranks 0-1 always; bonus row exact | 25.7 / 24.3 (-32 / -27 %) | 50.0 (15.3 + 34.7) | -4.8 | `qom_0_live` 2.53 [0.45] / 1.77 [0.33]; z -0.54 / +0.70 | free |
+  | 1s | QOM0 + split S 16 | 22.5 / 22.6 (-41 / -32 %) | 35.3 (18.0 + 17.3) | -6.2 | + a ~5 % smaller base pool [P, small] | free [P] |
+  | 2 | QOM0.5 + bonus row gated at the next draft's cf >= 0.5 (needs the MTP head's cf calibrated) | 22.8 / 22.0 (-40 / -34 %) | 46.9 | -6.0 | `qom_0.5_live_bonus5g` 2.88 [0.55] / 1.91 [0.39]; z +0.74 / +1.34 | ~free |
+  | 2s | the same + split S 16-32 | 18.7 / 19.7 (-51 / -41 %) | 27.2-31.3 | -7.7 | as 2, plus the pool | ~free [P] |
+  | 3 | QOM0 + every bonus row gated (the 45 GB FAST code rule, QOM-KEEP + DRAFT17, on chat) | 16.0 / 13.0 (-58 / -61 %) | 39.5 (4.8 + 34.7) | -8.7 | `qom_0_live_ball` 4.03 [1.00] / 3.26 [0.91] PASS; z +4.10 / +5.69 | costs; inside the lines (multi margin 0.43) |
+  | 3s | the same + split S 32 | 9.4 / 8.4 (-75 / -75 %) | 17.2 (6.2 + 11.0) | -11.3 | as 3, plus the pool (~+0.3-0.5 points [G]; c208 cost +1.2 at -30 % slots) | the IFEval gate decides |
+  | 4 | U3: a cold LSB sidecar is not read (ranks 0-1 at 3 bits when cold) = NW v3's (b) at its real rate | 26.6 / 24.7 (-30 / -26 %) | 28.6 (LSB 0: -55 % misses) | -4.5 (bytes) .. -8 (count) | worst case (`..._nw3`, every unsure row) FAIL: z +8.4 / +10.3. 3 bits on all sure rows (`qom_0.5_live_t3`) z +5.0 / +6.0. Real rate ~12 % of rank 0-1 LSB uses [P] | needs a fresh gate; after split 3s the LSB misses are already -68 % |
+  | 5 | NW1 on chat (cold demand uses go late; no 3 bits) | bytes unchanged; hides waits | - | most of what is left [P, unpriced] | `qom_0_live_ball_nw1` vs its twin: z -0.20 / -0.12 (non-tie IFEval z +2.00, flagged) | ~free |
+  | 6 | TOP8 on chat (CH5) | 30.2 / 25.9 (-21 / -22 %) | 54.8 | -3.2 | `top_k8` 5.24 [1.90] / 4.31 [1.54], multi FAIL; z +7.03 / +7.68 | DROP: dominated by QOM0 (fewer bytes saved, more damage) |
+  | 7 | MSB-2 on ranks 2-9 (BC2, below) | after QOM, <= -4..-9 % of the miss bytes | - | <= -1 | s7 screens: +0.6 (4 layers) to +7.4 points (48 layers) IFEval | DROP for chat |
+  | - | OPT (any residency policy's ceiling) | EXACT 19.6; QOM0+ball 9.0 | - | - | exact | PIN / RCP gained nothing (CACHE.md, BYTES10) |
+
+  - **Handed to BigMoE** (engine A/Bs on 12 IFEval at C 256 after CERT; then the EvalSuite IFEval + multi gate vs
+    NAX6-N, both orders):
+    - **M1-A (~free on the map):** QOM on every drafted chat row (cf >= 0) + a 16-slot base-to-sidecar shift
+      (C 256 -> 240, C_l +45). [P] -41 / -32 % MB per check, svc ~ -5..-6 ms.
+    - **M1-B (max):** M1-A + the bonus row gated (DRAFT17 on chat) + a 32-slot shift. [P] -75 % MB per check, svc
+      ~ -11 ms. It costs +1.4 / +1.6 points of flips vs M1-A on the map; the gate decides.
+    - Then NW1 on chat, (b) off, on top of the winner.
+    - Read per arm: svc, misses and MB per check, tok/s whole decode, and every token vs AR.
+    - The best shift in the engine may differ: its pools are C 256 + VTIER 64 base, C_l 112 + 32 sidecar, against the
+      replay's 295 / 89. Try S 16 and 32.
+  - Caveats:
+    - The map's cf is DFlash2's; chat runs the MTP head. QOM0 and the 'ball' bound need no cf; rule 2 does.
+    - svc is priced proportional to MB per check. A count-bound SSD would favour the LSB levers (3s, 4).
+
+- Sun 00:1x: BC2 ANSWER (NewIdeas 01:1x for Leap: a 2-bit / MSB-2 read path at 45 GB?) [records + map]:
+  1. **Read path.** At 24 GB, yes: BigMoE's R-44b POM (LEDGER R-44b; HANDOVER Thu).
+     - records3p seg1 (2 planes + fields) / seg2 (plane 3 + b3); the 2-plane slot is a 3-bit slot with plane 3 = 0 and
+       bias2. It is bitwise EvalSuite's tier 2, with no kernel change.
+     - b45 measured bytes -19 % but tok/s -1.9 %. Each 2-plane read or upgrade pays a ~0.1 ms CPU rebuild, so SSD busy
+       fell only -6.5 %.
+     - At 45 GB (r57 / ref2 tiers) I know of no port. It needs records3p for the converted store (disk), the POM pool
+       state and upgrades in r57's tier pool, and, for any GPU-side byte cut, a true 2-bit slot and kernel. The 3-bit-slot
+       trick saves SSD bytes only. BigMoE / Leap to confirm.
+  2. **What is different now: QOM.** M1's QOM on chat already skips cold ranks 2-9 entirely, at ~zero map cost. After
+     QOM, MSB misses are 30 % of chat bytes (QOM0) or 12 % (QOM0 + ball), so MSB-2 on misses has <= -4..-9 % left to
+     save. MSB-2 on resident ranks saves no SSD bytes.
+  3. **IFEval risk: high** [K, map, s7 screens at the 24 GB form, every kept expert of the gated rows]:
+     - MSB-2 at 4 layers: +0.64 / +0.62 points (IFEval / multi) over s7_ref;
+     - at all 48 layers: +7.4 / +8.2 points (13.92 / 13.59 %; KL x4.7 / x6.2);
+     - MSB-3 on every kept expert (s7_ref3): +1.1 / +1.0.
+     Ranks 2-9 only would be in between ([P, by weighted NMSE] ~+2-2.5 points IFEval): a likely FAIL on chat, for a
+     small byte gain. Recommendation: drop BC2 for chat; QOM is the stronger form of the same cut.
+
+- Sun 00:1x: 24 / 12 GB CHAT BYTES (NewIdeas 00:2x re-aim; parked until after Monday by NewIdeas 00:4x). On record from
+  NewIdeas' own BYTES10 replay (~/NewIdeas/data/ledger/bytes10_replay_fix.out; IFEval / multi, live checks, LRU):
+  - 24 GB (C_m 147 + C_l 46): EXACT 210 / 183 MB per kept token. QOM 0.5 (the 24 GB chat route, which PASSes chat at
+    147 slots) 120 / 111. OPT 94 / 84. Synthetic kept per check: EXACT flat at ~127 / 112 when no row is wasted.
+  - 12 GB (C_m 51 + C_l 32): EXACT 622 / 487. The best priced rule (COLD 0 t3) 194 / 156. Q1 0 t3 at 16 kept per check
+    80 / 61 (no chat gate passes it).
+  - <= 80 MB: at 24 GB, the passing route + fewer wasted rows (F2a) + the QOM pool split are the candidates (to price
+    after Monday). At 12 GB no gated rule gets near it [P].

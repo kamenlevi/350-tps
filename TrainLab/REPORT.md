@@ -3799,3 +3799,38 @@ loses chat hits.
 - **Engine change** (BigMoE's screen, behind a flag): after `_M.install(...)`, quantize the head's bf16 Linear modules
   at 4 bits, group 64 (the predicate in sticky/mtp_step_bench.py, D1_P4). Optionally, run the chain's steps
   without the per-step `.item()`: evaluate pairs of steps and cut post hoc.
+
+### F2A night: pre-registration (Sun 11-08 00:2x, before any run; NewIdeas' quiet whole-Mac window Sun 23:00 -> Mon 07:00, QUEUE c16f510)
+
+- **Goal.** A chat MTP head that keeps more per check on chat: b5 continued on ~1.5-2M tokens of the 125B's chat features.
+- **Data.**
+  - Text: one shard of UltraChat-200k (MIT; English multi-turn) + Aya (Apache-2.0; 17 languages incl. the multi set's
+    bg de fr es ru zh ja ar), ~2 : 1 in tokens. Rendered with the 125B's chat template, thinking off
+    (sticky/f2a_data.py -> data/f2a/seqs.npz).
+  - Labels: the 125B's own top-32 at every position (sticky/f2a_capture.py). So the labels are on-policy and only the
+    text is off-policy.
+  - On-policy eval: 24 of the 125B's own greedy IFEval answers (EvalSuite reference decodes), captured first.
+- **Recipe:** D-22's trainer from b5, depth 6, AUF as b5, lr = b5's x 0.5, warm-up 20 + cosine, one pass over the ring
+  (sticky/f2a_train.py).
+- **Line** (f2a vs b5; kept per check with the shipped cut t 0.3, K6; teacher-forced chain; sticky/f2a_eval.py):
+  - PASS: held-out kept >= x1.08 (geo of D-24's 30 IFEval and 24 multi, which neither head trained on) AND on-policy
+    IFEval kept >= x1.05. A PASS goes to BigMoE's engine A/B on Monday (12 IFEval, chat whole decode, exact).
+  - KILL: held-out < x1.03.
+  - BETWEEN otherwise.
+- **Prediction [G]:** held-out x1.05-1.20 (the modest row of 'F2A feasibility'). PASS ~35 %.
+- **Phases and guards** (turns/f2a_night.sh):
+  - Capture until the ring holds 34 GB or 03:45. The expert pool is C 256 if NO-SWAP >= 46 GB, else C 192 / 128.
+  - Train until 06:10. Evaluate, commit, and release the lock by 06:50.
+  - Each phase stops cleanly (keeping its checkpoint) on swap +2 GB or free disk < 25 GB (Kamen keeps 20 GB for
+    swap). The scripts wait while PAUSE exists.
+- **Engine A/B (BigMoE chs2, Sun 00:5x-01:0x, 12 IFEval at C 256, one pass each; data/r57/x2*_256_*):**
+  - On the exact config E, v1 is exact (12/12 equal to the AR reference) and neutral: drf 8.7 -> 8.4 ms per check, rows
+    3.14 -> 3.41, kept 2.53 -> 2.57, whole decode 36.6 -> 36.9 tok/s.
+  - On the lossy config L, v1 is a KILL: drf 9.1 -> 16.2 ms per check, kept 2.62 -> 2.55.
+  - Cause (BigMoE's split, confirmed in the code): my predicate also put 8 non-trained bf16 Linears at 4 bits. These are
+    the head's hyper-connection mixers (GatedResidual input_mix down / up + block_inject, and the output mixer). L's HC8
+    read path takes another route when they carry scales (qwen4_exp.py GatedResidual, line 1166).
+  - v1b quantizes only the 11 trained modules (predicate + `"hyper_connection" not in path`). It goes to BigMoE's chs4
+    on L after CERT. Expected: E's numbers, i.e. whole decode +0.5-1 % [P].
+  - A no-sync / pairwise chain isn't worth it: a chain cut at an odd step wastes a ~2.3 ms step, more than the ~0.2 ms
+    saved per sync.

@@ -75,6 +75,8 @@ for arm in $ARMS; do
     fcpcc) X="R57_WIRED=1 FCP_NCHK=16 MTPLX_QWEN4EXP_COMPILE=1" KK="ifeval/1220,ifeval/3280,ifeval/1561" CP=64;;   # B1 probe: MTPLX's compiled <= 4-row decode
     fcpcb) X="R57_WIRED=1" KK="ifeval/1220,ifeval/3280,ifeval/1561" CP=128;;   # CHAT-150 base (no probe windows)
     fcpcp) X="R57_WIRED=1 REF2_PAD_IN=1" KK="ifeval/1220,ifeval/3280,ifeval/1561" CP=128;;   # G1 exact: in-kernel pads
+    fcpcq) X="R57_WIRED=1 REF2_PAD_IN=1" KK="ifeval/1220" CP=32;;   # engagement check (counts)
+    fcpcm) X="R57_WIRED=1 R57_QOM_SETS=humaneval,ifeval" KK="ifeval/1220,ifeval/3280,ifeval/1561" CP=128;;   # M1 probe: QOM on chat (MTP drafter)
     fcpp1) X="R57_PFCHUNK=1024" E="$EXE" CC=192 KK="agent/edit10,agent/write13" CP=16;;   # PREFILL: chunk 1024 (today's)
     fcpp8) X="R57_PFCHUNK=8192" E="$EXE" CC=192 KK="agent/edit10,agent/write13" CP=16;;   # PREFILL: one call per prompt
     fcps) X="FCP_SEAMS=1 R57_WIRED=1" KK="$KC6" CP=128;;   # PLAN 220 (4): the cycle's GPU-idle seams on v1' + wired

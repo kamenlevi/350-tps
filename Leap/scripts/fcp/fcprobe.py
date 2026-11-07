@@ -312,6 +312,9 @@ def dump():
     print(f"[fcp] {len(REC)} check windows, {len(CALLS)} calls, {len(SAMP)} samples -> {p}", flush=True)
     r2 = sys.modules.get("ref2")
     if r2 is not None:
+        print(f"[fcp] ref2 COUNTS dense: pad_in {r2.COUNTS.get('pad_in')}, dense_native {r2.COUNTS.get('dense_native')}, "
+              f"small_native {r2.COUNTS.get('small_native')}, qmm16c {r2.COUNTS.get('qmm16c')}, mlx16 {r2.COUNTS.get('mlx16')}, "
+              f"hc8_fast {r2.COUNTS.get('hc8_fast')}", flush=True)
         print(f"[fcp] ref2 COUNTS tier: tier_calls {r2.COUNTS.get('tier_calls')}, tier_chunk {r2.COUNTS.get('tier_chunk')}, "
               f"groups {r2.COUNTS.get('tier_chunk_groups')}", flush=True)
         print(f"[fcp] ref2 COUNTS seams: sb_first {r2.COUNTS.get('sb_first')}, ple_late {r2.COUNTS.get('ple_late')}, "

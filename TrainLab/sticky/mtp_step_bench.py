@@ -131,7 +131,7 @@ for nm, fn in (("head (4-bit 248K output layer)", head_only), ("core (MTP layer,
 try:
     import mtplx.draft_lm_head as DLH
     q = lm.lm_head
-    for bits in (3, 2):
+    for bits in (() if os.environ.get("D1_SKIPOUT") == "1" else (3, 2)):
         wq = mx.dequantize(q.weight, q.scales, q.biases, group_size=q.group_size, bits=q.bits)
         w2, s2, b2 = mx.quantize(wq, group_size=64, bits=bits)
         del wq
@@ -145,5 +145,30 @@ try:
         del w2, s2, b2
 except Exception as e:
     say(f"draft output layer bits: n/a ({type(e).__name__}: {str(e)[:120]})")
+def upd(k):
+    def f():
+        model.mtp_update_cache(hid[:, :k], ids[:, 1:k + 1], mtp_cache=cache)
+        mx.eval([c.state for c in cache]); trim()
+    return f
+
+
+for k in (2, 4, 8):
+    ms5, p90 = timeit(upd(k))
+    say(f"cache update over {k} accepted rows        : {ms5:6.2f} ms (p90 {p90:.2f})")
+
+
+def cycle():
+    """engine-like draft of one chat check: append 3 accepted rows (update 2 + forward the last), then 2 synced steps"""
+    model.mtp_update_cache(hid[:, :2], ids[:, 1:3], mtp_cache=cache)
+    lg, h = model.mtp_forward(hid[:, 2:3], ids[:, 3:4], mtp_cache=cache, return_hidden=True)
+    l0 = lg[0, -1].astype(mx.float32); tk, p = mx.argmax(l0), mx.softmax(l0).max(); mx.eval(tk, p); t = int(tk.item())
+    for _ in range(2):
+        lg, h = model.mtp_forward(h, mx.array([[t]]), mtp_cache=cache, return_hidden=True)
+        lx = lg[0, -1].astype(mx.float32); tk, p = mx.argmax(lx), mx.softmax(lx).max(); mx.eval(tk, p); t = int(tk.item())
+    trim()
+
+
+ms6, p90 = timeit(cycle)
+say(f"engine-like chat draft (append 3 + 2 steps): {ms6:6.2f} ms (p90 {p90:.2f})")
 say(f"peak MLX memory {mx.get_peak_memory() / 2 ** 30:.1f} GB")
 open(OUT, "w").write("\n".join(L_) + "\n")

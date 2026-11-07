@@ -1,0 +1,81 @@
+11-08 00:10:10 [chs1] start (pid 96427, NO-SWAP 53.0 GB, snapshot 94f0aad, end 01:18, arms: c0 q1 fa1 fa2 fa3 fa4 fa5 fa6 e0 c0b r1 qr1 )
+11-08 00:11:45 [chs1] c0 rc=0
+11-08 00:13:20 [chs1] q1 rc=0
+11-08 00:14:56 [chs1] fa1 rc=0
+11-08 00:16:36 [chs1] fa2 rc=0
+11-08 00:18:06 [chs1] fa3 rc=0
+11-08 00:19:47 [chs1] fa4 rc=0
+11-08 00:21:22 [chs1] fa5 rc=0
+11-08 00:23:03 [chs1] fa6 rc=0
+11-08 00:24:38 [chs1] e0 rc=0
+11-08 00:26:13 [chs1] c0b rc=0
+11-08 00:27:44 [chs1] r1 rc=0
+11-08 00:29:14 [chs1] qr1 rc=0
+CHS chs1 (data/chs; snapshot 94f0aad; 12 IFEval (N45's keys), C 256, one pass per arm, quiet): WHOLE DECODE pooled (geo of runs); per check means: kept, rows, ck / drf / cycle ms, misses, svc / io ms, stl (count), bld / wt ms; MB SSD per kept token; lifetime peak; runs == NAX6-N's AR; relaxed accepts (rule R1 / span)
+  c0  : WHOLE DECODE   41.5 tok/s ( +0.0 % vs first) geo 41.9; kept 2.47 rows 3.12; ck 50.2 drf 8.9 cycle 59.0 ms; miss 90.7 svc 16.4 io 13.4 stl 20.5; bld 40.0 wt 9.1; 41.8 MB/kept; peak 42.40 GB; == AR 3/12; relaxed R1 0 span 0
+  q1  : WHOLE DECODE   42.1 tok/s ( +1.5 % vs first) geo 43.7; kept 2.48 rows 3.17; ck 49.2 drf 9.0 cycle 58.2 ms; miss 89.7 svc 15.5 io 12.4 stl 20.0; bld 39.2 wt 8.9; 41.2 MB/kept; peak 42.40 GB; == AR 4/12; relaxed R1 0 span 0
+  fa1 : WHOLE DECODE   42.3 tok/s ( +2.0 % vs first) geo 44.4; kept 2.52 rows 3.14; ck 50.2 drf 8.9 cycle 59.0 ms; miss 88.3 svc 15.3 io 12.3 stl 19.9; bld 39.6 wt 9.5; 39.6 MB/kept; peak 42.40 GB; == AR 3/12; relaxed R1 0 span 0
+  fa2 : WHOLE DECODE   40.3 tok/s ( -2.9 % vs first) geo 41.0; kept 2.46 rows 3.07; ck 52.4 drf 8.5 cycle 60.9 ms; miss 86.5 svc 15.6 io 12.6 stl 19.9; bld 41.1 wt 10.2; 41.1 MB/kept; peak 43.60 GB; == AR 4/12; relaxed R1 0 span 0
+  fa3 : WHOLE DECODE   42.4 tok/s ( +2.2 % vs first) geo 43.1; kept 2.58 rows 3.16; ck 51.0 drf 8.7 cycle 59.7 ms; miss 96.2 svc 16.8 io 13.1 stl 21.3; bld 40.2 wt 9.8; 41.9 MB/kept; peak 42.10 GB; == AR 3/12; relaxed R1 0 span 0
+  fa4 : WHOLE DECODE   39.4 tok/s ( -5.1 % vs first) geo 41.2; kept 2.47 rows 2.98; ck 54.3 drf 8.2 cycle 62.5 ms; miss 83.2 svc 14.2 io 11.4 stl 19.0; bld 41.7 wt 11.7; 37.9 MB/kept; peak 42.40 GB; == AR 3/12; relaxed R1 0 span 0
+  fa5 : WHOLE DECODE   42.9 tok/s ( +3.4 % vs first) geo 43.9; kept 2.47 rows 3.06; ck 48.8 drf 8.4 cycle 57.2 ms; miss 88.8 svc 15.9 io 12.8 stl 20.2; bld 38.6 wt 9.2; 40.4 MB/kept; peak 42.40 GB; == AR 3/12; relaxed R1 0 span 0
+  fa6 : WHOLE DECODE   36.7 tok/s (-11.7 % vs first) geo 38.5; kept 2.60 rows 3.19; ck 61.0 drf 8.7 cycle 69.7 ms; miss 92.3 svc 15.6 io 12.8 stl 20.6; bld 46.9 wt 13.2; 40.2 MB/kept; peak 43.30 GB; == AR 4/12; relaxed R1 0 span 0
+  e0  : WHOLE DECODE   36.4 tok/s (-12.2 % vs first) geo 39.0; kept 2.53 rows 3.14; ck 59.6 drf 8.7 cycle 68.3 ms; miss 89.8 svc 15.3 io 12.3 stl 20.3; bld 45.9 wt 12.8; 40.2 MB/kept; peak 41.70 GB; == AR 12/12; relaxed R1 0 span 0
+  c0b : WHOLE DECODE   42.7 tok/s ( +2.8 % vs first) geo 44.1; kept 2.45 rows 3.17; ck 48.2 drf 8.7 cycle 56.9 ms; miss 89.3 svc 15.1 io 12.3 stl 19.9; bld 38.0 wt 9.1; 41.5 MB/kept; peak 42.40 GB; == AR 2/12; relaxed R1 0 span 0
+  r1  : WHOLE DECODE   45.1 tok/s ( +8.7 % vs first) geo 46.3; kept 2.57 rows 3.06; ck 48.1 drf 8.3 cycle 56.4 ms; miss 92.1 svc 15.4 io 12.5 stl 20.5; bld 38.6 wt 8.4; 41.6 MB/kept; peak 42.40 GB; == AR 2/12; relaxed R1 62 span 0
+  qr1 : WHOLE DECODE   44.6 tok/s ( +7.5 % vs first) geo 45.5; kept 2.53 rows 3.09; ck 47.7 drf 8.5 cycle 56.2 ms; miss 89.0 svc 14.9 io 12.1 stl 19.7; bld 37.9 wt 8.7; 39.7 MB/kept; peak 42.40 GB; == AR 2/12; relaxed R1 63 span 0
+11-08 00:29:14 [chs1] report rc=0 (data/chs/chs1_report.txt)
+11-08 00:29:14 [chs1] end
+11-08 00:30:48 [chs2] start (pid 87817, NO-SWAP 52.9 GB, snapshot 09ef078, end 01:18, arms: x2c0 x2qm1 x2qm1s x2qm2s x2p4 x2l2c x2l2f x2rc8 x2qm2 x2c0b x2e x2ep4 )
+11-08 00:32:18 [chs2] x2c0 rc=0
+11-08 00:33:48 [chs2] x2qm1 rc=0
+11-08 00:35:19 [chs2] x2qm1s rc=0
+11-08 00:36:44 [chs2] x2qm2s rc=0
+11-08 00:38:19 [chs2] x2p4 rc=0
+11-08 00:39:50 [chs2] x2l2c rc=0
+11-08 00:41:25 [chs2] x2l2f rc=0
+11-08 00:43:01 [chs2] x2rc8 rc=0
+11-08 00:44:31 [chs2] x2qm2 rc=0
+11-08 00:46:01 [chs2] x2c0b rc=0
+11-08 00:47:37 [chs2] x2e rc=0
+11-08 00:49:12 [chs2] x2ep4 rc=0
+CHS chs2 (data/chs; snapshot 09ef078; 12 IFEval (N45's keys), C 256, one pass per arm, quiet): WHOLE DECODE pooled (geo of runs); per check means: kept, rows, ck / drf / cycle ms, misses, svc / io ms, stl (count), bld / wt ms; MB SSD per kept token; lifetime peak; runs == NAX6-N's AR; relaxed accepts (rule R1 / span)
+  x2c0: WHOLE DECODE   44.8 tok/s ( +0.0 % vs first) geo 46.4; kept 2.62 rows 3.29; ck 48.9 drf 9.1 cycle 58.0 ms; miss 97.8 svc 15.8 io 12.9 stl 21.5; bld 39.1 wt 8.8; 41.8 MB/kept; peak 42.40 GB; == AR 3/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x2qm1: WHOLE DECODE   45.3 tok/s ( +1.0 % vs first) geo 49.4; kept 2.46 rows 3.14; ck 45.2 drf 8.7 cycle 53.9 ms; miss 42.8 svc 10.1 io 7.8 stl 14.4; bld 35.1 wt 9.1; 22.8 MB/kept; peak 42.40 GB; == AR 3/12; relaxed R1 0 span 0; gated rows 1289; qom skip/opt 26716/341175; fc issued/hits 0/0
+  x2qm1s: WHOLE DECODE   45.8 tok/s ( +2.2 % vs first) geo 49.9; kept 2.41 rows 3.02; ck 44.0 drf 8.4 cycle 52.4 ms; miss 38.3 svc 9.2 io 7.6 stl 14.9; bld 33.8 wt 9.2; 21.6 MB/kept; peak 42.40 GB; == AR 2/12; relaxed R1 0 span 0; gated rows 1337; qom skip/opt 29069/353934; fc issued/hits 0/0
+  x2qm2s: WHOLE DECODE   52.0 tok/s (+16.1 % vs first) geo 55.4; kept 2.72 rows 3.42; ck 42.4 drf 9.3 cycle 51.7 ms; miss 28.2 svc 7.9 io 6.0 stl 11.4; bld 32.0 wt 9.4; 15.1 MB/kept; peak 42.30 GB; == AR 3/12; relaxed R1 0 span 0; gated rows 1776; qom skip/opt 71832/585238; fc issued/hits 0/0
+  x2p4: WHOLE DECODE   38.4 tok/s (-14.3 % vs first) geo 39.5; kept 2.55 rows 3.48; ck 49.6 drf 16.2 cycle 65.7 ms; miss 95.9 svc 15.9 io 12.9 stl 20.8; bld 39.5 wt 8.9; 42.6 MB/kept; peak 42.30 GB; == AR 3/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x2l2c: WHOLE DECODE   42.4 tok/s ( -5.3 % vs first) geo 43.8; kept 2.49 rows 3.10; ck 49.5 drf 8.5 cycle 58.0 ms; miss 88.6 svc 14.8 io 11.9 stl 19.9; bld 39.3 wt 9.3; 40.6 MB/kept; peak 42.40 GB; == AR 2/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x2l2f: WHOLE DECODE   40.7 tok/s ( -9.2 % vs first) geo 42.4; kept 2.53 rows 3.14; ck 52.7 drf 8.7 cycle 61.4 ms; miss 92.2 svc 15.0 io 9.1 stl 20.7; bld 41.1 wt 10.5; 183.2 MB/kept; peak 48.80 GB; == AR 3/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 150268/18327
+  x2rc8: WHOLE DECODE   45.1 tok/s ( +0.6 % vs first) geo 46.1; kept 2.48 rows 3.14; ck 46.1 drf 8.6 cycle 54.7 ms; miss 76.5 svc 12.9 io 9.8 stl 17.0; bld 36.1 wt 8.9; 34.5 MB/kept; peak 42.40 GB; == AR 3/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x2qm2: WHOLE DECODE   49.0 tok/s ( +9.5 % vs first) geo 53.1; kept 2.41 rows 3.02; ck 40.5 drf 8.3 cycle 48.8 ms; miss 25.8 svc 6.3 io 4.6 stl 9.0; bld 29.2 wt 10.4; 15.5 MB/kept; peak 42.40 GB; == AR 2/12; relaxed R1 0 span 0; gated rows 1848; qom skip/opt 57419/616618; fc issued/hits 0/0
+  x2c0b: WHOLE DECODE   43.7 tok/s ( -2.4 % vs first) geo 45.6; kept 2.50 rows 3.19; ck 47.8 drf 8.8 cycle 56.6 ms; miss 91.1 svc 14.9 io 12.1 stl 20.5; bld 38.0 wt 8.8; 40.9 MB/kept; peak 42.40 GB; == AR 3/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x2e : WHOLE DECODE   36.6 tok/s (-18.3 % vs first) geo 39.3; kept 2.53 rows 3.14; ck 59.4 drf 8.7 cycle 68.0 ms; miss 89.8 svc 15.1 io 12.1 stl 20.3; bld 45.7 wt 12.7; 40.0 MB/kept; peak 41.70 GB; == AR 12/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x2ep4: WHOLE DECODE   36.9 tok/s (-17.5 % vs first) geo 39.8; kept 2.57 rows 3.41; ck 59.9 drf 8.4 cycle 68.3 ms; miss 94.0 svc 15.5 io 12.5 stl 20.8; bld 47.8 wt 10.9; 40.1 MB/kept; peak 41.60 GB; == AR 12/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+11-08 00:49:12 [chs2] report rc=0 (data/chs/chs2_report.txt)
+11-08 00:49:12 [chs2] end
+11-08 00:57:13 [chs3] start (pid 14289, NO-SWAP 52.8 GB, snapshot 5d92dcc, end 01:18, arms: x3e x3oc x3q x3sn x3gl x3dnr x3hcb x3sbn x3cp x3d7 x3oc2 )
+11-08 00:58:48 [chs3] x3e rc=0
+11-08 01:00:19 [chs3] x3oc rc=0
+11-08 01:01:54 [chs3] x3q rc=0
+11-08 01:03:25 [chs3] x3sn rc=0
+11-08 01:05:00 [chs3] x3gl rc=0
+11-08 01:06:40 [chs3] x3dnr rc=0
+11-08 01:08:21 [chs3] x3hcb rc=0
+11-08 01:09:56 [chs3] x3sbn rc=0
+11-08 01:11:31 [chs3] x3cp rc=0
+11-08 01:13:12 [chs3] x3d7 rc=0
+11-08 01:14:47 [chs3] x3oc2 rc=0
+CHS chs3 (data/chs; snapshot 5d92dcc; 12 IFEval (N45's keys), C 256, one pass per arm, quiet): WHOLE DECODE pooled (geo of runs); per check means: kept, rows, ck / drf / cycle ms, misses, svc / io ms, stl (count), bld / wt ms; MB SSD per kept token; lifetime peak; runs == NAX6-N's AR; relaxed accepts (rule R1 / span)
+  x3e : WHOLE DECODE   37.0 tok/s ( +0.0 % vs first) geo 39.7; kept 2.53 rows 3.14; ck 58.7 drf 8.6 cycle 67.3 ms; miss 89.8 svc 14.8 io 11.8 stl 20.3; bld 45.1 wt 12.6; 40.1 MB/kept; peak 41.70 GB; == AR 12/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x3oc: WHOLE DECODE   37.4 tok/s ( +1.2 % vs first) geo 39.4; kept 2.59 rows 3.14; ck 59.0 drf 8.7 cycle 67.7 ms; miss 93.0 svc 15.5 io 12.7 stl 20.7; bld 45.3 wt 12.8; 41.2 MB/kept; peak 41.70 GB; == AR 3/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x3q : WHOLE DECODE   36.8 tok/s ( -0.6 % vs first) geo 39.6; kept 2.53 rows 3.14; ck 59.0 drf 8.7 cycle 67.7 ms; miss 89.8 svc 14.8 io 11.8 stl 20.3; bld 45.4 wt 12.6; 38.6 MB/kept; peak 41.70 GB; == AR 12/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x3sn: WHOLE DECODE   36.5 tok/s ( -1.5 % vs first) geo 38.2; kept 2.63 rows 3.20; ck 62.1 drf 8.8 cycle 70.9 ms; miss 94.5 svc 15.9 io 12.8 stl 21.3; bld 48.5 wt 12.6; 41.0 MB/kept; peak 41.80 GB; == AR 3/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x3gl: WHOLE DECODE   36.8 tok/s ( -0.5 % vs first) geo 39.6; kept 2.53 rows 3.14; ck 59.0 drf 8.6 cycle 67.6 ms; miss 89.8 svc 14.8 io 11.9 stl 20.3; bld 45.3 wt 12.7; 39.3 MB/kept; peak 41.70 GB; == AR 12/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x3dnr: WHOLE DECODE   35.6 tok/s ( -3.7 % vs first) geo 38.2; kept 2.53 rows 3.14; ck 61.1 drf 8.7 cycle 69.9 ms; miss 89.8 svc 15.8 io 12.7 stl 20.3; bld 47.2 wt 13.0; 40.7 MB/kept; peak 42.60 GB; == AR 12/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x3hcb: WHOLE DECODE   36.6 tok/s ( -1.1 % vs first) geo 38.7; kept 2.53 rows 3.14; ck 59.3 drf 8.7 cycle 68.0 ms; miss 89.8 svc 15.8 io 12.6 stl 20.3; bld 45.7 wt 12.7; 39.7 MB/kept; peak 41.70 GB; == AR 12/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x3sbn: WHOLE DECODE   37.9 tok/s ( +2.5 % vs first) geo 40.4; kept 2.53 rows 3.14; ck 57.1 drf 8.5 cycle 65.7 ms; miss 89.8 svc 15.7 io 12.3 stl 20.3; bld 44.2 wt 12.0; 39.4 MB/kept; peak 41.70 GB; == AR 12/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x3cp: WHOLE DECODE   36.7 tok/s ( -0.9 % vs first) geo 39.1; kept 2.53 rows 3.14; ck 59.3 drf 8.6 cycle 67.9 ms; miss 89.8 svc 15.6 io 12.4 stl 20.3; bld 45.6 wt 12.7; 39.5 MB/kept; peak 41.70 GB; == AR 12/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x3d7: WHOLE DECODE   36.9 tok/s ( -0.4 % vs first) geo 39.8; kept 2.53 rows 3.14; ck 59.0 drf 8.6 cycle 67.6 ms; miss 89.6 svc 15.4 io 12.2 stl 20.3; bld 45.4 wt 12.7; 38.9 MB/kept; peak 42.30 GB; == AR 12/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+  x3oc2: WHOLE DECODE   36.2 tok/s ( -2.1 % vs first) geo 38.3; kept 2.45 rows 3.04; ck 58.0 drf 8.3 cycle 66.3 ms; miss 85.9 svc 14.5 io 11.6 stl 19.6; bld 43.2 wt 13.9; 39.7 MB/kept; peak 41.70 GB; == AR 4/12; relaxed R1 0 span 0; gated rows 0; qom skip/opt 0/0; fc issued/hits 0/0
+11-08 01:14:47 [chs3] report rc=0 (data/chs/chs3_report.txt)

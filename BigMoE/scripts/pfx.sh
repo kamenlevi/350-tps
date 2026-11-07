@@ -28,6 +28,7 @@ KP="agent/edit10,agent/write13,agent/write11"
 FR=$(bash scripts/deep_freeze.sh pfx) || { say "freeze failed: $FR"; exit 2; }
 SD=data/r57/snap/pfx
 grep -q 'R57_PFCHUNK' "$SD/r57_screen_pfx.py" || { say "the frozen screen has no R57_PFCHUNK: not run"; exit 2; }
+grep -q 'R57_PFLM' "$SD/r57_screen_pfx.py" && [ -f "$SD/pflm.py" ] || { say "the frozen screen has no R57_PFLM / pflm.py: not run"; exit 2; }
 [ -n "$PFX_DRYRUN" ] && { echo "dry run: $FR; E $(echo "$E" | tr ',' '\n' | grep -c =) K=V, L $(echo "$L" | tr ',' '\n' | grep -c =) K=V"; exit 0; }
 git add data/r57/snap/frozen_pfx ':!data/r57/snap/frozen_pfx/**/__pycache__/**' "$SD" ":!$SD/__pycache__/**" data/r57/snap/c45_runner_pfx.sh \
 > (a quote from the project owner, kept private)
@@ -40,7 +41,7 @@ export C45_OUT="$PWD/$D" C45_SWAP0=$(sysctl -n vm.swapusage | awk '{gsub("M","",
   MG=4 C45_DEADLINE=$(date -v+120M +%H%M) C45_SCREEN="$SD/r57_screen_pfx.py" C45_REFTOK= R57_QOM_SETS=humaneval,mbpp R57_MODMAN=1
 rm -f $D/DONE
 say "PFX start (pid $$, NO-SWAP $A GB, snapshot $SNAP)"
-for a in "pe1024:$E,R57_PFCHUNK=1024" "pe1024nl:$E,R57_PFCHUNK=1024,R57_PFNOLOG=1" "pe2048:$E,R57_PFCHUNK=2048" "pe4096:$E,R57_PFCHUNK=4096" "pe8192:$E,R57_PFCHUNK=8192" "pe8192nl:$E,R57_PFCHUNK=8192,R57_PFNOLOG=1" "pl8192:$L,R57_PFCHUNK=8192"; do
+for a in "pe1024:$E,R57_PFCHUNK=1024" "pe1024nl:$E,R57_PFCHUNK=1024,R57_PFNOLOG=1" "plm1:$E,R57_PFCHUNK=1024,R57_PFNOLOG=1,R57_PFLM=1" "plm2:$E,R57_PFCHUNK=1024,R57_PFNOLOG=1,R57_PFLM=2" "pe2048:$E,R57_PFCHUNK=2048" "pe4096:$E,R57_PFCHUNK=4096" "pe8192:$E,R57_PFCHUNK=8192" "pe8192nl:$E,R57_PFCHUNK=8192,R57_PFNOLOG=1" "pl8192:$L,R57_PFCHUNK=8192"; do
   t=${a%%:*}; e=${a#*:}; rm -f data/r57/${t}_256_* $D/${t}_256.txt
   R57_KEYS=$KP C45_CAP=64 R57_PFSTAT=1 R57_LOGHASH=1 C45_ARMS="${t}_256:256:$e" $RUN
   say "$t rc=$?"
@@ -61,7 +62,7 @@ def load(t):
         return {}, {}
 R0, T0 = load("pe1024")
 L = [f"PFX (data/pfx; snapshot {snap}; C 256, CAP 64; quiet): prefill TTFT (pfs: prefill + setup + the first token) and tok/s by R57_PFCHUNK"]
-for t in ("pe1024", "pe1024nl", "pe2048", "pe4096", "pe8192", "pe8192nl", "pl8192"):
+for t in ("pe1024", "pe1024nl", "plm1", "plm2", "pe2048", "pe4096", "pe8192", "pe8192nl", "pl8192"):
     R, T = load(t)
     cells = []
     for k in ("agent/edit10", "agent/write13", "agent/write11"):
@@ -89,8 +90,18 @@ if R0.get(k, {}).get("pfs") and R8.get(k, {}).get("pfs"):           # NewIdeas 0
             L.append(f"  beside: {kk.split('/')[-1]} x{R0[kk]['pfs'] / R8[kk]['pfs']:.2f}; tokens {'==' if T8.get(kk) == T0.get(kk) else 'DIFFER'}")
 else:
     L.append("Verdict PFX: MISSING (write13 at 1024 or 8192)")
+for t, nm in (("plm1", "R57_PFLM=1 (full-E scratch, original ids)"), ("plm2", "R57_PFLM=2 (compact copy = today's call shape)")):
+    Rl, Tl = load(t)                                     # PF-A (Sun 00:3x): layer-major over the 1024 chunks, each layer's experts read once
+    for kk in ("agent/edit10", "agent/write13", "agent/write11"):
+        r, r0 = Rl.get(kk) or {}, R0.get(kk) or {}
+        if r.get("pfs") and r0.get("pfs"):
+            h, h0 = r.get("lh") or [], r0.get("lh") or []
+            L.append(f"PF-A {t} {kk.split('/')[-1]}: TTFT x{r0['pfs'] / r['pfs']:.2f} vs pe1024 ({r['P'] / r['pfs']:.0f} tok/s); decode tokens "
+                     f"{'==' if Tl.get(kk) == T0.get(kk) else 'DIFFER from'} pe1024's; logits hash == "
+                     f"{sum(1 for a_, b_ in zip(h, h0) if a_ == b_)}/{min(len(h), len(h0))}; scratch {r.get('pflm')}; {nm}")
+    L.append(f"PF-A {t}: lifetime peak {peak.get(f'{t}_256', float('nan')):.2f} GB (line 45.0)")
 L.append("PF-D price (R57_PFSTAT: experts resident at prefill start, which today's prefill re-reads from SSD; base = MSB-3 pool, side = LSB):")
-for t in ("pe1024", "pe8192"):
+for t in ("pe1024", "pe8192", "plm1", "plm2"):
     R, _ = load(t)
     for kk in ("agent/edit10", "agent/write13", "agent/write11"):
         s = (R.get(kk) or {}).get("pfst")
@@ -100,7 +111,7 @@ for t in ("pe1024", "pe8192"):
 open("data/pfx/pfx_report.txt", "w").write("\n".join(L) + "\n"); print("\n".join(L))
 EOF
 say "report rc=$? ($D/pfx_report.txt)"
-git add $D $(for t in pe1024 pe1024nl pe2048 pe4096 pe8192 pe8192nl pl8192; do echo data/r57/${t}_256_*; done) 2>/dev/null
+git add $D $(for t in pe1024 pe1024nl plm1 plm2 pe2048 pe4096 pe8192 pe8192nl pl8192; do echo data/r57/${t}_256_*; done) 2>/dev/null
 > (a quote from the project owner, kept private)
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
