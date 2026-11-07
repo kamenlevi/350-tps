@@ -63,6 +63,7 @@ To fix before the freeze (NewIdeas):
 | 45 GB | FAST | 12 MBPP | 71.3 [K, qall, C 224] | none on MBPP yet | coverage check tonight |
 | 12 GB | VERIFIED GREEDY (not exact: 2-4-row verify calls round differently from one-token decoding) | 16 HumanEval | 18.42 decode geo mean [K, 12GB-CLEAN Sat 00:28, alone, quiet; pooled 18.47; 13.66 with prefill; lifetime peak 11.144 GB] | deterministic (outputs = kp2's 16 / 16); not bit-exact; the ~12x comparison withdrawn | stands as verified greedy, with that label |
 | 12 GB | FAST (top-2, theta 0.95) | HumanEval | ~36 [P, modelled] | map code PASS 1.22 %; the 12 GB FAST arm's T0 same-scores was KILL on 5 Nov (HumanEval+ 80.0 vs 91.7, IFEval 84 vs 90; T1039) | needs a measured run + a new same-scores (map STEP0-P1C queued Sat night) |
+| 12 GB | FAST t80ck1u (P1-K1, θ 0.8) and t90ck1u (θ 0.9) | 16 HumanEval / HumanEval+ 60 | 46.33 whole decode [K, Fit12, 11.245 GB]; t90ck1u ~41 [rough, shared] | EvalSuite 84b3715 (Sat 12:50): FAIL both. HumanEval+ 50 vs 57 of 60 vs REF2-T (0 / 7, p 0.016); θ 0.9 52 vs 57 (p 0.063). The map's code line had PASSED | not releasable: no 12 GB FAST code mode |
 | 12 GB | FAST (theta 0.8, t80ck2) | HumanEval | 38.7-40.3 [K] | map code KILL 1.63 % | not releasable |
 
 How tok/s is measured: a geo mean over prompts. The screen's 'steady' (tpsw = kept / (c2 - c0), checks >= 2) leaves

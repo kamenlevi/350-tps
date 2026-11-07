@@ -38,13 +38,15 @@ NewIdeas 10:2x]. Setup: v1' (stackb + S2 + KEEP) + R57_WIRED=1 at C 256, 12 Huma
        Kamen's call, not a re-litigation of the line.
     2. GDN state checkpoints (exact-safe): partial accepts are 36 % of checks, at ~3.3 ms saved each. About -1.2 ms per
        cycle, ~+2 % [P].
-    3. C 288: fewer misses (C 224 -> 256 was +3.4 % steady). ~+2 % [G]. Lifetime peak ~44.3 GB [P] against the 45.0
-       line, and it means more wired memory.
+    3. C 288: OUT on memory (CORRECTED 13:3x). I first guessed ~44.3 GB. BigMoE's sat_report shows C 224 -> 256 raised
+       the lifetime peak by 3.4-4.2 GB (stackb 39.4 -> 42.8, stack 38.5 -> 42.7). So C 288 lands at ~46-47 GB [P],
+       over the 45.0 line. C 272 would sit at ~44.6-45.0 GB for maybe +1 %: not worth the margin.
     4. The draft (9 % of the wall): draft-ahead was re-priced on 11-06 as a loss (GPU-bound check, idle <= 2.5 ms;
        break-even at >= 73 % hits). Not a lever without a cheaper drafter.
-  - Product: 181.2 x 1.058 x 1.02 x 1.02 ~ 199 [P].
-  - Tonight's honest numbers: ~181 at S5, ~192 if NW ships (Kamen's call). 200 is a post-freeze target: GDN
-    checkpoints + C 288 + NW.
+  - Product: 181.2 x 1.058 (NW) x 1.02 (GDN checkpoints) ~ 196 [P]. 200 needs one more lever beyond these: drafter
+    acceptance (kept per check, 11.0 of 16) or Leap's dense-kernel roadmap.
+  - Tonight's honest numbers: ~181 at S5, ~192 if NW ships (Kamen's call). After the freeze: GDN checkpoints + NW
+    ~196, and 200 needs a further lever.
   - S5 should also report MBPP12. Whole decode on HumanEval includes check 0's 16 copied tokens, which flatters it.
 PREVIOUS: NEWEST 45 GB CODE NUMBERS, Sat 04:5x (re-derived by NewIdeas from BigMoE's raw S1 files: scripts/s1_fullperiod.py,
 data/s1/). C 256, quiet, 12 HumanEval, lifetime peak 43.9 GB:
@@ -882,6 +884,17 @@ ends it by the next item's start.
   18.42 tok/s decode geo mean on all 16 HumanEval prompts. Pooled it is 18.47 (3,456 tokens in 187.11 s); per-prompt
   range 17.16-20.30; 13.66 end to end with prefill. Lifetime peak 11.144 GB (under 12). Outputs equal kp2's on 16 / 16.
   This is the 12 GB release number for the verified-greedy loop (not exact).
+- 12 GB FAST CODE GATE Sat 12:50 (EvalSuite 84b3715; re-derived from the counts): FAIL. No 12 GB FAST code mode from P1-K1.
+  - t80ck1u (P1-K1, KU 4, θ 0.8; Fit12 measured 46.33 tok/s whole decode, 11.245 GB): HumanEval+ 50 vs 57 of 60 vs
+    REF2-T (-11.67 pt, McNemar 0 / 7, p 0.0156) in both orders. Vs NAX6: 50 vs 55 (-8.33, p 0.0625).
+  - t90ck1u (θ 0.9 fallback): 52 vs 57 (-8.33, 0 / 5, p 0.0625).
+  - Method lesson: Breakthrough's map PASSED t80ck1u on its code line, but the full decode loses 7 tasks, every one
+    against the arm. For this pass-1 form, the map's token-level code line does not predict HumanEval+ pass rates.
+    Gate future 12 GB FAST candidates on task scores early, not on the map alone.
+  - The 12 GB release stays the verified-greedy loop (ex16, 18.42 decode geo, 11.144 GB).
+  - The wired fix there is worth ~+2 % [P]: Fit12's own phase logs put ex16's check-0 excess at 2.0 % of decode (4.7 %
+    on t80ck1u). Fit12's armed wired A/B (wab.sh) runs on t80ck1u. Asked Fit12 13:1x to run it on ex16 instead, so its
+    number is the publishable one.
 - Earlier: 18.4-18.9 tok/s on HumanEval [K: T3t 18.9 and T3R 18.42 quiet, kp2 18.58 share; four runs and prompt
   subsets mixed]. The 11.39 GB lifetime footprint came from a six-arm process.
 - The 40.8 quoted before as "the 12 GB exact line" is T3R2's t80ck2, which is FAST. It commits pass-1-certified rows
