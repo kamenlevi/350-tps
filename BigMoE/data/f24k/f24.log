@@ -1,0 +1,8 @@
+11-07 21:04:55 F24 start (pid 10787, NO-SWAP 53.2 GB, snapshot 4caa5a3)
+11-07 21:07:45 probe C 100: rc 0, runs 12 / 12, lifetime peak 23.7 GB, aborts 0
+11-07 21:10:41 probe C 96: rc 0, runs 12 / 12, lifetime peak 23.2 GB, aborts 0
+11-07 21:11:16 EXACT CHECK at C 100 (chunked path):   File "<string>", line 4
+    print(f"{eq} / {len(tk)} prompts == AR; tier_chunk calls {cn.get(\"tier_chunk\", 0)}, groups {cn.get(\"tier_chunk_groups\", 0)}")
+                                                                      ^
+SyntaxError: unexpected character after line continuation character
+11-07 21:11:16 the chunked path is NOT exact at C 100: no F24 passes

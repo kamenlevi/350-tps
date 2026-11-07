@@ -30,6 +30,11 @@ awk -v a="$A" 'BEGIN {exit !(a >= 32)}' || { say "NO-SWAP $A GB < 32 at the 20 s
 B=$(grep -v '^#' data/stack/cert_env.txt | grep . | tail -1 | sed 's/,R57_QOM_SETS=humaneval,mbpp$//')
 echo "$B" | tr ',' '\n' | grep -qx 'R57_WIRED=1' || { say "cert_env is not v1' + wired: not run"; exit 2; }
 F="$B,BIGMOE_PAUSE_EVERY_MS=50,R57_S0CARRY=1,REF2_SB_FIRST=1,REF2_PLE_LATE=1,REF2_COMMIT_SUB=9,R57_DQ1=1,R57_VTIER=,REF2_TIER_CHUNK=1"
+if [ -n "$F24K_C24" ]; then                              # Sat 21:1x: REUSE the committed f24k snapshot (the one the probes and the
+  git diff --quiet HEAD -- "$SD" data/r57/snap/frozen_f24k data/r57/snap/c45_runner_f24k.sh 2>/dev/null || { say "f24k snapshot differs from its commit: not run"; exit 2; }
+  SNAP=$(git log -1 --format=%h -- "$SD/r57_screen_f24k.py")   # exact check ran on), skip the probes and the exact check, run the passes
+  [ -n "$F24_DRYRUN" ] && { echo "dry run (reuse): snapshot $SNAP, C24 $F24K_C24"; exit 0; }
+else
 FR=$(bash scripts/deep_freeze.sh f24k) || { say "freeze failed: $FR"; exit 2; }
 grep -q 'REF2_TIER_CHUNK' data/r57/snap/frozen_f24k/Leap_scripts/ref2.py || { say "the frozen ref2 has no REF2_TIER_CHUNK: not run"; exit 2; }
 [ -n "$F24_DRYRUN" ] && { echo "dry run: $FR; F $(echo "$F" | tr ',' '\n' | grep -c =) K=V"; exit 0; }
@@ -39,6 +44,7 @@ git add data/r57/snap/frozen_f24k ':!data/r57/snap/frozen_f24k/**/__pycache__/**
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_011DvdV6eUB4NgBbVkyVFPrT" || { say "snapshot commit failed: not run"; exit 3; }
 SNAP=$(git rev-parse --short HEAD)
+fi
 RUN="/bin/bash data/r57/snap/c45_runner_f24k.sh"
 export C45_OUT="$PWD/$D" C45_SWAP0=$(sysctl -n vm.swapusage | awk '{gsub("M","",$6); print $6 / 1024}') C45_ALARM=2400 \
   MG=4 C45_DEADLINE=$(date -v+120M +%H%M) C45_SCREEN="$SD/r57_screen_f24k.py" C45_REFTOK= R57_QOM_SETS=humaneval,mbpp R57_MODMAN=1
@@ -48,8 +54,8 @@ K="$K,humaneval/HumanEval/101,humaneval/HumanEval/63"
 KM="mbpp/16,mbpp/100,mbpp/146,mbpp/161,mbpp/183,mbpp/208,mbpp/224,mbpp/246,mbpp/268,mbpp/296,mbpp/305,mbpp/319"
 rm -f $D/DONE $D/C24
 say "F24 start (pid $$, NO-SWAP $A GB, snapshot $SNAP)"
-C24=""
-for c in 100 96; do
+C24="$F24K_C24"
+for c in $([ -z "$F24K_C24" ] && echo 100 96); do
   t=f24kp$c; rm -f data/r57/${t}_${c}_* $D/${t}_${c}.txt
   R57_KEYS=$K C45_ARMS="${t}_$c:$c:$F" $RUN; rc=$?
   pk=$(grep -oE "done ${t}_$c rc=[0-9]+:.*lifetime peak [0-9.]+" $D/c45.log | tail -1 | grep -oE '[0-9.]+$')
@@ -64,13 +70,16 @@ done
 echo "$C24" > $D/C24
 # the chunked path's exactness at C24 (Leap: the official proof): the NAX6-N exact env + REF2_TIER_CHUNK=1, 3 HumanEval, CAP 64,
 # tokens == NAX6-N's one-token AR (E5's file); every 16-row check there takes the chunked sync path
-t=f24kx; rm -f data/r57/${t}_${C24}_* $D/${t}_${C24}.txt
+t=f24kx
+if [ -z "$F24K_C24" ]; then
+rm -f data/r57/${t}_${C24}_* $D/${t}_${C24}.txt
 R57_KEYS="humaneval/HumanEval/68,humaneval/HumanEval/16,humaneval/HumanEval/91" C45_CAP=64 R57_REFTOK="$PWD/data/e5/ar_ref_tokens.json:gate+t" \
   C45_ARMS="${t}_$C24:$C24:R57_NAX=1,REF2_KEEP_CACHES=1,R57_WIRED=1,R57_VTIER=,REF2_TIER_CHUNK=1" $RUN
+fi
 XP=$("$PY" -I -c 'import json, sys
 ar = json.load(open(sys.argv[1])); tk = json.load(open(sys.argv[2])); cn = json.load(open(sys.argv[3]))
 eq = sum(1 for k, v in tk.items() if (lambda o, r: len(o) > 0 and o[:min(len(o), len(r))] == r[:min(len(o), len(r))])(list(v.values())[0][0], ar[k]["gate+t"][0]))
-print(f"{eq} / {len(tk)} prompts == AR; tier_chunk calls {cn.get(\"tier_chunk\", 0)}, groups {cn.get(\"tier_chunk_groups\", 0)}")' \
+print("%d / %d prompts == AR; tier_chunk calls %d, groups %d" % (eq, len(tk), cn.get("tier_chunk", 0), cn.get("tier_chunk_groups", 0)))' \
   data/e5/ar_ref_tokens.json data/r57/${t}_${C24}_tokens.json data/r57/${t}_${C24}_counts.json 2>&1)
 say "EXACT CHECK at C $C24 (chunked path): $XP"
 echo "$XP" | grep -q '^3 / 3 prompts == AR' || { say "the chunked path is NOT exact at C $C24: no F24 passes"; touch $D/DONE; exit 0; }

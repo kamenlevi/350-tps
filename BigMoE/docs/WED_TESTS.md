@@ -803,3 +803,11 @@ resident), R57_VTIER off. Context for Kamen's 24 GB question, NOT a table cell; 
 - CORRECTION: commit ef64e24's message ("C30 (24 GB lossy, C 160): CLEAN, f24_env.txt written") is text inherited from f24.sh by the sed
   copy: C30 is the ~31.8 GB context point and its env-file block is disabled (no data/stack/f24_env.txt exists). Its log / report keep
   f24's file names: data/c30/f24.log, data/c30/f24_report.txt.
+
+### Sat 21:00-21:04: E24m, E24's MBPP12 with the EOS stop (scripts/e24m.sh, data/e24m; quiet): 38.4 tok/s, comparable now
+E24's stack (W1B's s10b 24 GB + wired, Wed's build_m01) with S10B_EOS=1 (spec125's stop_ids = r57's EOS set) and S10B_SAVE_IDS=1.
+- **MBPP12: WHOLE DECODE 38.4 tok/s** (passes 38.2, 38.6); END TO END 18.6; SSD MB per token 494.0; tokens / task 115 (r57 rows: 115-123,
+  so the cell is comparable now; E24's 41.7 was mostly post-answer text). Lifetime peak 23.52 GB (<= 24.0).
+- pass 1 == pass 2 on 12 / 12 (ids); agreement with NAX6-N's AR 9 / 12 (ids over min(n, AR); information: stock kernels differ bitwise).
+- **EvalSuite 20:47: C30's code-only gate PASS** (S5' at C 160, VTIER off, s5p 6db4c24): HE+ vs NAX6-N fwd 88.3 vs 91.7 (-3.33, p 0.63),
+  rev 91.7 (+0.00); long code 21 rows, 0 blunders (RESULT_c30, EvalSuite). So the ~32 GB lossy point is gated on code.

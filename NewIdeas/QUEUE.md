@@ -42,11 +42,26 @@ morning. You can run tests for now as much as you want. I probably won't stop yo
 |---|---|---|---|---|---|
 | 45 GB | exact: E5 = NAX6-N + KEEP + wired (BigMoE f451b54) | 99.4; with the seams / DQ1 bundle 102.7 | 71.3; 73.3 | 42.2 GB | AR-token proof PASS, 96 / 96 runs |
 | 45 GB | lossy: S5' = v1' + wired + bundle (f2c4728) | 181.4 (B 174.4; S5 175.9) | 123.6 (B 120.2; S5 118.3) | 42.9 GB | S4 PASS vs NAX6-N; the bundle is bitwise, so S4 / CERT carry |
-| 24 GB | exact: E24 = W1B's s10b stack + wired, C 128 (601f66f) | 41.3 | 41.7 (*) | 23.86 GB | exact vs its own stock-kernel AR (Wed); tonight pass 1 == pass 2 on 24 / 24; NAX6-N agreement 6 / 24 (information) |
+| 24 GB | exact: E24 = W1B's s10b stack + wired, C 128 (601f66f; MBPP re-run with an EOS stop, E24m 4246291) | 41.3 | 38.4 with the EOS stop (passes 38.2 / 38.5; the N 256 run gave 41.7, not comparable) | 23.86 GB (MBPP run 23.52) | exact vs its own stock-kernel AR (Wed); tonight pass 1 == pass 2 on 24 / 24; NAX6-N agreement 6 / 24 (information) |
 | 24 GB | lossy | n/a: an engine limit | n/a | - | r57's first check of a prompt runs ungated (exact), so it needs C >= ~160, ~30 GB. Routes after the publish: row-chunking in ref2's tier path (Leap), or QOM's rules in the s10b stack |
 | 12 GB | verified greedy: 12E (Fit12) | 18.58 | 18.18 | 11.140 GB | verified greedy, not bit-exact; tokens = ex16's 12 / 12 |
-| 12 GB | lossy θ 0.95: 12F = t95ck1u (Fit12) | 40.59 | 18.74 | 11.280 GB | gate pending (EvalSuite slot 7, start by 00:50) |
+| 12 GB | lossy θ 0.95: 12F = t95ck1u (Fit12) | 40.59 | 18.74 | 11.280 GB | GATE (EvalSuite 3a4ea8a, 20:16): vs REF2-T 54 vs 57 of 60 (-5.00, 0 / 3) in both orders = FAIL at the bar. vs NAX6-N 54 vs 55 (-1.67, 1 / 2) would PASS. REFERENCE QUESTION, see the note below |
+| ~32 GB | lossy, CONTEXT ROW: C30 = S5''s config at C 160, VTIER off (ef64e24) | 153.5 | 114.8 | 31.8 GB | CODE GATE PASS vs NAX6-N (EvalSuite 907e001): HE+ 53 vs 55 forward (1 / 3, p 0.63) and 55 vs 55 reverse; long code 0 blunders in 29,219 tokens. vs REF2-T (information): -4 / -2 tasks |
 
+  - REFERENCE QUESTION for the 12 GB θ 0.95 cell (NewIdeas' error, flagged 21:1x): I told EvalSuite to pre-register
+    this gate vs REF2-T, carrying over t80ck1u's rule. But the orchestrator's 14:0x relay of Kamen's decision made
+    NAX6-N the FAST gates' reference, with REF2-T as information. Under NAX6-N the HumanEval+ line passes; under REF2-T
+    it fails exactly at the bar. Both numbers stand as measured. Which line applies is the orchestrator's / Kamen's call,
+    made on the rule's merits rather than on this result. Note: the 12 GB gate has no long-code line, unlike S4 / C30.
+    RESOLVED (the orchestrator 21:1x): the gate stays vs REF2-T, so the FAIL at the bar stands; NAX6-N's -1.67 is
+    information.
+    - The rule is each mode against its own exact reference. The 12 GB line's own base is REF2-T: its verified-greedy
+      loop equals REF2-T's tokens (EvalSuite's VOID check, 64 / 64), and EvalSuite pre-registered it that way at 08:17,
+      before any 12 GB verdict. NAX6-N applies at 45 GB / C30 because those stacks run on NAX6-N kernels.
+    - The 14:0x relay's "FAST reference" wording was too broad (the orchestrator's note). My REF2-T instruction was
+      right under the rule.
+    - The cell reads: 40.6 / 18.7, 11.3 GB, FAIL at the bar vs its own base. The publishable 12 GB number stays
+      verified greedy, 18.6 / 18.2.
   - (*) E24 runs a fixed 256 tokens with no EOS stop. MBPP answers are ~115-123 tokens, so most of E24's MBPP tokens
     come after the answer ends. Its MBPP figure is not comparable with the other rows; its HumanEval figure nearly is
     (answers ~245-250 tokens).
