@@ -811,3 +811,23 @@ E24's stack (W1B's s10b 24 GB + wired, Wed's build_m01) with S10B_EOS=1 (spec125
 - pass 1 == pass 2 on 12 / 12 (ids); agreement with NAX6-N's AR 9 / 12 (ids over min(n, AR); information: stock kernels differ bitwise).
 - **EvalSuite 20:47: C30's code-only gate PASS** (S5' at C 160, VTIER off, s5p 6db4c24): HE+ vs NAX6-N fwd 88.3 vs 91.7 (-3.33, p 0.63),
   rev 91.7 (+0.00); long code 21 rows, 0 blunders (RESULT_c30, EvalSuite). So the ~32 GB lossy point is gated on code.
+
+### Sat 21:04-21:22: F24k, the 24 GB LOSSY number on r57 with Leap's row-chunking (scripts/f24k.sh, data/f24k; quiet; snapshot 4caa5a3)
+Leap's REF2_TIER_CHUNK=1 (ref2 c176a5ad, built in ~25 min): a tier call whose expert union exceeds the pool is split into contiguous row
+groups that fit, each through the unchanged body (bitwise per Leap, 43/43). F = S5''s config + R57_VTIER off + REF2_TIER_CHUNK=1.
+- **Probes (12 HumanEval, CAP 256):** C 100 -> 12 / 12, lifetime peak 23.7 GB, no abort; C 96 -> 12 / 12, 23.2 GB. C24 = 100.
+- **Exact check of the chunked path at C 100 (the official proof): PASS:** NAX6-N exact env + REF2_TIER_CHUNK=1, 3 HumanEval, CAP 64:
+  3 / 3 prompts token-identical to NAX6-N's one-token AR; 88 chunked calls (176 groups). (The script's check line had an f-string
+  syntax error, so its first run stopped before the passes; the result was evaluated from the saved tokens and the passes re-run on
+  the same committed snapshot, 37f0d36.)
+
+| set | whole decode tok/s (passes) | full period | end to end | check 0 | median cycle | kept / check | SSD MB per kept token | lifetime peak |
+|---|---|---|---|---|---|---|---|---|
+| 12 HumanEval | **27.7** (27.5, 27.9) | 28.0 | 17.0 | 520 ms | 484.2 ms | 11.07 | 231.4 | **23.70 GB** |
+| MBPP12 | **35.8** (34.5, 36.8) | 36.4 | 16.4 | 435 ms | 70.6 ms | 6.04 | 162.4 | 23.40 GB |
+
+- CLEAN (0 live modules, no abort, peak <= 24.0). data/stack/f24_env.txt (96a87cf) -> EvalSuite's code-only gate (Sat 100, MEM 27 GB).
+- **Slower than E24's exact s10b stack** (41.3 HE / 38.4 MBPP with the EOS stop), as Leap predicted: at C 100 every 16-row HumanEval
+  check (160 ids > 98 slots) takes the synchronous chunked tier path (~480 ms per check, SSD reads not overlapped). MBPP's drafts are
+  shorter (truncation), so most of its checks still fit the gate path (median cycle 70.6 ms). At 24 GB the exact s10b stack is the
+  faster engine; r57's lossy rules need C >= ~160 to pay off (C30: 153.5 at 31.8 GB).
