@@ -60,3 +60,32 @@ Written before any CERT row.
 - math and mathx stay as the env has them (out of QOM: the code-only gate).
 - BigMoE adds 'humanevalx' and 'mathx' to the screens' SETOF before the Saturday freeze.
 
+
+## Amendment 2 (Sat 2026-11-07 05:5x, before any CERT row): the runner, the chat check, FAST sets
+- **The runner:** tools/day_runner55.sh. It uses runner 54's (S4's) gates, code checks and manifests unchanged.
+- **The config:** BigMoE writes the FROZEN config at the ~20:00 freeze to data/stack/cert_env.txt, in final_env.txt's
+  format: 'Sat <C>', 'MEM <n> GB' and 'screen data/r57/snap/<dir>/<file>.py' in its comment. CERT starts once that
+  file has been unchanged for 2 min and runners 53 / 54 have ended. The file, its commit and BigMoE's HEAD go into the
+  RESULT.
+- **The code:**
+  - If the file names a committed snapshot, CERT runs it. Every BigMoE module a process loads must then equal BigMoE's
+    HEAD at CERT's start, and the snapshot's paths may hold nothing uncommitted.
+  - Without a snapshot, tools/freeze_r57.py `now` freezes the live trees (as PREREG_s4 amendment 1).
+  - The screen's SETOF must cover CERT's sets, checked before any row.
+  - Live outside files (S4 found 17 Leap / TrainLab files loaded live) are pinned by sha at every gate. BigMoE was asked
+    to freeze them into the CERT snapshot.
+- **The reference rows:** the decode stage tops up ref2tnaxn.r3 (humanevalx + mathx, 154) first if runner 53 did not
+  finish.
+- **The chat check** (the orchestrator, Sat 05:5x: "chat EXACT in v1 is assumed, not measured"; Breakthrough flagged
+  the same):
+  - The rows: 12 IFEval prompts (the first 12 keys of dec_ifeval, sorted) interleaved with 12 humanevalx prompts, in one
+    order, 8 prompts per process. The engine therefore swaps profiles at request boundaries, code <-> chat.
+  - **CHAT-EXACT: YES** only if all 12 IFEval rows are token-identical to NAX6's AR rows (results/ref2tnax); otherwise
+    NO, with the first divergences.
+  - It is a check of its own (results/cert/CERT_chat.txt), outside CERT's 8 lines. The paper may say "chat runs EXACT
+    in v1" only on YES.
+- **FAST sets (information, for the paper):** CERT_info.txt lists, per set and order, how many rows are token-identical
+  to NAX6-N.
+  - S4 already showed math is NOT exact in the stack: 6 of 50 math rows identical in v1, 5-8 of 50 in stackb.
+  - The math processes log relax-span engagement ("span 10 runs"), while QOM is on HumanEval / MBPP only.
+  - The paper must say which sets run FAST kernels.

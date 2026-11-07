@@ -51,7 +51,7 @@ ST="R57_NAX=1,REF2_NAX_1CQ=1,REF2_DN_KS=1,REF2_GDN_LAZY=1,D7BNAX_32=2,R57_FASTTA
 B="$QA,$ST,R57_RELAX_SPAN=1,R57_RELAX_SPAN_RULE=R2:2:0.25,R57_COPY=g2,R57_QOM_SETS=humaneval"   # final_env 1403cd6 minus NW
 NW="$B,R57_NEVERWAIT=1,REF2_NEVERWAIT=1,R57_NWCNT=0"
 [ -n "$S1B_DRYRUN" ] && { echo "dry run: $(grep -c frozen_s1b "$SD/r57_screen_s1b.py") screen paths; B $(echo "$B" | tr ',' '\n' | grep -c =) K=V, NW $(echo "$NW" | tr ',' '\n' | grep -c =) K=V"; exit 0; }
-for t in s1bpf s1bb1 s1bn1 s1bn2 s1bb2; do rm -f data/r57/${t}_${CC}_* data/s1b/${t}_${CC}.txt; done
+for t in s1bpf s1bb1 s1bn1 s1bn2 s1bb2 s1bnd; do rm -f data/r57/${t}_${CC}_* data/s1b/${t}_${CC}.txt; done
 rm -f data/s1b/DONE
 say "S1b A/B start (pid $$, NO-SWAP $A GB, C $CC); ref2 md5 $(md5 -q "$HOME/Leap/scripts/ref2.py"), screen md5 $(md5 -q scripts/r57_screen_fast.py)"
 R57_KEYS="humaneval/HumanEval/68,humaneval/HumanEval/16" C45_CAP=32 C45_ARMS="s1bpf_$CC:$CC:$NW" $RUN
@@ -65,6 +65,20 @@ say "NW check CLEAN (2 / 2, engaged 2 / 2): the A/B runs"
 for a in "s1bb1:$B" "s1bn1:$NW" "s1bn2:$NW" "s1bb2:$B"; do
   R57_KEYS=$K C45_ARMS="${a%%:*}_$CC:$CC:${a#*:}" $RUN
   say "${a%%:*} rc=$?"
+done
+# 5th arm, information only (NewIdeas Sat 05:1x, for EvalSuite's carry-over question): NW with its counters built but read once
+# after the decode clock (R57_NWCNT=2): late groups per check at ~counters-off timing, vs S1's (read per check) median 18.0.
+ND="$B,R57_NEVERWAIT=1,REF2_NEVERWAIT=1,R57_NWCNT=2"
+R57_KEYS=$K C45_ARMS="s1bnd_$CC:$CC:$ND" $RUN
+say "s1bnd rc=$?"
+# 6th step, information (NewIdeas Sat 05:1x, evidence 1): Leap's NW GPU check (scripts/nwcnt_check.py = nw_check.py with a
+# counters switch) on S4's ref2 (ddbc0621, this run's frozen copy), counters ON then OFF: every output equality (warm == off,
+# FORCE == reference, cold == reference, layer 47) must hold both ways, i.e. the counters touch no output.
+rm -f data/s1b/nwcnt_check.txt
+for on in 1 0; do
+  NWCNT_ON=$on REF2_PATH="$FZ/Leap_scripts/ref2.py" QSC_COND="BigMoE S1b quiet window" BIGMOE_EXT_BUILD=build_qom \
+    perl -e 'alarm shift; exec @ARGV' 600 "$PY" -I scripts/nwcnt_check.py >> data/s1b/nwcnt_check.log 2>&1
+  say "nwcnt_check counters $on rc=$?"
 done
 "$PY" -I - "$CC" "$(date +%F)" "${S1B_FANLOG:-$HOME/Library/Logs/fanwatch.log}" >> "$LOG" 2>&1 <<'EOF'
 import datetime as D, json, math, re, statistics as S, sys
@@ -93,7 +107,7 @@ for ln in open("data/s1b/c45.log"):
 hit = {t for t, v in arm_t.items() if "run" in v and "done" in v and any(a < v["done"] and b > v["run"] for a, b in win)}
 P = {"B": ("s1bb1", "s1bb2"), "NW": ("s1bn1", "s1bn2")}
 runs, toks = {}, {}
-for t in sum(P.values(), ()):
+for t in sum(P.values(), ()) + ("s1bnd",):
     try:
         R = {r["key"]: r for r in json.load(open(f"data/r57/{t}_{C}_runs.json"))}
         for c in json.load(open(f"data/r57/{t}_{C}_checks.json")):
@@ -146,8 +160,28 @@ L.append(f"Verdict S1b NW v3 counters off (pre-registered, NewIdeas Sat 04:5x): 
 same = lambda a, b: sum(1 for k in toks[a] if k in toks[b] and toks[a][k] == toks[b][k])
 L.append(f"tokens identical per prompt (information): NW vs B {[same('s1bb1', 's1bn1'), same('s1bb2', 's1bn2')]} of 12; floor B1 vs B2 "
          f"{same('s1bb1', 's1bb2')}")
+def lg(tags, i):                                         # NW counters per check (checks >= 2), median
+    xs = []
+    for t in tags:
+        try:
+            for e in json.load(open(f"data/r57/{t}_{C}_checks.json")):
+                if not e.get("paused"):
+                    xs += [x[i] for x in (e.get("nw") or [])[2:] if x and len(x) > i]
+        except (OSError, ValueError):
+            pass
+    return S.median(xs) if xs else float("nan")
+rd = runs.get("s1bnd") or {}
+L.append(f"NW, counters read after the decode clock (s1bnd, information, for EvalSuite's carry-over question): "
+         f"{'MISSING' if not rd else ''}full period {g([r.get('fp') for r in rd.values()]):.1f}, whole decode "
+         f"{g([r['tps'] for r in rd.values()]):.1f} tok/s over {len(rd)}; per check (medians, checks >= 2) late groups "
+         f"{lg(('s1bnd',), 0):.1f} vs S1 (read per check) {lg(('s1n1', 's1n2'), 0):.1f}, late uses {lg(('s1bnd',), 1):.1f} vs "
+         f"{lg(('s1n1', 's1n2'), 1):.1f}, optional dropped now {lg(('s1bnd',), 6):.1f} vs {lg(('s1n1', 's1n2'), 6):.1f}; lifetime peak "
+         f"{peak.get(f's1bnd_{C}', float('nan')):.1f} GB")
 open("data/s1b/s1b_report.txt", "w").write("\n".join(L) + "\n"); print("\n".join(L))
 EOF
 say "report rc=$? (data/s1b/s1b_report.txt)"
+{ echo "NW GPU check, counters ON vs OFF (scripts/nwcnt_check.py on S4's ref2; information, evidence for EvalSuite):"
+  grep -E '^NEVER-WAIT check (Mon|Tue|Wed|Thu|Fri|Sat|Sun)|^NEVER-WAIT check:' data/s1b/nwcnt_check.txt 2>/dev/null | sed 's/^/  /' \
+    || echo "  MISSING (data/s1b/nwcnt_check.log)"; } >> data/s1b/s1b_report.txt
 touch data/s1b/DONE
 say "S1b A/B end"

@@ -474,7 +474,9 @@ if NW:                                                   # a cold demand expert 
     assert FAST and os.environ.get("REF2_OOO_1C") == "1", "R57_NEVERWAIT needs a FAST arm on the one-call (REF2_OOO_1C=1)"
     assert os.environ.get("REF2_NEVERWAIT") == "1", "R57_NEVERWAIT arms ref2 with REF2_NEVERWAIT=1: set both"
     assert all(hasattr(ref2, a_) for a_ in ("NW_RESET", "NW_ON", "NWCNT")), "R57_NEVERWAIT needs Leap's never-wait ref2"
-NWC = os.environ.get("R57_NWCNT", "1") == "1"            # R57_NWCNT=0 (NewIdeas Sat 04:5x): NW without ref2's per-layer counters. Their lazy
+NWM = os.environ.get("R57_NWCNT", "1")                  # 2 (Sat 05:2x): counters built, read once after the decode clock (late groups at
+assert NWM in ("0", "1", "2"), "R57_NWCNT is 0 (off), 1 (read per check, default) or 2 (read after the decode clock)"   # ~off timing)
+NWC = NWM != "0"                                         # R57_NWCNT=0 (NewIdeas Sat 04:5x): NW without ref2's per-layer counters. Their lazy
                                                          # graph (a sort + 8 sums per layer call) ran at the post-c2 readback: S1's NW spent
                                                          # ~2.4 ms/check more outside tpsw's c0..c2 window. Engagement then: the run's nwk
 QSPLIT = float(os.environ["R57_QOM_SPLIT"]) if os.environ.get("R57_QOM_SPLIT") else None   # ported from r57_screen.py (Fri 10:0x,
@@ -1358,7 +1360,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         if QC1C:
             q1c_.append([int(x_) for x_ in np.array(mx.stack(q1l_).sum(axis=0))] if q1l_ else [0, 0, 0, 0])
         if nwp_:                                         # [late groups, late uses, late mass, L47 drops, L47 rank-0 stalls, forced]
-            nw_.append([float(x_) for x_ in np.array(mx.stack(nwl_).sum(axis=0))] if nwl_ else [0.0] * 8)   # NW v3: 8 fields (Leap dcd5f4f8)
+            nw_.append(nwl_ if NWM == "2" else [float(x_) for x_ in np.array(mx.stack(nwl_).sum(axis=0))] if nwl_ else [0.0] * 8)   # NW v3: 8 fields (Leap dcd5f4f8); 2: lazy
         rows_.append(len(dr) + 1); cb_.append(disk_read_bytes() - b0_)
         ck_t.append(c2 - c1); kept.append(k + 1); wl.append(c2 - c0)
         if STALL:
@@ -1392,6 +1394,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         tok, a = out[-1], a + k + 1
     mx.eval(states(cache))
     dec = time.perf_counter() - td
+    if NWM == "2":                                       # R57_NWCNT=2: the per-check counter lists, evaluated now (off the decode clock)
+        nw_ = [[float(x_) for x_ in np.array(mx.stack(l_).sum(axis=0))] if l_ else [0.0] * 8 for l_ in nw_]
     stall = dict(chk=stl_, tr=BG.ext.trace(), rd=BG.ext.trace_reads(), cov=BG.ext.trace_cov()) if STALL else None
     rb, ml, kt = disk_read_bytes() - rb0, float((stats() - sl0)[0]), max(sum(kept), 1)
     px1 = st.stats()

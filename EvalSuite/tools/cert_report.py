@@ -1,5 +1,5 @@
 """CERT's lines (docs/PREREG_cert_2026-11-08.md + amendment 1) -> results/cert/CERT_*.txt (fixed paths, quoted by the paper).
-  .venv/bin/python tools/cert_report.py <arm forward run> <arm reverse run> <long-code run>
+  .venv/bin/python tools/cert_report.py <arm forward run> <arm reverse run> <long-code run> [<chat-check run>]
 1. Per set and order (6 lines): decision 4 vs NAX6-N's rows (tools/d4x.py's rule: delta > -5 pt AND McNemar p >= 0.05; a
    gain with p < 0.05 is DIFFERS (HIGHER)). HumanEval+ 164 = dec_humaneval 60 + dec_humanevalx 104; math 100 = dec_math
    50 + dec_mathx 50; MBPP 100 (tools/mbpp_score.py). Reference rows: results/ref2tnax (the core 60 + 50), ref2tnaxn.r3
@@ -8,8 +8,12 @@
 2. Pooled over the three sets and both orders (728 pairs): delta > -2 pt AND McNemar p >= 0.05.
 3. Long code: the 41 humanevalt rows, tfwin against the exact base: blunders (the base's p of a committed token < 0.01)
    <= 1 per 10K tokens.
+4. The chat check (PREREG_cert amendment 2; the orchestrator Sat 05:5x): IFEval prompts through the v1 engine, interleaved
+   with code prompts (request-boundary profile swaps); their tokens must equal NAX6's AR rows (results/ref2tnax) on every
+   one -> CHAT-EXACT: YES | NO (results/cert/CERT_chat.txt). A check of its own, outside the 8 lines.
 CERT PASS = all 8 lines pass; DIFFERS (HIGHER) is named in the verdict, not a FAIL (d4x's convention). Information
-(CERT_info.txt): token agreement between the orders, cap hits, the core 60 + 50 vs REF2-T. Rows without text get it
+(CERT_info.txt): token agreement between the orders, rows token-identical to NAX6-N per set (which sets run FAST
+kernels), cap hits, the core 60 + 50 vs REF2-T. Rows without text get it
 from their ids in memory (tools/rows_text.py's decode, equal to the decode stage's text on 520 / 520 reference rows)."""
 import gzip, json, math, os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -22,7 +26,7 @@ from evalsuite.report import mcnemar_p
 import d4x, mbpp_score as mb, rows_text as rt
 
 RES = os.path.join(ROOT, "results")
-OUT = os.path.join(RES, "cert")
+OUT = os.environ.get("CERT_OUT", os.path.join(RES, "cert"))     # CERT_OUT: a test elsewhere
 N = {"humaneval": 164, "math": 100, "mbpp": 100}
 NAME = {"humaneval": "HumanEval+", "math": "math", "mbpp": "MBPP"}
 REFS = ("ref2tnax", "ref2tnaxn.r3", "ref2tnaxn.r2")
@@ -81,7 +85,21 @@ def longcode(run):
                f"10K (bar <= 1), deviations {100 * dev / max(tok, 1):.2f} %: {v}")
 
 
-def main(fwd, rev, lrun):
+def chat_check(run):
+    """the chat check: the run's IFEval rows vs NAX6's AR rows, token for token"""
+    A, R = load(run), load("ref2tnax")
+    ks = sorted(k for k in A if A[k].get("set") == "ifeval" and k in R)
+    diff = [(k, next((i for i, (a, b) in enumerate(zip(A[k]["completion_ids"], R[k]["completion_ids"])) if a != b),
+                     min(len(A[k]["completion_ids"]), len(R[k]["completion_ids"]))))
+            for k in ks if A[k]["completion_ids"] != R[k]["completion_ids"]]
+    typ = sorted({str(A[k].get("type")) for k in ks})
+    v = "INCOMPLETE" if not ks else "YES" if not diff else "NO"
+    return v, (f"CHAT-EXACT: {v}: {len(ks) - len(diff)} of {len(ks)} IFEval rows token-identical to NAX6's AR ({run})"
+               + (f"; first divergences {', '.join(f'{k} @{i}' for k, i in diff[:8])}" if diff else "")
+               + (f"; row types {typ}" if typ != ["None"] else ""))
+
+
+def main(fwd, rev, lrun, crun=None):
     os.makedirs(OUT, exist_ok=True)
     its = items()
     R = load(*REFS)
@@ -106,6 +124,10 @@ def main(fwd, rev, lrun):
             txt.append(l)
             vl.append(l)
         open(os.path.join(OUT, f"CERT_{s}.txt"), "w").write("\n".join(txt) + "\n")
+        for o in ("fwd", "rev"):
+            ks = [k for k in want if k in A[o] and k in R]
+            info.append(f"token-identical to NAX6-N, {NAME[s]} {o}: "
+                        f"{sum(A[o][k]['completion_ids'] == R[k]['completion_ids'] for k in ks)} of {len(ks)}")
         same = [k for k in want if k in A["fwd"] and k in A["rev"]]
         info.append(f"token agreement {NAME[s]}: the two orders identical on "
                     f"{sum(A['fwd'][k]['completion_ids'] == A['rev'][k]['completion_ids'] for k in same)} of {len(same)}")
@@ -130,6 +152,10 @@ def main(fwd, rev, lrun):
     final = (f"CERT: FAIL ({', '.join(fl)})" if fl else f"CERT: INCOMPLETE ({', '.join(inc)})" if inc else
              "CERT: PASS" + (f" (DIFFERS (HIGHER) on {', '.join(hi)})" if hi else ""))
     open(os.path.join(OUT, "CERT_VERDICT.txt"), "w").write("\n".join(vl + [final]) + "\n")
+    if crun:
+        cv, cl = chat_check(crun)
+        open(os.path.join(OUT, "CERT_chat.txt"), "w").write(cl + "\n")
+        info.insert(0, cl)
     T = load("ref2t")      # information: the core 60 + 50 vs REF2-T
     for o in ("fwd", "rev"):
         for s in ("humaneval", "math"):
@@ -142,4 +168,4 @@ def main(fwd, rev, lrun):
 
 
 if __name__ == "__main__":
-    sys.exit(main(*sys.argv[1:4]))
+    sys.exit(main(*sys.argv[1:5]))

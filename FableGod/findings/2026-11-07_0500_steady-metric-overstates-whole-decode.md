@@ -3,8 +3,9 @@
   recomputed every arm from BigMoE's raw run records (this note).
 - The metric: the registered "geo steady" tok/s is tpsw = kept / (c2 - c0) over checks >= 2. It times only part of each
   cycle and skips each prompt's first check. It leaves out:
-  - ~2.35 ms of host work per check in the base, and ~4.7 ms with NW v3: NW's per-check counter readback waits for the
-    async commit replay outside the timed window;
+  - ~2.35 ms of host work per check in the base, and ~4.7 ms with NW v3. NW's per-check counter graph (a sort and 8 sums
+    per layer) runs at the readback after c2, outside the timed window. Both arms wait on the commit replay (NewIdeas
+    05:1x; BigMoE's own re-derivation: full period +4.3-4.8 %, whole decode +3.3 %);
   - the first check of each prompt (~300 ms, ~20 % of check + draft time on these 12 prompts).
 - Whole decode = n / decode wall time (prefill excluded). Below: the geometric mean over the 12 HumanEval prompts per pass,
   then the geometric mean of the passes. From ~/BigMoE/data/r57/<tag>_runs.json (fields n, tps, tpsw). This aggregation

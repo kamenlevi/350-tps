@@ -503,7 +503,17 @@ Leap's fix: ref2.remove() before each draft no longer drops REF2's per-weight ca
   (161.6, 166.5) = **+10.2 % (PASS >= +4 %)**. Median cycle 75.8 -> 66.9 ms; lifetime peak 43.1 GB (<= 45.0).
 - **New best: stackb + S2 + KEEP at C 256, 164.2 tok/s, 43.1 GB** (gate: S4).
 
-### Sat 01:46-01:53: S1 NW v3 engine A/B at C 256 (scripts/s1_ab.sh, data/s1; quiet, no freeze): PASS +9.0 % -> joins v1
+### Sat 01:46-01:53: S1 NW v3 engine A/B at C 256 (scripts/s1_ab.sh, data/s1; quiet, no freeze): CORRECTED Sat 05:1x: BETWEEN on the full period (+4.3-4.8 %), not PASS; the +9.0 % below is tpsw's window
+
+> **CORRECTION (Sat 05:1x; NewIdeas 04:5x, re-derived by BigMoE from data/r57/s1{b1,b2,n1,n2}_256_{runs,checks}.json):** tpsw =
+> sum(kept[2:]) / sum(c2 - c0) leaves out each check's c2 -> next c0, and NW spent more time there: 4.71 / 4.78 ms per check vs
+> B's 2.37 / 2.33. Over all wall time of checks >= 2 (full period): B 153.4 / 164.4, NW 166.7 / 166.3 tok/s, **+4.8 %**
+> (NewIdeas' cut +4.3 %); whole decode B 133.4 / 141.7, NW 143.7 / 140.5, **+3.3 %**. Both are BETWEEN on S1's line (PASS >= +8 %,
+> KILL < +3 %). Cause in the code: with ref2.NWCNT a list, each layer call adds a sort + 8 sums (Leap ref2.py:935) that are not
+> ancestors of the logits, so the whole counter graph runs at the post-c2 readback (screen line 1355) while the host waits. B
+> synced there too (R57_QCNT1C=1 in both arms: the q1c readback, line 1353), so the extra ~2.4 ms is NW's counters, which only
+> measure. Every tpsw headline sits ~4 % above the full period (B 165.3 vs 158.8). Re-test: S1b below (NW with R57_NWCNT=0, the
+> exact full period from per-check c0). Until S1b, NW's place in v1 is open; S4 (4ef3734, 04:40) runs NW with counters.
 
 Base B = v1 candidate stackb + S2 + KEEP; NW = B + R57_NEVERWAIT=1 + REF2_NEVERWAIT=1 (Leap's ref2 v3, ddbc0621; the r57 side
 gated per set). The 2-prompt NW check was clean. The nw3 map had PASSed at both pools (Breakthrough 01:4x).
@@ -520,11 +530,49 @@ gated per set). The 2-prompt NW check was clean. The nw3 map had PASSed at both 
 - **Tokens:** NW vs B identical on 6 and 6 of 12 (floor B1 vs B2: 8). NW v3 is lossy (its 3-bit sidecar / drop paths), so it goes
   to S4's gate.
 - **NEW BEST: stackb + S2 + KEEP + NW v3 at C 256, 180.3 tok/s geo steady on the 12 HumanEval, peak 43.9 GB** (gate: S4).
+  (CORRECTED: 180.3 is tpsw; on the full period the same arm is 166.5 tok/s and B 158.8. See the correction above.)
+
+### Sat 05:35-05:47: S1b (scripts/s1b_ab.sh, data/s1b; quiet, no freeze in the run): BETWEEN, full period +6.9 % -> v1' = stackb + S2 + KEEP (no NW)
+
+| arm (12 HumanEval, C 256) | full period tok/s (passes) | whole decode | tpsw | outside c0..c2 | median cycle | kept / check | lifetime peak |
+|---|---|---|---|---|---|---|---|
+| B = v1 minus NW (production env: no QCNT1C) | **164.2** (163.7, 164.3) | 141.2 | 164.7 | 0.17 ms | 65.2 ms | 10.38 | 43.8 GB |
+| NW v3, counters off (R57_NWCNT=0) | **175.6** (175.5, 175.5) | 149.4 | 176.1 | 0.16 ms | 61.6 ms | 10.32 | 43.0 GB |
+| NW v3, counters read after the clock (R57_NWCNT=2; 5th arm, information, outside the palindrome) | 182.6 | 154.7 | | | | | 42.9 GB |
+
+- **Verdict (pre-registered):** BETWEEN: full period **+6.9 %** (whole decode +5.8 %, tpsw +6.9 %), NW peak 43.0 GB. By NewIdeas'
+  rule (05:1x), v1' = stackb + S2 + KEEP, written 05:49: snapshot 03c7782 (data/r57/snap/s4b/ + frozen_s4b, so S4's PASSed s4/
+  stays), final_env.txt dd7ad0f (26 K=V, no NW). Its S4 runs in the v2 slot by 16:00. **v1' measured: 164.2 tok/s full period,
+  141.2 whole decode, 43.8 GB** (S1b's B arm).
+- **S4 (EvalSuite 05:38) PASSED v1 with NW (counters on, 4ef3734):** same scores vs NAX6-N PASS both orders, long code 0
+  blunders. So NW's quality passed; only its speed missed the +8 % line.
+- **R57_QCNT1C's cost:** S1's B (QCNT1C on) spent 2.35 ms per check outside c0..c2, production B 0.17 ms: the q1c readback.
+- **5th arm's +4 % is acceptance, not speed** (NewIdeas 06:0x, checked by BigMoE): its median cycle 61.5 ms (ck 56.4, drf 5.26)
+  equals the counters-off passes (61.8 / 61.5); kept per check (checks >= 2, pooled) 10.52 vs 10.05 / 10.21 = x1.038, the whole
+  gap. One pass of acceptance noise (B's own passes: 9.63 / 10.21). No palindrome needed. NW per cycle: -5.5 % (61.6 vs 65.2 ms).
+  NW v3 is now a post-release lever (NewIdeas): -3.6 ms per cycle, lossy.
+- **Late groups at ~counters-off timing (5th arm):** 20.0 per check vs S1's 18.0 (counters read per check); late uses 40.0 vs
+  37.5; optional dropped now 507 vs 496.5. Without the counters' 2.4 ms between checks, ~11 % more groups run late.
+- **NW GPU check, counters ON vs OFF** (scripts/nwcnt_check.py = Leap's nw_check.py with a counters switch, on S4's ref2
+  ddbc0621): both PASS (w) warm == off, (f) FORCE == reference, (c) cold == reference, (l) layer 47. The counters touch no
+  output. (nw_check had last run on the v3 candidate dcd5f4f8, so this also re-checks production ref2.)
+- **Tokens (information):** NW vs B identical on 5 and 4 of 12; floor B1 vs B2 5.
+
+Setup (as armed 05:13):
+- **Arms:** B = final_env 1403cd6 without NW (production-like: no R57_QCNT1C, no R57_RELAX_LOG); NW = B + R57_NWCNT=0 (new
+  knob, default on: 4ef3734's behaviour is unchanged). Palindrome b1 / n1 / n2 / b2 on S1's 12 HumanEval at C 256, after a
+  2-prompt NW check (clean + the host-side nw_late_calls > 0 on both).
+- **Screen change (default env unchanged):** per-check c0 (ms from the decode start) in the checks record, the run's host-side
+  NW counters (nwk) in the runs record; the full period = sum(kept[2:]) / (decode wall - c0 of check 2).
+- **Line (NewIdeas Sat 04:5x, in the header before arming):** full period, NW vs B: PASS >= +8 % AND peak <= 45.0 GB -> NW stays
+  in v1 with R57_NWCNT=0 (EvalSuite says whether S4's verdict on 4ef3734 carries); KILL < +3 % or peak > 45.0 GB; else BETWEEN.
+  Not PASS -> v1 = stackb + S2 + KEEP. Runs at S4_DONE (turn45 quiet ticket, ~12 min, window to 12:00).
 
 ### Sat 04:35: final v1 written for EvalSuite's S4 (scripts/s4_final.sh; snapshot 4ef3734, final_env.txt 1403cd6)
 - **v1 = stackb + S2 + KEEP + NW v3 at C 256** (`S4_VARIANT=stackb_s2 S4_KEEP=1 S4_NW=1`): the stack + ship B span + MATCH g2 + S2
   (SBN 2, D7BNAX_32 2, DSUB, SVH) + REF2_KEEP_CACHES + R57/REF2_NEVERWAIT; QOM (and so NW) on humaneval + mbpp only.
   Engine number so far: 180.3 tok/s on the 12 HE prompts, lifetime peak 43.9 GB (S1). S5 re-measures it vs qall tonight.
+  (CORRECTED Sat 05:1x: 180.3 is tpsw; full period 166.5 tok/s. NW's place in v1 now waits on S1b; see S1's correction.)
 - **Why stackb, not the stack** (NewIdeas' rule: same-scores + both long-code top-ups; B's top-up is its rollback gate):
   | runner 49 check (EvalSuite) | verdict |
   |---|---|

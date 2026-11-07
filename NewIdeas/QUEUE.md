@@ -18,8 +18,11 @@ data/s1/). C 256, quiet, 12 HumanEval, lifetime peak 43.9 GB:
 - v1 without NW = stackb + S2 + KEEP (S1's B arm): 165.3 steady, 158.5 full-period steady, 137.8 whole decode.
 - METRIC NOTE. The screen's steady tok/s is tpsw = kept / (c2 - c0) over checks >= 2 (r57_screen_s4.py:1357 / 1447).
   It leaves out the time from c2 to the next c0:
-  - B: ~2.35 ms of host work per check, so 'steady' reads ~4 % above full-period throughput;
-  - NW: ~4.75 ms per check, because its counter readback (line 1355) waits there for the async commit replay (line 1349).
+  - B: ~2.35 ms per check (host work, plus the q1c readback's wait for the commit replay), so 'steady' reads ~4 % above
+    full-period throughput;
+  - NW: ~4.75 ms per check. Its counter graph (a sort plus 8 sums per layer call, ref2.py:935) is not an ancestor of
+    the logits, so all of it runs at the line-1355 readback, after c2 (BigMoE 05:1x; my first reading, a wait on the
+    replay, was wrong: both arms waited on it via q1c).
   Release and S5 / CERT numbers: full-period steady plus whole decode, never tpsw alone.
   - RULE (orchestrator 05:0x):
     - Headlines and the paper use whole decode (n / decode wall, prefill reported separately).
@@ -39,6 +42,33 @@ data/s1/). C 256, quiet, 12 HumanEval, lifetime peak 43.9 GB:
     2 / 5, p 0.4531).
   - S4 compares against NAX6-N (the orchestrator's option (b), 03:59; Kamen may reverse) and runs now (runner 54
     -> results/S4_DONE).
+- S4 RESULT Sat 05:38: PASS (EvalSuite a1aac9b; v1 with NW v3 and its counters, snapshot 4ef3734). Re-derived from
+  the counts:
+  - vs NAX6-N, both orders: HumanEval+ 88.3 vs 91.7 (53 vs 55 of 60, McNemar 0 / 2, p 0.5); math 86 vs 88 (43 vs 44 of
+    50, p 1.0); long code 0 blunders in 27,488 tokens (21 rows).
+  - vs REF2-T (information): HumanEval+ 88.3 vs 95.0 (-4 of 60), which would FAIL the original line. Kamen may
+    reverse (b).
+  - Runner 49's stackb at C 224 scored 90.0 on the same 60. The two orders agree on only 44 of 110 rows token for
+    token, but score the same per set.
+  - S1b (BigMoE) runs after S4_DONE and decides NW. If NW leaves, v1' = stackb + S2 + KEEP gets its own S4 by 16:00.
+- S1b RESULT Sat 05:47 (BigMoE data/s1b/s1b_report.txt; re-derived): BETWEEN, so NW v3 leaves v1.
+  - NW with counters off vs B, both without QCNT1C / RELAX_LOG (untimed gap now ~0.15 ms per check in both):
+    - full period +6.9 % (exact c0: 164.2 -> 175.6; my approximation +6.7 %);
+    - whole decode +5.8 % (141.2 -> 149.4);
+    - median cycle 65.2 -> 61.6 ms (-5.5 %);
+    - kept per check (checks >= 2) 9.92 -> 10.13, within pass-to-pass noise (B's two passes: 9.63 / 10.21).
+  - The 5th arm (counters read after the clock, information) ran 182.6 full period. Its cycle (61.5 ms) equals the
+    counters-off passes; its +4 % is acceptance (10.52 kept per check), one pass. Not a counters-off bug.
+  - nwcnt_check on S4's ref2 (ddbc0621): counters ON and OFF both PASS. Late groups at counters-off timing: 20.0 per
+    check vs 18.0 (moot now).
+  - Method note: pass-to-pass acceptance varies up to ~6 % on these 12 prompts, so lossy A/Bs report the median cycle
+    ratio beside tok/s.
+- v1' (written 05:49, BigMoE dd7ad0f, snapshot 03c7782) = stackb + S2 + KEEP at C 256: 141.2 tok/s whole decode,
+  164.2 full period, lifetime peak 43.8 GB (S1b's B arm; S1's 137.5 carried the q1c readback).
+  - It needs its own S4 by 16:00. EvalSuite has been told (05:5x); runner 53 yields to it when it sees final_env newer
+    than S4_DONE.
+  - NW v3 becomes a post-release lever: -3.6 ms per cycle, lossy (code map PASS, chat FAIL).
+  - Against 200: x1.42 on whole decode, x1.22 on full period.
 PREVIOUS, Sat 01:4x (steady metric, ~4 % above full period; see the METRIC NOTE): 164.2 tok/s [K, BigMoE c02f807, re-derived]. stackb + S2 + REF2_KEEP_CACHES
 at C 256, quiet A/B on 12 HumanEval: +10.1 % vs 149.1 for stackb + S2 in the same run; cycle 75.8 -> 66.9 ms; lifetime
 peak 43.1 GB. KEEP passed its EXACT proof (3 / 3 prompts, tokens equal), so it adds no quality risk. Gate: S4 on v1 =
@@ -675,12 +705,23 @@ ends it by the next item's start.
         v1 (final_env 1403cd6, 04:35).
       - RE-DERIVED Sat 04:5x (NewIdeas; scripts/s1_fullperiod.py, data/s1/): BETWEEN on all wall time.
         - Full-period steady: +4.3 % (158.5 -> 165.4). Whole decode: +3.1 % (137.8 -> 142.1).
-        - The steady window (c0..c2) leaves out NW's per-check counter readback (r57_screen_s4.py:1355). That
-          readback waits for the async commit replay (line 1349).
-        - Time outside ck + drf per check: NW 4.71 / 4.79 ms vs B 2.35 / 2.33 ms.
-        - Re-test: readback off (ref2.NWCNT = None while NW_ON), B / NW / NW / B at C 256, scored on full period.
-          PASS >= +8 % keeps NW in v1. Otherwise v1 = stackb + S2 + KEEP, gated by the second S4 slot.
-        - The fix changes the screen's md5. EvalSuite says whether a counters-only change keeps S4's verdict.
+        - The steady window (c0..c2) leaves out NW's counter graph: a sort plus 8 sums per layer call. That graph
+          runs at the readback after c2 (r57_screen_s4.py:1355).
+        - Both arms also waited there for the commit replay through the q1c readback (R57_QCNT1C=1 in S1).
+        - Time outside ck + drf per check: NW 4.71 / 4.79 ms vs B 2.35 / 2.33 ms. BigMoE confirmed this 05:1x: full
+          period +4.8 % on his cut, whole decode +3.3 %.
+        - S1b (BigMoE c71b2ce, scripts/s1b_ab.sh):
+          - Arms: B = final_env minus NW, with no QCNT1C and no RELAX_LOG. NW = B + R57_NWCNT=0 (a new knob, default
+            on, so 4ef3734 is unchanged).
+          - Palindrome at C 256, after a 2-prompt NW check. Scored on exact full period (per-check c0 is now
+            recorded), with whole decode and tpsw beside.
+          - Armed at S4_DONE (a quiet ticket, ~12 min, window to 12:00). Report: data/s1b/s1b_report.txt.
+          - PASS >= +8 % AND peak <= 45.0 GB: NW stays, with its counters off.
+          - Otherwise: final_env v1' = stackb_s2 + KEEP, plus its S4 in the v2 slot by 16:00. NewIdeas' word was
+            given in advance, 05:1x.
+        - Carry-over of S4 to counters-off is EvalSuite's call. Evidence offered:
+          - a bitwise proof with a fixed late set (REF2_NW_FORCE), counters on vs off;
+          - S1b's late groups per check vs S1's 18.0. Less time between checks can mean more late groups.
       - POST-FREEZE BUNDLE (exact-safe; Leap's cycle audit Sat 01:4x found no other per-cycle rebuild of KEEP's class):
         1. GDN state checkpoints at verify rows 8 / 12, so a partial commit replays <= 4 rows instead of 35 separate
            gated_delta_update calls over all kept rows (3.9-4.8 ms on partial checks; ~1.5 ms per cycle on HE/68).
