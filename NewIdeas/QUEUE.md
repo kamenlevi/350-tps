@@ -11,6 +11,48 @@
 ## flattered by prompt copying (its answers re-emit the prompt's signature and docstring), so code gains are given per set.
 Tags: [K] = measured, [P] = priced from measured parts, [G] = a guess. 45 = the 45 GB line, 12 = the 12 GB line.
 
+> (a quote from the project owner, kept private)
+publish).
+- Target and rules:
+  - 220 tok/s WHOLE DECODE, 45 GB FAST, code, 12 HumanEval, lifetime peak <= 45.0 GB. From 181.2 that is x1.214.
+  - At today's K (11.0 kept per check), the median cycle must fall 63.5 -> ~52.3 ms (-11.2 ms).
+  - NW v3 stays OUT (Kamen). C 288 is OUT (memory). NAX6-N stays the gate reference.
+  - Exact-safe levers adopt with a bitwise check (exact env: verify-logits hash + tokens) and an engine A/B, with no new
+    gate; CERT carries over.
+  - Lossy levers need an S4-style gate vs NAX6-N, and a CERT re-run on the final config.
+- Where the cycle goes now (v1' + wired, S6W's W arm; Leap's Fri / Sat in-place prices):
+  - draft ~5.3 ms;
+  - dense pass ~25 ms at 16 rows (GPU-bound; Leap's gap hunt, Fri 21:0x);
+  - expert path ~26 ms, at NAX6-N's byte floor;
+  - miss waits: high-miss checks run 61.5 vs 50.1 ms;
+  - commit replay on the 36 % partial accepts, 3.9-4.8 ms each;
+  - host ~0.2 ms.
+- LEVERS, ranked (exact-safe first; measured before priced):
+
+| # | lever | kind | gain | owner -> A/B | next step | due |
+|---|---|---|---|---|---|---|
+| 1 | Dense program at 16 rows: the narrow GEMVs and the HC / GDN / attention pieces toward the byte floor (Leap's step 0 B: dense ~25 -> ~16-17 ms with every kernel at 220 GB/s) | exact-safe | up to -8 ms per cycle, x1.14 [P]; a Monday-sized part -3..-5 ms, x1.05-1.09 [P] | Leap -> BigMoE | re-price the pieces in place on today's stack (barrier kept), then build the top 2-3 by ms per day of work | builds Sun-Mon, last A/B Mon 18:00 |
+| 2 | GDN state checkpoints at verify rows 8 / 12: the partial-accept commit replays <= 4 rows | exact-safe | -1.1..-1.5 ms per cycle, x1.02 [P: 36 % partial x ~3.3 ms] | Leap -> BigMoE | build + the 43-check hash + A/B | Sun |
+| 3 | S2b leftovers: e (eprep, ~0.4 [P]) + f attention k\|v fold (-0.31 [K], BETWEEN alone) | exact-safe | -0.7 ms, x1.01 | Leap | bundle with 2 | Sun |
+| 4 | The draft-quality mx.eval merged into the first eval | exact-safe | -0.15 ms, x1.003 [P] | BigMoE | bundle with 2 | Sun |
+| 5 | Miss waits (high-miss checks +11 ms): an exact-safe way to read earlier | exact-safe | up to x1.12 if fully hidden [P, upper bound] | NewIdeas (desk) | DESK RESULT 14:3x: nothing buildable by Monday. Prefetch / pre-route was tried five ways (P2-PREFETCH, PF01, PREROUTE2, 3b partial read, LEAD1CORR: recall@10 <= ~0.79). Replacement is bounded: Belady oracles cut only -2..-16 % of misses, and LFU is in. One new angle goes post-release: ROW-WAVEFRONT (below) | closed for Tue |
+| 6 | T16 on code: guarded comment / docstring acceptance (the 125B ranks the row top 3 at >= 0.1) | lossy | K x1.035 / x1.105 on MBPP12 [K]; HumanEval not run | MTP Head + BigMoE; EvalSuite gate | HumanEval engine A/B on v1' + wired, then an S4-style gate vs NAX6-N if >= +3 % whole decode | gate starts by Mon 12:00 |
+| 7 | Drafter K (retrains, the D98 track) | changes FAST outputs | retrains move K inside noise (+-0.16, K_PLAN) | MTP Head | not by Tuesday | - |
+
+- Arithmetic:
+  - Likely by Monday: 2 + 3 + 4 + a partial 1 (-3..-5 ms) = -5..-7.5 ms per cycle, x1.09-1.13, so ~197-205.
+  - 220 needs the full #1 (-8 ms) plus 2-4 (-2 ms) plus T16 passing its gate (x1.035): about x1.22.
+  - So 220 is possible only if every piece lands; ~200 is the honest Monday expectation.
+- CUT-OFFS (publish freeze Monday night):
+  - Mon 12:00: the last lossy candidate (T16) starts its S4-style gate.
+  - Mon 18:00: the last exact-safe A/B starts.
+  - Mon 20:00: FREEZE. S5' is the final number: whole decode + full period, 12 HumanEval + MBPP12, quiet, lifetime
+    footprint.
+  - Mon night: a CERT top-up only if a lossy lever joined after Sunday's CERT; exact-safe additions carry over.
+  - Tuesday: publish (Kamen confirms).
+- Tonight is unchanged: S5 on v1' + wired (BigMoE), CERT from Sun 01:30 (EvalSuite). Its config is the fallback release
+  if nothing lands.
+
 NEWEST 45 GB CODE NUMBER, Sat 09:13: v1' + wired = 181.2 tok/s WHOLE DECODE [K, BigMoE S6W 2525931, re-derived by
 NewIdeas 10:2x]. Setup: v1' (stackb + S2 + KEEP) + R57_WIRED=1 at C 256, 12 HumanEval, quiet palindrome.
 - Gains: whole decode +27.4 % (142.2 -> 181.2); full period +4.3 % (169.3 -> 176.5; my approximation +4.2 %, 10 / 12
