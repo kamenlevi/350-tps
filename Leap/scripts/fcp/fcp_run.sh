@@ -68,6 +68,8 @@ for arm in $ARMS; do
     fcpe) X="REF2_EPREP=1 REF2_GDN_TG=1 R57_WIRED=1";;   # the bundle on v1' + wired (FAST): engagement + tokens
     fcpx3) X="REF2_SB_FIRST=1 REF2_PLE_LATE=1 REF2_COMMIT_SUB=9" E="$EXE" CC=224 KK="$KX";;   # seams (b, d, e) in the exact env
     fcpf) X="REF2_SB_FIRST=1 REF2_PLE_LATE=1 REF2_COMMIT_SUB=9 R57_WIRED=1";;   # seams (b, d, e) on v1' + wired: engagement
+    fcpk) X="REF2_TIER_CHUNK=1 R57_WIRED=1" CC=112 KK="$KC6";;   # F24: v1' + wired at C 112 with row-chunking (the ungated check)
+    fcpxk) X="REF2_TIER_CHUNK=1" E="$EXE" CC=112 KK="$KX";;   # F24 proof: the exact env at C 112, chunked sync path vs fcpx0 (C 224)
     fcps) X="FCP_SEAMS=1 R57_WIRED=1" KK="$KC6" CP=128;;   # PLAN 220 (4): the cycle's GPU-idle seams on v1' + wired
     fcpx1) X="FCP_WIRED=1" E="$EXE" CC=224 KK="$KX";; *) say "unknown arm $arm"; continue;; esac
   if [ -e "$HOME/.local/share/quiet/PAUSE" ] || [ -e "$HOME/.local/share/quiet/HOLD" ]; then say "PAUSE / HOLD: $arm skipped"; rc_all=1; continue; fi

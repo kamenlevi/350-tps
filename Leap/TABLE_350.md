@@ -9336,3 +9336,21 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   - partial, <= 100 misses (~39 %): check -0.13, cycle +0.10.
   - **Class-weighted cycle ~-0.34 ms (-0.55 %): a real gain under the 1 % line (BETWEEN stands), not ~0.** Read-outs of
     FAST A/Bs should stratify by accept type x miss band. Open: why the partial class gains ~0.
+
+## F24 ROW-CHUNKING in ref2's tier path: REF2_TIER_CHUNK=1, bitwise, runs at C 112 (Leap, Sat 2026-11-07 18:52-18:58; BigMoE's ask, NewIdeas QUEUE 223bf55)
+- The failure (BigMoE F24, data/f24): at C 112 a 16-row call has 160 ids > C_m 110, so it takes the sync path
+  (_sync_slots -> _tier_slots); the first, ungated (exact) check needed 120 distinct experts > 110 base slots -> assert.
+- ref2 1f85c231 -> c176a5ad (default off; atomic swap, self_test True; backup data/tchunk/ref2_before.py). With
+  REF2_TIER_CHUNK=1, a tier call whose distinct experts exceed the base slots (or whose 4-bit ranks exceed the sidecar
+  slots) runs as contiguous row groups that fit (_tier_row_groups, greedy, in order). Each group goes through the
+  unchanged body (_tier_rows: ensure, the 3c / NAX kernel, mx.eval), so a later group may evict an earlier group's
+  experts (the ext evicts only experts "not needed now"; no cross-call pins). Rows are concatenated back in order.
+  Never engages when the union fits. REF2_TIER_CHUNK_CAP=N (test only) groups at N.
+- CPU: the grouping on 5,000 random cases (rows 1-16, K 10, caps 40-440): every group within both caps, rows covered in
+  order, a fitting call kept whole: 0 bad.
+- **GPU proof: the exact env (NAX6-N) at C 112 with chunking (fcpxk; its 16-row checks take the chunked sync path) vs the
+  exact env at C 224 (fcpx0; the gate path): verify-logits hash equal on all 43 checks, tokens 3 / 3.** Engaged: 16
+  chunked calls (32 groups) of 737 tier calls; lifetime peak 24.7 GB; no abort.
+- FAST v1' + wired at C 112 (fcpk, 3 HumanEval, CAP 64): runs through (21 chunked calls, 42 groups; no assert or
+  free-slot abort), but 29.4 tok/s at CAP 64 (cycle ~540 ms: every 16-row check is on the sync path, 160 ids > C_m 110)
+  and lifetime peak 25.4 GB (> 24.0: C must go lower). For comparison E24's exact s10b stack is 41.3 tok/s at 23.86 GB.

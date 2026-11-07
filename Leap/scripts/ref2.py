@@ -216,6 +216,8 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "sb_first": os.environ.get("REF2_SB_FIRST") == "1",   # PLAN 220 seam (b): layer 0's output sent before layer 1 (default off)
        "ple_late": os.environ.get("REF2_PLE_LATE") == "1",   # PLAN 220 seam (d): the PLE stage at layer 1, not before layer 0 (default off)
        "commit_sub": int(os.environ.get("REF2_COMMIT_SUB", "0") or 0),   # PLAN 220 seam (e): send the commit's GDN replays every N (0 off)
+       "tier_chunk": os.environ.get("REF2_TIER_CHUNK") == "1",   # F24: a tier call whose expert union exceeds the slots runs in row groups (default off)
+       "tier_chunk_cap": int(os.environ.get("REF2_TIER_CHUNK_CAP", "0") or 0),   # test only: group at this union cap (0: the pools' own)
        "hc8_v": int(os.environ.get("REF2_HC8_V", "4")),
        "ooo_1c": os.environ.get("REF2_OOO_1C") == "1", "small_native": os.environ.get("REF2_SMALL_NATIVE") == "1",
        "nax_1cq": os.environ.get("REF2_NAX_1CQ") == "1",
@@ -232,7 +234,7 @@ _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
               kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
               fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0, ooo_1c_qom=0, nax_1cq=0, qom_split=0,
-              gdn_lazy=0, gdn_lazy_rows=0, gdn_lazy_flush=0, dn_ks=0, nw_calls=0, nw_late_calls=0, nw_writes=0, eprep=0, gdn_tg=0, sb_first=0, ple_late=0, ple_late_stale=0, commit_sub=0)
+              gdn_lazy=0, gdn_lazy_rows=0, gdn_lazy_flush=0, dn_ks=0, nw_calls=0, nw_late_calls=0, nw_writes=0, eprep=0, gdn_tg=0, sb_first=0, ple_late=0, ple_late_stale=0, commit_sub=0, tier_chunk=0, tier_chunk_groups=0)
 QCNT_1C = None                                       # Fri 11-06: a list -> each one-call's post-drop work (see the notes)
 NW_ON = False                                        # NEVER-WAIT (Fri 11-06): runtime switch, read per one-call (armed by
 NWCNT = None                                         # CFG["neverwait"]); NWCNT: a list -> per one-call float32 counters
@@ -1476,15 +1478,53 @@ def _lz_commit_post(cache, wins, ok, keep, verified):
         e._ref2_lz_c = None
 
 _BS = [None]
+def _tier_row_groups(ids2, C, C_l, r4):
+    """F24 row-chunking: contiguous row groups, in order, each with <= C distinct experts and (r4 = the 4-bit ranks'
+    column range) <= C_l distinct 4-bit-rank experts; a single row (K <= C ids) always fits"""
+    groups, a, ub, u4 = [], 0, set(), set()
+    for i in range(ids2.shape[0]):
+        rb = set(ids2[i].tolist())
+        r4s = set(ids2[i, r4[0]:r4[1]].tolist()) if r4 else set()
+        if i > a and (len(ub | rb) > C or len(u4 | r4s) > C_l):
+            groups.append((a, i))
+            a, ub, u4 = i, set(), set()
+        ub |= rb
+        u4 |= r4s
+    groups.append((a, ids2.shape[0]))
+    return groups
+
 def _tier_slots(self, x, indices, bm):
+    """F24 (CFG tier_chunk / REF2_TIER_CHUNK=1, default off; BigMoE Sat 18:5x): a call whose distinct experts exceed the
+    base slots (or its 4-bit ranks' the sidecar slots) runs as contiguous row groups that fit, each through _tier_rows
+    (its own ensure + kernel + eval, so a later group may evict an earlier group's experts), the rows written back in
+    order. The kernel computes each (row, rank) pair in its own threadgroups, so every row keeps its bits. Never engages
+    when the union fits (C 256: never). REF2_TIER_CHUNK_CAP=N (test only) groups at N to prove the bits at a C that fits."""
+    t = bm["tier"]
+    ids2 = np.array(indices).reshape(-1, indices.shape[-1])
+    K = ids2.shape[-1]
+    if CFG["tier_chunk"]:
+        lo4 = [s_ for s_ in t["segs"] if s_[2] == 4]
+        r4 = (lo4[0][0], lo4[-1][1]) if lo4 else None
+        cb = min(bm["C"], CFG["tier_chunk_cap"]) if CFG["tier_chunk_cap"] else bm["C"]
+        cl = min(t["C_l"], CFG["tier_chunk_cap"]) if CFG["tier_chunk_cap"] else t["C_l"]
+        if len(np.unique(ids2)) > cb or (r4 and len(np.unique(ids2[:, r4[0]:r4[1]])) > cl):
+            groups = _tier_row_groups(ids2, cb, cl, r4)
+            x2 = x.reshape(-1, x.shape[-1])
+            ys = [_tier_rows(self, x2[a:b], ids2[a:b], bm) for a, b in groups]
+            COUNTS["tier_chunk"] += 1
+            COUNTS["tier_chunk_groups"] += len(groups)
+            return mx.concatenate(ys, axis=0).reshape(*x.shape[:-1], K, -1)
+    return _tier_rows(self, x.reshape(-1, x.shape[-1]), ids2, bm).reshape(*x.shape[:-1], K, -1)
+
+def _tier_rows(self, x, ids, bm):
     """R-58 REF2-T: a 5-16-row call on BigMoE's rank-tier pools (BIGMOE_TIER, e.g. 4433333333 with TIER_GLU 3c) runs its
     routed experts at the plan's tiers on pool slots, as the gated path's tier_call does for 1-4 rows: base-pool (MSB-3)
     slots for every rank, LSB-sidecar slots for the 4-bit ranks, MoonShots' fused 3c kernel. That kernel computes each
     (row, rank) pair in its own threadgroups, so a row's bits do not depend on the call's other rows. BigMoE's own
-    _sync_call would run these calls as the exact 4-bit prefill instead (tier.prefill_call)."""
+    _sync_call would run these calls as the exact 4-bit prefill instead (tier.prefill_call). x [n, D], ids [n, K] numpy
+    -> y [n, K, Dout], evaluated (F24: _tier_slots's body, now per row group)."""
     from bigmoe import tier as T
     BS, t = _BS[0], bm["tier"]
-    ids = np.array(indices)                                           # [..., K] in gate-rank order
     K = ids.shape[-1]
     uniq = np.unique(ids)
     assert len(uniq) <= bm["C"], ("REF2-T: more experts than base slots", len(uniq), bm["C"])
@@ -1504,7 +1544,7 @@ def _tier_slots(self, x, indices, bm):
     if hasattr(T, "_LAYOUT"):                                         # BigMoE's per-layer router (layout 0 / 1 / 2)
         T._LAYOUT[0] = t.get("layout", 0)
     y = T._tier_glu()(x.reshape(-1, x.shape[-1]), t["base"], t["sideP"], sm, sl, plan=T.PLAN)
-    y = y.reshape(*x.shape[:-1], K, -1)
+    y = y.reshape(x.shape[0], K, -1)
     mx.eval(y)                                                        # before a later ensure of L can evict slots
     COUNTS["tier_calls"] += 1
     return y

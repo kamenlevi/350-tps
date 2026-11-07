@@ -274,7 +274,9 @@ for dom, texts in PROMPTS.items():
         p0 = dict(PAUSED); PAUSED["t_last"] = 0.0
         mx.reset_peak_memory()                                  # R-38: this prompt's MLX peak (prefill + decode)
         t0 = time.perf_counter()
-        out, s = spec125.generate(rt.model, ids_of(text), N, k_mtp=1, max_draft=7, lookup=1, adapt=aw)
+        out, s = spec125.generate(rt.model, ids_of(text), N, k_mtp=1, max_draft=7, lookup=1, adapt=aw,
+                                  stop_ids=({248044, 248046} if os.environ.get("S10B_EOS") == "1" else None))   # S10B_EOS=1
+                                  # (Sat 18:5x, E24 MBPP comparable to r57): stop at the screen's EOS set (r57 EOS = {248044, 248046})
         peak_gb = mx.get_peak_memory() / 1e9
         wall = time.perf_counter() - t0
         st.gate.check()
@@ -293,7 +295,8 @@ for dom, texts in PROMPTS.items():
                                     ext={k: ext.stats().get(k, 0) - e0[k] for k in EXT_KEYS}, trace=tr,
                                     pom=[a - b for a, b in zip(ext.pom_stats(), pm0)] if pm0 is not None else None,
                                     peak_gb=round(peak_gb, 3), lifetime_fp_gb=round(lifetime_fp_gb(), 3),
-                                    fp_now_gb=round(fp_now_gb(), 4)))
+                                    fp_now_gb=round(fp_now_gb(), 4),
+                                    ids=[int(x) for x in out] if os.environ.get("S10B_SAVE_IDS") == "1" else None))   # E24m (Sat 18:5x)
         print(f"[{name}] {len(out)} tok, {s['tok_s']:.1f} tok/s, {s['passes']} passes, verify rows {rows_v}, "
               f"x rows {d['x'].shape[0]}, sha {sha}", flush=True)
         json.dump(meta, open(os.path.join(OUT, "meta.json"), "w"), indent=1)

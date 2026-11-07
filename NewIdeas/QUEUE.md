@@ -58,6 +58,20 @@ morning. You can run tests for now as much as you want. I probably won't stop yo
     are noise.
   - Optional context point, not a table cell: "~30 GB lossy" = S5''s config at C 160, the smallest C r57 can run.
     Asked of BigMoE 18:1x (~10 min). Its quality basis: runner 49 gated stackb at C 160 / 192 (PASS vs NAX6).
+  - C30 RESULT (BigMoE 18:12, ef64e24; that commit's message wrongly says 24 GB): S5''s config at C 160, VTIER off,
+    no abort. Re-derived: 12 HumanEval 153.5 (passes 152.3 / 154.7), MBPP12 114.8 (116.6 / 112.9), lifetime peak
+    31.8 GB. The orchestrator wants it as a "~32 GB lossy" row, which needs its own code gate, because FAST is
+    cache-dependent and S4 at C 256 does not cover C 160.
+- REST OF THE NIGHT (NewIdeas 18:5x, the orchestrator's items in my order). One big job at a time; CERT 01:30 fixed:
+  1. ~18:5x-19:45, EvalSuite: the 12 GB θ 0.95 code gate (t95ck1u; HE+ vs REF2-T in both orders, the 12 GB rule).
+  2. ~19:45-21:00, EvalSuite: the C30 CODE-ONLY gate (HE+ x 2 orders + long code vs NAX6-N), the same form planned for
+     F24. BigMoE hands EvalSuite a c30_env (S5''s env at C 160, VTIER off).
+  3. ~21:00-21:15, BigMoE: E24 MBPP with an EOS stop, if s10b's harness can stop at EOS cheaply. It makes the 24 GB
+     MBPP cell comparable. If not cheap, the cell keeps its caveat.
+  4. Until ~01:00, BigMoE (+ Leap for ref2): 24 GB lossy, only if one route builds in <= ~3 h. The routes: QOM's rules
+     in the s10b stack, or row-chunking a layer call whose union exceeds C in ref2's tier path. Build on CPU now,
+     measure in the GPU gap after item 3. Otherwise the cell stays n/a for Tuesday.
+  5. 01:30: CERT (EvalSuite), unchanged.
 
 > (a quote from the project owner, kept private)
 publish).

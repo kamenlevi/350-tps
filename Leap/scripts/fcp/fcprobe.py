@@ -290,6 +290,8 @@ def dump():
     print(f"[fcp] {len(REC)} check windows, {len(CALLS)} calls, {len(SAMP)} samples -> {p}", flush=True)
     r2 = sys.modules.get("ref2")
     if r2 is not None:
+        print(f"[fcp] ref2 COUNTS tier: tier_calls {r2.COUNTS.get('tier_calls')}, tier_chunk {r2.COUNTS.get('tier_chunk')}, "
+              f"groups {r2.COUNTS.get('tier_chunk_groups')}", flush=True)
         print(f"[fcp] ref2 COUNTS seams: sb_first {r2.COUNTS.get('sb_first')}, ple_late {r2.COUNTS.get('ple_late')}, "
               f"ple_late_stale {r2.COUNTS.get('ple_late_stale')}, commit_sub {r2.COUNTS.get('commit_sub')}", flush=True)
         print(f"[fcp] ref2 COUNTS: gdn_tg {r2.COUNTS.get('gdn_tg')}, eprep {r2.COUNTS.get('eprep')}, ooo_1c {r2.COUNTS.get('ooo_1c')}, "
