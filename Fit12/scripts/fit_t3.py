@@ -9,7 +9,8 @@ Per arm: tokens (sha1, first divergence from ex), lsha, checks, kept per check, 
 skipped, rows in pass 1 / 2, pass-2 calls, refused commits, tok/s (shared GPU, rough); the process's lifetime peak.
 Usage: [BigMoE venv] fit_t3.py TAG
 (Sat 7 Nov) EvalSuite's entry point (t80ck1u code same-scores): F12_IDS_OUT=<file.json> with exactly ONE arm (F12_T3ARMS=
-t80ck1u, t90ck1u or ex) writes {key: full-output ids} (EOS kept as the last id, like EvalSuite's completion_ids) and
+t80ck1u, t90ck1u or ex) writes {key: {arm: [full-output ids]}}, the input of EvalSuite's tools/r57rows.py (EOS kept as the
+last id, like EvalSuite's completion_ids), and
 <file>_meta.json ({key: arm, theta, n, cap, finish stop / length, pf_s, dec_s, tok_s, checks, paused_s}) after every prompt,
 in run order; F12_CAP=item caps each prompt at its item's max_tokens; F12_KEYS = the keys in run order (the history)."""
 import ctypes, hashlib, json, os, sys, time
@@ -73,6 +74,9 @@ else:
     rt, _ = B.load_b12(0.10, mtp=False)
     model = rt.model
     draft, DF = T3.load_draft(B, model)
+    if os.environ.get("F12_WIRED") == "1":             # (Sat 7 Nov, Leap's FIRSTCHK fix, BigMoE's R57_WIRED form) MLX keeps its
+        _wl = int(mx.device_info()["max_recommended_working_set_size"])   # buffers wired for the run (IOGPU stops unwiring the
+        print(f"[{TAG}] WIRED: mx.set_wired_limit({_wl / 1e9:.2f} GB), was {mx.set_wired_limit(_wl) / 1e9:.2f} GB", flush=True)   # pools)
     from bigmoe_v3f.gated import ext as _EXT          # (T3R2) was imported per arm; the same module object
     if os.environ.get("F12_K12SYNC") == "1":           # (Tue 3 Nov 23:0x, K12; orchestrator 22:5x) Leap's [K] A/B
         import k12sync                                 # (50de28c): mx.eval at every MoE block's entry and exit
@@ -183,14 +187,14 @@ PZK = {}                                                 # (Sat 7 Nov) key -> PA
 
 
 def dump_ids():                                          # (Sat 7 Nov, EvalSuite) after every prompt, in run order, atomically:
-    if not IDS:                                          # IDS = {key: ids} (EOS kept as the last id, like EvalSuite's
+    if not IDS:                                          # IDS = {key: {arm: [ids]}} (EOS kept as the last id, like EvalSuite's
         return                                           # completion_ids); <IDS>_meta.json = {key: arm, theta, n, cap, finish, ...}
     arm, th = ARMS[0][0], ARMS[0][1]
     ids_, meta = {}, {}
     for k, v in PER.items():
         if arm in v:
             toks, s = v[arm]
-            ids_[k] = [int(t_) for t_ in toks]
+            ids_[k] = {arm: [[int(t_) for t_ in toks]]}  # EvalSuite's tools/r57rows.py input: {key: {arm: [run ids]}}
             meta[k] = dict(arm=arm, theta=th, n=len(toks), cap=capk(k), finish="stop" if toks and toks[-1] in EOS else "length",
                            pf_s=s["pf_s"], dec_s=s["dec_s"], tok_s=round(s["tok_s"], 3), checks=s["checks"],
                            paused_s=round(PZK.get(k, 0.0), 1))

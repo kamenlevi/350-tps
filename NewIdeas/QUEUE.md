@@ -11,7 +11,42 @@
 ## flattered by prompt copying (its answers re-emit the prompt's signature and docstring), so code gains are given per set.
 Tags: [K] = measured, [P] = priced from measured parts, [G] = a guess. 45 = the 45 GB line, 12 = the 12 GB line.
 
-NEWEST 45 GB CODE NUMBERS, Sat 04:5x (re-derived by NewIdeas from BigMoE's raw S1 files: scripts/s1_fullperiod.py,
+NEWEST 45 GB CODE NUMBER, Sat 09:13: v1' + wired = 181.2 tok/s WHOLE DECODE [K, BigMoE S6W 2525931, re-derived by
+NewIdeas 10:2x]. Setup: v1' (stackb + S2 + KEEP) + R57_WIRED=1 at C 256, 12 HumanEval, quiet palindrome.
+- Gains: whole decode +27.4 % (142.2 -> 181.2); full period +4.3 % (169.3 -> 176.5; my approximation +4.2 %, 10 / 12
+  prompts faster).
+- Check 0: 339 / 306 -> 66 / 65 ms per pass. Later checks ~59 -> ~57 ms. Lifetime peak 42.9 GB in both arms.
+- FIRSTCHK chain: NewIdeas priced it (07:0x: 15.8 % of the decode wall); BigMoE's kill test showed a one-time wait with
+  no host CPU (07:05); Leap named and fixed it (08:36).
+  - The cause: IOGPU's wired collector unwires the 32 GB pools during the prefill, and check 0 re-wires +31.8 GB.
+  - The fix: one mx.set_wired_limit(55.66 GB) after model load.
+  - Exactness: verify-logits hash equal 43 / 43 in the exact env; tokens 3 / 3. So S4's gate on v1' carries over.
+- Into S5 tonight (final_env unchanged + R57_WIRED=1). Against 200: x1.10 on whole decode.
+- The same call applies to the EXACT default, the 12 GB loop (c1u16's check 0 is 229 ms median) and Breakthrough's
+  engines.
+- Still open (BigMoE): whether the volatile tier (R57_VTIER) becomes wired and so not purgeable. It filled 0.00 GB.
+- PATH TO 200 on whole decode (NewIdeas 10:3x; CPU-only from S6W's W passes; scripts/tail_w.py, data/firstcheck/tail_w.txt): x1.104 needed.
+  - Where the wall goes now:
+    - checks 90.8 %, drafts 9.0 %, host gaps 0.3 %;
+    - inside checks: demand SSD busy 17.7 %, GPU waiting on misses 20.8 % (they overlap);
+    - 64 % of checks accept all 16 rows;
+    - the tail is light: checks over 1.5x the median are 1.0 % of the wall. No FIRSTCHK-class outlier is left.
+    - High-miss checks (above the median miss count) run 61.5 vs 50.1 ms, so misses are the biggest single part left.
+  - Levers, each a few %:
+    1. NW v3 with counters off: +5.8 % whole decode on S1b's base (cycle -3.6 ms). Lossy. Quality passed in S4 (v1 with
+       NW + counters). BETWEEN on its +8 % full-period line. Shipping a BETWEEN lossy lever for the 200 goal is
+       Kamen's call, not a re-litigation of the line.
+    2. GDN state checkpoints (exact-safe): partial accepts are 36 % of checks, at ~3.3 ms saved each. About -1.2 ms per
+       cycle, ~+2 % [P].
+    3. C 288: fewer misses (C 224 -> 256 was +3.4 % steady). ~+2 % [G]. Lifetime peak ~44.3 GB [P] against the 45.0
+       line, and it means more wired memory.
+    4. The draft (9 % of the wall): draft-ahead was re-priced on 11-06 as a loss (GPU-bound check, idle <= 2.5 ms;
+       break-even at >= 73 % hits). Not a lever without a cheaper drafter.
+  - Product: 181.2 x 1.058 x 1.02 x 1.02 ~ 199 [P].
+  - Tonight's honest numbers: ~181 at S5, ~192 if NW ships (Kamen's call). 200 is a post-freeze target: GDN
+    checkpoints + C 288 + NW.
+  - S5 should also report MBPP12. Whole decode on HumanEval includes check 0's 16 copied tokens, which flatters it.
+PREVIOUS: NEWEST 45 GB CODE NUMBERS, Sat 04:5x (re-derived by NewIdeas from BigMoE's raw S1 files: scripts/s1_fullperiod.py,
 data/s1/). C 256, quiet, 12 HumanEval, lifetime peak 43.9 GB:
 - v1 as written for S4 = stackb + S2 + KEEP + NW v3 (final_env 1403cd6, snapshot 4ef3734). 180.3 tok/s on the screen's
   steady metric [K, BigMoE f9c9fff]. On all wall time: 165.4 full-period steady and 142.1 whole decode [K, re-derived].

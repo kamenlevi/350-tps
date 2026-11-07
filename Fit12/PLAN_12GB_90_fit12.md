@@ -218,3 +218,9 @@ rule: tokens per check, time per check from the table above, and divergences vs 
   {key: ids} + _meta.json after every prompt. Tested in FAKE mode. Backup fit_t3.py.bak_es; new sha256 7ebdce481ea5....
   EvalSuite told: the VOID rule "ex reproduces REF2-T on 4 rows" can fail without an engine bug (see above).
 - Findings note: /Users/kamen/FableGod/findings/2026-11-07_0823_12gb-fast-t80ck1u-46tps.md.
+- Sat 10:5x: the entry point now writes r57rows.py's input ({key: {arm: [ids]}}; fit_t3.py sha256 ec0964f190b7), and
+  F12_WIRED=1 adds Leap's wired-limit call. WIRED A/B pre-registered (no pass / fail; an engine A/B): /Users/kamen/Fit12/scripts/
+  wab.sh runs t80ck1u W (F12_WIRED=1) then B in separate processes on this section's footing. [P] from c1u16's phase logs:
+  check 0 runs ~500 ms over the later same-mode checks when it goes to pass 2 / exact, 3.6 s in all = 4.7 % of decode, so
+  W <= +4.9 % whole decode; tokens W = B expected. On the verified-greedy loop (ex16) the same excess is 2.0 % of decode.
+  Starts once /Users/kamen/Fit12/data/scr/wab/GO exists (after the usage hold) and 10 minutes are clear.
