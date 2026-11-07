@@ -296,12 +296,13 @@ case "$C" in 160|176|192|208|224|240|256) ;; *) say "C '$C' from the comment is 
 MEM=$(echo "$COMMENT" | grep -oE 'MEM [0-9]+' | head -1 | awk '{print $2}'); MEM=${MEM:-46}
 EB=$(echo "$ENVLINE" | tr ',' '\n' | grep '^BIGMOE_EXT_BUILD=' | cut -d= -f2); EB=${EB:-build}
 BMC=$(git -C "$BM" rev-parse --short HEAD); QOMSO=$(shasum -a 256 "$BM"/ext/"$EB"/*.so | cut -c1-12)
-SNAP=$(echo "$COMMENT" | grep -oE 'data/r57/snap/r57_screen[A-Za-z0-9_.-]*\.py' | head -1)
-[ -z "$SNAP" ] && echo "$COMMENT" | grep -qi 'snap' && { say "the comment names a snapshot but no data/r57/snap/r57_screen*.py: runner stops"; exit 2; }
+SNAP=$(echo "$COMMENT" | grep -oE 'data/r57/snap/([A-Za-z0-9_.-]+/)*r57_screen[A-Za-z0-9_.-]*\.py' | head -1)   # s4/ subdir (04:40)
+[ -z "$SNAP" ] && echo "$COMMENT" | grep -qi 'snap' && { say "the comment names a snapshot but no data/r57/snap/[dir/]r57_screen*.py: runner stops"; exit 2; }
 if [ -n "$SNAP" ]; then
   MODE=snapshot; SCREEN=$BM/$SNAP
   [ -f "$SCREEN" ] || { say "no $SCREEN: runner stops"; exit 2; }
-  SNAPP=("$SNAP" $(grep -oE 'data/r57/snap/frozen_[A-Za-z0-9_]+' "$SCREEN" | sort -u))
+  SNAPP=("$SNAP" $(grep -oE 'data/r57/snap/([A-Za-z0-9_.-]+/)*frozen_[A-Za-z0-9_]+' "$SCREEN" | sort -u))
+  [ "$(dirname "$SNAP")" != data/r57/snap ] && SNAPP+=("$(dirname "$SNAP")")      # the snapshot's own folder (s4/: its relax / inert modules)
   bm_pin || { say "the snapshot (${SNAPP[*]}) or bigmoe/ is not BigMoE $BMC (uncommitted or untracked files), or the .so: runner stops"; exit 7; }
 else
   MODE=freeze; FZ=${S4_FZBASE:-$HOME/EvalSuite/$AF}/fz_$(date +%m%d_%H%M%S)

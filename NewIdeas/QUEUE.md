@@ -11,7 +11,35 @@
 ## flattered by prompt copying (its answers re-emit the prompt's signature and docstring), so code gains are given per set.
 Tags: [K] = measured, [P] = priced from measured parts, [G] = a guess. 45 = the 45 GB line, 12 = the 12 GB line.
 
-NEWEST MEASURED 45 GB CODE NUMBER, Sat 01:4x: 164.2 tok/s [K, BigMoE c02f807, re-derived]. stackb + S2 + REF2_KEEP_CACHES
+NEWEST 45 GB CODE NUMBERS, Sat 04:5x (re-derived by NewIdeas from BigMoE's raw S1 files: scripts/s1_fullperiod.py,
+data/s1/). C 256, quiet, 12 HumanEval, lifetime peak 43.9 GB:
+- v1 as written for S4 = stackb + S2 + KEEP + NW v3 (final_env 1403cd6, snapshot 4ef3734). 180.3 tok/s on the screen's
+  steady metric [K, BigMoE f9c9fff]. On all wall time: 165.4 full-period steady and 142.1 whole decode [K, re-derived].
+- v1 without NW = stackb + S2 + KEEP (S1's B arm): 165.3 steady, 158.5 full-period steady, 137.8 whole decode.
+- METRIC NOTE. The screen's steady tok/s is tpsw = kept / (c2 - c0) over checks >= 2 (r57_screen_s4.py:1357 / 1447).
+  It leaves out the time from c2 to the next c0:
+  - B: ~2.35 ms of host work per check, so 'steady' reads ~4 % above full-period throughput;
+  - NW: ~4.75 ms per check, because its counter readback (line 1355) waits there for the async commit replay (line 1349).
+  Release and S5 / CERT numbers: full-period steady plus whole decode, never tpsw alone.
+  - RULE (orchestrator 05:0x):
+    - Headlines and the paper use whole decode (n / decode wall, prefill reported separately).
+    - Full-period steady is the steady-state figure. tpsw is information only.
+    - New speed lines are pre-registered on full period, with whole decode reported beside them.
+    - Same-metric table: findings/2026-11-07_0500_steady-metric-overstates-whole-decode.md.
+  - C 256 vs C 224 (stackb): +3.4 % steady but +0.1 % on whole decode (123.5 vs 123.4).
+    - For the 24 GB line, C 224 is worth ~3 GB less RAM for the same whole-decode speed. No action tonight.
+- S1 (NW v3) on full period: +4.3 % (whole decode +3.1 %). That is BETWEEN on its lines (PASS >= +8 %, KILL < +3 %),
+  not the registered +9.0 %. Re-test asked of BigMoE (04:5x): NW with the per-check readback off, B / NW / NW / B at
+  C 256, scored on full period. >= +8 % keeps NW in v1; otherwise v1 = stackb + S2 + KEEP, gated in the second S4 slot.
+- Against 200: x1.41 on whole decode (142.1); x1.21 on full period (165.4), x1.26 without NW (158.5). Headlines use whole decode from now on (orchestrator 05:0x; prefill separate; full-period steady = the steady-state figure; tpsw = information only).
+- Runner 49 (EvalSuite bb7094d, 3581be6; stackb at C 224), re-derived:
+  - Same scores vs REF2-T: FAIL at the bar, HumanEval+ 90.0 vs 95.0 % (-3 of 60, McNemar 0 / 3, p 0.25).
+  - Same scores vs NAX6: PASS (90.0 vs 91.7, p 1.0).
+  - B top-up PASS (0.30 blunders / 10K); long code PASS (41 humanevalt rows, 0.18 / 10K); MBPP PASS (76.0 vs 79.0,
+    2 / 5, p 0.4531).
+  - S4 compares against NAX6-N (the orchestrator's option (b), 03:59; Kamen may reverse) and runs now (runner 54
+    -> results/S4_DONE).
+PREVIOUS, Sat 01:4x (steady metric, ~4 % above full period; see the METRIC NOTE): 164.2 tok/s [K, BigMoE c02f807, re-derived]. stackb + S2 + REF2_KEEP_CACHES
 at C 256, quiet A/B on 12 HumanEval: +10.1 % vs 149.1 for stackb + S2 in the same run; cycle 75.8 -> 66.9 ms; lifetime
 peak 43.1 GB. KEEP passed its EXACT proof (3 / 3 prompts, tokens equal), so it adds no quality risk. Gate: S4 on v1 =
 (stackb | stack) + S2 + KEEP. Against 200: x1.22 to go. S1 (NW v3; its map PASSED at both pools) is next, at most
@@ -643,6 +671,16 @@ ends it by the next item's start.
       - S1 UNBLOCKED Sat 01:4x: nw3's code map PASS at both pools (Breakthrough 7e08711: published 0.71 %, D +0.12,
         clean; 208 slots 0.86 %, D +0.18). BigMoE's NW v3 engine A/B on v1 runs at the next boundary (PASS >= +8 %,
         KILL < +3 %, peak <= 45.0 GB). It joins v1 if it passes before runner 49's code verdicts, else v2.
+      - RESULT Sat 01:5x (BigMoE f9c9fff): PASS as registered, +9.0 % steady (180.3 vs 165.3, peak 43.9 GB). NW joined
+        v1 (final_env 1403cd6, 04:35).
+      - RE-DERIVED Sat 04:5x (NewIdeas; scripts/s1_fullperiod.py, data/s1/): BETWEEN on all wall time.
+        - Full-period steady: +4.3 % (158.5 -> 165.4). Whole decode: +3.1 % (137.8 -> 142.1).
+        - The steady window (c0..c2) leaves out NW's per-check counter readback (r57_screen_s4.py:1355). That
+          readback waits for the async commit replay (line 1349).
+        - Time outside ck + drf per check: NW 4.71 / 4.79 ms vs B 2.35 / 2.33 ms.
+        - Re-test: readback off (ref2.NWCNT = None while NW_ON), B / NW / NW / B at C 256, scored on full period.
+          PASS >= +8 % keeps NW in v1. Otherwise v1 = stackb + S2 + KEEP, gated by the second S4 slot.
+        - The fix changes the screen's md5. EvalSuite says whether a counters-only change keeps S4's verdict.
       - POST-FREEZE BUNDLE (exact-safe; Leap's cycle audit Sat 01:4x found no other per-cycle rebuild of KEEP's class):
         1. GDN state checkpoints at verify rows 8 / 12, so a partial commit replays <= 4 rows instead of 35 separate
            gated_delta_update calls over all kept rows (3.9-4.8 ms on partial checks; ~1.5 ms per cycle on HE/68).

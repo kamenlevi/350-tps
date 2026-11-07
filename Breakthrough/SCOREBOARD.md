@@ -3616,3 +3616,65 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
   - Predictions [G]: code D +0.2 to +0.5 -> +0.12 / +0.18 (both under the range; PASS 55 % -> PASS); control +-0.15 -> +0.06.
   - Next on record: nw3's two 36-window arms (chat: IFEval / multi VERDICT2 and D vs nw1) in map_rest.sh, after the CERT
     reference decodes.
+
+- Sat 04:2x: NW3 CHAT (on record) [K]: VERDICT2 FAIL on IFEval and multi at BOTH pools. D vs nw1 is +1.0 to +2.4 points,
+  inside the predicted +1 to +3. The published pool's coin toss came down FAIL. Code stays PASS, as decided at 01:4x.
+  Arms run 03:55:08-04:07:32 (36/36 windows each, swap flat at 6.9 GB). Read: data/map_rest_read.txt.
+
+  | pool | arm | IFEval all-row [non-tie] | multi all-row [non-tie] | D vs nw1 (IFEval / multi) | McNemar vs nw1 (all-row; non-tie) | VERDICT2 |
+  |---|---|---|---|---|---|---|
+  | published | `qom_0_live_ball_nw1` (twin) | 3.97 % [1.38] | 3.24 % [0.85] | | | PASS / PASS |
+  | published | `qom_0_live_ball_nw3` | 6.18 % [2.61] | 5.60 % [2.48] | +2.21 / +2.36 | IFEval 122 / 47, z +5.77; 52 / 14, z +4.68. multi 122 / 38, z +6.64; 67 / 13, z +6.04 | FAIL / FAIL |
+  | 208 slots | `qom_0_live_ball_c208_nw1` (twin) | 5.33 % [2.35] | 3.72 % [1.39] | | | FAIL / FAIL (already) |
+  | 208 slots | `qom_0_live_ball_c208_nw3` | 6.33 % [3.28] | 5.46 % [2.45] | +1.00 / +1.74 | IFEval 95 / 61, z +2.72; 54 / 25, z +3.26. multi 104 / 42, z +5.13; 55 / 20, z +4.04 | FAIL / FAIL |
+
+  - Lines: IFEval 5.42 [2.22], multi 3.69 [1.63]. VERDICT (all-row): published IFEval BETWEEN, multi KILL (5.60 > x1.5
+    5.54); 208 slots BETWEEN / BETWEEN.
+  - **The worst-case rule sets the chat rate, not the pool.** nw3 lands at ~6.2-6.3 % IFEval and ~5.5-5.6 % multi at both
+    pools; only nw1 differs by pool. That is why D is larger at the published pool.
+  - **For v1:** (b) at its worst case costs chat, though not code. The engine's real share of it is NWCNT (3-bit
+    sidecars per check) on chat prompts. So NW v3 is code-validated only. A chat claim needs one of: NWCNT on chat
+    prompts, an engine chat run, or NW v3 off for chat.
+  - Cross-check: t3_all (every rank at 3 bits on uncertain rows) cost +5.09 / +4.25 against its control; nw3 (ranks 0-1
+    only) costs about half that.
+
+- Sat 04:2x: STEP 0 RESULT (PLAN_12GB_90) [K]: ALL THREE P1-K1 KU 4 cf 0.9 forms PASS VERDICT2 on code. Per the
+  pre-registered rule ("the fastest passing form is the 12 GB base"), the base is **T3R2's own form,
+  `p1c_oea_k1_ku4_p08_cf09` (t80ck1u, θ 0.8): 45.8 tok/s [P, Fit12's replay, full outputs, cf 0.9]**. The fastest
+  code-passing point before this was top-2 θ 0.95 at 35.9 [P] (+28 % [P]). Arms run 04:07:33-04:12:54 (12/12 windows each).
+
+  | arm | θ | all-row | non-tie | tie | slack to the line (all-row / non-tie) | prediction [G] | tok/s [P] |
+  |---|---|---|---|---|---|---|---|
+  | `p1c_oea_k1_ku4_p08_cf09+code` (T3R2's form) | 0.8 | 1.31 % (44/3366) | 0.78 % (26/3316) | 36.0 % | 1 flip / 2 flips | 1.4-1.6 % | 45.8 |
+  | `p1c_oea_k1_ku4_p09_cf09+code` | 0.9 | 1.16 % (39) | 0.66 % (22) | 34.0 % | 6 / 6 | 1.3-1.5 % | 41.0 |
+  | `p1c_oea_k1_ku4_p095_cf09+code` | 0.95 | 1.10 % (37) | 0.60 % (20) | 34.0 % | 8 / 8 | 1.1-1.3 % | 37.9 |
+
+  - Line: VERDICT2 code, all-row <= 1.34 % AND non-tie <= 0.87 %.
+  - McNemar:
+    - θ 0.8 vs cert_top5_p09 (0.92 %): 25 / 12, z +2.14 (non-tie 17 / 5, z +2.56). Top-5 pass 1 is still cleaner, but it
+      overflows C = 47.
+    - KU 4 + cf gate vs the plain P1-K1 θ 0.8 (`p1c_oea_k1_p08`, 1.52 %): 13 / 20, z -1.22 (non-tie 7 / 14, z -1.53). At
+      θ 0.9: 15 / 27, z -1.85 (non-tie 8 / 19, z -2.12).
+    - θ 0.9 vs θ 0.8: 7 / 12, z -1.15. θ 0.95 vs θ 0.8: 8 / 15, z -1.46.
+  - Predictions [G]: all three came in at or under the bottom of their ranges.
+  - **Caveats.** θ 0.8 passes by 1 all-row flip. A second sample or EvalSuite same-scores could tip it. θ 0.9 (41.0 [P],
+    6 flips of slack) is the safe fallback. The speeds are Fit12's replay, calibrated within 2-4 % of T3R2's measured
+    runs. This is FAST, not exact: adoption needs EvalSuite same-scores on code and Fit12's measured run on full outputs.
+  - From 45.8, 90-130 tok/s needs x1.97-2.84. Sent to Fit12 (peer say) and to the orchestrator (next-caliber,
+    12 GB line).
+
+- Sat 04:2x: T1 RESULT (Fable A's LOSSY350_A T1) [K]. Input sparsity on the routed experts: every MoE block's switch reads
+  x with all but the c largest-|x| of each 64-wide input group zeroed; the router and the shared expert keep the full x.
+  Ran from sat_t1.sh, 04:13:18-04:21:59, swap flat at 6.9 GB. Lines and decide.py are Fable A's ("room" = non-tie flips
+  left above today's preset).
+
+  | arm | kept of 64 | code all-row | code non-tie | IFEval [non-tie] | multi [non-tie] | predicted non-tie [G, Fable A] | Fable A's line |
+  |---|---|---|---|---|---|---|---|
+  | xs64 | 64 (identity) | 0.00 % (0) | 0.00 % | | | 0 | OK: the wrapper is inert |
+  | xs48 | 48 | 0.45 % (15) | 0.12 % | 3.74 % [0.87] | 2.67 % [0.67] | 0.05-0.07 code; 0.55-0.66 / 0.48-0.54 chat | FITS (room 0.66 / 1.03 / 0.72); lever alive (kill 0.21) |
+  | xs40 | 40 | 0.95 % (32) | 0.33 % | | | 0.17-0.24 | FITS |
+  | xs32 | 32 | 1.43 % (48) | 0.66 % | | | 0.42-0.60 | OVER; lever alive (kill 1.03) |
+
+  - Every measured non-tie cost ran 1.2-2x over Fable A's predictions. xs48's multi room is thin (0.67 vs 0.72).
+  - Stand-alone VERDICT2: xs48 passes all three domains; xs40 passes code; xs32 fails code all-row (1.43 > 1.34).
+  - Quality only: the speed side (a kernel that skips the zeroed inputs) is Fable A's to price. No speed is claimed.

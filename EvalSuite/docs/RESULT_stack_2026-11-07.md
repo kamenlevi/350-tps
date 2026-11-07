@@ -1,4 +1,4 @@
-# RESULT: the FAST stack's code verdicts, the Fri -> Sat night (runner 49; Sat 2026-11-07 04:0x)
+# RESULT: the FAST stack's code verdicts, the Fri -> Sat night (runner 49; Sat 2026-11-07 04:0x, long code 04:34)
 
 Pre-registered in docs/PREREG_stack_2026-11-06.md (+ amendments 1-3), PREREG_relax_drift amendment 2 (the top-up) and
 PREREG_mbpp (+ amendment 3).
@@ -17,7 +17,7 @@ data/r57/snap/r57_screen_sat.py (a4d659190145). Provenance:
 | **STACK** (both orders must pass) | | **FAIL** (results/STACK_DONE) |
 | B top-up (code-only, 51 rows >= 512 tokens) | blunders 2 = 0.30 per 10K (line <= 1); pooled q4 KLD 0.00671 (<= 0.02); largest row 0.02761 (<= 0.05) | **PASS** (results/relax_topup_report.txt) |
 | MBPP (the stack without CD16) vs NAX6-N's AR | 76.0 vs 79.0 % in both orders, delta -3.00, p 0.4531 (2 / 5) | **PASS** (results/MBPP_DONE) |
-| Long code: the stack on the 41 humanevalt rows | being scored (tfwin): runner 49 decoded them, but an unset variable dropped the scoring call (76659d9) | pending |
+| Long code: the stack's CODE env on the 41 humanevalt rows (tfwin vs NAX6-N; 04:34) | 54,561 tokens, blunders 1 = 0.18 per 10K (line <= 1), deviations 1.76 %; QOM engaged on 41 / 41 runs (5 processes, all typed code) | **PASS** (results/stack_ht_report.txt) |
 
 The same-scores FAIL is decided by the strict bar: the delta must be above -5 pt, and it is exactly -5.00 (3 tasks of
 60). It is not significant (p 0.25).

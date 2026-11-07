@@ -214,3 +214,4 @@ M5 Pro. Taken from HANDOVER.md, LEDGER.md, FINDINGS.md and DESIGN_*.md (line num
 - Sat 11-07 00:40: S2 (R57_SBN=2 + D7BNAX_32=2 + DSUB + SVH, Leap) on stackb at C 256: PASS +3.1 % (146.8 vs 142.4 tok/s), cycle -1.3 ms; tokens differ (floor B1-vs-B2 7/12 under QOM), so S2 joins S4's gate. Data data/s2.
 - Sat 11-07 01:3x: REF2_KEEP_CACHES=1 (Leap S2c) on stackb + S2 at C 256: +10.2 % (164.2 vs 149.1 tok/s, cycle -8.9 ms, 43.1 GB) and bitwise in the exact NAX6-N env (3/3 prompts): joins final v1. Data data/s2c.
 - Sat 11-07 01:5x: NW v3 (Leap ref2 v3 + r57 NW side) engine A/B on stackb + S2 + KEEP at C 256: PASS +9.0 % (180.3 vs 165.3 tok/s; B passes spread 7 %), peak 43.9 GB; joins v1 (S4 gate). Data data/s1.
+- Sat 11-07 04:35: final v1 written for S4 = stackb + S2 + KEEP + NW v3 at C 256 (snapshot 4ef3734, final_env 1403cd6): runner 49 vs NAX6-N PASS (vs REF2-T FAIL -5.00, on record), B top-up 0.30/10K PASS, long code 0.18/10K PASS, MBPP PASS. docs/WED_TESTS.md

@@ -16,6 +16,9 @@ Sat 7 Nov 2026, 01:4x. Found by Leap, measured by Leap and BigMoE, re-derived by
   falls 7.2-8.0 ms per check.
 - BigMoE's engine A/B (FAST stack at C 256, 12 HumanEval prompts, quiet): 164.2 vs 149.1 tok/s (x1.10); cycle 75.8
   -> 66.9 ms; lifetime peak 43.1 GB.
+  - Added Sat 04:5x: those two numbers are the screen's steady metric, which leaves out ~2.35 ms of host work per
+    check. On all wall time (full-period steady): 143.6 -> 157.3, x1.096, faster on 11 of 12 prompts. The gain holds,
+    because both arms have the same untimed gap.
 - Exactness: on the EXACT path (3 prompts), tokens were equal with the fix off and on.
 - Status: in the FAST release candidate. Its short quality gate runs Saturday. Using it in the EXACT default is a
   separate decision, still open.

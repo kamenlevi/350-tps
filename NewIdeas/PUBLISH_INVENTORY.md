@@ -50,10 +50,11 @@ To fix before the freeze (NewIdeas):
 |---|---|---|---|---|---|
 | 45 GB | EXACT (NAX6-N) | ref14, 13-14 prompts | 49.9 [K, quiet, C 192, NATIVE-FRI run 2] | certified exact reference (Part 1 + 2 PASS, Thu 5 Nov) | stands |
 | 45 GB | FAST (FAST-NAX all-in) | 12 HumanEval | 113.9 [K, quiet, C 224, palindrome] | same-scores: tonight's run on the stack | pending tonight |
-| 45 GB | FAST stack (+ DN-KS, lazy, D7BNAX_32, att_single; no CD16) | 12 HumanEval | 132.6 [K, quiet, C 224, palindrome, Sat 00:2x] | same-scores (runner 49 gates stackb, below) | measured |
-| 45 GB | FAST stackb (the stack + B's comment rule + g2 copy) at C 256 | 12 HumanEval | 144.9 [K, quiet, palindrome 145.5 / 144.3, lifetime peak 42.8 GB; +46 % vs qall 99.1]; 142.4 in the S2 A/B (~1.7 % run to run) | runner 49's same-scores + 2 long-code top-ups (at C 160 / 192: more QOM skipping than C 256, so conservative); CERT at the release C | pending runner 49 |
-| 45 GB | stackb + S2 (SB 2, D7BNAX_32=2, DSUB / SVH) at C 256 | 12 HumanEval | 146.8 [K, quiet A/B vs 142.4: +3.1 %, peak 42.8 GB] | S4's gate (QOM run-to-run tokens differ, so no token route) | pending S4 |
-| 45 GB | stackb + S2 + REF2_KEEP_CACHES (v1) at C 256 | 12 HumanEval | 164.2 [K, quiet A/B vs 149.1: +10.1 %; cycle 66.9 ms; peak 43.1 GB] | KEEP: EXACT proof 3 / 3 (same bits); v1's S4 gate | pending S4 |
+| 45 GB | FAST stack (+ DN-KS, lazy, D7BNAX_32, att_single; no CD16) | 12 HumanEval | 132.6 steady = 116.9 whole decode [K, quiet, C 224, palindrome, Sat 00:2x; whole decode from the orchestrator's 05:0x table] | same-scores (runner 49 gates stackb, below) | measured |
+| 45 GB | FAST stackb (the stack + B's comment rule + g2 copy) at C 256 | 12 HumanEval | 144.9 [K, quiet, palindrome 145.5 / 144.3, lifetime peak 42.8 GB; +46 % vs qall 99.1]; 142.4 in the S2 A/B (~1.7 % run to run) | runner 49 at C 224 (EvalSuite bb7094d, 3581be6): same scores vs REF2-T FAIL at the bar (HumanEval+ 90.0 vs 95.0, -3 of 60, p 0.25); vs NAX6 PASS (90.0 vs 91.7); B top-up PASS (0.30 / 10K); long code PASS (0.18 / 10K); MBPP PASS (76 vs 79, p 0.45). S4 compares vs NAX6-N (the orchestrator's (b); Kamen may reverse) | code verdicts in; S4 running |
+| 45 GB | stackb + S2 (SB 2, D7BNAX_32=2, DSUB / SVH) at C 256 | 12 HumanEval | 146.8 steady [K, quiet A/B vs 142.4: +3.1 %, peak 42.8 GB]; whole decode 119.5 -> 124.8 (+4.4 %) | S4's gate (QOM run-to-run tokens differ, so no token route) | pending S4 |
+| 45 GB | stackb + S2 + REF2_KEEP_CACHES at C 256 | 12 HumanEval | 164.2 steady [K, quiet A/B vs 149.1: +10.1 %; cycle 66.9 ms; peak 43.1 GB]; whole decode 126.0 -> 135.3 (+7.4 %), full period 143.6 -> 157.3 (+9.6 %); in S1's B arm: 165.3 steady = 158.5 full period = 137.8 whole decode [K, re-derived] | KEEP: EXACT proof 3 / 3 (same bits); S4 (if NW leaves v1, the second S4 slot) | v1 if NW stays BETWEEN |
+| 45 GB | v1 as written for S4: the row above + NW v3 (code sets only; NW's chat map FAILED, so math / chat run without it) | 12 HumanEval | 180.3 steady [K, BigMoE f9c9fff] = 165.4 full period = 142.1 whole decode [K, re-derived Sat 04:5x]; peak 43.9 GB | NW's code map PASS (0.71 / 0.86 %); S4 vs NAX6-N, running | NW +4.3 % on full period = BETWEEN on S1's lines; re-test with the per-check readback off decides |
 | 45 GB | FAST + RELAX B (code and math answers) | HumanEval+ / math | x1.49 / x1.32 vs the exact control [K, paired, C 160] | decision 4 PASS; drift PASS as registered | stands; tonight's top-up can roll it back |
 | 45 GB | chat | IFEval | E x1.46 [K, paired] | E PASS alone; E + HC8 KILL (84 vs 90) | ships EXACT until E runs without HC8 |
 | 45 GB | agent turns | 17 long agent turns | - | AGENTFAST FAIL (85 blunders; QOM-KEEP carries it) | ships EXACT (stated limit) |
@@ -61,6 +62,14 @@ To fix before the freeze (NewIdeas):
 | 12 GB | VERIFIED GREEDY (not exact: 2-4-row verify calls round differently from one-token decoding) | 16 HumanEval | 18.42 decode geo mean [K, 12GB-CLEAN Sat 00:28, alone, quiet; pooled 18.47; 13.66 with prefill; lifetime peak 11.144 GB] | deterministic (outputs = kp2's 16 / 16); not bit-exact; the ~12x comparison withdrawn | stands as verified greedy, with that label |
 | 12 GB | FAST (top-2, theta 0.95) | HumanEval | ~36 [P, modelled] | map code PASS 1.22 %; the 12 GB FAST arm's T0 same-scores was KILL on 5 Nov (HumanEval+ 80.0 vs 91.7, IFEval 84 vs 90; T1039) | needs a measured run + a new same-scores (map STEP0-P1C queued Sat night) |
 | 12 GB | FAST (theta 0.8, t80ck2) | HumanEval | 38.7-40.3 [K] | map code KILL 1.63 % | not releasable |
+
+How tok/s is measured: a geo mean over prompts. The screen's 'steady' (tpsw = kept / (c2 - c0), checks >= 2) leaves
+out the host work between cycles (~2.35 ms per check, so ~4 % high) and any wait placed there (NW's counter readback,
+~4.75 ms). The release reports two figures:
+- Headline: whole decode (all time after prefill; prefill reported separately). The orchestrator's rule, 05:0x.
+- The steady-state figure: full-period steady (all wall time after the first two checks).
+'steady' rows above are labeled as such. The same-metric table for every arm is in findings note
+2026-11-07_0500. On it, v1 = 142.1 whole decode (137.5 without NW v3), and 200 is x1.41 away.
 
 Stated limits in any release: agent turns run EXACT; chat runs EXACT (or E without HC8 once its launch exists); every
 code number names its workload (HumanEval is flattered by prompt copying); FAST outputs can differ between runs at

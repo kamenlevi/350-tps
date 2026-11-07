@@ -520,3 +520,21 @@ gated per set). The 2-prompt NW check was clean. The nw3 map had PASSed at both 
 - **Tokens:** NW vs B identical on 6 and 6 of 12 (floor B1 vs B2: 8). NW v3 is lossy (its 3-bit sidecar / drop paths), so it goes
   to S4's gate.
 - **NEW BEST: stackb + S2 + KEEP + NW v3 at C 256, 180.3 tok/s geo steady on the 12 HumanEval, peak 43.9 GB** (gate: S4).
+
+### Sat 04:35: final v1 written for EvalSuite's S4 (scripts/s4_final.sh; snapshot 4ef3734, final_env.txt 1403cd6)
+- **v1 = stackb + S2 + KEEP + NW v3 at C 256** (`S4_VARIANT=stackb_s2 S4_KEEP=1 S4_NW=1`): the stack + ship B span + MATCH g2 + S2
+  (SBN 2, D7BNAX_32 2, DSUB, SVH) + REF2_KEEP_CACHES + R57/REF2_NEVERWAIT; QOM (and so NW) on humaneval + mbpp only.
+  Engine number so far: 180.3 tok/s on the 12 HE prompts, lifetime peak 43.9 GB (S1). S5 re-measures it vs qall tonight.
+- **Why stackb, not the stack** (NewIdeas' rule: same-scores + both long-code top-ups; B's top-up is its rollback gate):
+  | runner 49 check (EvalSuite) | verdict |
+  |---|---|
+  | same scores vs NAX6-N (S4's reference: orchestrator 03:59, option b; PREREG_s4 amendment 2 = EvalSuite 39c4462) | PASS both orders (HE 90.0 vs 91.7, p 1.0; math, IFEval PASS) |
+  | same scores vs REF2-T (runner 49's own line; on record, S4 reports both) | FAIL both orders (HE 90.0 vs 95.0, -5.00 vs a bar of > -5) |
+  | B's code-only drift top-up (51 rows >= 512 tokens) | PASS: 0.30 blunders/10K (<= 1), pooled q4 KLD 0.0067 |
+  | the stack's CODE env on all 41 humanevalt rows (tfwin vs NAX6-N) | PASS: 1 blunder in 54561 tokens = 0.18/10K (<= 1), deviations 1.76 % |
+  | MBPP 100 | PASS (76.0 vs 79.0, p 0.45) |
+- **Checks before writing:** live Leap/scripts, Leap/third_party, TrainLab/sticky, Breakthrough/keepset and the screen are
+  byte-identical to S1's tested frozen_s1 (frozen_s4 vs frozen_s1: 0 files differ; screen equal modulo the dir). The env
+  equals S1's NW arm minus two logging knobs (R57_QCNT1C counters, R57_RELAX_LOG) plus R57_QOM_SETS=humaneval,mbpp.
+  NW acts only where a FAST rule acts (screen `nwp_ = NW and fz is not None`; ref2 gates on NW_ON), so math / IFEval run
+  exact with NW off: Breakthrough's nw3 CHAT FAIL (be2c175) does not reach v1. NW v3 is code-validated only.

@@ -200,3 +200,22 @@ x1.5-2.3 [G] on the code-valid base. That is 75-130 tok/s if the base is 50-57.
   - the rank-0 residency replay.
 - **Leap**: pass-1 kernels at 12 GB.
 - **MTP Head**: kept per check with P-OFF / D98 on the T3R2 prompts.
+
+## Update Sat 04:2x: STEP 0 RESULT, the 12 GB base is T3R2's own form (45.8 tok/s [P])
+
+- Saturday's step 0 ran on the map (12 code windows each, VERDICT2 code). All three P1-K1 KU 4 cf 0.9 forms PASS [K]
+  (SCOREBOARD "Sat 04:2x: STEP 0 RESULT"; data/map_rest_read.txt):
+
+  | point | tok/s [P, Fit12's replay] | code on the map, all-row [non-tie] | slack to the line |
+  |---|---|---|---|
+  | P1-K1, θ 0.8, KU 4 (t80ck1u, T3R2's form) | 45.8 | 1.31 % [0.78], PASS | 1 flip / 2 flips |
+  | P1-K1, θ 0.9, KU 4 | 41.0 | 1.16 % [0.66], PASS | 6 / 6 |
+  | P1-K1, θ 0.95, KU 4 | 37.9 | 1.10 % [0.60], PASS | 8 / 8 |
+
+- **By the pre-registered rule, the 12 GB base is T3R2's own form at 45.8 [P].** The fastest code-passing point before
+  was top-2 θ 0.95 at 35.9 [P], so this is +28 % [P].
+- Its margin is one all-row flip, so θ 0.9 (41.0) is the fallback if a re-sample or EvalSuite tips it.
+- The plan's factors now start from 45.8. 90-130 tok/s needs x1.97-2.84 (the x2.0-3.6 above assumed a 36-46 base).
+- Next, before adoption:
+  - Fit12's measured run of t80ck1u on full outputs (16 HumanEval);
+  - EvalSuite same-scores on code. It is FAST, not exact.
