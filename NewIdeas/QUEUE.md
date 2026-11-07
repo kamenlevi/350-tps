@@ -69,6 +69,37 @@ data/s1/). C 256, quiet, 12 HumanEval, lifetime peak 43.9 GB:
     than S4_DONE.
   - NW v3 becomes a post-release lever: -3.6 ms per cycle, lossy (code map PASS, chat FAIL).
   - Against 200: x1.42 on whole decode, x1.22 on full period.
+- S4 on v1' RESULT Sat 06:48: PASS (EvalSuite 013a4a6), re-derived from the counts:
+  - forward: HumanEval+ 53 vs 55 of 60 (p 0.5), math 42 vs 44 of 50 (p 0.5);
+  - reverse: HumanEval+ 54 vs 55, math 43 vs 44 (p 1.0);
+  - long code 0 blunders in 27,014 tokens.
+  - Every discordant pair in S4 (both runs) and runner 49 goes against the FAST arm: small, consistent losses. None
+    is significant. Worth a sentence in Paper B.
+  - S5 (BigMoE, evening: whole decode + full period, c0 recorded) may go. FREEZE ~20:00. CERT runner 55 from Sun 01:30.
+- NEW LEAD, Sat 07:0x (NewIdeas; scripts/firstcheck_price.py, data/firstcheck/): FIRSTCHK, the first check of each
+  prompt, is the biggest single lever on the whole-decode headline.
+  - What it costs: in v1' (S1b's B arm, 24 prompt runs) check 0 takes 306 ms vs 58 ms for later checks. That is 15.8 % of
+    the decode wall (median per prompt).
+  - Where it sits: graph build 287 vs 53 ms; eval wait 20 vs 5 ms; draft 13 vs 5 ms.
+  - Not the SSD: check 0 has FEWER misses than later checks (21 vs 31), demand reads 13 vs 9 ms. The prefill already
+    warmed the pools.
+  - Ceiling: if check 0 cost a later check, whole decode goes 141.0 -> 170.7 (+21 %) [P]; with check 1 too, +22 %.
+  - Ruled out from existing data:
+    - A6 keep (no end-of-prompt mx.clear_cache): on 11-04 (cmb1c -> cmb2, C 160, exact) the check-0 excess was
+      unchanged (183.1 -> 182.5 ms code, 196.4 -> 196.1 other) and whole decode -0.3 % (code). Its 11-03 win
+      (465-1681 -> 130-211 ms) was on long agent prefills.
+    - REF2's per-weight caches: KEEP keeps them across prompts too (remove() returns early).
+    - New-length kernel builds: R-80 KILL (+1.4 to +8.5 ms).
+  - Prior art in our records: K-80 / the 11-03 A6 split saw "a one-time non-SSD cost in the first check's graph build"
+    (28-73 % of the excess after keep) on long prefills. Nobody fixed it; the steady metric hid it from every A/B since.
+  - Cheapest kill test (~3 min GPU, shared slot, a copy of the s4b screen, 3 HumanEval prompts in one process):
+    - Run R57_A6=rep: the first check twice, rolled back in between; copy 1 - copy 2 = the one-time cost.
+    - Record time.thread_time() around build and wait of checks 0, 0', 1 and 2.
+    - KILL if copy 2 is also >= 200 ms and host CPU is <= 20 ms of the excess. Then the cost is the first check's
+      content, not a one-time cost.
+    - Otherwise the split names the piece: host (Python setup, compile retrace) vs GPU (first use).
+  - Placement: not before S5, the freeze or CERT. If it is host-side setup that can move or vanish, it is an exact-safe
+    v2 item. Owner of the screen: BigMoE. Kernels: Leap.
 PREVIOUS, Sat 01:4x (steady metric, ~4 % above full period; see the METRIC NOTE): 164.2 tok/s [K, BigMoE c02f807, re-derived]. stackb + S2 + REF2_KEEP_CACHES
 at C 256, quiet A/B on 12 HumanEval: +10.1 % vs 149.1 for stackb + S2 in the same run; cycle 75.8 -> 66.9 ms; lifetime
 peak 43.1 GB. KEEP passed its EXACT proof (3 / 3 prompts, tokens equal), so it adds no quality risk. Gate: S4 on v1 =

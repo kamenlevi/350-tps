@@ -276,6 +276,7 @@ PRD = dict(n=0, L=[], chk=[], row=[], X=[], Y=[])        # R57_PR_DUMP: this run
 #          each id to the LRU front in order), up to the pool size C_m; the 4-bit ranks' ones into the LSB sidecar up to C_l
 A6 = set(filter(None, os.environ.get("R57_A6", "").replace("+", ",").split(",")))   # '+' too: c45_runner's arm lists split on ','
 A6_POOLS = int(os.environ.get("R57_A6_POOLS", "24"))
+TCPU = os.environ.get("R57_TCPU") == "1"                 # Sat 07:0x (NewIdeas FIRSTCHK): main-thread CPU ms per check (build, wait); A6 rep1 too
 # WARMSPLIT (NewIdeas 11-02 07:3x, Monday night; lead ~/.local/share/pacer/leads/2026-11-01_per_row_cost_opus.md step 1):
 # R57_WARMSPLIT=N: every Nth check from the 3rd drafts all 15 (a 16-row check) and, before the real one, runs the identical
 # input cold at 16 rows (rolled back), then warm (all its experts now resident) at 1 / 4 / 8 / 16 rows, each rolled back.
@@ -1058,6 +1059,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
     q1c_ = []                                            # per check, R57_QCNT1C: [kept, dropped, groups computed, split drops]
     nw_ = []                                             # per check, R57_NEVERWAIT: ref2.NWCNT summed over the layer calls
     c0s_ = []                                            # per check: c0 - td in s (the full-period rate, NewIdeas Sat 04:5x)
+    tc_ = []                                             # per check, R57_TCPU: [build, wait] main-thread CPU ms
     rows_, cb_, bld_, wt_, wsf_ = [], [], [], [], []     # per check: verified rows, SSD bytes (the per-row cost split, 11-01
                                                          # lead), graph-build s, eval-wait s (A6 / K-80's split), warm-split flag
     WSPL = []                                            # this run's warm-split samples
@@ -1156,23 +1158,36 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         s0, b0_ = stats(), disk_read_bytes()
         c1 = time.perf_counter()
         drf.append(c1 - c0)                              # the drafter's share of the cycle: the SSD idles (R-70D's window)
-        if "rep" in A6 and not kept and not mtp:         # A6 rep: copy 1 of the first check, rolled back; the real check
+        t1_ = time.thread_time() if TCPU else 0.0
+        if A6 & {"rep", "repf"} and not kept and not mtp:   # A6 rep: copy 1 of the first check, rolled back; the real check
             snap_ = CS.snapshot_untrimmable_cache_lazy(cache)   # below is copy 2 (same rows, its experts now resident)
             tap_reset(); TAP["on"] = True
-            with ref2.verify_scope(model):
-                lg_ = model(mx.array([[tok] + dr]), cache=cache)
-            tb_ = time.perf_counter()
+            if "repf" in A6:                             # repf (Sat 07:0x): copy 1 under the real check's FAST gate (rep ran it ungated)
+                FG.update(on=fk_ is not None or sq_ is not None, keep=mx.array(fk_) if fk_ is not None else None,
+                          sure=mx.array(sq_) if sq_ is not None else None, sure_np=sq_, t3=bool(fz and fz.get("t3")),
+                          cold=bool(fz and fz.get("cold")) and sq_ is not None,
+                          qom=bool(fz and fz.get("qom")) and sq_ is not None, qcf=mx.array(qcf_) if qcf_ is not None else None)
+            try:
+                with ref2.verify_scope(model):
+                    lg_ = model(mx.array([[tok] + dr]), cache=cache)
+            finally:
+                if "repf" in A6:
+                    FG.update(on=False, keep=None, sure=None, sure_np=None, t3=False, cold=False, qom=False, qcf=None)
+            tb_ = time.perf_counter(); tbt_ = time.thread_time()
             TAP["on"] = False
             mx.eval(mx.argmax(lg_[0], axis=-1), taps())
-            te_ = time.perf_counter()
+            te_ = time.perf_counter(); tet_ = time.thread_time()
             CS.rollback_after_verify(cache, snap_, len(dr) + 1)
             mx.eval(states(cache))
             sd_ = stats() - s0
             a6["rep1"] = [round(1e3 * (tb_ - c1), 2), round(1e3 * (te_ - tb_), 2), int(sd_[0]), round(1e3 * sd_[1], 2),
                           round(1e3 * sd_[2], 2)]           # build ms, eval wait ms, misses, demand SSD ms, gate service ms
+            if TCPU:                                     # + main-thread CPU ms of the build and of the wait (Metal encoding)
+                a6["rep1"] += [round(1e3 * (tbt_ - t1_), 2), round(1e3 * (tet_ - tbt_), 2)]
             del lg_, snap_
             s0, b0_ = stats(), disk_read_bytes()
             c1 = time.perf_counter()
+            t1_ = time.thread_time() if TCPU else 0.0
         if wsp:                                          # the warm split: the identical 16-row input cold, then warm at 1 / 4 /
             inp_, smp = mx.array([[tok] + dr]), dict(n=len(kept), rows=len(dr) + 1, warm=[])   # 8 / 16 rows, each rolled back
             for n_ in (0, 1, 4, 8, 16):                  # n_ 0 = the cold 16-row pass
@@ -1239,6 +1254,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                 ref2.NW_ON = False
                 nwl_, ref2.NWCNT = ref2.NWCNT, None
         cb = time.perf_counter()                         # graph built: the sync-free gate waits on each layer's router ids
+        tcb_ = time.thread_time() if TCPU else 0.0
         TAP["on"] = False
         am = mx.argmax(lg[0], axis=-1)
         rx2 = bool(RLXV2 and (RLX_D > 0 or SPAN) and dr)    # R57_RELAX_V2: dlm / rank ride in the argmax readback
@@ -1257,6 +1273,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
             lh_.append(_hlg.sha1(np.array(lg[0].astype(mx.float32)).tobytes()).hexdigest()[:16])
         ce = time.perf_counter()
         bld_.append(cb - c1); wt_.append(ce - cb)        # K-80's split: graph build vs the eval wait (+ the commit after)
+        if TCPU:                                         # R57_TCPU: main-thread CPU ms of this check's build and wait
+            tc_.append([round(1e3 * (tcb_ - t1_), 2), round(1e3 * (time.thread_time() - tcb_), 2)])
         am = am.tolist()
         if rx2:
             dlm2, drk2 = dlv_.tolist(), rkv_.tolist()
@@ -1454,6 +1472,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                         miss=sm[:, 0].tolist(), io=(1e3 * sm[:, 1]).tolist(), svc=(1e3 * sm[:, 2]).tolist(), mb=[x / 1e6 for x in cb_],
                         nw=nw_, q1c=q1c_,        # R57_NEVERWAIT / R57_QCNT1C: per-check counters (empty when off)
                         c0=[round(1e3 * x, 3) for x in c0s_],   # ms from the decode start (td) to each check's c0
+                        tc=tc_,                  # R57_TCPU: per check [build, wait] main-thread CPU ms
                         uses=sm[:, 4].tolist(), stl=sm[:, 5].tolist(),   # C3-R8: expert groups and stalled layer calls per check
                         bld=[1e3 * x for x in bld_], wt=[1e3 * x for x in wt_], ws=wsf_), wspl=WSPL,
                 tpsw=sum(kept[2:]) / max(sum(wl[2:]), 1e-9), cut=cut, bad=bad, stall=stall,   # tpsw: steady state, checks >= 2
