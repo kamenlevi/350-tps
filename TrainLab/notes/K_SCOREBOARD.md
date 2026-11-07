@@ -32,8 +32,10 @@ the same definition as the walks below.
 - CD16, HumanEval: [P] x1.24-1.26 (GOAL) vs [K] x1.20 / x1.22 (across runs; GOAL's same-block read x1.19-1.27). Held.
 - CD16, MBPP: [P] x1.8-1.9 vs [K] x1.45 / x1.66. The replay holds the 125B's text fixed. In the engine the drafter's
   comment text ran away and changed the text.
-- T16, MBPP12: [P] x1.15 (x1.08 with the gain halved) vs [K] x1.035 / x1.105. HumanEval not run (T16 was left out of
-  the palindrome).
+- T16, MBPP12: [P] x1.15 (x1.08 with the gain halved) vs [K] x1.035 / x1.105.
+- T16, HumanEval (Sat 14:31-14:37, on v1' + wired at C 256, REPORT 'T16-HE'): kept 10.56 -> 10.89 geo (x1.031), 10.75
+  -> 11.11 pooled (x1.033), the low end of [P] x1.03-1.08. Speed net 0 (173.2 vs 173.2 tok/s whole decode): the tagger
+  adds +1.9 ms per cycle. KILL.
 - Relax v2, HumanEval: [P] x1.10-1.23 (MoonShots) vs [K] x1.11 / x1.14, the low end.
 - MATCH g2@16, HumanEval: walk [K] x1.038 (24 HE+) vs engine x1.08 / x1.115 (12 HE). The engine arms' texts differ (238
   vs 250 tokens per task), so the engine figure carries text noise.

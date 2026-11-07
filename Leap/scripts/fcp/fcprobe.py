@@ -26,7 +26,10 @@ TAG = os.environ.get("R57_TAG", "fcp")
 NCHK = int(os.environ.get("FCP_NCHK", "4"))
 HZ = float(os.environ.get("FCP_HZ", "1000"))
 NOCLEAR = os.environ.get("FCP_NOCLEAR") == "1"
-WIRED = os.environ.get("FCP_WIRED") == "1"   # the fix candidate: MLX's residency set (mx.set_wired_limit) keeps buffers wired
+WIRED = os.environ.get("FCP_WIRED") == "1"
+COMMIT = os.environ.get("FCP_COMMIT") == "1"   # PLAN 220: split each commit (ref2 lazy pre / MTPLX commit + the PLE forward / post)
+CSYNC = os.environ.get("FCP_CSYNC") == "1"     # + an eval of the cache states right after it: the commit's GPU time
+CREC = []   # the fix candidate: MLX's residency set (mx.set_wired_limit) keeps buffers wired
 S = {"on": False, "run": -1, "chk": -1, "phase": None, "wrapped2": False, "cur": None, "mtl": []}
 REC, CALLS, SAMP = [], [], []
 
@@ -147,6 +150,57 @@ def _sampler():
         SAMP.append((time.perf_counter(), S["run"], S["chk"], S["phase"], " < ".join(key)))
 
 
+def _cwrap(kind, fn):                                  # a commit piece: always recorded, tagged with (keep, verified)
+    def w(*a, **k):
+        t0, c0 = time.perf_counter(), time.thread_time()
+        try:
+            return fn(*a, **k)
+        finally:
+            CREC.append((S["run"], S["chk"], kind, S.get("ck"), t0, 1e3 * (time.perf_counter() - t0),
+                         1e3 * (time.thread_time() - c0), None))
+    w.__wrapped__ = fn
+    return w
+
+
+def _layer_wrap(fn):                                   # a decoder layer's forward, recorded only inside the commit
+    def w(self_, *a, **k):
+        if not S.get("in_commit"):
+            return fn(self_, *a, **k)
+        t0, c0 = time.perf_counter(), time.thread_time()
+        try:
+            return fn(self_, *a, **k)
+        finally:
+            CREC.append((S["run"], S["chk"], "layer_fwd", S.get("ck"), t0, 1e3 * (time.perf_counter() - t0),
+                         1e3 * (time.thread_time() - c0), None))
+    w.__wrapped__ = fn
+    return w
+
+
+def _commit_top(fn):
+    def w(self, cache, snapshot_states, *, keep_tokens, verified_tokens):
+        if not S.get("lw"):
+            S["lw"] = True
+            for T_ in {type(l) for l in self.layers if getattr(l, "ple", None) is not None}:
+                T_.__call__ = _layer_wrap(T_.__call__)
+        S["ck"] = (int(keep_tokens), int(verified_tokens))
+        t0, c0 = time.perf_counter(), time.thread_time()
+        S["in_commit"] = True
+        try:
+            ok = fn(self, cache, snapshot_states, keep_tokens=keep_tokens, verified_tokens=verified_tokens)
+        finally:
+            S["in_commit"] = False
+        t1, c1_ = time.perf_counter(), time.thread_time()
+        sync = None
+        if CSYNC:
+            import mlx.core as mx
+            mx.eval([c.state for c in cache if c is not None and hasattr(c, "state")])
+            sync = 1e3 * (time.perf_counter() - t1)
+        CREC.append((S["run"], S["chk"], "commit", S["ck"], t0, 1e3 * (t1 - t0), 1e3 * (c1_ - c0), sync))
+        return ok
+    w.__wrapped__ = fn
+    return w
+
+
 def _wrap_late():                                      # bigmoe's modules exist by the first check
     S["wrapped2"] = True
     tier, stream, gated = (sys.modules.get(f"bigmoe.{m}") for m in ("tier", "stream", "gated"))
@@ -163,6 +217,15 @@ def _wrap_late():                                      # bigmoe's modules exist 
         stream._stage_drop = _wrap("stream._stage_drop", stream._stage_drop)
     if gated is not None and hasattr(gated, "Gate"):
         gated.Gate.new_pass = _wrap("Gate.new_pass", gated.Gate.new_pass)
+    if COMMIT:
+        r2, Qm = sys.modules.get("ref2"), sys.modules.get("mtplx.models.qwen4_exp")
+        if r2 is not None and Qm is not None:
+            r2._lz_commit_pre = _cwrap("lz_pre", r2._lz_commit_pre)
+            r2._lz_commit_post = _cwrap("lz_post", r2._lz_commit_post)
+            if "commit" in r2._ORIG:
+                r2._ORIG["commit"] = _cwrap("mtplx_commit", r2._ORIG["commit"])
+            Qm.Qwen4ExpTextModel.commit_verified_window = _commit_top(Qm.Qwen4ExpTextModel.commit_verified_window)
+        print(f"[fcp] FCP_COMMIT: ref2 {r2 is not None}, qwen4_exp {Qm is not None}, CSYNC {CSYNC}", flush=True)
     print(f"[fcp] wrapped: tier {tier is not None}, stream {stream is not None}, gated {gated is not None}", flush=True)
 
 
@@ -209,6 +272,6 @@ def mark(kind, chk=None):
 def dump():
     os.makedirs(OUT, exist_ok=True)
     p = os.path.join(OUT, f"{TAG}_fcp.json")
-    json.dump(dict(rec=REC, calls=CALLS, samp=SAMP, noclear=NOCLEAR), open(p + ".tmp", "w"))
+    json.dump(dict(rec=REC, calls=CALLS, samp=SAMP, noclear=NOCLEAR, crec=CREC, csync=CSYNC), open(p + ".tmp", "w"))
     os.replace(p + ".tmp", p)
     print(f"[fcp] {len(REC)} check windows, {len(CALLS)} calls, {len(SAMP)} samples -> {p}", flush=True)

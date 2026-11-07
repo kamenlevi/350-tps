@@ -50,15 +50,17 @@ awk -v a="$A" 'BEGIN {exit !(a >= 47.2)}' || { say "NO-SWAP $A GB < 47.2: C 256 
 cd "$SD" || exit 1
 rc_all=0
 EXE="R57_PRESET=45 BIGMOE_EXT_BUILD=build R57_PROMPTS=6 R57_REPS=1 R57_WARM=1 R57_NAX=1 R57_REFTOK= R57_A6=ctl R57_TCPU=1 R57_LOGHASH=1"
-KX="humaneval/HumanEval/68,humaneval/HumanEval/16,ifeval/1220"   # BigMoE's KEEP exact proof (s2c_ab.sh 0.): NAX6-N, C 224
+KX="humaneval/HumanEval/68,humaneval/HumanEval/16,ifeval/1220"
+KC="humaneval/HumanEval/68,humaneval/HumanEval/16,humaneval/HumanEval/91,humaneval/HumanEval/0,humaneval/HumanEval/23,humaneval/HumanEval/52"   # PLAN 220 commit split   # BigMoE's KEEP exact proof (s2c_ab.sh 0.): NAX6-N, C 224
 for arm in $ARMS; do
-  E="$ENV0" CC=256 KK="$R57_KEYS"
+  E="$ENV0" CC=256 KK="$R57_KEYS" CP=64
   case $arm in fcpa) X="";; fcpb) X="FCP_NOCLEAR=1";; fcpw) X="FCP_WIRED=1";;
+    fcpc) X="FCP_COMMIT=1 R57_WIRED=1" KK="$KC" CP=128;; fcpd) X="FCP_COMMIT=1 FCP_CSYNC=1 R57_WIRED=1" KK="$KC" CP=128;;
     fcpx0) X="" E="$EXE" CC=224 KK="$KX";; fcpx1) X="FCP_WIRED=1" E="$EXE" CC=224 KK="$KX";; *) say "unknown arm $arm"; continue;; esac
   if [ -e "$HOME/.local/share/quiet/PAUSE" ] || [ -e "$HOME/.local/share/quiet/HOLD" ]; then say "PAUSE / HOLD: $arm skipped"; rc_all=1; continue; fi
   SW0=$(swap_mb); say "run $arm (swap $SW0 MB)"
   env $E $X R57_KEYS=$KK R57_TAG=$arm FCP_OUT="$D" VECLIB_MAXIMUM_THREADS=4 PYTHONDONTWRITEBYTECODE=1 \
-    perl -e 'alarm shift; exec @ARGV' 420 "$PY" -B r57_screen_fcp.py $CC 64 > "$D/$arm.txt" 2>&1 &
+    perl -e 'alarm shift; exec @ARGV' 420 "$PY" -B r57_screen_fcp.py $CC $CP > "$D/$arm.txt" 2>&1 &
   jp=$!
   while kill -0 $jp 2>/dev/null; do
     sleep 5

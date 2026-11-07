@@ -277,6 +277,7 @@ PRD = dict(n=0, L=[], chk=[], row=[], X=[], Y=[])        # R57_PR_DUMP: this run
 A6 = set(filter(None, os.environ.get("R57_A6", "").replace("+", ",").split(",")))   # '+' too: c45_runner's arm lists split on ','
 A6_POOLS = int(os.environ.get("R57_A6_POOLS", "24"))
 TCPU = os.environ.get("R57_TCPU") == "1"                 # Sat 07:0x (NewIdeas FIRSTCHK): main-thread CPU ms per check (build, wait); A6 rep1 too
+DQ1 = os.environ.get("R57_DQ1") == "1"                   # PLAN 220 #4 (NewIdeas Sat 14:1x): the draft and its quality (cf) in ONE eval
 # WARMSPLIT (NewIdeas 11-02 07:3x, Monday night; lead ~/.local/share/pacer/leads/2026-11-01_per_row_cost_opus.md step 1):
 # R57_WARMSPLIT=N: every Nth check from the 3rd drafts all 15 (a 16-row check) and, before the real one, runs the identical
 # input cold at 16 rows (rolled back), then warm (all its experts now resident) at 1 / 4 / 8 / 16 rows, each rolled back.
@@ -1105,6 +1106,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         else:
             _d17 = D17 and R_ == 16                      # R57_D17: 17 positions, the 16th draft only gates the last row
             pth, cf = propose(mx.array([[tok] + [MASK] * (R_ if _d17 else min(R_, 32) - 1)]), ctx[None].astype(mx.bfloat16), dcache)
+            if DQ1:                                      # R57_DQ1: one GPU round trip for both readbacks below (the same ops, same bits);
+                mx.eval(pth, cf)                         # off: np.array(pth) then np.array(cf) can each wait on the GPU
             dr = np.array(pth[0]).tolist()
             cfl = np.array(cf[0]).tolist()
             x16 = c16 = None
@@ -1703,6 +1706,11 @@ json.dump(TOK, open(os.path.join(OUT, f"{TAG}_tokens.json"), "w"))
 try:                                                     # never let the side log cost a run
     json.dump(PC, open(os.path.join(OUT, f"{TAG}_checks.json"), "w"))
     json.dump(RUNS, open(os.path.join(OUT, f"{TAG}_runs.json"), "w"))
+    if os.environ.get("R57_MODMAN") == "1":              # Sat 14:xx (EvalSuite: freeze the live outside files): every loaded module
+        _rt = tuple(os.path.expanduser(p_) for p_ in ("~/Leap/", "~/TrainLab/", "~/Breakthrough/", "~/BigMoE/data/r57/snap/"))
+        json.dump(sorted([m_, f_] for m_, f_ in ((m_, getattr(sys.modules.get(m_), "__file__", None)) for m_ in list(sys.modules))
+                         if f_ and f_.startswith(_rt)), open(os.path.join(OUT, f"{TAG}_modules.json"), "w"))   # under Leap / TrainLab /
+                                                         # Breakthrough (live) or a snapshot: a freeze leaves no live ones
     if STALL:
         json.dump(dict(laymap=LAYMAP, runs=STL, anchor=[time.time(), time.clock_gettime(time.CLOCK_UPTIME_RAW)]),   # wall
                   open(os.path.join(OUT, f"{TAG}_stall.json"), "w"))   # clock <-> the trace's UPTIME_RAW (fanwatch's SSD temps)

@@ -9107,3 +9107,156 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   purgeable: BigMoE checks), the 12 GB engines (same stall expected, scaled to their pool size).
 - Where it goes (owners): one call after the model load in BigMoE's screen / stream setup (and Fit12's / Breakthrough's
   engines). Kept below the 45 GB line: the wired limit caps what MLX wires; the footprint is unchanged.
+
+## PLAN 220: LEAP'S BUILD ORDER for levers 1-3 (Leap, Sat 2026-11-07 14:1x; NewIdeas' PLAN 220, QUEUE 8dae435)
+- **Measured input (CPU only, BigMoE's S6W files = v1' + wired, 12 HumanEval, C 256, two runs, 435 checks after check 0):**
+  - partial accepts 38 / 39 % of checks;
+  - main-thread time after the eval (accept logic + commit build + submit): partial 2.19 / 2.10 ms vs full 0.34 / 0.33;
+  - the next draft: after a partial 6.10 / 6.07 ms vs after a full 5.14 / 5.15.
+  - So a partial costs ~+1.8 ms of main-thread Python + ~+0.9 ms of GPU replay landing in the next draft = **~1.06 ms
+    per cycle in all**. That is the ceiling for any lever on the commit.
+  - Why: MTPLX's commit_verified_window builds, lazily, 35 gated_delta_update replays (compute_g, sigmoid, the kernel,
+    the conv-state concat / slice / contiguous) plus the PLE layer's full forward over the kept rows. r57 async_evals it
+    (r57_screen_fast.py:1379-1380). Its GPU work runs ahead of the next draft on the same queue.
+- **#2 as specified (state checkpoints at verify rows 8 / 12): KILL on paper.** Checkpoints cut only replay rows (part of
+  the ~0.9 ms GPU). They add 2 x 36 x 2 MB = 144 MB of state writes to EVERY check (~0.5-0.7 ms) and leave the 1.8 ms
+  Python build untouched. My cost model (HANDOVER, Sat 01:4x) had them at break-even at ~1/3 partial already.
+  - **#2' instead: the commit replay as ONE mx.compile'd call per kept count** (the 35 layers' g / beta / recurrence /
+    conv updates; mlx_lm's kernel unchanged), behind a ref2 switch (default off). Bitwise test vs the stock loop on
+    recorded commits, then the exact-env hash. [P] -1.2 ms main thread and ~-0.2 ms GPU per partial = **-0.5..-0.6 ms per
+    cycle (x1.009)**.
+- **#1 the dense program: mostly NOT exact-safe.** Today's numbers (S2b step 1 REDONE, stack env, C 224): the dense-only
+  16-row forward is 21.96 ms wall, GPU ~20.9, Python graph build 15.2. The priced pieces sum to 16.7 ms; ~5.3 ms is
+  unpriced (PLE, the final norm + head, glue).
+  - Exactness: REF2's <= 16-row dense calls are bitwise == qmm16c per column. DN-KS (in v1') already took the
+    narrow-GEMV K split (out_proj, a|b, k/v, gate|up, down). Its bits changed (<= 2e-3): FAST, and it went through the
+    gate.
+  - What stays bitwise-safe: (b) k3c's load tail (-0.9 [P], Fable B prices run ~2x high: ~-0.45); (d) attention's ~25
+    other launches per layer after att_single (-0.5 [P]); HC k2b folded into its neighbour (-0.7 [P], step 0 B); and
+    whatever the unpriced 5.3 ms holds (locate first).
+  - Bit-changing (FAST: an S4-style gate by Mon 12:00, Kamen's / the orchestrator's call): a chunked GDN step at 16
+    rows (2.07 ms per check today; the bitwise prefetch reached -7 % on Fri), an in_proj K split (-0.25 ms per 2-row
+    check measured Fri: small), an HC8 restructure.
+  - **So #1's exact-safe part is ~-1.5..-2.5 ms per cycle [P], not -8.**
+  - The CPU floor too: in the live loop the main thread spends ~35 ms per check (build 15-16 + encode ~19, XPT) vs GPU
+    ~47. GPU savings past ~12 ms per check would hit it. Fewer dispatches (eprep, attention launches) help both sides.
+- **Build order (ms per day):**
+  1. **Sat evening: #2'** (compiled commit replay): build, CPU/GPU bitwise test on recorded commits, an in-process toggle.
+  2. **Sat night: one quiet slot to re-price on today's stack:** the ABL pieces + ple + head + the remainder; HC8
+     k1c / k3c / k2b chains at 16 rows; eprep's in-place dispatch count.
+  3. **Sun: #3 e** (Fable B's kernels/eprep.py: 4,000 cases, 0 differ) **+ f** (attention k|v fold, -0.31 [K]), then the
+     top bitwise #1 items by step 2's prices (k3c tail, k2b, attention launches).
+  4. **Sun evening:** the bundle's exact-env hash check (FCP's 43-check method), then BigMoE's B / X / X / B A/B
+     (C 256, quiet) by Mon morning; NewIdeas' line (cycle >= 1 % lower, KILL if >= 0.5 % worse).
+  5. The bit-changing list goes to NewIdeas for an S4 decision before Mon 12:00.
+- **Honest arithmetic:** exact-safe bundle -2.5..-3.7 ms per cycle [P] = x1.04-1.06 -> ~189-192 tok/s [P]; with T16
+  (x1.035, lossy) ~196-199. 220 needs the bit-changing dense kernels on top (another ~-4..-6 ms per cycle) or a new
+  lever.
+- **CORRECTION (14:1x) to the #2 lines above:** v1' runs REF2_GDN_LAZY=1 (ref2's lazy commit): the 35 pure-GDN layers
+  do NOT replay at commit; the next check's GDN body replays the kept rows' packs in registers. **#2' (one compiled call
+  for the 35 replays) is WITHDRAWN: that work no longer exists.** The measured partial cost (+1.8 ms main thread, +0.9 ms
+  in the next draft; ceiling ~1.06 ms per cycle) is the PLE layer's full forward over the kept rows (the one non-lazy
+  layer, MoE included) plus the lazy bookkeeping (_lz_commit_pre / post). Checkpoints still cannot pay (the GDN replay
+  rows they would cut are already in registers). Next: the re-price slot splits the partial commit (lazy pre / MTPLX
+  commit + the PLE forward / lazy post) before any #2 build; a lazy PLE layer is the candidate if that forward dominates.
+  Build order now: (1) the re-price slot tonight (dense ABL + ple + head; the commit split; HC8 chains), (2) #3 e + f,
+  (3) the bitwise #1 items by measured price, (4) #2 only if the split shows >= 0.5 ms per cycle reachable.
+
+## PLAN 220 RE-PRICE SLOT, part 1 (Leap, Sat 2026-11-07 14:25-14:30, quiet) + a RE-CORRECTION of #2
+- **RE-CORRECTION: the 14:1x "correction" was WRONG; v1' does NOT run the lazy GDN commit.** The v1' env (final_env
+  dd7ad0f) has REF2_GDN_LAZY=1 but no R57_GDNB=1, and the lazy commit needs CFG gdn_body: it is inert. Evidence: the
+  commit split's lazy wrappers never fired, and the 16-row chains show mlx_lm's gated_delta_step x36 with
+  gdn_prework_exact / gdn_gated_norm_exact (the REF2-T chain, not gdn_body). So MTPLX's commit replays the 35 pure-GDN
+  layers as written, and the 12:1x (first) analysis of #2 stands.
+- **Commit split (fcpc / fcpd: v1' + wired, C 256, HumanEval 68 / 16 / 91 + the 3 warm-ups, CAP 128):**
+
+| per commit, medians | partial (n 31 / 32) | full (n 33 / 34) |
+|---|---|---|
+| ref2 _commit, main thread wall = CPU | 1.08 ms | 0.16 ms |
+| of it MTPLX's commit (35 GDN replays + the PLE layer + trims, built lazily) | 1.00 ms | 0.07 ms |
+| of that the PLE layer's forward over the kept rows | 0.27 ms | - |
+| GPU work it leaves (fcpd: an eval right after the commit) | **2.88 ms** | 0.18 ms |
+
+  - With S6W's next-draft gap (+0.93 ms after a partial) and 38.5 % partials, the commit's cost per cycle is ~0.4 ms CPU
+    + ~0.36 ms of GPU that the draft does not hide (~0.75 ms in all; the earlier 1.06 also counted the accept logic).
+  - R-21 (10-29) already found the 35 replays state-bound (220 MB of fp32 state at ~185-200 GB/s): batching them saves
+    <= 0.1 ms GPU. A compiled replay would save at most ~0.7 ms of CPU per partial (~0.27 ms per cycle): small.
+- **New exact-safe candidate, ready now: R57_GDNB=1** (ref2 gdn_body, one-dispatch GDN body, bitwise == off; GDNB-2 PASS
+  Fri: -0.71 ms per check at NSG 16 on the exact config with R-83 + DENSE-N-RAM). It is not in v1'. With it,
+  REF2_GDN_LAZY (already in the env) engages too (Fri check: bits PASS, -0.56 ms per partial, +0.93 per full, ~-0.2 net
+  per check). For BigMoE's A/B: v1' + wired vs + R57_GDNB=1 (lazy on, as the env has it) and, if that is worse than
+  -0.7, + R57_GDNB=1 with REF2_GDN_LAZY unset.
+- **The stepb arms ran without att_single** (R57_FASTTAX is handled only in r57_screen_fast.py; the stepb harness builds
+  on r57_screen.py), so the dense pass used MTPLX's 12-head-chunk SDPA (144 calls per check). The S2b prices of Sat 00:54
+  had the same gap. Attention's 3.51 ms and the 21.42 ms base are overstated, roughly by the chunked SDPA (~3 ms). The
+  other pieces' prices: HC reads 1.90 + 1.99, HC write 0.24, GDN 7.42 (in_proj 4.65), MoE dense 1.11, **PLE 0.90**,
+  **head (final norm + lm_head) 1.63** (~195 MB at ~120 GB/s). Part 2 re-runs the base, attention and the chains with
+  STEPB_ATT_SINGLE=1.
+
+## PLAN 220 RE-PRICE SLOT, part 2: v1''s dense program priced in place (Leap, Sat 2026-11-07 14:37-14:42, quiet)
+- The stepb harness on r57_screen_fast.py itself (part 1's old screen had neither att_single nor SVH): arm v1f = v1''s
+  dense side (FAST-TAX att_single on, SVH's screened head on, SB 2, KEEP, wired; QOM, NAX, DN-KS, HC8, DNR, HCB, SMALL-N,
+  OOO-1C); v1fg = + R57_GDNB=1. C 224, check 8, dense-only 16-row forwards (4 rounds x 12), barrier-kept bar / cal stubs.
+- **In-place prices (wall ms per 16-row check): base 19.79 (Python build 12.06); HC reads 1.82 + 1.95 = 3.77; HC write
+  0.08; attention 2.64; GDN 8.90 (in_proj 4.62, the rest 4.28); MoE dense part 1.22; PLE 0.52; head (SVH) 0.78;
+  unpriced ~1.9.** (Prices overlap a little: a stub can push the forward toward its 12 ms CPU build.)
+- **16-row dependent chains (us per call x calls = ms per check; GB/s):**
+  - in_proj qkv|z 113.6 x 36 = 4.09 (213; floor at 295: ~2.9); out / o_proj (DN-KS ks 6) 38.7 x 48 = 1.86 (236);
+    attention q 76.1 x 12 = 0.91 (239).
+  - **mlx_lm's gated_delta_step 58.6 x 36 = 2.11 (116 GB/s over 6.7 MB; 27.6 us at 2 rows).**
+  - HC8 k1c 22.2-24.2 x 96 = 2.23 (~200); **k3c 26.6 x 96 = 2.55 (148)**; k2b 7.8 x 96 = 0.75 (60).
+  - **router (MLX 8-bit quantized_matmul, 512 x 2560) 17.9 x 48 = 0.86 (84 GB/s)**; shared gate|up 13.1 x 48 = 0.63;
+    down 7.2 x 48 = 0.35; router_fused 0.17; moe_tail 0.13.
+  - SDPA (att_single, 24 heads x 16 rows x 397 keys) 42.6 x 12 = 0.51; attention's 8-bit 640 x 2560 24.0 x 12 = 0.29;
+    k / v 0.20; rope 0.14; QSA pool / prepare 0.17; a|b 0.28; GDN prework 0.23; gated norm 0.17; hc_write 0.27.
+- **GDNB in today's config: leap_gdn_body_gi 68.0 us per layer vs ~71.5 for the stock chain it replaces (step 58.6 +
+  prework 6.5 + gated norm 4.7 + compute_g 1.7) = ~-0.13 ms per check; in place the base read 20.28 vs 19.79 (+0.49,
+  noise).** Friday's GDNB-2 (-0.71) was on the exact config. Sent to BigMoE before its GDNB A/B (it was already running;
+  its report data/gdnb/gdnb_report.txt prices body + lazy commit).
+- **1b prices (bit-changing; S4-style gate) and build days:**
+
+| 1b item | price per 16-row check | build | note |
+|---|---|---|---|
+| in_proj K split (REF2_DN_KS=2) | ~-0.3 ms (116.4 -> 108.2 us per call, part 1) | 0: built | ready for the Mon gate |
+| chunked GDN step | ~-0.8..-1.0 ms (58.6 us -> a ~28 us state floor) | ~1.5 days | only if GDN-STEP-R (1a, below) misses |
+| HC8 restructure | k3c 2.55 -> ~1.5 ms + k2b 0.75 | ~1 day | the k2b fold and the k3c tail can keep the arithmetic: 1a first |
+| router on a native 8-bit kernel | ~-0.5 ms (84 GB/s today) | ~0.5-1 day | changes router bits (routing can move): 1b |
+
+- **1a next (exact-safe), in order:** (1) **GDN-STEP-R**: mlx_lm's step with R dv rows per simdgroup (1,536 / R
+  threadgroups, each dv row's arithmetic verbatim, bitwise by construction; tests the waves hypothesis Friday's
+  ablations never touched): up to ~-1.0 ms; (2) the HC8 k2b fold + k3c tail with the same arithmetic: ~-1..-1.5 ms;
+  (3) eprep (#3e) ~-0.3..-0.5.
+
+## GDN-STEP-R: the 16-row GDN step's cost is arithmetic, not waves or load latency (Leap, Sat 2026-11-07 14:54-14:56, quiet)
+- scripts/gdn_step_r.py: three bitwise variants of mlx_lm's gated_delta_step (each dv row's loop body verbatim), checked
+  against mlx_lm's kernel on the engine's shapes (Hk 16, Hv 48, Dk = Dv 128; T 1 / 2 / 5 / 8 / 16 / 32; masked and not):
+  R (R dv rows per simdgroup: 1,536 / R threadgroups) 48 / 48, PRE (every row's inputs in registers first) 24 / 24, TG
+  (every row's inputs in threadgroup memory first) 18 / 18 cases bitwise == mlx_lm (y and the state).
+- Dependent chains of 36 calls (us per call incl. a ~3 us link; mlx_lm's first arm runs on a cold clock, so mlx_lm2 at
+  the end is the reference):
+
+| T 16 | mlx_lm2 | R2 | R4 | R8 | PRE 1 | PRE 2 | TG 1 | **TG 2** | TG 4 |
+|---|---|---|---|---|---|---|---|---|---|
+| us per call | 68.0 | 73.2 | 72.5 | 75.8 | 247.1 (spills) | 159.8 | 68.4 | **61.6** | 69.0 |
+
+  - At T 2 every form is 38.7-41.5 us.
+- **Reading:** R8 does 8x the per-row work per thread in the same time, and neither the threadgroup copy nor the register
+  copy removes the per-row cost (~2 us per row). So the 16-row step is bound by its arithmetic: ~5 M fp32 operations
+  per row across the grid (decay, the kv FMA, the update, the out FMA and two 5-step simd_sums over 786 K state
+  values), ~22 us at 16 rows on top of ~25 us of state traffic. Friday's GDN-STEP3 ablations fit this (prefetch -7 %).
+- **Verdicts:** waves hypothesis KILL; GDN-STEP-R as a lever: **TG 2 = -9 % per call, ~-0.23 ms per check, bitwise
+  (small 1a; fold into the bundle only if cheap).** The 16-row step can only get much cheaper with fewer operations:
+  the chunked (WY / UT, matrix-unit) form, which changes bits. **1b chunked GDN step re-priced: ~-0.5..-0.9 ms per check
+  [P], ~1.5 days, bit-changing.**
+
+## HC8-K3C: no bitwise speedup (Leap, Sat 2026-11-07 15:00-15:03, quiet; scripts/hc8_k3c_abl.py)
+- k3c (the HC read's up mix + tail, 96 calls per check, 3.81 MB per call) in a 96-call dependent chain over 96 cold
+  up-mixers, arms interleaved after a warm-up (the first arm of an un-warmed run reads 30-45 % high: clock ramp).
+- **Where the ~29 us go:** without the code loads 20.4-20.8, without the MMA 18.7-21.0 -> the code stream (~8.6 us) and
+  the matrix work (~10.3) run back to back, on ~10 us of fixed work (launch, mix1 copy, tail, cross-stream sum, the
+  link). The scattered tail loads cost nothing (constants: 30.1 vs 30.0): Fable B's suspect is cleared.
+- **Bitwise variants (all == k3c on 12 weight sets), us per call vs k3c 28.7-29.0:** tail via threadgroup memory
+  (TGT) 31.1-31.3; every group's codes loaded first (PF5) 34.4 (register pressure); K split across 5 simdgroups per
+  stream with the group terms summed in k3c's order (KS5, 640-thread groups) 42.4.
+- **Verdict: HC8 k3c tail KILL** (no bitwise form faster); **k2b fold not built** (a cross-threadgroup "last block"
+  sync for <= ~0.2-0.3 ms per check: risk over gain before Monday). HC8's remaining levers change bits (1b).

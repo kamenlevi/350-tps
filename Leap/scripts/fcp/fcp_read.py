@@ -123,3 +123,37 @@ for pr in os.environ.get("FCP_PAIRS", "").split():          # bitwise: each chec
     tok = [A[k].get("out") == B[k].get("out") for k in ks]
     print(f"pair {a} vs {b}: logits hash equal on every check in {sum(lh)} of {len(ks)} prompts "
           f"({sum(len(A[k].get('lh') or []) for k in ks)} checks); tokens equal in {sum(tok)} of {len(ks)}")
+
+for arm in ARMS:                                             # PLAN 220: the partial-commit split (FCP_COMMIT arms)
+    P = load(arm)
+    if not P or not P.get("crec"):
+        continue
+    runs = sorted({r for r, *_ in P["crec"]})
+    keep = set(runs[-int(os.environ.get("FCP_NPROMPTS", "6")):])
+    G = collections.defaultdict(list)
+    for run, chk, kind, ck, t0, wall, cpu, sync in P["crec"]:
+        if run in keep and ck:
+            G[(kind, "partial" if ck[0] < ck[1] else "full")].append((wall, cpu, sync))
+    print(f"== {arm}: commit split (main thread, ms; medians; runs {sorted(keep)}; CSYNC {P.get('csync')})")
+    for kind in ("commit", "lz_pre", "mtplx_commit", "layer_fwd", "lz_post"):
+        for pf in ("partial", "full"):
+            v = G.get((kind, pf), [])
+            if v:
+                sy = [x for _, _, x in v if x is not None]
+                print(f"    {kind:13s} {pf:7s} n {len(v):4d}  wall {med([w for w, _, _ in v]):7.2f}  cpu {med([c for _, c, _ in v]):7.2f}"
+                      + (f"  sync after {med(sy):7.2f}" if sy else ""))
+    try:
+        C = json.load(open(f"{D}/r57/{arm}_checks.json"))
+        pe, dr = collections.defaultdict(list), collections.defaultdict(list)
+        for c in C:
+            n = len(c["ck"])
+            for i in range(1, n):
+                pf = "partial" if c["kept"][i] < c["rows"][i] else "full"
+                pe[pf].append(c["ck"][i] - c["bld"][i] - c["wt"][i])
+                if i + 1 < n:
+                    dr[pf].append(c["drf"][i + 1])
+        tot = len(pe["partial"]) + len(pe["full"])
+        print(f"    checks.json: partial {len(pe['partial'])} / {tot}; post-eval ms partial {med(pe['partial']):.2f} full "
+              f"{med(pe['full']):.2f}; next draft ms after partial {med(dr['partial']):.2f} after full {med(dr['full']):.2f}")
+    except (OSError, ValueError, KeyError) as e:
+        print(f"    checks.json: {e}")

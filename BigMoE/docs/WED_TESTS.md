@@ -629,3 +629,59 @@ hashes). W = v1' + R57_WIRED=1 (screen 39e21da). 12 HumanEval, C 256, palindrome
   the residency set does not wire them; the peak is unchanged (42.9 GB both).
 - **v1' + wired = 181.2 tok/s whole decode, 176.5 full period, 42.9 GB at C 256** (12 HumanEval). It goes into S5 tonight
   (R57_WIRED=1, explicit in the env line).
+
+### Sat 14:12-14:25: S5, the number for Kamen (scripts/s5_final.sh, data/s5; quiet; snapshot d8eb2e4): CLEAN -> cert_env.txt
+- **Freeze:** every copied .py's code paths rewritten into frozen_s5 (344 files: ~/Leap/scripts, ~/Leap/third_party, ~/TrainLab/sticky,
+  "~/TrainLab" -> TrainLab_root, Breakthrough's keepset). S4's snapshot had rewritten only the screen; ref2 / ooo1cq / tierglu_nax6n
+  insert ~/Leap/scripts themselves, so 17 files loaded live. Module manifests (R57_MODMAN=1): 30 modules from the snapshot per
+  process, **0 live**. Pre-flight clean (2 / 2).
+- C 256, qall / v1' + wired / v1' + wired / qall, one process per arm, no freeze window in the run:
+
+| set | arm | whole decode tok/s (passes) | full period (passes) | check 0 | cycle | kept / check | tokens / task | lifetime peak |
+|---|---|---|---|---|---|---|---|---|
+| 12 HumanEval | qall | 92.5 (92.0, 92.9) | 100.9 (100.4, 101.3) | 330 ms | 105.3 ms | 10.17 | 250 | 42.5 GB |
+| 12 HumanEval | **v1' + wired** | **175.9** (174.6, 176.9) | **170.5** (169.1, 171.6) | 68 ms | 64.4 ms | 10.74 | 242 | **42.9 GB** |
+| MBPP12 | qall | 65.8 (66.1, 65.5) | 72.8 (72.4, 73.1) | 307 ms | 85.4 ms | 6.25 | 123 | 42.2 GB |
+| MBPP12 | **v1' + wired** | **118.3** (118.1, 118.4) | **115.4** (115.0, 115.7) | 60 ms | 52.2 ms | 6.21 | 123 | 42.6 GB |
+
+- **v1' + wired vs qall:** 12 HumanEval whole decode **+90.1 %**, full period +68.9 %; MBPP12 whole decode **+79.7 %**, full
+  period +58.5 %. Tokens identical pass to pass: HumanEval v 9 / 12, q 9 / 12; MBPP v 7 / 12, q 6 / 12 (QOM varies run to run).
+- S6W measured the same config at 181.2 whole decode (passes 183.9 / 178.4) this morning; S5's 175.9 (174.6 / 176.9) is ~3 %
+  lower, within session-to-session spread. HumanEval's whole decode includes check 0's copied rows; MBPP12 is the plainer number.
+- **cert_env.txt = s5_env.txt** (8036f5e): v1' + wired, screen data/r57/snap/s5/r57_screen_s5.py, snapshot d8eb2e4, 27 K=V
+  (R57_QOM_SETS=humaneval,mbpp). EvalSuite's CERT from Sun 01:30.
+
+### Sat 14:31-14:37: T16-HE, T16's HumanEval engine A/B on v1' + wired (scripts/t16he_ab.sh, data/t16he; quiet; S5's snapshot d8eb2e4): KILL
+MTP Head's line (~/TrainLab/REPORT.md 'T16-HE', bccd23c). B = v1' + wired; T = B - span B + R57_INERT=T16 (+ per-pass INERT log).
+C 256, the 12 HumanEval, B / T / T / B, 0 live outside modules.
+
+| arm | whole decode (passes) | full period (passes) | median cycle | kept / check | tokens / task | check 0 | lifetime peak |
+|---|---|---|---|---|---|---|---|
+| B = v1' + wired | 173.2 (172.3, 173.8) | 168.0 (167.7, 168.0) | 63.6 ms | 10.56 | 246 | 68 ms | 42.9 GB |
+| T = + T16 (span B off) | 173.2 (169.2, 176.6) | 167.8 (163.6, 171.3) | 65.5 ms | 10.89 | 246 | 67 ms | 42.9 GB |
+
+- **Verdict (pre-registered): KILL:** whole decode -0.0 % (line: PASS >= +3 %, KILL < +1 %); tokens per task T / B 1.000; no runaway.
+- **Why:** T16 keeps +3.1 % more tokens per check (10.89 vs 10.56) but its cycle is +1.9 ms (+3.0 %) slower, so the net is zero.
+  Span B left with T (the screen runs INERT and span as separate arms), so the extra cycle is most likely InertScan's per-check host
+  work on v1''s host-bound path. T16 rule-kept rows 47 of 2912 rows in spans (INERT log: 47 lines).
+- **Tokens:** T vs B identical on 3 and 4 of 12; the floor B1 vs B2 is 8 (T16 is lossy, as expected).
+- B here (173.2) sits below S5's 175.9 and S6W's 181.2 for the same config: the day's spread; the A/B is within one run.
+
+### Sat 14:43-14:54: GDNB, R57_GDNB=1 on v1' + wired (scripts/gdnb_ab.sh, data/gdnb; quiet; S5's snapshot d8eb2e4): G KILL, G' BETWEEN
+NewIdeas (PLAN 220 #2 slot): v1' carries REF2_GDN_LAZY=1 but no R57_GDNB, so its lazy commit is inert. G = v1' + wired + R57_GDNB=1
+(the lazy commit engages); G' = G without REF2_GDN_LAZY. Leap 14:4x (before the run): the body alone saves ~0.13 ms per check here.
+
+- **Bits (re-run today, exact NAX6-N env, C 224, CAP 64, LOGHASH):** G form and G' form both == gx0 on all 43 checks' verify-logits
+  hashes and 3 / 3 prompts' tokens (GDNB-2 PASS re-confirmed on today's ref2 / gdnbody).
+- **Engine (C 256, 12 HumanEval, B / G / G' / G' / G / B):**
+
+| arm | median cycle | vs B | whole decode | full period | kept / check | check 0 | peak |
+|---|---|---|---|---|---|---|---|
+| B = v1' + wired | 63.48 ms | | 169.7 | 164.5 | 10.10 | 67 ms | 42.9 GB |
+| G = + GDNB (lazy commit on) | 63.99 ms | **+0.52 ms (+0.81 %)** | 174.9 | 169.8 | 10.59 | 65 ms | 42.9 GB |
+| G' = GDNB, lazy commit off | 63.55 ms | +0.08 ms (+0.12 %) | 172.3 | 167.2 | 10.31 | 65 ms | 42.9 GB |
+
+- **Verdicts (NewIdeas' exact-safe line: PASS cycle <= -1 % AND bits; KILL cycle >= +0.5 %): G KILL, G' BETWEEN.** Neither joins the
+  Sunday bundle. The whole decode / full period gains (+3.1 % / +1.6 %) are acceptance (kept 10.59 / 10.31 vs 10.10: QOM's pass-to-pass
+  noise), which is why the line judges on the cycle. Matches Leap's prior: the body saves ~nothing and the engaged lazy commit costs on
+  full accepts more than it saves on partial ones.

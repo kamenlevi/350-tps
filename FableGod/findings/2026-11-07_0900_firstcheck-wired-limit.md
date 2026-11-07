@@ -20,5 +20,5 @@
   tokens are equal 3 / 3. FAST v1' tokens are equal 3 / 3. Residency changes no kernel, input or order.
 - Gain MEASURED (BigMoE S6W 09:13): +27.4 % whole decode on v1' at C 256 (142.2 -> 181.2); see 2026-11-07_0945.
   NewIdeas' [P] was +18.8 %. The same call applies to the EXACT default and to the 12 GB and Breakthrough engines.
-- Open: BigMoE checks whether the purgeable volatile tier (R57_VTIER) would become wired, and so not purgeable. It
+- Resolved (BigMoE 14:1x): the volatile tier (R57_VTIER) uses its own newBuffer allocations, not MLX's allocator, so the wired limit does not wire it; it stays purgeable. It
   filled 0.00 GB in these runs.

@@ -211,6 +211,7 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "dense_native_nt": int(os.environ.get("REF2_DENSE_NATIVE_NT", "1")),
        "hc8_fast": os.environ.get("REF2_HC8_FAST") == "1", "hc8_np": int(os.environ.get("REF2_HC8_NP", "20")),
        "keep_caches": os.environ.get("REF2_KEEP_CACHES") == "1",   # KEEP-C: remove() keeps _DN / _SN / _HC8 (default off)
+       "eprep": os.environ.get("REF2_EPREP") == "1",   # PLAN 220 #3e: _ooo_1c_call's id glue as one dispatch (eprep_k; default off)
        "hc8_v": int(os.environ.get("REF2_HC8_V", "4")),
        "ooo_1c": os.environ.get("REF2_OOO_1C") == "1", "small_native": os.environ.get("REF2_SMALL_NATIVE") == "1",
        "nax_1cq": os.environ.get("REF2_NAX_1CQ") == "1",
@@ -227,7 +228,7 @@ _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
               kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
               fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0, ooo_1c_qom=0, nax_1cq=0, qom_split=0,
-              gdn_lazy=0, gdn_lazy_rows=0, gdn_lazy_flush=0, dn_ks=0, nw_calls=0, nw_late_calls=0, nw_writes=0)
+              gdn_lazy=0, gdn_lazy_rows=0, gdn_lazy_flush=0, dn_ks=0, nw_calls=0, nw_late_calls=0, nw_writes=0, eprep=0)
 QCNT_1C = None                                       # Fri 11-06: a list -> each one-call's post-drop work (see the notes)
 NW_ON = False                                        # NEVER-WAIT (Fri 11-06): runtime switch, read per one-call (armed by
 NWCNT = None                                         # CFG["neverwait"]); NWCNT: a list -> per one-call float32 counters
@@ -864,7 +865,16 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
     gate, L = bm["gate"], bm["L"]
     BT.OOO_STATS["calls"] += 1
     COUNTS["ooo_1c"] += 1
-    if sdrop is None:
+    ids_se = None
+    if sdrop is None and CFG["eprep"] and (qm is not None or (R4 and nlz is not None)):   # PLAN 220 #3e: one dispatch,
+        import eprep_k                               # bitwise == the ops below (scripts/eprep_k.py check(); dtypes kept)
+        nle = nlz[0] if (R4 and nlz is not None) else None
+        ids_p, ids_se = eprep_k.glue(ids, qm[0] if qm is not None else None, nle, R4 if nle is not None else 0)
+        if qm is None:
+            ids_p = ids                              # no QOM: the loader's ids are the ids (as below)
+        ids_k = ids.reshape(M, K)
+        COUNTS["eprep"] += 1
+    elif sdrop is None:
         ids_p = ids if qm is None else mx.where(qm[0].reshape(ids.shape), ids.astype(mx.int32) | (1 << 21),
                                                 ids.astype(mx.int32))   # QOM: optional uses marked for the loader only
         ids_k = ids.reshape(M, K)
@@ -884,9 +894,12 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
             t.pop("nolsb")                           # (read anyway) and take sidecar slot -2 (final: LP1 -> tier 3)
             nl, nl_np = nlz
             nl2 = nl.reshape(M, 1)
-            un = np.where(~np.asarray(nl_np))[0]
-            dup = ids.reshape(M, K)[int(un[0]) if len(un) else 0, 0]
-            ids_s = mx.where(nl2, dup, ids.reshape(M, K)[:, :R4]).reshape(*ids.shape[:-1], R4)
+            if ids_se is not None:                   # PLAN 220 #3e: computed with ids_p in eprep_k's one dispatch
+                ids_s = ids_se
+            else:
+                un = np.where(~np.asarray(nl_np))[0]
+                dup = ids.reshape(M, K)[int(un[0]) if len(un) else 0, 0]
+                ids_s = mx.where(nl2, dup, ids.reshape(M, K)[:, :R4]).reshape(*ids.shape[:-1], R4)
         else:
             ids_s = ids[..., :R4]
         dep_l, n_l = post(t["side"], ids_s, after=dep_m)

@@ -6,6 +6,8 @@
 > - CD16: HumanEval x1.20 [K] vs x1.24-1.26 [P]. MBPP12 x1.45 (pooled x1.66) [K] vs x1.8-1.9 [P]. Quality KILL (tests
 >   22 -> 16 of 24: comment text runs away). Withdrawn, with every wholesale-text arm.
 > - T16 (GOAL's guarded CD16): MBPP12 x1.035 (pooled x1.105) [K] vs x1.15 [P]. BETWEEN, tests 22 -> 21 of 24.
+>   HumanEval on v1' + wired (Sat 14:37): kept x1.031-1.033 [K], but the tagger's host work adds +1.9 ms per cycle,
+>   so whole decode is -0.0 %. KILL (REPORT 'T16-HE').
 > - Relax v2 (M-44): HumanEval x1.11 (pooled x1.14) [K] vs x1.10-1.23 [P]. Speed only: it relaxes code tokens, so it
 >   is never in code_env.
 > - So section 5 item 1's "HE K ~12-13 if both hold" did not happen for shippable code. K on code is 11.3 (HumanEval)

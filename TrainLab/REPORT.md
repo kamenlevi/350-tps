@@ -3594,3 +3594,56 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
 - Built but not installed, exact: BP-9's screened draft head (R57_DSUB; PASS 11-04, propose -1.0 ms with D8-NAX, kept
   code x1.0000) exists only as Leap's data/r57_session_vocab.diff. FLAT-2's arms (R57_D7B=code + R57_D7BNAX=1, and the 45
   preset doesn't set it) drafted without it: ~-1 ms on FLAT if it carries to D7b-NAX. NewIdeas / BigMoE decide.
+
+### T16-HE: T16 on HumanEval, engine A/B on v1' + wired: pre-registration (Sat 11-07 14:0x, before any run; NewIdeas PLAN 220 item 6)
+
+- **Question.** Does T16 make the 45 GB release faster on HumanEval code? T16 is GOAL's guarded comment / docstring
+  acceptance: a comment or docstring row whose draft is not the 125B's argmax is kept only if the 125B ranks the draft in
+  its top 3 at p >= 0.1 p1. Module: BigMoE scripts/inert_span.py "T16" (4f09d77). On MBPP12 it measured K x1.035 median /
+  x1.105 pooled (Sat 00:xx, BETWEEN); it was never run on HumanEval.
+- **Arms.** BigMoE's engine at C 256, the 12 HumanEval of S1 / S6W, one process per arm, quiet lock, NO-SWAP >= 47.2 GB.
+  - B = v1' + wired: data/stack/final_env.txt (dd7ad0f) + R57_WIRED=1, QOM sets humaneval. This is S6W's W arm (181.2
+    tok/s whole decode).
+  - T = B without R57_RELAX_SPAN / R57_RELAX_SPAN_RULE, plus R57_INERT=T16 and R57_INERT_LOG. Span B has to go because
+    the screen asserts that INERT and SPAN are separate arms (r57_screen_fast.py:190).
+  - Order B / T / T / B.
+- **Caveat.** T also drops span B. Span B made 0 relaxed accepts on these 12 prompts last night (stackb), so dropping it
+  only removes its host cost. The verdict is on the T config, the release candidate, not on T16 alone.
+- **Line** (pair-mean geo WHOLE DECODE tok/s, T vs B, over the 12):
+  - PASS: >= +3 % AND T's lifetime peak <= 45.0 GB AND median tokens per task T / B <= 1.05 AND no T prompt runs to the
+    cap where B ended by itself. Then EvalSuite's S4-style gate vs NAX6-N (same scores in both orders + long code +
+    MBPP), started by Mon 12:00.
+  - KILL: < +1 %, OR T's peak > 45.0 GB, OR a runaway (a T prompt at the cap where B ended by itself).
+  - BETWEEN otherwise (+1..+3 %): no gate by Tuesday.
+- **Beside** (not the gate): median cycle (ms), full period, check 0, kept per check (geo and pooled), tokens per task, rows
+  kept by T16's rule (INERT log), and tokens identical per prompt T vs B next to the floor B1 vs B2.
+- **Prediction [P].** Kept x1.03-1.08: GOAL's HumanEval replay says x1.08 (x1.04 with the gain halved), and MATCH g2
+  already takes the copied docstrings. Cycle +0..+1 ms of host work. So whole decode +1..+6 %; PASS is roughly a coin toss.
+- **Cost.** ~25 min of quiet GPU (4 arms at C 256, MEM ~43 GB). No download.
+- **Runner.** BigMoE: its engine, its data folder, and its freeze + commit for EvalSuite's provenance. MTP Head reads the
+  result, writes the RESULT here and the TRIED line, and hands a PASS to EvalSuite and NewIdeas.
+
+#### RESULT (Sat 11-07 14:31-14:37, BigMoE scripts/t16he_ab.sh 7bc901e on S5's snapshot d8eb2e4, data a03e25d): KILL. T16's +3 % kept is eaten by +1.9 ms of cycle
+
+| arm | whole decode tok/s (passes) | full period | median cycle | kept per check, geo / pooled | tokens per task | peak |
+|---|---|---|---|---|---|---|
+| B = v1' + wired | 173.2 (172.3 / 173.8) | 168.0 | 63.6 ms | 10.56 / 10.75 | 246 | 42.9 GB |
+| T = B - span B + T16 | 173.2 (169.2 / 176.6) | 167.8 | 65.5 ms | 10.89 / 11.11 | 246 | 42.9 GB |
+
+- **Line:** T vs B whole decode -0.0 %, so KILL (< +1 %). My re-derivation from the per-prompt logs gives -0.01 %, with 6 of
+  12 prompts faster. Tokens per task T / B 1.000 (geo 0.999), no runaway, peak 42.9 GB. Full period -0.2 %.
+- **Beside:** T16 kept 47 rows by its rule over both T passes; 2,912 rows sat in comments or docstrings. Tokens identical T
+  vs B: 3 and 4 of 12, against a B1-vs-B2 floor of 8.
+- **Reading.** Kept x1.031 geo / x1.033 pooled, at the low end of the prediction (x1.03-1.08). But the median cycle grew
+  +1.9 ms (+3.0 %), so the net is zero.
+- **Where T16's host time goes** (r57_screen_fast.py 1127 / 1358-1404 + inert_span.py; read, not profiled):
+  - an extra GPU sync per check, for the draft's logit margin and rank on all 16 rows (a 16 x vocab compare);
+  - two Python scans per check: pre_block before the verify, classify after it. Each copies the CodeScan and feeds the
+    draft text one character at a time;
+  - three rounds of per-token detokenization.
+- **A cheaper tagger with the same decisions** could remove most of that:
+  - run classify first, and sync only when a row has a rule mode;
+  - use an id -> text table;
+  - skip the scan when the state is code and no draft row holds '#' or a quote.
+- **Its ceiling is the kept gain, ~+3 %.** That is borderline on this line, and the arm is still lossy (an S4-style gate
+  plus a CERT top-up). Not worth it by Tuesday unless the exact-safe levers fall short by <= 3 %.

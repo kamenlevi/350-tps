@@ -41,10 +41,15 @@ F2_GEN = F2_GEN[:_eol2 + 1] + ("if os.environ.get('STEPB_ATT_SINGLE') == '1':   
                                "        _r._ON[0] = False                       # (_DN / _SN / _HC8: identity-validated, so the same bits)\n"
                                "        _r._CARRY[0] = None\n"
                                "    ref2.remove = _soft_remove\n"
-                               "    print('[stepb] STEPB_KEEP_REF2C: ref2.remove() keeps _DN / _SN / _HC8', flush=True)\n") + F2_GEN[_eol2 + 1:]
+                               "    print('[stepb] STEPB_KEEP_REF2C: ref2.remove() keeps _DN / _SN / _HC8', flush=True)\n"
+                               "if os.environ.get('STEPB_WIRED') == '1':   # Leap PLAN 220: v1' + wired (R57_WIRED's mx.set_wired_limit)\n"
+                               "    import mlx.core as _mxw\n"
+                               "    print('[stepb] STEPB_WIRED: set_wired_limit, was', _mxw.set_wired_limit(int(_mxw.device_info()['max_recommended_working_set_size'])), flush=True)\n") + F2_GEN[_eol2 + 1:]
 _sb = "(4 if SB_LO <= int(rows) <= 16 else 0)"            # r57's SB cadence (MTPLX's mid-loop async_eval every 4 layers)
-assert F2_GEN.count(_sb) == 1, f"step B: r57's SB cadence expression found {F2_GEN.count(_sb)} times"
-F2_GEN = F2_GEN.replace(_sb, "(STEPB_SBN[0] if SB_LO <= int(rows) <= 16 else 0)")
+if F2_GEN.count(_sb) == 1:
+    F2_GEN = F2_GEN.replace(_sb, "(STEPB_SBN[0] if SB_LO <= int(rows) <= 16 else 0)")
+else:                                                    # r57_screen_fast.py (PLAN 220): its cadence is R57_SBN's already
+    assert F2_GEN.count("(SBN if SB_LO <= int(rows) <= 16 else 0)") == 1, "step B: no SB cadence expression (old or R57_SBN form)"
 _e2 = F2_GEN.index("\n", F2_GEN.index("_SBK.preload("))
 F2_GEN = F2_GEN[:_e2 + 1] + "STEPB_SBN = [int(os.environ.get('STEPB_SB_N', '4'))]   # Leap step B: the SB cadence, toggleable\n" + F2_GEN[_e2 + 1:]
 F2_INFO["stepb"] = "stepb_k.patch() after import evalsuite.env; STEPB_ATT_SINGLE after import ref2; SB cadence STEPB_SBN"

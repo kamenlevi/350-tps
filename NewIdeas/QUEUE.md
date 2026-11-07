@@ -14,7 +14,11 @@ Tags: [K] = measured, [P] = priced from measured parts, [G] = a guess. 45 = the 
 > (a quote from the project owner, kept private)
 publish).
 - Target and rules:
-  - 220 tok/s WHOLE DECODE, 45 GB FAST, code, 12 HumanEval, lifetime peak <= 45.0 GB. From 181.2 that is x1.214.
+  - 220 tok/s WHOLE DECODE, 45 GB FAST, code, 12 HumanEval, lifetime peak <= 45.0 GB.
+  - TWO BASES (the orchestrator 14:3x):
+    - S5, the headline (BigMoE d8eb2e4, Sat 14:25, quiet, CLEAN; re-derived): 175.9 tok/s, so x1.251 to 220. It also
+      gave MBPP12 118.3.
+    - S6W's W arm: 181.2, so x1.214. Same config; the two runs are ~3 % apart (QOM varies run to run).
   - At today's K (11.0 kept per check), the median cycle must fall 63.5 -> ~52.3 ms (-11.2 ms).
   - NW v3 stays OUT (Kamen). C 288 is OUT (memory). NAX6-N stays the gate reference.
   - Exact-safe levers adopt with a bitwise check (exact env: verify-logits hash + tokens) and an engine A/B, with no new
@@ -31,20 +35,40 @@ publish).
 
 | # | lever | kind | gain | owner -> A/B | next step | due |
 |---|---|---|---|---|---|---|
-| 1 | Dense program at 16 rows: the narrow GEMVs and the HC / GDN / attention pieces toward the byte floor (Leap's step 0 B: dense ~25 -> ~16-17 ms with every kernel at 220 GB/s) | exact-safe | up to -8 ms per cycle, x1.14 [P]; a Monday-sized part -3..-5 ms, x1.05-1.09 [P] | Leap -> BigMoE | re-price the pieces in place on today's stack (barrier kept), then build the top 2-3 by ms per day of work | builds Sun-Mon, last A/B Mon 18:00 |
-| 2 | GDN state checkpoints at verify rows 8 / 12: the partial-accept commit replays <= 4 rows | exact-safe | -1.1..-1.5 ms per cycle, x1.02 [P: 36 % partial x ~3.3 ms] | Leap -> BigMoE | build + the 43-check hash + A/B | Sun |
+| 1a | Dense, BITWISE part (PRICED by Leap 15:4x, TABLE_350 fe1b68c / 83a225e, on v1''s real dense program: dense-only 16-row pass 19.79 ms, Python build 12.06; HC reads 3.77, attention 2.64, GDN 8.90 with in_proj 4.62, MoE dense 1.22, PLE 0.52, head 0.78). UPDATE Leap 16:0x (e951042): the HC8 item is a KILL. k3c's ~29 us per call is the code stream (~8.6 us) and the MMA (~10.3) back to back, plus ~10 us fixed. Three bitwise forms lost (31.1 / 34.4 / 42.4 us vs 29.0), and the k2b fold is <= ~0.2-0.3 ms behind a cross-threadgroup sync. Bitwise dense kernels are close to exhausted. What is left: eprep (built, off; -0.3..-0.5 [P]) + GDN TG 2 (-0.23 [P]). Sunday order (Leap, all exact-safe): (1) TG 2 behind a ref2 switch, then eprep + TG 2 priced in situ for BigMoE's bundle A/B; (2) the draft's 5.3 ms priced piece by piece; (3) the commit replay on a second stream: prior KILL D-COMMIT design D (0.06 ms per cycle, 11-03) and NAX-OCC (two streams -1..-13 %), so re-test only on a named change; (4) the cycle's GPU-idle seams (2.5-3.6 ms per cycle: accept logic, commit build, draft build in Python). Caveat for (2), NewIdeas: in FAST v1' the drafts move outputs (B's comment rule, COPY g2; QOM / U3 via cache state), so a drafter-kernel change is gate-free only with bitwise-equal drafts | exact-safe | -1..-2 ms per cycle, x1.015-1.03 [P] (Leap 16:0x) | Leap -> BigMoE | Sunday as above | Sun night bundle |
+| 1b | Dense, BIT-CHANGING part (PRICED 15:4x): (1) in_proj K split, REF2_DN_KS=2: ~-0.3 ms, BUILT. (4) NEW: a native router kernel (MLX's 8-bit qmm runs at 84 GB/s, 0.86 ms per check): ~-0.5 ms [P], 0.5-1 day. (2) Chunked GDN step at 16 rows: -0.5..-0.9 ms [P], ~1.5 days; the step is arithmetic-bound (3 bitwise variants, 90 / 90 cases equal, -9 % at best) | lossy-class (new bits) | all three: -1.3..-1.7 ms, x1.02-1.027 [P] | Leap -> BigMoE; EvalSuite gate | see the gate recommendation below | post-release unless the orchestrator wants a Monday gate |
+| 2 | R57_GDNB=1 (gdn_body): RESULT BigMoE 14:54 (cf2b69a). Bits PASS in both forms (43 / 43 hashes, 3 / 3 tokens), but G (GDNB + lazy commit) is +0.52 ms per cycle (+0.81 %) = KILL, and G' (lazy off) +0.08 ms = BETWEEN. The whole-decode +3.1 / +1.6 % was acceptance noise. Leap's prior is confirmed. The partial commit's ~0.75 ms per cycle on the wall has no lever left (a compiled replay <= 0.27 ms) | exact-safe | none | - | OUT of the bundle | - |
+| 1a+ | Head (final norm + lm_head): 1.63 ms per check at ~120 GB/s (Leap 15:1x) | exact-safe if it can take the native qmm16n | up to ~-1 ms [P] | Leap | check whether the native path is bitwise here | Sun |
 | 3 | S2b leftovers: e (eprep, ~0.4 [P]) + f attention k\|v fold (-0.31 [K], BETWEEN alone) | exact-safe | -0.7 ms, x1.01 | Leap | bundle with 2 | Sun |
 | 4 | The draft-quality mx.eval merged into the first eval | exact-safe | -0.15 ms, x1.003 [P] | BigMoE | bundle with 2 | Sun |
 | 5 | Miss waits (high-miss checks +11 ms): an exact-safe way to read earlier | exact-safe | up to x1.12 if fully hidden [P, upper bound] | NewIdeas (desk) | DESK RESULT 14:3x: nothing buildable by Monday. Prefetch / pre-route was tried five ways (P2-PREFETCH, PF01, PREROUTE2, 3b partial read, LEAD1CORR: recall@10 <= ~0.79). Replacement is bounded: Belady oracles cut only -2..-16 % of misses, and LFU is in. One new angle goes post-release: ROW-WAVEFRONT (below) | closed for Tue |
-| 6 | T16 on code: guarded comment / docstring acceptance (the 125B ranks the row top 3 at >= 0.1) | lossy | K x1.035 / x1.105 on MBPP12 [K]; HumanEval not run | MTP Head + BigMoE; EvalSuite gate | HumanEval engine A/B on v1' + wired, then an S4-style gate vs NAX6-N if >= +3 % whole decode | gate starts by Mon 12:00 |
+| 6 | T16 on code: RESULT BigMoE 14:37 (a03e25d; MTP Head verified a5a915f): KILL. Whole decode -0.0 % (173.2 vs 173.2 on v1' + wired, C 256): kept +3.1 %, but the cycle was +1.9 ms (+3.0 %), the InertScan tagger's host work. A cheaper tagger with the same decisions caps at ~+3 %, still lossy (gate + CERT): post-release | lossy | none by Tuesday | - | OUT | - |
 | 7 | Drafter K (retrains, the D98 track) | changes FAST outputs | retrains move K inside noise (+-0.16, K_PLAN) | MTP Head | not by Tuesday | - |
 
-- Arithmetic:
-  - Likely by Monday: 2 + 3 + 4 + a partial 1 (-3..-5 ms) = -5..-7.5 ms per cycle, x1.09-1.13, so ~197-205.
-  - 220 needs the full #1 (-8 ms) plus 2-4 (-2 ms) plus T16 passing its gate (x1.035): about x1.22.
-  - So 220 is possible only if every piece lands; ~200 is the honest Monday expectation.
+- Arithmetic (CORRECTED 15:5x with every lever measured or priced; from S5's 175.9):
+  - Exact-safe bundle (1a + 3 + 4; CORRECTED 16:1x after the HC8 KILL): x1.015-1.03 [P], so ~178.5-181.
+  - With all of 1b (if gated): x1.02-1.027 more, so ~184-188 [P].
+  - T16 and GDNB are KILLed. 220 (x1.25) is OUT OF REACH by Tuesday.
+  - Honest Monday number: ~178.5-181 exact-safe, against S5's 175.9 (the 15:5x estimate of ~180-183 is superseded).
+- MONDAY GATE, NewIdeas' recommendation (15:5x): NO lossy gate on Monday.
+  - Only 1b (1) + (4) can be ready by Mon 10:00: ~-0.8 ms, ~+1.3 %. That is not worth a gate plus a Monday-night CERT
+    top-up 18 h before the publish.
+  - Release = S5's config + the exact-safe bundle. Bitwise, so CERT carries over.
+  - 1b goes post-release, with T16's cheaper tagger and the next gate cycle.
+  - DECIDED (the orchestrator 15:0x; the default unless Kamen overrides): no lossy gate on Monday. The release is S5's
+    config + the exact-safe bundle, and CERT carries over.
+    - The orchestrator re-verified both KILLs.
+    - It also ruled out the Python graph build (~10-15 ms) as a lever: Leap's B5a / B5b records show it hidden behind
+      GPU work (the 16-row forward is ~21 ms wall with ~21 ms of GPU).
+    - Kamen is told that 220 by Tuesday is out of reach on measured levers (Monday ~180-183).
+- POST-PUBLISH CYCLE (parked; the orchestrator asked to keep it): ONE COMBINED GATE on "v2 max".
+  - The config: the release + 1b + whatever new lossy levers clear their A/Bs: (1) DN_KS=2, (4) the native router,
+    (2) the chunked GDN step, T16 with a cheaper tagger, and NW only if Kamen re-opens it.
+  - The run: BigMoE's A/B of v2 max vs the release, then one S4-style gate vs NAX6-N, then a CERT run.
+  - If it fails, only the lossy part is lost.
+  - The way to 220 is dense GPU time and expert bytes per check, not host time.
 - CUT-OFFS (publish freeze Monday night):
-  - Mon 12:00: the last lossy candidate (T16) starts its S4-style gate.
+  - Mon 12:00: a lossy gate starts only if the orchestrator overrules the recommendation above.
   - Mon 18:00: the last exact-safe A/B starts.
   - Mon 20:00: FREEZE. S5' is the final number: whole decode + full period, 12 HumanEval + MBPP12, quiet, lifetime
     footprint.
@@ -66,7 +90,8 @@ NewIdeas 10:2x]. Setup: v1' (stackb + S2 + KEEP) + R57_WIRED=1 at C 256, 12 Huma
 - Into S5 tonight (final_env unchanged + R57_WIRED=1). Against 200: x1.10 on whole decode.
 - The same call applies to the EXACT default, the 12 GB loop (c1u16's check 0 is 229 ms median) and Breakthrough's
   engines.
-- Still open (BigMoE): whether the volatile tier (R57_VTIER) becomes wired and so not purgeable. It filled 0.00 GB.
+- CLOSED (BigMoE 14:1x): the volatile tier (R57_VTIER) is the extension's own volatile newBuffer, not MLX's allocator. So
+  set_wired_limit doesn't wire it, and it stays purgeable.
 - PATH TO 200 on whole decode (NewIdeas 10:3x; CPU-only from S6W's W passes; scripts/tail_w.py, data/firstcheck/tail_w.txt): x1.104 needed.
   - Where the wall goes now:
     - checks 90.8 %, drafts 9.0 %, host gaps 0.3 %;

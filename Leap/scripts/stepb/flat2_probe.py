@@ -545,6 +545,8 @@ class Hooks:
         al = [l for l in lay if not l.is_linear]
         ipr = [l.linear_attn.in_proj_fused for l in gl if getattr(l.linear_attn, "in_proj_fused", None) is not None]
         pl = [l.ple for l in lay if "ple" in l]
+        tm_ = ns["model"].language_model if hasattr(ns["model"], "language_model") else ns["model"]   # PLAN 220: the head
+        hd = [o for o in (getattr(tm_, "lm_head", None), getattr(getattr(tm_, "model", None), "norm", None)) if o is not None]
 
         def cls(objs):
             return ("cls", {type(o) for o in objs}, {id(o) for o in objs})
@@ -557,7 +559,8 @@ class Hooks:
              "att": [cls([l.self_attn for l in al])],
              "gdn": [cls([l.linear_attn for l in gl])],
              "moe": [cls([l.mlp for l in lay])],
-             "ple": [cls(pl)] if pl else []}
+             "ple": [cls(pl)] if pl else [],
+             "head": [cls(hd)] if hd else []}   # PLAN 220: the final norm + lm_head
         SPEC = {}                                        # variant -> (mode, specs); "<mode>:<piece>", a bare piece = bar,
         for tok_ in [t_ for t_ in ABL.split(",") if t_]:  # "d5" = ref2's D5 fold on (CFG hc_pend_mlp) with no stub
             if tok_ == "d5":
@@ -602,7 +605,7 @@ class Hooks:
             return mx.zeros(x.shape[:-1] + (x.shape[-1],), x.dtype)
 
         out = {v: dict(wall=[], build=[], win=[]) for v in names}
-        out["_meta"] = dict(names=names, n=ABL_N, rounds=ABL_R, rows=len(dr_) + 1, gdn=len(gl), att=len(al), inproj=len(ipr),
+        out["_meta"] = dict(names=names, n=ABL_N, rounds=ABL_R, rows=len(dr_) + 1, gdn=len(gl), att=len(al), inproj=len(ipr), head=len(hd),
                             ple=len(pl))
         try:
             for t_ in T_x:
