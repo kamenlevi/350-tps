@@ -18,7 +18,7 @@
 
 - Exactness: in the exact env, the verify-logits hash equals the unwired run's on all 43 checks of the 3 prompts, and the
   tokens are equal 3 / 3. FAST v1' tokens are equal 3 / 3. Residency changes no kernel, input or order.
-- Gain: +18.8 % [P] on v1' whole decode (141.2 -> ~168), priced by NewIdeas from the check-0 share. The engine A/B at
-  C 256 is next (BigMoE). The same call applies to the EXACT default and to the 12 GB and Breakthrough engines.
+- Gain MEASURED (BigMoE S6W 09:13): +27.4 % whole decode on v1' at C 256 (142.2 -> 181.2); see 2026-11-07_0945.
+  NewIdeas' [P] was +18.8 %. The same call applies to the EXACT default and to the 12 GB and Breakthrough engines.
 - Open: BigMoE checks whether the purgeable volatile tier (R57_VTIER) would become wired, and so not purgeable. It
   filled 0.00 GB in these runs.

@@ -470,6 +470,11 @@ if VTIER:                                                # NewIdeas' RANKED 33, 
     VT_MAP = [[sw._bm["L"], (sw._bm.get("tier") or {}).get("side")] for sw in SW_]
     say(f"R57_VTIER: {_vb} / {_vs} slots per base / sidecar pool = {VT_BYTES / 1e9:.2f} GB volatile (purgeable: NOT in "
         f"phys_footprint; macOS reclaims it before compression or swap)")
+if os.environ.get("R57_WIRED") == "1":                   # Sat 09:0x (Leap FCP 038bfa1, FIRSTCHK's fix; mlx-lm's wired_limit): MLX's
+    _wl = int(mx.device_info()["max_recommended_working_set_size"])   # residency set keeps its buffers wired for the run, so
+    say(f"R57_WIRED: mx.set_wired_limit({_wl / 1e9:.2f} GB), was {mx.set_wired_limit(_wl) / 1e9:.2f} GB")   # IOGPU stops unwiring
+                                                         # the pools in each prefill. VTIER's buffers (ext newBuffer, volatile) are
+                                                         # not MLX allocations, so they stay purgeable.
 NW = os.environ.get("R57_NEVERWAIT") == "1"             # NEVER-WAIT (docs/NEVERWAIT_IFACE.md, Leap's ~/Leap/data/nw/NW_DESIGN.md):
 if NW:                                                   # a cold demand expert runs one layer late in ref2's one-call instead of
     assert FAST and os.environ.get("REF2_OOO_1C") == "1", "R57_NEVERWAIT needs a FAST arm on the one-call (REF2_OOO_1C=1)"

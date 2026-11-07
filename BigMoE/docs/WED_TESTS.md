@@ -610,3 +610,22 @@ check 0 (copy 2). ('rep' ran copy 1 ungated, which would leave the FAST path's f
   during check 0, or time each layer's router wait in check 0 vs copy 2).
 - Caution for any fix: a dummy check before the decode clock (A6 dummy) only moves the cost out of the clock (time to answer
   unchanged). A lever must remove it or overlap it with existing waits.
+
+### Sat 09:07-09:13: S6W wired-limit engine A/B on v1' (scripts/s6w_ab.sh, data/s6w; quiet): PASS, whole decode +27.4 %
+Leap's FCP (038bfa1): check 0 re-wired the 32 GB expert pools (IOGPU's wired collector unwired them during each prefill);
+mx.set_wired_limit(max_recommended_working_set_size) once after model load removes it, bitwise in the exact env (43/43 logits
+hashes). W = v1' + R57_WIRED=1 (screen 39e21da). 12 HumanEval, C 256, palindrome b1 / w1 / w2 / b2.
+
+| arm | whole decode tok/s (passes) | full period (passes) | check 0 (median) | median cycle | kept / check | lifetime peak |
+|---|---|---|---|---|---|---|
+| B = v1' | 142.2 (138.9, 145.5) | 169.3 (166.7, 171.7) | 320 ms | 64.9 ms | 10.75 | 42.9 GB |
+| **W = v1' + wired** | **181.2** (183.9, 178.4) | **176.5** (179.9, 173.0) | **65 ms** | 63.5 ms | 11.03 | 42.9 GB |
+
+- **Verdict (pre-registered): PASS:** whole decode **+27.4 %** (line >= +8 %), full period +4.3 % (>= -2 %), W peak 42.9 GB.
+  NewIdeas' price was +18.8 % [P]. Part of the full-period gain is acceptance noise (kept +2.6 %); the cycle is -2 %.
+- **Tokens:** W vs B identical on 7 and 9 of 12; the floor B1 vs B2 is 7 and W1 vs W2 is 7 (QOM varies run to run). The
+  carry-over proof for S4's v1' verdict is Leap's exact-env bitwise check (residency changes no kernel, input or order).
+- **VTIER:** its buffers are ext newBuffer allocations marked volatile (bigmoe_ext.cpp:2011), outside MLX's allocator, so
+  the residency set does not wire them; the peak is unchanged (42.9 GB both).
+- **v1' + wired = 181.2 tok/s whole decode, 176.5 full period, 42.9 GB at C 256** (12 HumanEval). It goes into S5 tonight
+  (R57_WIRED=1, explicit in the env line).
