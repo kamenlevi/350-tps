@@ -586,3 +586,27 @@ Setup (as armed 05:13):
   equals S1's NW arm minus two logging knobs (R57_QCNT1C counters, R57_RELAX_LOG) plus R57_QOM_SETS=humaneval,mbpp.
   NW acts only where a FAST rule acts (screen `nwp_ = NW and fz is not None`; ref2 gates on NW_ON), so math / IFEval run
   exact with NW off: Breakthrough's nw3 CHAT FAIL (be2c175) does not reach v1. NW v3 is code-validated only.
+
+### Sat 07:04-07:05: FIRSTCHK kill test (scripts/fc_kill.sh, data/fc; quiet ticket, runner 53 yielded): ONE-TIME, not host
+Orchestrator / NewIdeas 07:0x (QUEUE db21669): in v1' each prompt's check 0 takes ~306 ms vs ~58 ms later (build 287 vs 53 ms),
+15.8 % of the decode wall; ceiling +21 % whole decode [P]. v1' env (final_env dd7ad0f), 3 HumanEval, C 256, CAP 64, main-thread
+CPU per check (R57_TCPU=1). fcrep = R57_A6=repf: copy 1 of check 0 under the real check's FAST gate, rolled back, then the real
+check 0 (copy 2). ('rep' ran copy 1 ungated, which would leave the FAST path's first use in copy 2.)
+
+| check (medians of 3 prompts) | wall ms (build + wait) | main-thread CPU ms | demand SSD ms (per prompt) | misses (per prompt) |
+|---|---|---|---|---|
+| control check 0 | 326 (292 + 34) | 34 | 112 / 56 / 41 | 385 / 131 / 76 |
+| fcrep copy 1 | 312 (288 + 23) | 32 | 109 / 56 / 41 | 385 / 133 / 77 |
+| fcrep copy 2 (the same check, again) | **61** (56 + 5) | 22 | 0 | 0 |
+| later checks 1-3 | 79-90 | 23 | 14-52 | 66-291 |
+
+- **Verdict (pre-registered): ONE-TIME, GPU:** copy 2 61 ms < 200; host CPU in the excess 10 ms of ~221 ms.
+- The excess is not host Python (thread CPU +10 ms) and mostly not the SSD (copy 1's demand reads are 41-109 ms vs 14-52 ms in
+  later checks that have MORE misses). ~150-200 ms per prompt is the main thread blocked with no CPU. The prefill is evaluated
+  before the decode clock (mx.eval per chunk + .item()), so it is not deferred prefill work.
+- Candidates (not tested): a GPU-side or external wait paid once per prompt. Metal pipeline builds (they run in
+  MTLCompilerService, so they don't count as thread CPU), the pool / tier switch after a 4-bit prefill (pf1), first touch of
+  freshly allocated buffers (A6 keep was ruled out at C 160 exact, 11-04). Next: Leap's scope (e.g. sample the main thread
+  during check 0, or time each layer's router wait in check 0 vs copy 2).
+- Caution for any fix: a dummy check before the decode clock (A6 dummy) only moves the cost out of the clock (time to answer
+  unchanged). A lever must remove it or overlap it with existing waits.
