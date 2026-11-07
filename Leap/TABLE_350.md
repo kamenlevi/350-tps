@@ -9046,3 +9046,64 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   - Exact lever (kernel work, after the freeze): the verify pass checkpoints each GDN state at rows 8 and 12 (~140 MB of
     extra writes per check), and the commit replays <= 4 rows from the nearest checkpoint. Same arithmetic, so
     bitwise-safe. Price ~1-3 ms per cycle by the partial-check share. Intermediate: one dispatch for the 35 replays.
+
+## FCP: FIRSTCHK NAMED -- each prompt's check 0 re-wires the 32 GB expert pools (Leap, Sat 2026-11-07 08:28-08:30, quiet)
+- Ask (the orchestrator 08:1x): sample the main thread and the GPU timing inside check 0 in-process, name the wait, say
+  whether a fix is exact-safe. Setup (scripts/fcp/, pre-registered 831b987): BigMoE's FIRSTCHK control (fc_kill's fcctl)
+  on a copy of r57_screen_fast.py (md5 70ed7810): v1' (final_env dd7ad0f, QOM sets humaneval), HumanEval 68 / 16 / 91,
+  CAP 64, C 256, R57_A6=ctl R57_TCPU=1 R57_LOGHASH=1, plus fcprobe.py on every window of checks 0-3.
+
+| fcpa, medians over the 3 prompts | check 0 | checks 1-3 | check 0 excess |
+|---|---|---|---|
+| wall ms (build + wait) | 345.2 | 86.9 / 99.7 / 91.9 | +253.3 |
+| build ms (graph + the mid-loop async_eval) / wait ms | 311.1 / 44.1 | 73-86 / 13-14 | +232.3 / +30.4 |
+| main-thread CPU ms / other threads' CPU ms | 41.4 / 713.4 | ~30.5 / 93-105 | +10.9 / **+611.1** |
+| host wired memory (wire_count) | **+31.8 GB** | 0 | |
+| host zero fills / decompressions (16 KB pages) | 8,857 / 1,501 | 0 / 0 | |
+| MTLCompilerService CPU | 0 | 0 | no pipeline builds |
+| mx.async_eval, 23 calls per check: wall / CPU ms | 294.2 / 17.5 | 66.1 / 11.3 | +228 / +6 |
+
+- Sampler: +231 ms of the build excess sits at qwen4_exp.py:6491 (_forward's mid-loop mx.async_eval, the SB cadence).
+- **Named: the GPU driver re-wires the 32.32 GB expert pools at every prompt's check 0** (wired +31.8 GB inside check 0,
+  nothing after). The prefill computes experts from staging and scratch buffers, so the pools sit idle through it. The
+  screen sets no wired limit (mx.set_wired_limit was 0; iogpu.disable_wired_collector 0, dynamic_lwm 1), so IOGPU's
+  wired collector unwires them. Check 0's first command buffers then wait while the driver wires ~2 M pages (~0.6 s CPU
+  over ~3 threads), and MLX throttles the main thread inside async_eval: blocked, little CPU. Not a pipeline build, not
+  host (+11 ms), not SSD (misses as later checks).
+- fcpb (+ FCP_NOCLEAR: tier.prefill_done's mx.clear_cache() skipped): excess +174 ms, -79 vs fcpa (BETWEEN on the
+  100 / 30 ms lines); check 0 still wires +34.7 GB. The clear is a minor part; the re-wire stays.
+- FAST v1' logits differ between any two processes (fcpa vs fcpb: 0 of 12 checks' hashes equal, misses differ by 1-11
+  per check; tokens equal 3/3), so the bitwise check runs in the exact NAX6-N env (step 2).
+- Prior art: K-80 (11-01) found "a one-time non-SSD cost inside the first check" with candidates (a) the empty buffer
+  cache (NewIdeas' A6KEEP: KILL), (b) the gate's first call after the slot prefill, (c) first touch of decode-only
+  buffers; R-80 ruled out kernel builds. FCP names it: the buffers are the pools and the cost is re-wiring them.
+  mlx-lm wires model memory with mx.set_wired_limit (generate.py's wired_limit) for this kind of stall.
+
+## FCP STEP 2: THE FIX -- mx.set_wired_limit for the run: check 0's excess GONE, bitwise in the exact env (PASS; 08:34-08:36, quiet)
+- Arms (pre-registered 5565729): fcpw = v1' + FCP_WIRED=1 (mx.set_wired_limit(max_recommended_working_set_size = 55.66
+  GB) once at start: mlx-lm's wired_limit, held for the whole run; the screen had 0), C 256, the same 3 HumanEval;
+  fcpx0 / fcpx1 = the NAX6-N exact env (R57_NAX=1, no R57_FAST) without / with it, C 224, BigMoE's KEEP-proof prompts
+  (HumanEval 68, 16, ifeval/1220), CAP 64, R57_LOGHASH=1.
+
+| medians over 3 prompts | check 0 wall ms | checks 1-3 wall ms | check 0 excess | check 0 wires | other threads' CPU, check 0 | decode tok/s (CAP 64) / steady | lifetime peak |
+|---|---|---|---|---|---|---|---|
+| fcpa v1' | 345.2 | 86.9 / 99.7 / 91.9 | +253.3 | +31.8 GB | 713 ms | 96.0 / 156.9 | 43.0 GB |
+| **fcpw v1' + wired** | **89.6** | 85.5 / 99.2 / 90.2 | **-0.7** | +0.2 GB | 93 ms | **159.5** / 158.4 | 43.0 GB |
+| fcpx0 exact | 287.5 | 159.4 / 213.9 / 191.1 | +96.4 | +30.9 GB | 735 ms | 57.4 / 69.5 | 38.2 GB |
+| **fcpx1 exact + wired** | **178.0** | 153.8 / 207.4 / 186.1 | **-8.2** | +0.2 GB | 350 ms | 58.4 / 72.8 | 38.2 GB |
+
+- **fcpw: PASS** (excess -254 ms >= 100; check 0 wires 0.2 GB < 5; peak 43.0 <= 45.0). Tokens equal fcpa 3/3. Its
+  logits hashes differ from fcpa's, as any two FAST v1' processes' do (fcpa vs fcpb, step 1).
+- **EXACT: PASS -- fcpx1's verify-logits hash equals fcpx0's on all 43 checks of the 3 prompts, tokens equal 3/3.**
+  Exact-safe by construction too: residency changes no kernel, input or order.
+- The CAP 64 tok/s overstates the gain (check 0 is 1 of 4 checks). On v1' whole decode NewIdeas' FIRSTCHK-PRICE puts
+  check 0 at 15.8 % of the wall: 1 / (1 - 0.158) = **+18.8 % [P]** (141.2 -> ~168 [P]); BigMoE's engine A/B prices it.
+  Steady-state checks unchanged (158.4 vs 156.9), main-thread CPU unchanged (~30 ms per check).
+- Prior art (published): mlx-lm's generate.py wires model memory with mx.set_wired_limit(max_recommended_working_set_size)
+  for the length of a generation (macOS 15+, residency sets). The screens never called it, so IOGPU's wired collector
+  unwound the idle pools during each prefill. Lever tag: published; the diagnosis is new.
+- Not measured here: prefill time (whole runs 31 s vs 40 s, exact 27 vs 27 s: no visible cost), the volatile tier
+  (R57_VTIER filled 0.00 GB in these runs; if its buffers are MLX allocations they would be wired too and stop being
+  purgeable: BigMoE checks), the 12 GB engines (same stall expected, scaled to their pool size).
+- Where it goes (owners): one call after the model load in BigMoE's screen / stream setup (and Fit12's / Breakthrough's
+  engines). Kept below the 45 GB line: the wired limit caps what MLX wires; the footprint is unchanged.

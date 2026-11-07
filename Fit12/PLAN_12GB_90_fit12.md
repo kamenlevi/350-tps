@@ -5,7 +5,8 @@ quality (T0, the top-2 two-pass at 12 GB: HumanEval+ 80.0 vs 91.7 = KILL, IFEval
 Fit12 cannot write in ~/Breakthrough (standing rule), so this file is for Breakthrough to merge or link.
 
 ## Where the 57 tok/s check goes [K: T3R2's run, Wed 4 Nov 13:05, /Users/kamen/Fit12/data/scr/t3r2/p47_layers.txt]
-Arm t80ck1u (P1-K1 pass 1, KU 4; certificate theta 0.8 + cf gate 0.9; exact = REF2-T), HumanEval prompts, quiet lock.
+Arm t80ck1u (P1-K1 pass 1, KU 4; certificate theta 0.8 + cf gate 0.9; the exact pass at REF2-T's tiers 4433333333, which is
+not REF2-T's tokens: the 12 GB loop is verified greedy, corrected Sat 7 Nov), HumanEval prompts, quiet lock.
 Per check ~261 ms for ~15 kept tokens (57.3 tok/s):
 | part | ms per check | share | inside |
 |---|---|---|---|
@@ -193,3 +194,27 @@ rule: tokens per check, time per check from the table above, and divergences vs 
   (pooled) at 11.144 GB; the six-arm process's 11.39 GB held the other arms' state too.
 - Data: /Users/kamen/Fit12/data/scr/ex16 (ex16.txt, ex16_report.txt / .json, MANIFEST.txt with shasums + ENV, per-prompt
   _ex / _ex_toks / _ex_ph json). Sent to the orchestrator 00:3x.
+
+## t80ck1u MEASURED (Sat 7 Nov 08:2x; the orchestrator 08:1x; c1u16 ran 08:19:27-08:21:48 under a quiet lock, rc 0, swap flat)
+- The 12 GB FAST candidate (Breakthrough's map step 0, be2c175: P1-K1 theta 0.8 KU 4 passes the code line, 45.8 tok/s [P])
+  ALONE in its own process, on 12GB-CLEAN's footing: all 16 HumanEval prompts, greedy, cap 256, full outputs, C_m 47 / C_l 32,
+  F12_RERUN=1, F12_PHLOG=1. Runner /Users/kamen/Fit12/scripts/c1u16.sh; reader /Users/kamen/Fit12/scripts/c1u16_read.py (the
+  orchestrator's metrics since 05:0x); data /Users/kamen/Fit12/data/scr/c1u16 (c1u16_report.txt / .json, MANIFEST.txt).
+- WHOLE DECODE (n / decode wall time, prefill excluded): **46.33 tok/s geometric mean**, pooled 44.34 (3,415 tokens in 77.01 s),
+  per prompt 29.81 (/91) to 86.83 (/68). FULL-PERIOD STEADY (wall time after each prompt's first check): 49.14 geometric mean,
+  45.66 pooled. END TO END with prefill: 24.49 geometric mean, 24.92 pooled.
+- Lifetime peak phys_footprint (RUSAGE_INFO_V4): **11.245 GB = 10.473 GiB**, under the 12 GB line.
+- Per check (357 checks): 9.57 tokens kept; draft 11.1, pass 1 106.4, pass 2 / exact 83.8, commit 11.3 ms; 101 checks with a
+  pass 2 and 60 exact checks after the cf gate. The first check + setup costs ~473 ms per prompt (mean; ~175-230 ms when
+  pass 1 certifies check 0, ~630-910 ms when it goes exact).
+- Validity: rc 0, a 'done' line, no PAUSE (16 / 16 counted), no Error / Traceback, swap flat at 6797 MB, GPU 0 % at the start.
+- Against the replay: the measured pooled 44.34 sits within the earlier measured 44.2-44.9 and 3 % under the replay's 45.8
+  [P]; the geometric mean (the headline form) is 46.33. Against 12GB-CLEAN (18.42 / 18.47 at 11.144 GB): x2.52 geometric
+  mean, x2.40 pooled.
+- Tokens (information): = the verified-greedy loop (ex16) on 4 / 16 prompts (first divergences at 104-252); = REF2-T through
+  256 tokens on 4 / 16. ex16 = REF2-T on 13 / 16 (divergences /101 @164, /6 @117, /77 @134: verified greedy, near-ties).
+- Quality is EvalSuite's code same-scores (docs/PREREG_t80ck1u_2026-11-07.md, HumanEval+ 60 x 2 orders). Entry point
+  (Sat 08:3x): fit_t3.py with F12_IDS_OUT (one arm: t80ck1u / t90ck1u / ex), F12_CAP=item, F12_KEYS in run order; it writes
+  {key: ids} + _meta.json after every prompt. Tested in FAKE mode. Backup fit_t3.py.bak_es; new sha256 7ebdce481ea5....
+  EvalSuite told: the VOID rule "ex reproduces REF2-T on 4 rows" can fail without an engine bug (see above).
+- Findings note: /Users/kamen/FableGod/findings/2026-11-07_0823_12gb-fast-t80ck1u-46tps.md.

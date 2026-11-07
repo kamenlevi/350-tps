@@ -1,5 +1,16 @@
 # K plan for the weekend (MTP Head, Fri 2026-11-06 09:5x; the orchestrator 09:4x)
 
+> **MEASURED Sat 08:2x (engine [K], BigMoE data/fday + data/sat, C 224; table in notes/K_SCOREBOARD.md).**
+> - Shipped code profile (v1 = stackb): **11.33 kept per check on the 12 HumanEval** (pooled 11.16), x1.08 over the
+>   stack (10.48), all from MATCH g2@16. This is today's K, up from 10.36.
+> - CD16: HumanEval x1.20 [K] vs x1.24-1.26 [P]. MBPP12 x1.45 (pooled x1.66) [K] vs x1.8-1.9 [P]. Quality KILL (tests
+>   22 -> 16 of 24: comment text runs away). Withdrawn, with every wholesale-text arm.
+> - T16 (GOAL's guarded CD16): MBPP12 x1.035 (pooled x1.105) [K] vs x1.15 [P]. BETWEEN, tests 22 -> 21 of 24.
+> - Relax v2 (M-44): HumanEval x1.11 (pooled x1.14) [K] vs x1.10-1.23 [P]. Speed only: it relaxes code tokens, so it
+>   is never in code_env.
+> - So section 5 item 1's "HE K ~12-13 if both hold" did not happen for shippable code. K on code is 11.3 (HumanEval)
+>   and ~6-6.7 (MBPP12). The drafter side still has no priced route to K 14.
+
 > **CORRECTED Fri 10:5x (Fable GOAL's K-wall list, ~/FableGod/goal/K_WALL_1106.md, 10:50; [P] = its replays of the
 > d23h every-position walks through the engine's tagger, 0.3 cut).**
 > - CD16 is not copying. It accepts comment / docstring text wholesale, so on MBPP it is x1.8-1.9 kept, not ~x1.0 as

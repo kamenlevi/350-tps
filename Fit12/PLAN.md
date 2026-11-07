@@ -3324,3 +3324,6 @@ so R-01 should find about the same slots, not ~1 GB more.
 - 12GB-CLEAN RESULT (Sat 00:3x): 18.42 tok/s decode, geometric mean over all 16 HumanEval prompts (pooled 18.47); lifetime
   peak 11.144 GB = 10.38 GiB; alone in its process, quiet lock, rc 0, no PAUSE, outputs = kp2's ex 16 / 16. Verified
   greedy, not exact. Details: /Users/kamen/Fit12/PLAN_12GB_90_fit12.md '12GB-CLEAN RESULT'.
+- t80ck1u MEASURED (Sat 08:19-08:21, quiet, alone, 16 HumanEval, 12 GB FAST candidate): 46.33 tok/s whole decode geometric
+  mean (pooled 44.34), full-period 49.14, end to end 24.49; lifetime 11.245 GB; x2.52 the verified-greedy loop. Details:
+  /Users/kamen/Fit12/PLAN_12GB_90_fit12.md 't80ck1u MEASURED'. EvalSuite's entry point: fit_t3.py F12_IDS_OUT (same section).

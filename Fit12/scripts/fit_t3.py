@@ -7,7 +7,11 @@ load_b12(0.10) WITHOUT the MTP head: DFlash2 drafts). Per prompt, in one process
   t80   theta 0.8 (pass 2 on rows n..j);  t80c: + cf gate 0.9;  t80cs: + cf gate + skip (2, 8);  t80b: t80 again
 Per arm: tokens (sha1, first divergence from ex), lsha, checks, kept per check, checks with pass 2 / exact / cf-gated /
 skipped, rows in pass 1 / 2, pass-2 calls, refused commits, tok/s (shared GPU, rough); the process's lifetime peak.
-Usage: [BigMoE venv] fit_t3.py TAG"""
+Usage: [BigMoE venv] fit_t3.py TAG
+(Sat 7 Nov) EvalSuite's entry point (t80ck1u code same-scores): F12_IDS_OUT=<file.json> with exactly ONE arm (F12_T3ARMS=
+t80ck1u, t90ck1u or ex) writes {key: full-output ids} (EOS kept as the last id, like EvalSuite's completion_ids) and
+<file>_meta.json ({key: arm, theta, n, cap, finish stop / length, pf_s, dec_s, tok_s, checks, paused_s}) after every prompt,
+in run order; F12_CAP=item caps each prompt at its item's max_tokens; F12_KEYS = the keys in run order (the history)."""
 import ctypes, hashlib, json, os, sys, time
 
 os.environ["HF_HUB_OFFLINE"] = "1"                   # no downloads: DFlash2's config must already be local
@@ -25,7 +29,8 @@ if os.environ.get("F12_CMCL"):                       # (23:2x) pass 1 on 16 rows
 TAG = sys.argv[1] if len(sys.argv) > 1 else "t3"
 t_start = time.time()
 OUTD = os.environ.get("F12_OUT", os.path.expanduser("~/Fit12/data/t3"))
-CAP = int(os.environ.get("F12_CAP", "128"))
+CAPS = os.environ.get("F12_CAP", "128")             # (Sat 7 Nov) "item" = each item's own max_tokens (EvalSuite's rows)
+CAP = 0 if CAPS == "item" else int(CAPS)
 ES = os.path.expanduser("~/EvalSuite")
 BT = os.environ.get("F12_BT", os.path.expanduser("~/Fit12/pinned/8db7/bt_b12.py"))
 EOS = (248044, 248046)
@@ -80,7 +85,7 @@ else:
         KP.selftest()
     dbytes = sum(v.nbytes for _, v in __import__("mlx.utils", fromlist=["tree_flatten"]).tree_flatten(draft.parameters()))
     os.makedirs(OUTD, exist_ok=True)
-    print(f"[{TAG}] bt_b12 {sha}, engine {getattr(B, 'V3F', '?')}, C_m {B.CFG.get('cm')} C_l {B.CFG.get('cl')}, cap {CAP}; drafter "
+    print(f"[{TAG}] bt_b12 {sha}, engine {getattr(B, 'V3F', '?')}, C_m {B.CFG.get('cm')} C_l {B.CFG.get('cl')}, cap {CAPS}; drafter "
           f"{dbytes / 1e9:.3f} GB (own params), SW {draft.config.sliding_window}; after load: lifetime {life_gb():.3f} GB, MLX active "
           f"{mx.get_active_memory() / 1e9:.3f}; prompts " + ", ".join(f"{r['key']} (n {r['n_prompt']})" for r in SEL), flush=True)
 ARMS = [("ex", None, {}), ("g1", 1.01, dict(p2_all=True)), ("g0", 0.0, {}), ("t80", 0.8, {}),
@@ -90,6 +95,7 @@ ARMS = [("ex", None, {}), ("g1", 1.01, dict(p2_all=True)), ("g0", 0.0, {}), ("t8
         ("t80ck2m3", 0.8, dict(cfmin=0.9, _k2=True, _m3=True)),                                 # (Tue 10:4x) INFO: M-18
         ("t80ck1um3", 0.8, dict(cfmin=0.9, _k2=True, _k1u=int(os.environ.get("F12_K1U_KU", "4")), _m3=True)),   # INFO
         ("t80ck1u", 0.8, dict(cfmin=0.9, _k2=True, _k1u=int(os.environ.get("F12_K1U_KU", "4")))),   # (Tue 10:3x) P1-K1
+        ("t90ck1u", 0.9, dict(cfmin=0.9, _k2=True, _k1u=int(os.environ.get("F12_K1U_KU", "4")))),   # (Sat 7 Nov) theta 0.9
         ("t80ck2pf", 0.8, dict(cfmin=0.9, _k2=True, _pf2=int(os.environ.get("F12_PF2_B", "6")))),   # (Tue 15:0x) P2-PREFETCH
         ("t80ck1upf", 0.8, dict(cfmin=0.9, _k2=True, _k1u=int(os.environ.get("F12_K1U_KU", "4")), _pf2=int(os.environ.get("F12_PF2_B", "6")))),
         # (Thu 5 Nov 20:0x, 12 GB plan lever 1) certificate calibration: t80ck1u's pass 1 on EVERY check (no cf gate), then
@@ -112,6 +118,8 @@ ARMS = [("ex", None, {}), ("g1", 1.01, dict(p2_all=True)), ("g0", 0.0, {}), ("t8
 if os.environ.get("F12_T3ARMS"):
     want = os.environ["F12_T3ARMS"].split(",")
     ARMS = [a for a in ARMS if a[0] in want]
+IDS = os.environ.get("F12_IDS_OUT")                      # (Sat 7 Nov, EvalSuite's t80ck1u same-scores) full-output ids out
+assert not IDS or len(ARMS) == 1, "F12_IDS_OUT takes exactly one arm (F12_T3ARMS=<arm>)"
 import threading                                         # (T3R2, NewIdeas' QUEUE 4dbe21a; PLAN.md 'T3R2') PAUSE watch, SSD per pair
 PAUSEF = os.environ.get("F12_PAUSEF", os.path.expanduser("~/.local/share/quiet/PAUSE"))
 HCSV = os.path.expanduser("~/Library/Logs/health.csv")
@@ -167,8 +175,33 @@ def files(r):                                            # one prompt's output f
     return [f"{TAG}_{kf}_{a}{x}.json" for a, _, _ in ARMS for x in ("", "_toks", "_ph")]
 
 
+def capk(key):                                           # (Sat 7 Nov) one prompt's token cap: F12_CAP, or the item's max_tokens
+    return int(ITEMS[key]["max_tokens"]) if CAPS == "item" else CAP
+
+
+PZK = {}                                                 # (Sat 7 Nov) key -> PAUSE seconds inside the run that counts
+
+
+def dump_ids():                                          # (Sat 7 Nov, EvalSuite) after every prompt, in run order, atomically:
+    if not IDS:                                          # IDS = {key: ids} (EOS kept as the last id, like EvalSuite's
+        return                                           # completion_ids); <IDS>_meta.json = {key: arm, theta, n, cap, finish, ...}
+    arm, th = ARMS[0][0], ARMS[0][1]
+    ids_, meta = {}, {}
+    for k, v in PER.items():
+        if arm in v:
+            toks, s = v[arm]
+            ids_[k] = [int(t_) for t_ in toks]
+            meta[k] = dict(arm=arm, theta=th, n=len(toks), cap=capk(k), finish="stop" if toks and toks[-1] in EOS else "length",
+                           pf_s=s["pf_s"], dec_s=s["dec_s"], tok_s=round(s["tok_s"], 3), checks=s["checks"],
+                           paused_s=round(PZK.get(k, 0.0), 1))
+    for p_, o_ in ((IDS, ids_), ((IDS[:-5] if IDS.endswith(".json") else IDS) + "_meta.json", meta)):
+        json.dump(o_, open(p_ + ".tmp", "w"))
+        os.replace(p_ + ".tmp", p_)
+
+
 def run_prompt(ri, r):                                   # all arms of one prompt; T3P's order rule (F12_ALT)
     ids = ITEMS[r["key"]]["prompt_ids"]
+    cap_ = capk(r["key"])
     res = {}
     temps = []
     t0_ = time.time()
@@ -192,7 +225,7 @@ def run_prompt(ri, r):                                   # all arms of one promp
         ca = ssd_c()
         dfs0 = _EXT.defer_stats()                        # [rows, waited, late reads, late ids forced to wait]
         try:
-            toks, s = T3.generate(B, model, draft, DF, list(ids), CAP, th, stop_ids=EOS, log=lg, **kw)
+            toks, s = T3.generate(B, model, draft, DF, list(ids), cap_, th, stop_ids=EOS, log=lg, **kw)
         finally:
             T3._K2[0] = False
             T3._K1U[0] = 0
@@ -267,6 +300,8 @@ for ri, r in enumerate(SEL):
                 os.replace(os.path.join(OUTD, f_), os.path.join(OUTD, "void1_" + f_))   # files of a paused prompt
     print(f"[{TAG}] PAIR {r['key']}: SSD per arm (C) {', '.join(temps)} | PAUSE {pz:.1f} s inside -> "
           f"{'ok' if pz == 0 else 'VOID: re-run at the end' if RERUN else 'PAUSE-FLAGGED (timings void)'}", flush=True)
+    PZK[r["key"]] = pz
+    dump_ids()
 for ri, r in VOID:                                       # once, in order; the void run's files are kept as void1_* (moved above)
     wait_cool(f"re-run {r['key']}")
     res, t0, t1, temps = run_prompt(ri, r)
@@ -280,6 +315,8 @@ for ri, r in VOID:                                       # once, in order; the v
         PER[r["key"]] = res
     print(f"[{TAG}] PAIR {r['key']} (re-run): SSD per arm (C) {', '.join(temps)} | PAUSE {pz:.1f} s inside -> "
           f"{'ok' if pz == 0 else 'VOID again: excluded'}", flush=True)
+    PZK[r["key"]] = pz
+    dump_ids()
 print(f"[{TAG}] PAUSE summary: intervals {[(round(a_ - t_start, 1), None if b_ is None else round(b_ - t_start, 1)) for a_, b_ in PZ]} s "
       f"from the start; re-run {[r['key'].split('/')[-1] for _, r in VOID]}; excluded "
       f"{[r['key'].split('/')[-1] for _, r in VOID if r['key'] not in PER]}", flush=True)
@@ -300,4 +337,7 @@ for arm, a_ in TOT.items():                              # summed tokens / summe
           flush=True)
 if os.environ.get("F12_K12SYNC") == "1" and not FAKE:
     print(f"[{TAG}] K12: {k12sync.N[0]} synced MoE block calls; wrapper still installed: {k12sync.installed()}", flush=True)
+if IDS:
+    dump_ids()
+    print(f"[{TAG}] IDS: {len([k for k, v in PER.items() if ARMS[0][0] in v])} keys -> {IDS}", flush=True)
 print(f"[{TAG}] done; lifetime {life_gb():.3f} GB", flush=True)
