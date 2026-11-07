@@ -831,3 +831,32 @@ groups that fit, each through the unchanged body (bitwise per Leap, 43/43). F = 
   check (160 ids > 98 slots) takes the synchronous chunked tier path (~480 ms per check, SSD reads not overlapped). MBPP's drafts are
   shorter (truncation), so most of its checks still fit the gate path (median cycle 70.6 ms). At 24 GB the exact s10b stack is the
   faster engine; r57's lossy rules need C >= ~160 to pay off (C30: 153.5 at 31.8 GB).
+
+### Sat 22:05-23:25: N45, the paper's missing 45 GB measurements (scripts/n45.sh, data/n45; quiet; S5' snapshot 6db4c24, C 256)
+EB = the EXACT default (R57_PRESET=45 + NAX6-N) + KEEP + wired + the Sunday bundle; L = S5''s lossy config (v1' + wired + bundle; QOM on
+humaneval / mbpp only). Prompts: the first 12 IFEval and 12 math keys with NAX6-N AR rows (EvalSuite results/ref2tnax), CAP 256,
+EB / L / L / EB per set; prefill: agent/edit10 (1565 tokens), agent/write13 (4730), agent/write11 (7932), CAP 16, two passes per config.
+
+| set | arm | whole decode tok/s (passes) | full period | end to end | tokens / task | lifetime peak | == NAX6-N AR |
+|---|---|---|---|---|---|---|---|
+| 12 IFEval | EB | **39.9** (39.9, 39.8) | 41.6 | 17.1 | 142 | 41.7 GB | **24 / 24 (EXACT PROOF PASS)** |
+| 12 IFEval | L | **45.0** (45.2, 44.8) | 44.9 | 17.3 | 144 | 42.4 GB | 6 / 24 |
+| 12 math | EB | **78.8** (79.4, 78.3) | 81.0 | 39.5 | 256 | 42.5 GB | **24 / 24 (EXACT PROOF PASS)** |
+| 12 math | L | **87.9** (85.3, 90.4) | 90.5 | 40.3 | 256 | 43.1 GB | 7 / 24 |
+
+| prefill (TTFT = prefill + cache / drafter setup + the first token) | P | EXACT TTFT (passes) | exact prefill tok/s | LOSSY TTFT | lossy prefill tok/s |
+|---|---|---|---|---|---|
+| agent/edit10 | 1565 | 15.90 s (15.92, 15.88) | **98** | 16.28 s | 96 |
+| agent/write13 | 4730 | 40.11 s (40.70, 39.51) | **118** | 41.23 s | 115 |
+| agent/write11 | 7932 | 64.07 s (63.78, 64.36) | **124** | 66.57 s | 119 |
+
+Lifetime peaks over the prefill arms: exact 44.5 GB, **lossy 45.1 GB (> 45.0 on the 7.9K prompt)**.
+- **FINDING 1 (claims): v1''s lossy config is NOT exact on chat / math.** v1' runs those sets with exact acceptance (no QOM rule), yet only
+  6 / 24 (IFEval) and 7 / 24 (math) runs equal NAX6-N's AR: a non-FAST v1' lever changes their outputs (candidates: R57_FASTTAX, REF2_HC8_FAST,
+  the S2 session-vocab head R57_SVH / DSUB). Their quality basis is S4's same-scores PASS vs NAX6-N (math / IFEval), so they are "lossy,
+  same scores", not exact. Not tested which lever.
+- **FINDING 2: the 45 GB lossy config breaches 45.0 GB on a 7.9K-token prompt** (45.1 GB lifetime); code / chat / math prompts stay
+  at 42.4-43.1 GB; exact stays at 44.5 GB on 7.9K.
+- **FINDING 3: prefill is the weak spot:** ~100-124 tok/s (exact and lossy alike: the prefill path streams experts from SSD per 1024-row
+  chunk). For comparison, Strata (Q2_0, ~40 GB RSS, whole model in RAM) reports ~226 tok/s at 4K on an M1 Max and ~1430 on an M5 Max.
+- Chat decode is slow vs code (IFEval 39.9 exact / 45.0 lossy vs HumanEval 99.4 / 181.4): HumanEval flatters (copying, long accepts).
