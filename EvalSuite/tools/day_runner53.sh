@@ -22,6 +22,8 @@ alive49() { [ -f results/q49.pid ] && kill -0 "$(cat results/q49.pid)" 2>/dev/nu
 echo $$ > results/q53.pid; trap 'rm -f results/q53.pid' EXIT
 say "runner 53 start (pid $$); waits for runner 49's end, then $RUN on humanevalx + mathx ($(count results/$RUN/decode.jsonl)/154 rows)"
 while alive49; do sleep 60; done
+sleep 300      # BigMoE's s4_final.sh writes final_env.txt as runner 49 ends: give S4 (runner 54) the first slot
+{ [ -e results/S4_READY ] || [ -s "$HOME/BigMoE/data/stack/final_env.txt" ]; } && { say "final_env.txt / S4_READY is in: runner 53 yields to S4 at $(count results/$RUN/decode.jsonl)/154"; exit 0; }
 EST=3000; NP=0
 while [ "$(count results/$RUN/decode.jsonl)" -lt 154 ]; do
   calm

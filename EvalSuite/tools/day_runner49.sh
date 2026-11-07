@@ -35,6 +35,7 @@ UNSETS=(-u EVALSUITE_BIGMOE_CODE -u EVALSUITE_RELAX_VARIANT -u EVALSUITE_STAGE_E
 RLXENV="BIGMOE_MAXK=160,BIGMOE_TIER=4433333333,BIGMOE_TIER_GLU=3c,BIGMOE_TIER_CL=112,BIGMOE_TIER_COMBINE=1,BIGMOE_OOO=1"
 STAGEENV=$RLXENV
 PY=.venv/bin/python
+EST_TF=2700      # tfwin's chunk estimate (unset before Sat 04:0x: bash dropped the tfwin call on the arithmetic error)
 say() { echo "$(date +%H:%M:%S) $*" >> "$LOG"; }
 lid_shut() {
   ioreg -r -k AppleClamshellState -d 4 2>/dev/null | grep -m1 '"AppleClamshellState"' | grep -q Yes || return 1

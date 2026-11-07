@@ -9,8 +9,8 @@
 # Each stage's first process manifest is its reference (a later process loading other outside code is VOID), and every
 # stage must load the same shas as the first stage on the modules they share.
 # 1. Same scores: math 50 + HumanEval+ 60 in two prompt orders, 10 prompts per process (the screen's HARD = 600 s); IFEval
-#    stays EXACT (NAX6's own rows: information); tools/d4x.py vs REF2-T per order; the line: math and HumanEval+ pass
-#    decision 4 in both orders.
+#    stays EXACT (NAX6's own rows: information); tools/d4x.py vs NAX6-N's rows (results/ref2tnax) per order (PREREG_s4
+#    amendment 2, Sat 04:1x; vs REF2-T as information); the line: math and HumanEval+ pass decision 4 in both orders.
 # 2. Long code: every second key of keys_T (HumanEval/0, 8, ... 160: 21 rows), one order, QOM on humanevalt as on code;
 #    tfwin against NAX6-N; the line: blunders (NAX6-N's p of a committed token < 0.01) <= 1 per 10K tokens.
 # Every run's rows get their text from their ids after each order (tools/rows_text.py: the scorers read text).
@@ -327,7 +327,8 @@ order s4_fwd fwd "$KEYS"
 order s4_rev rev "$RKEYS"
 SSF=""; SSI=""
 for o in fwd rev; do
-  $PY tools/d4x.py "s4_$o" ref2t ref2t.r2 > "results/s4_${o}_d4.txt" 2>&1
+  $PY tools/d4x.py "s4_$o" ref2tnax > "results/s4_${o}_d4.txt" 2>&1                  # the line: vs NAX6-N (amendment 2)
+  $PY tools/d4x.py "s4_$o" ref2t ref2t.r2 > "results/s4_${o}_vs_ref2t_d4.txt" 2>&1    # information: vs REF2-T
   ./bin/evalsuite report --variant "s4_$o" --decode --ref ref2t > "results/report_s4_${o}_vs_ref2t.txt" 2>&1
   for s in math humaneval ifeval; do
     l=$(grep "^$s (n" "results/s4_${o}_d4.txt" | tail -1)
@@ -337,6 +338,8 @@ for o in fwd rev; do
   done
 done
 SS=PASS; [ -n "$SSI" ] && SS="INCOMPLETE ($SSI )"; [ -n "$SSF" ] && SS="FAIL ($SSF )"
+RT="vs REF2-T (information): fwd $(grep '^D4X:' results/s4_fwd_vs_ref2t_d4.txt | tail -1), rev $(grep '^D4X:' results/s4_rev_vs_ref2t_d4.txt | tail -1)"
+say "S4 $RT"
 say "S4 same scores: $SS"
 # ------------------------------------------------ 2. long code: every second key of keys_T, one order, tfwin
 HKEYS=$(awk 'NR % 2 == 1' results/drift/keys_T.txt | paste -sd, -)
@@ -378,7 +381,7 @@ case "$SS" in PASS) ;; INCOMPLETE*) I="$I same-scores" ;; *) F="$F same-scores$S
 case "$HT" in *": PASS") ;; *": FAIL") F="$F long-code" ;; *) I="$I long-code" ;; esac
 case "$MB" in "not run"*|*PASS*|*DIFFERS*) ;; *FAIL*) F="$F MBPP" ;; *) I="$I MBPP" ;; esac
 V=PASS; [ -n "$I" ] && V="INCOMPLETE ($I )"; [ -n "$F" ] && V="FAIL ($F )"
-echo "S4: $V; same scores $SS; ${HT:-long code missing}; MBPP $MB" > results/S4_DONE
+echo "S4: $V; same scores (vs NAX6-N) $SS; ${HT:-long code missing}; MBPP $MB; $RT" > results/S4_DONE
 say "the S4 verdict: $(cat results/S4_DONE)"
 peer say --to ojox-3f "EvalSuite S4 $(date +%H:%M): $(cut -c1-230 results/S4_DONE) (results/S4_DONE)" > /dev/null 2>&1
 say "runner 54 end"
