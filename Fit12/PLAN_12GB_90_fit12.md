@@ -236,3 +236,30 @@ rule: tokens per check, time per check from the table above, and divergences vs 
   the first exact pass after prefill filling ranks 2-9 into cold pools (an expert-cache warm-up). Open lever, not routed:
   prefetch the first check's ranks 2-9 during the prefill's tail (<= ~4.9 % whole decode [P]).
 - Findings note: /Users/kamen/FableGod/findings/2026-11-07_1555_12gb-wired-limit-null.md. Data /Users/kamen/Fit12/data/scr/wab.
+
+## TABLE 12 GB CELLS 12E + 12F (pre-registered Sat 7 Nov 17:2x; the orchestrator 17:1x, NewIdeas 17:2x QUEUE c8dfaac)
+- Kamen's 45 / 24 / 12 GB x exact / lossy table (Sun ~08:00). The 12 GB cells run on BigMoE's S5 prompt set so the rows
+  compare: 12 HumanEval (68, 16, 91, 6, 79, 19, 161, 17, 56, 141, 101, 63) + MBPP12 (16, 100, 146, 161, 183, 208, 224, 246,
+  268, 296, 305, 319), CAP 256 as S5, greedy, full outputs to EOS / cap.
+  - 12E (slot 3): arm ex, the verified-greedy loop (NOT bit-exact; 12GB-CLEAN's 18.42 was on 16 HumanEval).
+  - 12F (slot 4): arm t95ck1u = P1-K1 KU 4, cf 0.9, theta 0.95 (t80ck1u -11.7 and t90ck1u -8.3 pt failed EvalSuite's code
+    gate; the map passes theta 0.95 at 1.10 % code flips, 37.9 tok/s [P] on 16 HumanEval). FAST.
+- Runner /Users/kamen/Fit12/scripts/tab12.sh: each arm alone in its own process, back to back under one quiet lock, 12GB-CLEAN's
+  footing (C_m 47 / C_l 32, F12_RERUN=1, F12_PHLOG=1). Each run writes r57rows-form ids for EvalSuite (tab12{e,f}_ids.json).
+- Report (c1u16_read.py): whole decode (headline), full period, end to end, each as geometric mean and pooled, overall and per
+  set (HumanEval / MBPP); lifetime peak; 12E's tokens vs ex16 (12 shared HumanEval keys: same arm and cap, so they should
+  match), 12F's tokens vs 12E. No pass / fail: measurements. Validity: rc 0, a 'done' line, PAUSE-free counted prompts,
+  lifetime < 12 GB. 12F's quality verdict is EvalSuite's gate (slot 7, its own pre-registration).
+- fit_t3.py sha256 11cadf9ec149: + the t95ck1u arm; keys missing from b12llff4's rows (MBPP) come from EvalSuite's
+  data/items/dec_<set>.jsonl. FAKE-tested 17:23 (both arms, the reader's per-set split, r57rows-form ids).
+- RESULT (Sat 17:4x; tab12.sh 17:36:52-17:46:44, one quiet lock, rc 0 both, no PAUSE, swap flat 6733 MB; GO 17:24):
+  - 12E verified greedy (ex): whole decode 12 HE geo 18.58 / pooled 18.64, MBPP12 18.18 / 17.79 (all 24: 18.38 / 18.34);
+    full period 18.57 / 18.43; end to end 13.87 / 11.15; lifetime 11.140 GB = 10.375 GiB; 450 checks, 8.86 kept, 471 ms
+    each. Tokens = ex16 on the 12 shared HumanEval keys (12 / 12).
+  - 12F theta 0.95 (t95ck1u): whole decode 12 HE geo 40.59 / pooled 39.87, MBPP12 18.74 / 18.66 (all 24: 27.58 / 27.90);
+    full period 45.33 / 18.97; end to end 22.73 / 11.56; lifetime 11.280 GB = 10.505 GiB; 529 checks, 7.74 kept; per check
+    pass 1 98.3, pass 2 / exact 158.5 ms; checks with a pass 2 261, exact 129. Tokens = 12E on 6 / 24.
+  - Reading: FAST x2.18 over verified greedy on HumanEval, x1.03 on MBPP. MBPP keeps 5-8 tokens per check, so pass 1
+    rarely certifies, and some MBPP prompts run slower than verified greedy (/268 13.9 vs 17.5, /224 17.0 vs 19.8).
+  - Findings note: /Users/kamen/FableGod/findings/2026-11-07_1747_12gb-table-cells.md. Ids for EvalSuite:
+    /Users/kamen/Fit12/data/scr/tab12/tab12{e,f}_ids.json (r57rows form, CAP 256).

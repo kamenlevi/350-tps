@@ -726,3 +726,80 @@ REF2_COMMIT_SUB=9 (e) (Leap's ref2 1f85c231) + R57_DQ1=1 (#4). scripts/xsafe_ab.
   p1a's flat partial class (Leap's question) is now -1.70 ms: (d) / (e) act on partials as designed. The high-miss checks gain most
   (-4.7 ms): with the first submit earlier and the stats / PAUSE reads off the path, the GPU starts before the demand reads land.
   The read-out's p1a partial row equals Leap's own (n 172 / 184, +0.10, -0.13).
+
+### Sat 17:10-17:23: E5, the 45 GB EXACT number at C 256 (scripts/e5_exact.sh, data/e5; quiet; snapshot f451b54): EXACT PROOF PASS
+E = the EXACT default: R57_PRESET=45 on the converted store + NAX6-N (now the preset's default for exact runs, 2a88770) + REF2_KEEP_CACHES=1
++ R57_WIRED=1. EB = E + the Sunday exact-safe bundle (seams a-e + DQ1) = the E5' arm. E / EB / EB / E on S5's 12 HumanEval, then MBPP12.
+
+- **EXACT PROOF: PASS:** 96 / 96 runs (24 prompts x 4 passes, E and EB) token-identical to NAX6-N's one-token AR (EvalSuite results/ref2tnax
+  for HumanEval, ref2tnaxn.r2 for MBPP; first min(n, AR length) tokens); prompt lengths match on all 24.
+
+| set | arm | whole decode tok/s (passes) | full period | end to end (prefill median) | check 0 | cycle | kept / check | lifetime peak |
+|---|---|---|---|---|---|---|---|---|
+| 12 HumanEval | E | **99.4** (100.0, 98.6) | 99.7 | 30.8 (4.52 s) | 132 ms | 109.0 ms | 10.71 | 42.2 GB |
+| 12 HumanEval | EB | **102.7** (102.3, 103.2) | 103.1 | 31.6 (4.39 s) | 129 ms | 104.6 ms | 10.71 | 42.2 GB |
+| MBPP12 | E | **71.3** (69.9, 72.4) | 69.2 | 20.3 (3.68 s) | 107 ms | 82.6 ms | 5.93 | 41.9 GB |
+| MBPP12 | EB | **73.3** (71.7, 74.7) | 71.1 | 20.3 (3.92 s) | 94 ms | 81.0 ms | 5.93 | 41.9 GB |
+
+- EB vs E: whole decode +3.4 % (HumanEval), +2.7 % (MBPP12); median cycle -2.68 % / -3.80 %. The bundle carries to the exact mode.
+- The previous exact number (NATIVE-FRI, 49.9 tok/s at C 192 on the steady metric, before KEEP / wired / C 256) is superseded.
+- Exact prefill is slow: 3.7-4.5 s median per prompt, so end to end is ~31 (HumanEval) / ~20 (MBPP) tok/s. Prefill is the next exact lever.
+
+### Sat 17:24-17:36: S5' = S5's config + the Sunday exact-safe bundle (scripts/s5p.sh, data/s5p; quiet; snapshot 6db4c24): CLEAN
+B = v1' + wired (S5's config); X = B + seams a-e + DQ1 (p4s PASS, bits 43/43; S4 / CERT carry). C 256, B / X / X / B per set.
+
+| set | arm | whole decode tok/s (passes) | full period | end to end | check 0 | cycle | kept / check | tokens / task | lifetime peak |
+|---|---|---|---|---|---|---|---|---|---|
+| 12 HumanEval | B | 174.4 (168.6, 179.6) | 168.8 | 34.8 | 65 ms | 63.5 ms | 10.42 | 246 | 42.9 GB |
+| 12 HumanEval | **X = S5'** | **181.4** (181.7, 180.9) | **176.2** | 35.4 | 64 ms | 63.1 ms | 10.83 | 243 | 42.9 GB |
+| MBPP12 | B | 120.2 (118.3, 121.9) | 117.4 | 23.6 | 59 ms | 53.5 ms | 6.34 | 120 | 42.6 GB |
+| MBPP12 | **X = S5'** | **123.6** (122.5, 124.7) | **120.8** | 23.4 | 58 ms | 51.9 ms | 6.38 | 116 | 42.6 GB |
+
+- X vs B: whole decode +4.0 % (HumanEval; cycle -0.16 %, acceptance +3.9 % this run), +2.9 % (MBPP12; cycle -2.50 %). 0 live modules.
+- data/stack/s5p_env.txt = the S5' config line (the 45 GB lossy table cell; S4 / CERT carry the bundle by its bits).
+- **End to end is prefill-bound:** ~35 (HumanEval) / ~23 (MBPP) tok/s, prefill ~5 s per prompt in both modes (E5: 3.7-4.5 s). A short
+  prompt's prefill touches nearly all 512 experts per layer and the pools hold 256, so prefill streams ~the whole model from SSD
+  (~68 GB at ~12 GB/s). The next big lever for time-to-answer is prefill, not decode.
+
+### Sat 17:49-17:58: E24, the 24 GB EXACT number (scripts/e24.sh, data/e24; quiet): 41.3 / 41.7 tok/s, 23.86 GB
+W1B's 24 GB stack (s10b_trace.py, stock kernels, v3 tiers 4433333333 / 3c + COMBINE + OOO, GDN_EXACT, MAXK 80 + DUPROW chunking, C 128,
+M-01, JOINT, MTP stream, FR-Spec + Scout; Wed's ext/build_m01, the binary W1B ran) + BIGMOE_WIRED=1 (mx.set_wired_limit: the only one
+of this week's exact-safe fixes that applies; KEEP / NAX / S2 / the seams are r57 / ref2-only). r57 cannot go below C ~160 exact
+(16-row checks need up to 160 experts resident per layer call). 1-prompt pre-flight clean (wired engaged), then two passes.
+
+| set | whole decode tok/s (passes) | end to end | SSD MB per token | tokens / task |
+|---|---|---|---|---|
+| 12 HumanEval | **41.3** (41.8, 40.8) | 26.5 | 355.1 | 256 |
+| MBPP12 | **41.7** (42.5, 41.0) | 27.7 | 308.1 | 256 |
+
+- **Lifetime peak 23.86 GB (<= 24.0).** Exact status (NewIdeas): exact vs its own stock-kernel AR (proven Wed, w24 == w24t); tonight
+  pass 1 == pass 2 on 24 / 24 prompts. Agreement with NAX6-N's AR (sha over the run's n tokens, information): 6 / 24; stock kernels
+  differ from NAX6-N's bitwise, and s10b's generate runs to N 256 without stopping at EOS, so MBPP rows (AR ends ~115) cannot match.
+- s10b records no per-check clock: full period n/a. Its N 256 without an EOS stop doubles MBPP's tokens per task vs r57 (~120):
+  the decode rate is comparable, the per-task work is not.
+- vs Wed's W1B (33.2 tok/s on 2 HumanEval + 4 math, no wired limit): different prompts; the wired limit is the only change in the stack.
+
+### Sat 17:59-18:00: F24 (24 GB lossy on r57): NOT MEASURABLE at the 24 GB budget tonight (engine limit)
+scripts/f24.sh probed r57 v1' + wired + the bundle (S5' snapshot 6db4c24, R57_VTIER off) at C 112 and C 104 on 12 HumanEval. Both arms
+stopped within ~10 s on the FIRST verify check of the first prompt: ref2's REF2-T tier path asserts ("more experts than base slots", 120
+unique experts in one layer call > 110 base slots at C 112; ref2.py:1490 via _sync_slots). That check runs ungated (FG off: no draft
+confidence yet), i.e. exact, and a 16-row exact call can need up to 160 experts resident at once. So r57 needs C >= ~160 (~30 GB) even in
+FAST mode; QOM's smaller demand set does not help the checks that fall back to the exact path. -> The 24 GB lossy cell is n/a tonight.
+Routes (not tonight): chunk a layer call whose expert union exceeds C into row groups in ref2's tier path (as the 24 GB stack's DUPROW
+chunking does), or port QOM's FAST rules into the s10b 24 GB stack. (f24.sh's probe line said "aborts 0": it counted only "no free slot";
+the arms' rc=1 is in data/f24/c45.log.)
+
+### Sat 18:04-18:12: C30, the ~30 GB lossy CONTEXT point (scripts/c30.sh, data/c30; quiet; S5' snapshot 6db4c24): 153.5 / 114.8 tok/s, 31.8 GB
+NewIdeas 18:1x: S5''s config (v1' + wired + the Sunday bundle) at r57's smallest workable C, 160 (a 16-row exact check can need 160 experts
+resident), R57_VTIER off. Context for Kamen's 24 GB question, NOT a table cell; quality basis = runner 49's stackb gate at C 160 / 192
+(PASS vs NAX6). A C 160 probe pass (12 / 12, no abort), then 12 HumanEval x 2 and MBPP12 x 2; 0 live outside modules.
+
+| set | whole decode tok/s (passes) | full period | end to end | check 0 | cycle | kept / check | SSD MB per kept token | lifetime peak |
+|---|---|---|---|---|---|---|---|---|
+| 12 HumanEval | **153.5** (152.3, 154.7) | 149.1 | 34.9 | 74 ms | 70.0 ms | 9.77 | 18.1 | **31.80 GB** |
+| MBPP12 | **114.8** (116.6, 112.9) | 111.9 | 25.0 | 60 ms | 53.6 ms | 6.08 | 15.9 | 31.40 GB |
+
+- vs S5' at C 256 (181.4 / 123.6, 42.9 GB): -15.4 % / -7.1 % whole decode for -11.1 GB of lifetime peak.
+- CORRECTION: commit ef64e24's message ("C30 (24 GB lossy, C 160): CLEAN, f24_env.txt written") is text inherited from f24.sh by the sed
+  copy: C30 is the ~31.8 GB context point and its env-file block is disabled (no data/stack/f24_env.txt exists). Its log / report keep
+  f24's file names: data/c30/f24.log, data/c30/f24_report.txt.

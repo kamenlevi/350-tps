@@ -42,6 +42,9 @@ if os.environ.get("R57_PRESET") == "45":                 # THE 45 GB DEFAULT (Ne
     os.environ.setdefault("R57_COMBINE", "1")            # + OOO + TIER_COMBINE (NewIdeas 11-01 11:4x on EvalSuite's R-56d PASS,
     os.environ.setdefault("BIGMOE_TIER_COMBINE", "1")    # exact); the no-OOO control: R57_COMBINE=0 BIGMOE_OOO=0
     os.environ.setdefault("BIGMOE_OOO", "1")
+    if not os.environ.get("R57_FAST"):                   # Sat 17:2x: the EXACT default runs NAX6-N (Kamen's Thu 15:0x condition MET by NATIVE-FRI:
+        os.environ.setdefault("R57_NAX", "1")            # NAX6-N +6.7 % over 3c-N, both exact; the orchestrator 17:1x). R57_NAX=0 = 3c-N (REF2-T's
+                                                         # ref14 arms). FAST arms set it themselves (v1' R57_NAX=1; qall unset = 3c-N)
     # NewIdeas 11-02 01:3x on C45 (all exact): ADOPT MoonShots' M-17 per-layer pool sizes (L: -17.2 % SSD MB per kept token,
     # +8.3 % steady at C 224) from the md5-pinned data/seed45/laysz45_<C>.json (uniform pools at other C; R57_LAYSZ=0 = the
     # uniform control) and ADOPT Leap's K-73 exact-safe stack (+2.4 %; off with R57_COMBINE=0, which it needs).
@@ -70,6 +73,8 @@ if os.environ.get("R57_PRESET") == "45":                 # THE 45 GB DEFAULT (Ne
                 os.environ.setdefault(_k, "1")
 if os.environ.get("BIGMOE_COPY_PAR") == "0":             # the ext turns the copy split on for ANY value: =0 means off here
     os.environ.pop("BIGMOE_COPY_PAR")
+assert not (os.environ.get("R57_NAX") == "1" and os.environ.get("REF2_OOO_1C") == "1" and os.environ.get("REF2_NAX_1CQ") != "1"), \
+    "R57_NAX=1 with REF2_OOO_1C=1 needs REF2_NAX_1CQ=1 (the old one-call head's rs_l bug; HANDOVER Fri 03:3x)"
 TIER = os.environ.get("R57_TIER") == "1"                 # S45-T (NewIdeas 18:2x): REF2-T on the gate at C's RAM (M-08 sizing)
 if TIER:
     os.environ["BIGMOE_TIER"] = "4433333333"; os.environ["BIGMOE_TIER_GLU"] = "3c"
@@ -953,6 +958,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         FG["cap"] = np.zeros((48, 512), bool)
     if SV is not None:                                   # SESSION-VOCAB: this prompt's ids join both subsets (before the prefill:
         SV.new_prompt(ids)                               # a short last prefill chunk takes SVH's <= 16-row path too)
+    tpf_ = time.perf_counter()                           # Sat 17:2x (E5): prefill wall (+ the first token's readback) for end-to-end tok/s
     cache, last, T, ws = prefill(ids, mtp)
     if cold_:
         cap_, FG["cap"] = FG["cap"], None
@@ -970,6 +976,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         ctx = T[start:P]
     a = P
     tok = int(mx.argmax(last).item())
+    tpf_ = time.perf_counter() - tpf_                    # s: prefill + the cache / drafter setup + the first token (A6's pre-loop steps excluded below)
     if SV is not None:
         SV.committed([tok])
     set_arm(arm)
@@ -1472,6 +1479,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         FG["dump"] = None
     return dict(lh=lh_, out=out[:CAP], n=min(len(out), CAP), tps=min(len(out), CAP) / dec, drafter=drafter, hist=hist, a6=a6,
                 nwk=[ref2.COUNTS.get("nw_calls", 0) - nk0_[0], ref2.COUNTS.get("nw_late_calls", 0) - nk0_[1]] if NW else None,
+                pfs=round(tpf_, 4),                      # E5: prefill wall s (end to end = n / (pfs + n / tps))
                 rlx=rst if RLX_D > 0 else None,      # R57_RELAX_DELTA: rows checked, kept exact / in all, relaxed accepts
                 spn=sst if SPAN else None,           # R57_RELAX_SPAN: rows checked, kept exact / in all, relaxed, span rows
                 inert=dict(ist, arm=INERT["name"]) if INERT is not None else None,   # R57_INERT: rows checked, kept exact / in
@@ -1567,7 +1575,7 @@ for n_p, (s, key) in enumerate(PICK):
         RUNS.append(dict(key=key, arm=arm, type=typ, bad=r["bad"], cut=r["cut"], P=len(ids),
                          **{k_: r[k_] for k_ in ("drafter", "hist", "a6", "n", "tps", "tpsw", "kept", "checks", "cyc", "ck",
                                                  "drf", "miss", "io", "mb", "mpk", "mem", "copy", "fast", "pf", "lh", "inert")},
-                         d7b=draft is DRAFT4, rlx=r.get("rlx"), spn=r.get("spn"), nwk=r.get("nwk")))   # Thu 18:5x / Fri 10:0x: relaxed / span / INERT
+                         d7b=draft is DRAFT4, rlx=r.get("rlx"), spn=r.get("spn"), nwk=r.get("nwk"), pfs=r.get("pfs")))   # Thu 18:5x / Fri 10:0x: relaxed / span / INERT
                                                          # stats were computed but never written (the pre-flight's MISSING)
         m = min(len(want), r["n"])
         agree = same(r["out"], want)

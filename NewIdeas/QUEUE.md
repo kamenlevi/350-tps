@@ -12,6 +12,54 @@
 Tags: [K] = measured, [P] = priced from measured parts, [G] = a guess. 45 = the 45 GB line, 12 = the 12 GB line.
 
 > (a quote from the project owner, kept private)
+morning. You can run tests for now as much as you want. I probably won't stop you until tomorrow morning or midday".
+- The table: 45 / 24 / 12 GB x exact / lossy. Every cell gets:
+  - whole decode on the S5 prompts (12 HumanEval + MBPP12);
+  - the lifetime peak;
+  - quality status: a bitwise / AR-token proof for exact, a gate verdict for lossy.
+  The orchestrator compiles it at ~08:00 from the reports.
+- Have: 45 lossy = S5, 175.9 / 118.3, 42.9 GB, S4 PASS. 12 lossy = t80ck1u, 46.3, gate FAIL.
+- Rules: one big GPU job at a time. Timing runs use quiet locks, gates use shared locks. Each owner reports on finishing.
+- Times are estimates. If a slot runs long, the later ones move up; the 01:30 CERT does not move.
+
+| # | cell | run | owner | lock | est. time | quality status |
+|---|---|---|---|---|---|---|
+| 1 | 45 exact | E5 (NAX6-N + KEEP + wired), plus an E5' arm with the seams / DQ1 bundle | BigMoE (armed) | quiet | 17:3x-~18:45 | AR-token proof vs NAX6-N |
+| 2 | 45 lossy (update) | S5' = S5's config + seams / DQ1 (p4s: +2.0 %) | BigMoE | quiet | ~18:45-19:05 | bits PASS 43 / 43, so S4 and CERT carry |
+| 3 | 12 exact-ish | 12E: the verified-greedy loop (ex16 / kp2 form) on the S5 prompts. The 18.42 was measured on 16 HumanEval, not this set | Fit12 | quiet | ~19:05-19:20 | verified greedy, not bit-exact (outputs = kp2's) |
+| 4 | 12 lossy (retry) | 12F: θ 0.95 measured run on the S5 prompts. A new pre-registration after two FAILs, and EvalSuite pre-registers first | Fit12 | quiet | ~19:20-19:30 | its code gate in slot 7 |
+| 5 | 24 exact | E24 (DECIDED 17:3x with BigMoE): W1B's 24 GB stack (s10b, stock kernels, C 128, MAXK 80 + row chunking, 23.86 GB) + mx.set_wired_limit, the only exact-safe fix that applies to it (KEEP, NAX, S2 and the seams are r57 / ref2-only). 12 HE + MBPP12, two passes. Why not r57: r57 cannot run EXACT below C ~160 (an exact 16-row check needs up to 160 distinct experts per layer, so the ext aborts with "no free slot"), and 24 GB gives C ~104-112 | BigMoE | quiet | ~19:30-20:45 | exact vs its own stock-kernel AR (proven Wed, w24 == w24t); tonight pass 1 == pass 2 + agreement with NAX6-N's AR (information) |
+| 6 | 24 lossy | F24 (DECIDED 17:3x): r57 v1' + wired + seams / DQ1 at the largest C with a lifetime peak <= 24.0 GB (C ~104-112 est.), R57_VTIER off (its 7.45 GB would not exist on a 24 GB Mac). A probe first: 12 HE at C 104 / 112 for peak and abort-safety, then the passes. CODE ONLY: v1' runs math / IFEval exact, which r57 cannot do below C ~160 | BigMoE | quiet | ~20:45-21:45 | its gate in slot 8 |
+| 7 | 12 lossy gate | θ 0.95 code same-scores vs REF2-T (the 12 GB rule), both orders | EvalSuite | shared | ~21:30-22:15 | PASS / FAIL |
+| 8 | 24 lossy gate | F24, CODE-ONLY (DECIDED 17:3x): HumanEval+ same scores in both orders + long code vs NAX6-N's existing reference rows (exact outputs don't depend on C). No math / IFEval, and no QOM-all-sets variant (not v1''s rules). A "no free slot" abort on any row makes the gate INCOMPLETE, and the table says so | EvalSuite | shared | ~22:15-~00:30 | PASS / FAIL / INCOMPLETE |
+| 9 | (release) | CERT on cert_env (S5's config; S5' carries bitwise) | EvalSuite | as planned | Sun 01:30 -> morning | unchanged |
+
+- Slack ~1 h before CERT. If the 24 GB runs overrun, gate 8 may slip past 01:30. Then CERT goes first, and F24's gate
+  runs after CERT or is marked "pending" in the table. The release's CERT is never delayed.
+- TABLE RESULTS, Sat 18:1x. Every number was re-derived by NewIdeas from the raw per-prompt files (scripts/table/). Whole decode tok/s, geo mean over prompts:
+
+| line | mode | 12 HumanEval | MBPP12 | lifetime peak | quality status |
+|---|---|---|---|---|---|
+| 45 GB | exact: E5 = NAX6-N + KEEP + wired (BigMoE f451b54) | 99.4; with the seams / DQ1 bundle 102.7 | 71.3; 73.3 | 42.2 GB | AR-token proof PASS, 96 / 96 runs |
+| 45 GB | lossy: S5' = v1' + wired + bundle (f2c4728) | 181.4 (B 174.4; S5 175.9) | 123.6 (B 120.2; S5 118.3) | 42.9 GB | S4 PASS vs NAX6-N; the bundle is bitwise, so S4 / CERT carry |
+| 24 GB | exact: E24 = W1B's s10b stack + wired, C 128 (601f66f) | 41.3 | 41.7 (*) | 23.86 GB | exact vs its own stock-kernel AR (Wed); tonight pass 1 == pass 2 on 24 / 24; NAX6-N agreement 6 / 24 (information) |
+| 24 GB | lossy | n/a: an engine limit | n/a | - | r57's first check of a prompt runs ungated (exact), so it needs C >= ~160, ~30 GB. Routes after the publish: row-chunking in ref2's tier path (Leap), or QOM's rules in the s10b stack |
+| 12 GB | verified greedy: 12E (Fit12) | 18.58 | 18.18 | 11.140 GB | verified greedy, not bit-exact; tokens = ex16's 12 / 12 |
+| 12 GB | lossy θ 0.95: 12F = t95ck1u (Fit12) | 40.59 | 18.74 | 11.280 GB | gate pending (EvalSuite slot 7, start by 00:50) |
+
+  - (*) E24 runs a fixed 256 tokens with no EOS stop. MBPP answers are ~115-123 tokens, so most of E24's MBPP tokens
+    come after the answer ends. Its MBPP figure is not comparable with the other rows; its HumanEval figure nearly is
+    (answers ~245-250 tokens).
+  - S5''s +4.0 % over B on HumanEval is mostly acceptance noise: kept per check 11.61 vs 11.29 (my aggregation); the
+    median cycle moved -0.16 %.
+  - The clean measure of the bundle is E5's exact pair, where tokens are identical (kept 11.40 both): +3.4 % HumanEval,
+    +2.7 % MBPP12.
+  - Pass-to-pass acceptance noise on 12 HumanEval is +-3-4 %. Differences under ~4 % between runs of the same config
+    are noise.
+  - Optional context point, not a table cell: "~30 GB lossy" = S5''s config at C 160, the smallest C r57 can run.
+    Asked of BigMoE 18:1x (~10 min). Its quality basis: runner 49 gated stackb at C 160 / 192 (PASS vs NAX6).
+
+> (a quote from the project owner, kept private)
 publish).
 - Target and rules:
   - 220 tok/s WHOLE DECODE, 45 GB FAST, code, 12 HumanEval, lifetime peak <= 45.0 GB.

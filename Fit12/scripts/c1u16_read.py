@@ -115,6 +115,16 @@ if rows:
     P(f"FULL-PERIOD STEADY (tokens after each prompt's first check / wall time after it, {len(fl)} prompts): geometric mean "
       f"{res['full_geo']:.2f}; pooled {res['full_pooled']:.2f}")
     P(f"END TO END (n / (prefill + decode)): geometric mean {res['e2e_geo']:.2f}; pooled {res['e2e_pooled']:.2f}")
+    sets = sorted({x["key"].split("/")[0] for x in rows})      # (Sat 7 Nov, the table) per set when the run mixes sets
+    for s_ in (sets if len(sets) > 1 else []):
+        rs = [x for x in rows if x["key"].split("/")[0] == s_]
+        fs = [x for x in rs if x["full"]]
+        bs = dict(n=len(rs), whole_geo=geo([x["whole"] for x in rs]), whole_pooled=sum(x["tok"] for x in rs) / sum(x["dec"] for x in rs),
+                  full_geo=geo([x["full"] for x in fs]), full_pooled=sum(x["after_tok"] for x in fs) / sum(x["after_s"] for x in fs),
+                  e2e_geo=geo([x["e2e"] for x in rs]))
+        res[f"set_{s_}"] = bs
+        P(f"  {s_} ({bs['n']} prompts): WHOLE DECODE geo {bs['whole_geo']:.2f} / pooled {bs['whole_pooled']:.2f}; full-period "
+          f"geo {bs['full_geo']:.2f} / pooled {bs['full_pooled']:.2f}; end to end geo {bs['e2e_geo']:.2f}")
     P(f"Per check ({ch} checks, {tok / ch:.2f} tokens kept): ms draft "
       f"{sum(x['ms']['draft'] * x['checks'] for x in rows) / ch:.1f}, pass 1 {sum(x['ms']['p1'] * x['checks'] for x in rows) / ch:.1f}, "
       f"pass 2 / exact {sum(x['ms']['p2'] * x['checks'] for x in rows) / ch:.1f}, commit "
@@ -122,7 +132,8 @@ if rows:
       f"{sum(x['modes']['pass2'] for x in rows)}, exact {sum(x['modes']['exact'] for x in rows)}, cfgate "
       f"{sum(x['modes']['cfgate'] for x in rows)}; first check + setup {res['first_ms_mean']:.0f} ms per prompt (mean)")
     P(f"Tokens identical to the verified-greedy loop ({RT} {RA}, information): {res['same']} / {res['compared']} prompts; "
-      "first divergences: " + (", ".join(f"{x['key'].split('/')[-1]} @{x['ref_div']}" for x in rows if x["ref_same"] is False) or "none"))
+      "first divergences: " + (", ".join(f"{x['key'].replace('humaneval/HumanEval/', 'HE/')} @{x['ref_div']}" for x in rows
+                                         if x["ref_same"] is False) or "none"))
 P(f"Lifetime peak phys_footprint of this process (RUSAGE_INFO_V4): "
   + (f"{done:.3f} GB = {done * 1e9 / 2 ** 30:.3f} GiB" if done is not None else "MISSING (no 'done' line: the run did not finish)"))
 P(f"PAUSE: {pz or 'no summary line'}; void runs: {void or 'none'}")

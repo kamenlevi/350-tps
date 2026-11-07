@@ -9,7 +9,7 @@ Per arm: tokens (sha1, first divergence from ex), lsha, checks, kept per check, 
 skipped, rows in pass 1 / 2, pass-2 calls, refused commits, tok/s (shared GPU, rough); the process's lifetime peak.
 Usage: [BigMoE venv] fit_t3.py TAG
 (Sat 7 Nov) EvalSuite's entry point (t80ck1u code same-scores): F12_IDS_OUT=<file.json> with exactly ONE arm (F12_T3ARMS=
-t80ck1u, t90ck1u or ex) writes {key: {arm: [full-output ids]}}, the input of EvalSuite's tools/r57rows.py (EOS kept as the
+t80ck1u, t90ck1u, t95ck1u or ex) writes {key: {arm: [full-output ids]}}, the input of EvalSuite's tools/r57rows.py (EOS kept as the
 last id, like EvalSuite's completion_ids), and
 <file>_meta.json ({key: arm, theta, n, cap, finish stop / length, pf_s, dec_s, tok_s, checks, paused_s}) after every prompt,
 in run order; F12_CAP=item caps each prompt at its item's max_tokens; F12_KEYS = the keys in run order (the history)."""
@@ -39,7 +39,16 @@ sha = hashlib.sha256(open(BT, "rb").read()).hexdigest()[:10]
 assert sha == "8db71cc537", f"bt_b12.py is {sha}, T3 is written against 8db71cc537"
 REF = [json.loads(l) for l in open(os.path.join(ES, "results", "b12llff4", "decode.jsonl"))]
 WANT = os.environ.get("F12_KEYS", "humaneval/HumanEval/156,humaneval/HumanEval/42,ifeval/,math500/test/number_theory/459.json").split(",")
-SEL = [next(r for r in REF if r["key"].startswith(w) if w.endswith("/") or r["key"] == w) for w in WANT]
+def _sel(w):                                         # (Sat 7 Nov) b12llff4's row, else (e.g. MBPP for the 45 / 24 / 12 GB table)
+    r = next((r for r in REF if r["key"].startswith(w) if w.endswith("/") or r["key"] == w), None)   # the item's own row from
+    if r is None:                                    # EvalSuite's data/items/dec_<set>.jsonl (set = the key's prefix)
+        it = next(it for it in map(json.loads, open(os.path.join(ES, "data", "items", f"dec_{w.split('/')[0]}.jsonl")))
+                  if it["key"] == w)
+        r = dict(key=w, set=it["set"], n_prompt=len(it["prompt_ids"]))
+    return r
+
+
+SEL = [_sel(w) for w in WANT]
 ITEMS = {}
 for st_ in {r["set"] for r in SEL}:
     ITEMS.update({it["key"]: it for it in map(json.loads, open(os.path.join(ES, "data", "items", f"dec_{st_}.jsonl")))})
@@ -100,6 +109,7 @@ ARMS = [("ex", None, {}), ("g1", 1.01, dict(p2_all=True)), ("g0", 0.0, {}), ("t8
         ("t80ck1um3", 0.8, dict(cfmin=0.9, _k2=True, _k1u=int(os.environ.get("F12_K1U_KU", "4")), _m3=True)),   # INFO
         ("t80ck1u", 0.8, dict(cfmin=0.9, _k2=True, _k1u=int(os.environ.get("F12_K1U_KU", "4")))),   # (Tue 10:3x) P1-K1
         ("t90ck1u", 0.9, dict(cfmin=0.9, _k2=True, _k1u=int(os.environ.get("F12_K1U_KU", "4")))),   # (Sat 7 Nov) theta 0.9
+        ("t95ck1u", 0.95, dict(cfmin=0.9, _k2=True, _k1u=int(os.environ.get("F12_K1U_KU", "4")))),  # (Sat 17:1x) theta 0.95
         ("t80ck2pf", 0.8, dict(cfmin=0.9, _k2=True, _pf2=int(os.environ.get("F12_PF2_B", "6")))),   # (Tue 15:0x) P2-PREFETCH
         ("t80ck1upf", 0.8, dict(cfmin=0.9, _k2=True, _k1u=int(os.environ.get("F12_K1U_KU", "4")), _pf2=int(os.environ.get("F12_PF2_B", "6")))),
         # (Thu 5 Nov 20:0x, 12 GB plan lever 1) certificate calibration: t80ck1u's pass 1 on EVERY check (no cf gate), then

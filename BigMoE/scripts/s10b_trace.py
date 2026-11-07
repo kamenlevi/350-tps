@@ -169,7 +169,8 @@ PROMPTS = {
 }
 V0 = {1: 42, 2: 59, 3: 74, 4: 87, 5: 94, 6: 107, 7: 117, 8: 123}
 if os.environ.get("S10B_KEYS"):                            # W1B (docs/WALL1_BENCH.md): EvalSuite's prompts by key, e.g. S45's
-    _SET = {"humaneval": "humaneval", "math500": "math", "gsm8k": "math", "ifeval": "ifeval", "multi": "multi", "agent": "agent"}
+    _SET = {"humaneval": "humaneval", "math500": "math", "gsm8k": "math", "ifeval": "ifeval", "multi": "multi", "agent": "agent",
+            "mbpp": "mbpp"}                                    # mbpp: E24 (Sat 17:4x), EvalSuite's dec_mbpp.jsonl
     _items = {}
     PROMPTS = {}
     for _k in os.environ["S10B_KEYS"].split(","):            # six; their prompt ids are used as they are (EvalSuite's template)
@@ -186,6 +187,9 @@ def ids_of(t):
     return list(i if isinstance(i[0], int) else i["input_ids"])
 
 
+if os.environ.get("BIGMOE_WIRED") == "1":                     # Sat 17:xx (E24; Leap FCP 038bfa1): MLX's residency set for the run
+    _wl = int(mx.device_info()["max_recommended_working_set_size"])
+    print(f"BIGMOE_WIRED: mx.set_wired_limit({_wl / 1e9:.2f} GB), was {mx.set_wired_limit(_wl) / 1e9:.2f} GB", flush=True)
 spec125.generate(rt.model, ids_of("Hi"), 8, k_mtp=1, max_draft=7, lookup=1)   # warm-up
 st.gate.check()
 s10b.drop()

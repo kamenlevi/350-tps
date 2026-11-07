@@ -3330,3 +3330,7 @@ so R-01 should find about the same slots, not ~1 GB more.
 - WIRED A/B (Sat 15:49-15:55): mx.set_wired_limit on the 12 GB loop (t80ck1u) = x1.004 whole decode, tokens W = B 16 / 16:
   KILL at 12 GB; the first-check excess (4.7 % of decode) stays: cold pools after prefill, not un-wiring. Details:
   /Users/kamen/Fit12/PLAN_12GB_90_fit12.md 'WIRED A/B RESULT'.
+- TABLE 12 GB CELLS (pre-registered Sat 17:2x): 12E (ex) + 12F (t95ck1u, theta 0.95) on S5's 12 HE + MBPP12, CAP 256, quiet,
+  each alone: /Users/kamen/Fit12/PLAN_12GB_90_fit12.md 'TABLE 12 GB CELLS'.
+- TABLE 12 GB CELLS RESULT (Sat 17:36-17:46): 12E verified greedy 18.58 (12 HE) / 18.18 (MBPP12) whole decode geo, 11.14 GB;
+  12F theta 0.95 40.59 / 18.74, 11.28 GB. Details: /Users/kamen/Fit12/PLAN_12GB_90_fit12.md 'TABLE 12 GB CELLS'.

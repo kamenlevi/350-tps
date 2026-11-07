@@ -1997,3 +1997,7 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 08:21:48 SCR c1u16 end (rc 0, 141 s, swap 6797 MB): 16 prompt outputs
 15:49:51 SCR wab start: fit_t3.py t80ck1u W (F12_WIRED=1) then B, 16 HumanEval prompts, quiet lock (50 GB free, swap 6765 MB, GPU 0%)
 15:55:07 SCR wab end (rc 0, 316 s, swap 6765 MB)
+17:36:52 SCR tab12 start: fit_t3.py 12E (ex) then 12F (t95ck1u), each alone, S5 prompts (12 HE + MBPP12), cap 256, quiet lock (50 GB free, swap 6733 MB, GPU 0%)
+17:42:03 SCR tab12 tab12e end (rc 0)
+17:46:44 SCR tab12 tab12f end (rc 0)
+17:46:44 SCR tab12 end (rc 0, 592 s, swap 6733 MB)
