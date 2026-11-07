@@ -101,6 +101,8 @@ _PFTAP_FN = [None]
 _TOPK = [0]      # (Thu 5 Nov 20:1x, 12 GB plan lever 2, Breakthrough 19:5x) k > 2: the WIDE pass 1 runs each row's ranks
                  # 0..k-1 at REF2-T's tiers (0-1 at 4 bits, 2..k-1 at 3 bits) at their top-10 mass weights; 0 = off
 _K2 = [os.environ.get("F12_P1K2", "0") == "1"]   # pass 1's tier_glu on ranks 0-1 only (plan '44'): the 8 weight-0 pairs dropped
+S_MOE = [int(os.environ.get("F12_SMOE", "4096"))]   # (Sun 8 Nov, 12 GB prefill) b12_prefill's MoE chunk: experts read once per
+                 # layer per S_MOE prompt rows (a multiple of 512); 8192 = one MoE call for prompts up to 8K (BigMoE's PFX form)
 PHLOG = [None]   # (Tue 3 Nov, T3P) a list: one row per timed phase (name, check, then at start and at end: CLOCK_UPTIME_RAW s,
                  # the gate's pass seq, disk bytes read by this process, loader misses); None = off (no extra calls)
 CAL = [None]     # (Thu 5 Nov 20:0x, 12 GB plan lever 1, certificate calibration) a list: one dict per check (path, the draft d,
@@ -343,8 +345,9 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
             pf.append((L, t_))
     _PFTAP_FN[0] = pftap
     t0 = time.perf_counter()
+    pfd0 = _diskread()                                 # (Sun 8 Nov) the prefill's own SSD bytes (rusage diskio)
     try:
-        B.b12_prefill(model, mx.array([ids[:-1]]), cache, 512, 4096)
+        B.b12_prefill(model, mx.array([ids[:-1]]), cache, 512, S_MOE[0])
     finally:
         _PFTAP_FN[0] = None
     per = {L: [] for L in TAPS}
@@ -354,6 +357,7 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
     del pf, per
     mx.eval(T)
     t1 = time.perf_counter()
+    st["pf_mb"] = (_diskread() - pfd0) / 1e6
     dcache = draft.make_cache()
     start = max(0, (P - 1) - (SW - 1))
     for c in dcache:

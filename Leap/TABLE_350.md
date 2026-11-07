@@ -9354,3 +9354,130 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
 - FAST v1' + wired at C 112 (fcpk, 3 HumanEval, CAP 64): runs through (21 chunked calls, 42 groups; no assert or
   free-slot abort), but 29.4 tok/s at CAP 64 (cycle ~540 ms: every 16-row check is on the sync path, 160 ids > C_m 110)
   and lifetime peak 25.4 GB (> 24.0: C must go lower). For comparison E24's exact s10b stack is 41.3 tok/s at 23.86 GB.
+
+## PREFILL 500 (Kamen 23:4x MUST): MLX's kernels at prefill M, batch invariance, the full-row logits (Leap, Sat 23:44-23:49, quiet)
+- **PF-KBENCH (scripts/pf_kbench.py; random 4-bit g64 weights at the 125B's shapes; ms per call -> TFLOPS):**
+
+| kernel (K -> N) | M 64 | M 256 | M 1024 | M 2048 | M 4096 | M 8192 |
+|---|---|---|---|---|---|---|
+| GDN in_proj 2560 -> 16,384 | 13.3 | 22.4 | 27.0 | 28.3 | 28.9 | 29.1 |
+| attention q 2560 -> 12,288 | 6.5 | 9.7 | 26.7 | 28.0 | 28.7 | 29.0 |
+| out_proj 6144 -> 2560 | 2.2 | 16.8 | 23.9 | 26.0 | 27.3 | 28.3 |
+| shared gate|up 2560 -> 1280 | 0.8 | 3.2 | 4.9 | 11.8 | 24.3 | 26.2 |
+| shared down 640 -> 2560 | 1.0 | 4.4 | 11.4 | 16.9 | 20.2 | 24.1 |
+| head 2560 -> 248,320 | 24.9 | 28.2 | 29.3 | 29.5 | (2 GB) | (4 GB) |
+| **experts: gather_qmm sorted, 512 x top 10 (gate|up + down)** | 1.2 | 2.8 | **7.1** | 9.7 | 11.8 | **13.8** |
+
+  - Dense 4-bit GEMMs reach ~27-29 TF from 1K rows; the experts reach half that (20-160 rows per expert).
+  - Per prefill token ~13 GFLOP [estimate]: dense ~7, experts ~4.7, attention <= ~1.2 at 8K.
+  - Compute floor ~0.97 ms per token with 1K-row expert batches (~1,000 tok/s), ~0.65 at 8K rows (~1,500). After
+    BigMoE's expert-once streaming, **the expert GEMMs bound prefill (PF-B's target)**.
+- **Batch invariance, kernel level (the same rows inside calls of different M, bitwise vs M 1024):**
+  - 4-bit qmm: equal from M 16 (in_proj, att q), 128 (out_proj, shared down), 256 (shared gate|up); M 1024 = 2048 =
+    4096 = 8192 everywhere tested.
+  - **The 8-bit router (N 512) only from M 541 (differs at <= 512).**
+  - gather_qmm (sorted): 1024 = 2048 = 4096 = 8192.
+- **End to end (fcpp1 / fcpp8: exact env, C 192, agent/edit10 1,565 + agent/write13 4,730 tokens, CAP 16): R57_PFCHUNK 1024
+  vs 8192 -> the verify-logits hash differs on 9 of 9 decode checks (tokens equal 16 + 16).** A one-call prefill is not
+  bitwise == today's 1024-row chunks: a prefill piece (attention over the prefix, the GDN chunked recurrence, HC bf16
+  GEMMs or the grouped MoE prefill) is not batch-invariant. Locating it is next.
+  - **Design that is bitwise by construction:** layer-major with 1024-row sub-batches (each layer sees exactly today's
+    inputs). Only the expert streaming changes. Sent to BigMoE.
+- **The full-row logits:** the screen's prefill calls the model with MTPLX's defaults (emit_logits True, logits_keep 0):
+  full-vocab logits for every row (508 MB + ~1.3 TFLOP, ~45 ms, per 1024-row chunk; 2.35 GB at one 4,730-row call).
+  Lifetime peak 37.4 -> 41.6 GB at C 192 in fcpp8. Only lg[0, -1] is used. Fix: emit_logits=False on all but the last
+  chunk, logits_keep >= 256 on the last (the head is row-invariant there). Whole runs: fcpp1 66 s vs fcpp8 42 s (the
+  one-call prefill streams experts once: BigMoE's PFX measures it).
+
+## CHAT 150 / PREFILL 500: CH2 anatomy + the priced F1a and PF-B plans (Leap, Sun 2026-11-08 00:0x; NewIdeas QUEUE 9c65385)
+- **CH2 (fcpch: v1' + wired = L, C 256, IFEval 1220 / 3280 / 1561, CAP 128, quiet; small n; per check):**
+  - 2 rows (n 13): wall 54.5 ms (build 48.0 + wait 6.4), main-thread CPU 29.3, the loader threads' CPU 74.
+  - 3 rows: 61.7 ms; 4 rows: 67.9.
+  - Not CPU-bound: the main thread waits ~25 ms inside the build, so the GPU binds at low rows.
+  - Cycle 55.8 (full) / 64.2 (partial) ms: the MTP head's draft 6.6-9.2 ms (c0 -> its last eval), GPU-idle seams
+    ~2.4 (check start) + 0.3-1.2 (accept / commit) + ~0.5.
+  - BigMoE's N45 (n 664): the MTP head already verifies a median 3 rows on chat (adaptive by its cut). A 1-row check
+    costs 52.7 (exact) / 42.1 (L) ms; +~3-4 ms per row and ~2.6 ms of draft per drafted token. **The fixed per-check
+    cost, not the row count, sets the chat cycle.**
+- **The 2-row map (16-row dependent chains at FLAT-2's 2 rows, v1''s dense program, gap_p220b; us x calls = ms):** every
+  dense call is padded to 16 rows (REF2's <= 16-row form).
+  - HC8 5.9: k1c 2.46, k3c 2.47, k2b 0.96. GDN in_proj 4.35 (200 GB/s). out / o_proj 1.93. GDN step 1.12. att q 1.02.
+  - The 2 -> 16-row pads (Concatenate) 1.44. Router (MLX 8-bit) 0.89 (84 GB/s). Shared gate|up + down 1.13.
+  - SDPA 0.53. Small glue ~1.5 (rope, norms, QSA prep, moe_tail, router_fused, gated norm, prework, hc_write, a|b, k|v).
+  - ~20-22 ms of GPU vs a dense byte floor of 3.1 GB = ~11-12 ms.
+- **F1a plan (low-row dense kernels, 1-6 rows; bit-changing allowed, IFEval-gated vs NAX6-N), priced per 2-row check:**
+  1. Row-native low-row forms: no 2 -> 16 pad (Concatenate 1.44 ms) and no 16-row work in the GEMVs. One kernel family
+     at M 1-8 with the K split chosen per shape (DN-KS's knowledge): in_proj toward ~280 GB/s (-1.2), out / o_proj
+     (-0.4), att q (-0.3), router 8-bit native (-0.6), shared (-0.5). **-4..-4.5 ms, ~1.5 days.**
+  2. HC8 read at low rows: fold k2b into k3c's prologue (at 2 rows k2b's partials are ~56 KB per threadgroup, ~2 us
+     from L2; bitwise possible) -0.7..-0.9; row-native k1c / k3c -0.8..-1.2. **-1.5..-2 ms, ~1 day.**
+  3. Glue fusion at low rows (rope + norms, moe_tail + router_fused, gated norm + prework): **-0.6..-1 ms, ~1 day.**
+  - Total ~-6..-7.5 ms of GPU per 2-row check: ~20-22 -> ~14 ms dense, chat check ~45-55 -> ~38-48 ms, x1.13-1.18 on
+    the chat cycle [P]. Gated set target ~Wed (NewIdeas). The experts at 2 rows (NAX ~14 ms at all-resident) and the
+    MTP draft (~2.6 ms per drafted token) are the next walls for 150.
+- **PF-B plan (prefill expert GEMMs; after BigMoE's layer-major port PF-A):**
+  - Today MLX's gather_qmm (sorted) reaches 7.1 TF at 1K rows and 13.8 at 8K (dense qmm 27-29). Its tiles run
+    part-filled at 20-160 rows per expert.
+  - A grouped expert GEMM over a layer's whole prompt (rows bucketed per expert, full-tile MMA via MPP's matmul2d on
+    the 4-bit / 3c records, weights read once) targets ~18-22 TF. Experts then take ~0.2-0.25 ms per token vs ~0.66
+    at 1K-row sub-batches: prefill compute ~0.97 -> ~0.55 ms per token (~1,800 tok/s compute floor) [P].
+  - Exactness: a new reduction order changes prefill bits vs gather_qmm, so it is a lossy prefill unless the decode
+    still matches AR (R-56-style audit). The bitwise route keeps gather_qmm on all rows at once (pairs invariant across
+    1K-8K: measured) at 13.8 TF: ~x1.4 on the experts vs 1K-row sub-batches, exact, ~0.5 day once PF-A lands.
+  - Recommended order: the bitwise all-rows gather_qmm first (with PF-A), then the MPP grouped GEMM as the lossy
+    option. ~1.5-2 days for the kernel and its audit.
+- **LOWROW (Sun 00:0x, quiet; scripts/lowrow_bench.py; dependent chains over cold weights; us per call at M 1 / 2 / 4):**
+  - in_proj 2560 -> 16,384: REF2's padded qmm16c 131-135 (175-180 GB/s); v1''s native qmm16n 120.9 (chain table);
+    **MLX's own GEMV 96-101 at M 1-2 (234-245 GB/s)**, 115.5 at M 4.
+  - att q: qmm16c 122; native 85.3; MLX 86-88 (equal to native).
+  - out_proj: qmm16c 100-104 (ks 1); DN-KS ks 6 40.3; MLX 46.7-48 (DN-KS better).
+  - Narrow ones, DN-KS better than MLX everywhere: shared gate|up 13.5 vs 18-20; shared down 10.1 vs 15.6-18; a|b
+    8.7 vs 18-23; k / v 9.7 vs 22-44.
+  - **The 8-bit router (MLX) 18.5-25.5 at 55-75 GB/s** (a native 8-bit DN-KS form ~5-8).
+- **F1a re-priced (per 2-row check):**
+  - **Exact-safe** (no gate):
+    - (i) in-kernel row padding: REF2's 16-row kernels read rows >= M as zeros instead of a materialized
+      Concatenate pad. The same arithmetic, so the same bits. -1.4 ms (the 2 -> 16-row pads, 1.44 ms), ~1 day.
+    - (ii) the k2b fold into k3c at <= 4 rows: -0.6..-0.7 ms, ~2 h.
+  - **Bit-changing** (IFEval gate):
+    - (iii) in_proj on a row-native GEMV at <= 2 rows: -0.7 ms.
+    - (iv) a native 8-bit router: -0.5 ms.
+    - (v) glue fusion: -0.6..-1 ms.
+  - **Total ~-3.8..-4.3 ms per 2-row check** (the narrow GEMVs were already DN-KS's), x1.07-1.08 on the chat cycle
+    [P]. The earlier -6..-7.5 counted DN-KS's own gains twice.
+
+> (a quote from the project owner, kept private)
+- Arms on L (v1' + wired, C 256), IFEval 1220 / 3280 / 1561, CAP 128: fcpch (plain + the ioreg GPU sampler) and fcpcs
+  (MoE blocks synced before and after in check windows). Field meanings in the per-check records: io = demand SSD busy
+  ms, svc = gate service ms on calls with misses (the GPU spinning on the loader), **stl = the number of layer calls
+  that stalled (out of 48), not ms.**
+- **Plain, per check (medians):**
+  - 2 rows (n 13): wall 53.8 ms, main-thread CPU 29.2, other threads' CPU 70.5, **GPU busy 91 %**.
+  - 4 rows (n 10): wall 69.1, main 33.2, GPU busy 92 %.
+  - Screen stats: misses 75.5, io 14.7 ms, svc 17.3 ms, stl 26 of 48, ck 50.6, draft 8.2.
+- **Synced (n 33; syncs inflate the wall to 97.9 ms):**
+  - Sum of the waits before each MoE block (the dense GPU work since the last one) 29.4 ms; MoE builds (Python) 5.2;
+    MoE waits (router + shared + gate + experts) 47.8; main CPU 27.8.
+  - Less ~0.15 ms per sync: **dense ~22 ms GPU** (the 2-row chain map agrees: 20-22), **MoE ~40 ms incl. ~17 of
+    miss spin, so experts + router + shared ~16 ms**.
+- **Decomposition of a 2-row chat check (~54 ms, GPU-bound): dense GPU ~22 + experts / router / shared ~16 + miss spin ~17
+  (they sum to the wall); main-thread CPU ~29, overlapped.**
+- Order for my lane:
+  - With misses gone (M1: BigMoE / Breakthrough), GPU ~38 > CPU 29: G2 (experts) and G1 (dense) first.
+  - Then the CPU build binds (B1).
+  - G2's floor at 2 rows is ~2.2 GB (ranks 0-1 at 4 bits, 2-9 at 3 bits, ~23 MB per row per layer): ~8 ms, so
+    ~-6 ms lossless. More needs lossy chat routing (top-8, lower-bit tail ranks), gated.
+- **For a 22 ms step: misses -17 (M1), experts -8..-12 (G2 + lossy routing), dense -8..-12 (G1 + more), main CPU
+  29 -> <= 15 (B1), draft 8 -> ~4 (D1).** Every piece has to land.
+- **G1 exact piece REF2_PAD_IN (ref2 95585132, 1cb5d24; scripts/qmm26m.py):** qmm26's native kernel pads rows in the kernel
+  (rows >= M load constant zeros, only M rows written). Bitwise == qmm16n on the padded x: 320 / 320 (M 1-16, five shapes,
+  DN-KS's K splits).
+- **Chat A/B on L (fcpcb vs fcpcp, 3 IFEval, CAP 128):** check+commit medians by rows: 1: 45.4 -> 47.7; **2: 44.1 ->
+  43.9**; 3: 50.5 -> 49.9; 4: 56.6 -> 56.4 ms. **No measurable gain.**
+- **Chat on L is not run-to-run deterministic.** Any two plain runs (fcpch / fcpcs / fcpcb) agree only on check 0's hash;
+  tokens differ on 2 of 3 prompts. Engine-level bit checks for chat levers must use the exact env (or kernel-level
+  proofs).
+- **Reading: while misses stall ~26 of 48 layer calls per chat check (~17 ms of gate spin), dense-side GPU savings move
+  into the spin and do not shorten the check.** The 1a bundle showed the same (gains only on low-miss checks). **M1
+  (misses) gates every GPU lever on chat.** My levers need measuring with misses removed (replays with the experts
+  resident) until M1 lands.

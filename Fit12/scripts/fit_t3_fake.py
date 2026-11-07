@@ -39,7 +39,7 @@ def generate(B_, model, draft, DF, ids, cap, th, stop_ids=None, log=None, **kw):
     dec = time.perf_counter() - t_dec
     s = dict(lsha=("k1u" if k1u else "k2") + ("m3" if m3 else ""), checks=n, kept=8.0, pass2=0, exact=0, cfgate=0, skipped=0,
              rows1=16 * n, rows2=0, calls2=0, refused=0, pf_s=0.0, dec_s=dec, tok_s=cap / dec, t_draft=0.0, t_p1=dec, t_p2=0.0,
-             t_commit=0.0, miss1=3 * n, miss2=0)
+             t_commit=0.0, miss1=3 * n, miss2=0, pf_mb=0.5 * len(ids))   # pf_mb: (Sun 8 Nov) the PREFILL line's field
     if k1u:
         s.update(k1u_kept=25 * n, k1u_rl=10 * n, k1u_over=n)
     if pf2:

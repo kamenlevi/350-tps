@@ -89,3 +89,18 @@ Written before any CERT row.
   - S4 already showed math is NOT exact in the stack: 6 of 50 math rows identical in v1, 5-8 of 50 in stackb.
   - The math processes log relax-span engagement ("span 10 runs"), while QOM is on HumanEval / MBPP only.
   - The paper must say which sets run FAST kernels.
+
+## Amendment 3 (Sat 2026-11-07 23:3x, before any CERT row): IFEval joins as a scored set
+- **Why:** the PREREG said "IFEval joins only if the orchestrator says a chat FAST profile ships". The orchestrator
+  (23:3x) says that in effect it ships.
+  - BigMoE's N45 (23:26, data/n45; the orchestrator verified the raw runs): the shipped config (cert_env's v1' + wired)
+    ran 12 IFEval prompts at exact acceptance, yet only 6 of 24 runs equal NAX6-N's AR (math 7 / 24).
+  - Some non-QOM lever changes the chat and math bits (R57_FASTTAX, REF2_HC8_FAST, or S2's SVH / DSUB; untested which).
+  - So chat in v1' is NOT exact, and no line covered its quality.
+- **The new lines:** IFEval, the 100 core prompts (dec_ifeval), in both orders inside CERT's main run (CERT's rows
+  become 464 per order). Decision 4 vs NAX6's IFEval rows (results/ref2tnax), per order, same bar as the other sets:
+  delta > -5 pt AND McNemar p >= 0.05. No stage 2. That makes 2 more lines: CERT PASS = all 10 lines pass.
+- **The pooled line keeps its pre-registered 3 sets (728 pairs).** A 4-set pool with IFEval is reported as information.
+- **Unchanged:** the chat-exact check stays as written; it will most likely say NO. Then the paper says "chat: lossy,
+  same scores".
+- **Cost:** ~30-40 min more (100 IFEval rows x 2 orders at ~45 tok/s). CERT starts at 01:30 as planned.

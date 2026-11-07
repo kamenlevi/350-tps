@@ -4,8 +4,9 @@
 # ~/BigMoE/data/stack/cert_env.txt (written at the ~20:00 FREEZE; final_env.txt's format: 'Sat <C>', 'MEM <n> GB' and
 # 'screen data/r57/snap/<dir>/<file>.py' in its comment) and for runners 53 / 54 to end. Then:
 # 0. NAX6-N's reference rows on humanevalx + mathx (ref2tnaxn.r3, 154): the decode stage tops up what runner 53 left.
-# 1. The config on CERT's 364 rows (HumanEval+ 60 + 104, math 50 + 50, MBPP 100) in two prompt orders, 10 prompts per
-#    process; R57_QOM_SETS + humanevalx (amendment 1; math / mathx stay as the env has them).
+# 1. The config on CERT's 464 rows (HumanEval+ 60 + 104, math 50 + 50, MBPP 100, IFEval 100: amendment 3, Sat 23:3x)
+#    in two prompt orders, 10 prompts per process; R57_QOM_SETS + humanevalx (amendment 1; math / mathx / ifeval stay
+#    as the env has them).
 # 1b. The chat check (amendment 2): 12 IFEval prompts interleaved with 12 humanevalx prompts, 8 per process, so the
 #    engine swaps profiles at request boundaries; the IFEval rows must equal NAX6's AR token for token.
 # 2. Long code: the 41 humanevalt rows, one order, + humanevalt in the QOM sets; tfwin against NAX6-N.
@@ -329,9 +330,9 @@ QS=$(printf '%s\n' "${STACKENV[@]}" | grep '^R57_QOM_SETS=' | tail -1); QS=${QS#
 case ",$QS," in *,humanevalx,*) Q1="$QS" ;; *) Q1="${QS:+$QS,}humanevalx" ;; esac
 case ",$Q1," in *,humanevalt,*) Q2="$Q1" ;; *) Q2="$Q1,humanevalt" ;; esac
 KEYS=$(python3 -c 'import json
-ks = [json.loads(l)["key"] for n in ("dec_humaneval", "dec_humanevalx", "dec_math", "dec_mathx", "dec_mbpp") for l in open(f"data/items/{n}.jsonl")]
-assert len(ks) == 364 == len(set(ks)), len(ks)
-print(",".join(sorted(ks)))') || { say "CERT's 364 keys do not build: runner stops"; exit 2; }
+ks = [json.loads(l)["key"] for n in ("dec_humaneval", "dec_humanevalx", "dec_math", "dec_mathx", "dec_mbpp", "dec_ifeval") for l in open(f"data/items/{n}.jsonl")]
+assert len(ks) == 464 == len(set(ks)), len(ks)
+print(",".join(sorted(ks)))') || { say "CERT's 464 keys do not build: runner stops"; exit 2; }
 RKEYS=$(echo "$KEYS" | tr ',' '\n' | tail -r | paste -sd, -)
 CKEYS=$(python3 -c 'import json
 f = sorted(json.loads(l)["key"] for l in open("data/items/dec_ifeval.jsonl"))[:12]

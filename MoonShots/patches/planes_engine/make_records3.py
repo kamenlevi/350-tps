@@ -19,8 +19,18 @@ import numpy as np
 ALIGN = 16384
 G = 64
 U32, U16, U8 = np.uint32, np.uint16, np.uint8
-SHAPES = ((640, 2560), (640, 2560), (2560, 640))          # [out, K] of gate, up, down (pieces w, s, b each)
+SHAPES = ((640, 2560), (640, 2560), (2560, 640))          # [out, K] of gate, up, down (pieces w, s, b each): today's default
 pad = lambda n: (n + ALIGN - 1) // ALIGN * ALIGN
+
+
+def shapes_from_config(path):
+    """[out, K] of gate, up, down from a model config.json (Qwen 4 day-0 kit, Sun 2026-11-08): (I, H), (I, H), (H, I) with
+    I = moe_intermediate_size, H = hidden_size (text_config if nested); K must be a multiple of the group size 64"""
+    c = json.load(open(path))
+    t = c.get("text_config", c)
+    I, H = int(t["moe_intermediate_size"]), int(t["hidden_size"])
+    assert I % G == 0 and H % G == 0 and H % 8 == 0 and I % 8 == 0, (I, H)
+    return ((I, H), (I, H), (H, I))
 
 
 def layout(shapes=SHAPES):
@@ -181,7 +191,7 @@ def open_nocache(path, flags, mode=0o644):
     return fd
 
 
-def mlx_checks(L, src_path, dst_path, si, lay, rng, mx, P):
+def mlx_checks(L, src_path, dst_path, si, lay, rng, mx, P, shapes=SHAPES):
     """per-layer MLX checks: MLX reads w3 as m; gather_qmm(bits=3) on the MSB part vs planes125._tier_proj(n=3)."""
     E, rs, po, ps, R = si["E"], si["recsz"], si["piece_off"], si["piece_size"], lay["recsz"]
     ids = np.sort(rng.choice(E, 10, replace=False))
@@ -193,7 +203,7 @@ def mlx_checks(L, src_path, dst_path, si, lay, rng, mx, P):
         srcs.append(a); dsts.append(c)
     os.close(fs); os.close(fd)
     res = {"experts": [int(e) for e in ids]}
-    for p, (out, K) in enumerate(SHAPES):
+    for p, (out, K) in enumerate(shapes):
         name = ("gate", "up", "down")[p]
         pc = lambda bufs, off, size, dt, shape: mx.array(np.stack([np.frombuffer(bb, dt, size // np.dtype(dt).itemsize, off)
                                                                      for bb in bufs]).reshape(len(bufs), *shape))
@@ -256,13 +266,16 @@ def main():
     ap.add_argument("--device", default="cpu", choices=("cpu", "gpu"))
     ap.add_argument("--no-mlx", action="store_true")
     ap.add_argument("--delete-src", action="store_true")
+    ap.add_argument("--config", default=os.path.expanduser("~/BigMoE/models/bare/config.json"),
+                    help="model config.json the expert shapes come from (default: today's model)")
     a = ap.parse_args()
+    SH = shapes_from_config(a.config)
     sidx = json.load(open(os.path.join(a.src, "index.json")))
     layers = sorted(int(k) for k in sidx["layers"]) if a.layers == "all" else [int(x) for x in a.layers.split(",")]
     os.makedirs(a.out, exist_ok=True)
     ipath = os.path.join(a.out, "index.json")
     oidx = json.load(open(ipath)) if os.path.exists(ipath) else {"align": ALIGN, "format": "records3", "layers": {}}
-    lay = layout()
+    lay = layout(SH)
     mx = P = None
     if not a.no_mlx:
         import mlx.core as mx
@@ -276,7 +289,7 @@ def main():
     for L in layers:
         si = sidx["layers"][str(L)]
         E, rs = si["E"], si["recsz"]
-        assert si["piece_size"] == [s for out, K in SHAPES for s in (out * K // 2, out * K // G * 2, out * K // G * 2)], L
+        assert si["piece_size"] == [s for out, K in SH for s in (out * K // 2, out * K // G * 2, out * K // G * 2)], (L, SH)
         src_path, dst_path = os.path.join(a.src, si["file"]), os.path.join(a.out, f"L{L:02d}.bin")
         t0 = time.time()
         if not a.verify_only:
@@ -309,7 +322,7 @@ def main():
             ref_ok &= np.array_equal(reference_record(bs[:rs], si, lay), bd[:lay["recsz"]])
         os.close(fs); os.close(fd)
         t2 = time.time()
-        res = mlx_checks(L, src_path, dst_path, si, lay, rng, mx, P) if mx is not None else {}
+        res = mlx_checks(L, src_path, dst_path, si, lay, rng, mx, P, shapes=SH) if mx is not None else {}
         t3 = time.time()
         ok = (all(v == 0 for k, v in bad.items() if k != "s3_halve") and ref_ok
               and all(r["unpack_eq_m"] and r["b3_eq_mlx"] and r["s3_eq_2s"] and r["allclose"] for k, r in res.items() if k != "experts"))

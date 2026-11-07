@@ -243,6 +243,11 @@ if FAST:
     assert os.environ.get("R57_QOM_TAIL", "3") == "3", "R57_QOM_TAIL=4 (LSB reads for kept ranks 2-9) is not built yet"
     FASTARMS["QOM"] = {s_: _S(thr=_QT, q1u=True, t3=True, qom=True) for s_ in   # R57_QOM_SETS (Fri 08:1x, EvalSuite's agent
                        os.environ.get("R57_QOM_SETS", "humaneval,ifeval,multi").split(",")}   # check): agent sets run exact unless listed
+    if os.environ.get("R57_CHAT_RULE"):                  # Sun 8 Nov (CHAT150 strike K1, NewIdeas 00:4x): arm E's chat rule R1
+        assert os.environ["R57_CHAT_RULE"] == "R1" and FAST == "QOM", "R57_CHAT_RULE=R1 rides on R57_FAST=QOM (only R1 is wired)"
+        for s_ in ("ifeval", "multi"):                   # (relax_core: accept the draft while log p(d) >= log p1 - 0.5 nat) on the
+            FASTARMS["QOM"][s_] = dict(FASTARMS["QOM"].get(s_) or _S(), rules=(RXC.R1,))   # chat sets; a set outside
+                                                         # R57_QOM_SETS keeps exact expert reads (thr None: rules only, as arm E)
     if FAST == "QOM":
         sys.path.insert(0, "/Users/kamen/Breakthrough/keepset")
         import qom_keep as QK                            # read-only: Breakthrough's module
@@ -478,6 +483,11 @@ if VTIER:                                                # NewIdeas' RANKED 33, 
     VT_MAP = [[sw._bm["L"], (sw._bm.get("tier") or {}).get("side")] for sw in SW_]
     say(f"R57_VTIER: {_vb} / {_vs} slots per base / sidecar pool = {VT_BYTES / 1e9:.2f} GB volatile (purgeable: NOT in "
         f"phys_footprint; macOS reclaims it before compression or swap)")
+PFCHUNK = int(os.environ.get("R57_PFCHUNK", "1024") or "1024")   # Sat 23:4x (orchestrator FLAG 2: 45.1 GB on a 7.9K prompt): prefill rows per chunk
+PFNOLOG = os.environ.get("R57_PFNOLOG") == "1"           # Sun 00:2x (Leap: prefill built full-vocab logits for every row, ~508 MB + ~45 ms per 1K chunk)
+if os.environ.get("R57_CACHE_GB"):                       # Sat 23:4x (FLAG 2): cap MLX's buffer cache (freed buffers kept for reuse) for the run
+    _cl = int(float(os.environ["R57_CACHE_GB"]) * 1e9)
+    say(f"R57_CACHE_GB: mx.set_cache_limit({_cl / 1e9:.2f} GB), was {getattr(mx, 'set_cache_limit', None) and mx.set_cache_limit(_cl) / 1e9:.2f} GB")
 if os.environ.get("R57_WIRED") == "1":                   # Sat 09:0x (Leap FCP 038bfa1, FIRSTCHK's fix; mlx-lm's wired_limit): MLX's
     _wl = int(mx.device_info()["max_recommended_working_set_size"])   # residency set keeps its buffers wired for the run, so
     say(f"R57_WIRED: mx.set_wired_limit({_wl / 1e9:.2f} GB), was {mx.set_wired_limit(_wl) / 1e9:.2f} GB")   # IOGPU stops unwiring
@@ -925,8 +935,13 @@ def prefill(ids, want_w=False, chunk=1024):
     for a in range(0, len(ids), chunk):
         if ("pools" in A6 and a + chunk >= len(ids)) or ("warm" in A6 and a == 0):   # EvalSuite's block records each
             EM.STATE.capture = {}                        # layer's rank-ordered top-k (warm: from the first chunk on)
-        lg = model(mx.array([ids[a:a + chunk]]), cache=cache)
-        mx.eval(lg, states(cache), [x[-1] for x in TAP["x"]])
+        if PFNOLOG:                                      # R57_PFNOLOG=1 (Leap Sun 00:2x): no vocab head on cache-only chunks; the last chunk
+            last_ = a + chunk >= len(ids)                # keeps its last 256 rows (MLX's head is row-invariant there: the last row's bits stay)
+            lg = model(mx.array([ids[a:a + chunk]]), cache=cache, **({"logits_keep": 256} if last_ else {"emit_logits": False}))
+            mx.eval(*([lg] if lg is not None else []), states(cache), [x[-1] for x in TAP["x"]])
+        else:
+            lg = model(mx.array([ids[a:a + chunk]]), cache=cache)
+            mx.eval(lg, states(cache), [x[-1] for x in TAP["x"]])
         if want_w:                                       # the chat switch: each chunk's widened stream for the MTP head
             w = TXT._last_widened
             assert w.shape[1] == min(chunk, len(ids) - a), w.shape
@@ -958,8 +973,14 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         FG["cap"] = np.zeros((48, 512), bool)
     if SV is not None:                                   # SESSION-VOCAB: this prompt's ids join both subsets (before the prefill:
         SV.new_prompt(ids)                               # a short last prefill chunk takes SVH's <= 16-row path too)
+    pfst_ = None                                         # Sun 00:2x (R57_PFSTAT=1, NewIdeas PF-D price): pool residency at prefill start
+    if os.environ.get("R57_PFSTAT") == "1":              # (base MSB-3 pools / LSB sidecars: experts a prefill re-reads today) + its SSD bytes
+        _rb = sum(int((np.array(BS.ext.lookup(sw._bm["L"], list(range(512)))) >= 0).sum()) for sw in SW_ if not sw._bm.get("full"))
+        _rs = sum(int((np.array(BS.ext.lookup(sw._bm["tier"]["side"], list(range(512)))) >= 0).sum()) for sw in SW_
+                  if not sw._bm.get("full") and (sw._bm.get("tier") or {}).get("side") is not None)
+        pfst_ = [_rb, _rs, disk_read_bytes()]
     tpf_ = time.perf_counter()                           # Sat 17:2x (E5): prefill wall (+ the first token's readback) for end-to-end tok/s
-    cache, last, T, ws = prefill(ids, mtp)
+    cache, last, T, ws = prefill(ids, mtp, chunk=PFCHUNK)
     if cold_:
         cap_, FG["cap"] = FG["cap"], None
         warm_ = cap_ if (U3C_LEN and len(ids) >= 128) else (cap_ | (POP45 >= 0.05))
@@ -976,7 +997,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         ctx = T[start:P]
     a = P
     tok = int(mx.argmax(last).item())
-    tpf_ = time.perf_counter() - tpf_                    # s: prefill + the cache / drafter setup + the first token (A6's pre-loop steps excluded below)
+    tpf_ = time.perf_counter() - tpf_                    # s: prefill + the cache / drafter setup + the first token
+    pfb_ = disk_read_bytes() if pfst_ is not None else 0  # R57_PFSTAT: the prefill's SSD bytes end here (A6's pre-loop steps excluded below)
     if SV is not None:
         SV.committed([tok])
     set_arm(arm)
@@ -1480,6 +1502,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
     return dict(lh=lh_, out=out[:CAP], n=min(len(out), CAP), tps=min(len(out), CAP) / dec, drafter=drafter, hist=hist, a6=a6,
                 nwk=[ref2.COUNTS.get("nw_calls", 0) - nk0_[0], ref2.COUNTS.get("nw_late_calls", 0) - nk0_[1]] if NW else None,
                 pfs=round(tpf_, 4),                      # E5: prefill wall s (end to end = n / (pfs + n / tps))
+                pfst=None if pfst_ is None else dict(res_base=pfst_[0], res_side=pfst_[1], gb=round((pfb_ - pfst_[2]) / 1e9, 3)),
                 rlx=rst if RLX_D > 0 else None,      # R57_RELAX_DELTA: rows checked, kept exact / in all, relaxed accepts
                 spn=sst if SPAN else None,           # R57_RELAX_SPAN: rows checked, kept exact / in all, relaxed, span rows
                 inert=dict(ist, arm=INERT["name"]) if INERT is not None else None,   # R57_INERT: rows checked, kept exact / in
@@ -1575,7 +1598,7 @@ for n_p, (s, key) in enumerate(PICK):
         RUNS.append(dict(key=key, arm=arm, type=typ, bad=r["bad"], cut=r["cut"], P=len(ids),
                          **{k_: r[k_] for k_ in ("drafter", "hist", "a6", "n", "tps", "tpsw", "kept", "checks", "cyc", "ck",
                                                  "drf", "miss", "io", "mb", "mpk", "mem", "copy", "fast", "pf", "lh", "inert")},
-                         d7b=draft is DRAFT4, rlx=r.get("rlx"), spn=r.get("spn"), nwk=r.get("nwk"), pfs=r.get("pfs")))   # Thu 18:5x / Fri 10:0x: relaxed / span / INERT
+                         d7b=draft is DRAFT4, rlx=r.get("rlx"), spn=r.get("spn"), nwk=r.get("nwk"), pfs=r.get("pfs"), pfst=r.get("pfst")))   # Thu 18:5x / Fri 10:0x: relaxed / span / INERT
                                                          # stats were computed but never written (the pre-flight's MISSING)
         m = min(len(want), r["n"])
         agree = same(r["out"], want)

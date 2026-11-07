@@ -3647,3 +3647,155 @@ Extends Leap's SD study (TABLE_350 'SD', Mon) with today's measurements and a li
   - skip the scan when the state is code and no draft row holds '#' or a quote.
 - **Its ceiling is the kept gain, ~+3 %.** That is borderline on this line, and the arm is still lossy (an S4-style gate
   plus a CERT top-up). Not worth it by Tuesday unless the exact-safe levers fall short by <= 3 %.
+
+### CHAT150: what drafting can do for chat (Sat 11-07 23:4x-23:5x; CPU, sticky/chat_ngram.py -> data/chat150_read.txt; the orchestrator 23:4x + NewIdeas PLAN CHAT 150 items CH3 / CH4)
+
+**Bottom line.** Nothing on the drafting side prices >= x1.5 on chat. The best exact stack by Tuesday is ~x1.10-1.15
+tok/s. And 150 tok/s on chat is a check-cost problem, not a drafting one: with today's chat check costs, a drafter
+that never misses would reach only ~114 tok/s at 16 rows with the serial MTP draft, or ~150 with a one-pass draft.
+
+- **Chat's check cost** (BigMoE N45, Sat 23:25, 45 GB C 256, 12 IFEval x 2 passes, checks >= 2, the engine's own
+  per-check records): the wall is fixed cost + verify per row + the serial MTP draft (2.59 ms per row).
+  - Exact config: median wall 61.0 ms at a median 3 rows. Fit: 47.0 ms + 3.25 ms per row + the draft. One row alone
+    costs 56.2 ms.
+  - Lossy config: median 48.5 ms. Fit: 33.1 ms + 4.35 ms per row + the draft. One row costs 45.1 ms.
+  - Kept / rows = 0.80 in both, so the 0.3 cut already spends rows well. The fixed part is 75-85 % of a chat check.
+- **Replays.** Head b5 (the shipped chat head), teacher-forced on the 30 IFEval + 24 multi held-out answers (D-24's
+  data), walked with D-17's loop. The shipped rule (K15, cut 0.3) gives IFEval 2.34 / multi 2.54 kept per check, and
+  36.2 / 38.3 tok/s [P] (the engine measured 39.9 on its 12 IFEval).
+
+| lever | IFEval kept / check | IFEval tok/s [P] | multi tok/s [P] | status |
+|---|---|---|---|---|
+| shipped MTP chain, cut 0.3 | 2.34 | 36.2 | 38.3 | today |
+| cut re-tuned to 0.2 | 2.48 (x1.06) | x1.015 | x1.009 | exact, a constant |
+| CH3: head 2x faster, best cut 0.15 | 2.57 (x1.09) | x1.095 | x1.083 | exact; needs a faster MTP step (kernels) |
+| CH3: head 4x faster, best cut 0.15 | 2.57 | x1.138 | x1.128 | exact |
+| prompt lookup alone (match >= 1-3) | 1.11-1.19 | x0.48-0.59 | x0.44-0.52 | KILL |
+| prompt lookup + MTP hybrid (match >= 2..6, caps 4 / 8 / 15) | 2.18-2.34 | x0.90-0.996 | x0.89-0.994 | KILL |
+| the same, other answers as a corpus (SuffixDecoding-style) | 2.29-2.32 | x0.95-0.98 | x0.93-0.96 | KILL |
+| oracle pick of lookup vs MTP per check | 2.37 | x1.012 | x1.000-1.004 | ceiling of any selector |
+| tree leaves (rank-1 / 2 at kept depths with p < 0.8), today's head | 2.50-2.92 | x1.009-1.044 | x0.98-1.02 | needs a GDN tree verify (not built) |
+| tree leaves, head 2x faster | 2.50-2.92 | x1.07-1.11 | x1.05-1.09 | same |
+
+- **Relaxed acceptance on chat** (lossy; chat runs exact today). EvalSuite's RELAX (11-05): the chat arm E kept +7.2 %
+  (2.67 vs 2.49), at IFEval 87 vs 90 (BETWEEN). The stronger F / G rules failed IFEval (-5 / -6). So relaxing adds
+  ~x1.07 at most within quality.
+- **Retuning the head on chat** (D-22, [K]): b4, with twice the chat windows, moved IFEval 2.43 -> 2.51 (n.s.). AUF (b5)
+  gave +0.3 %. The wall is the head's depth-1 accuracy: IFEval 0.73-0.76, multi 0.78-0.80, code 0.98.
+- **CH4: an EAGLE-3-style head (target features + one trained layer) by Tuesday: no.**
+  - Its features must come from the 125B. Free cloud can't hold it, and the Mac captures at prefill speed: 98-124 tok/s
+    (N45), i.e. ~2.5 h of quiet GPU per 1M tokens.
+  - The 5 taps take 25.6 KB per token, i.e. 25.6 GB per 1M tokens. The disk is at 88 GB free, under its 100 GB floor,
+    so only online training (capture and train in one process) would fit.
+  - One night is therefore ~3-4M tokens, a few % of the chat data EAGLE-3-class heads train on. It would start from a
+    target-trained one-layer head (the native MTP) that a 2x chat-data tune moved by 1 %.
+  - [G] kept +0-5 % for a night of work, not the 3+ that CH4 asks for.
+- **What 150 needs.** At K 3 (the realistic best: the cut re-tune + trees + CH3) the check must cost ~20 ms, against
+  48.5-61 today. At NewIdeas' K 3.75 it must cost ~25 ms, and the serial MTP draft at today's speed would take ~11 ms of
+  that. So 150 needs the check's fixed part cut ~2.5x and a head ~4x faster, both by Tuesday.
+- **Data:** data/chat150_read.txt; script sticky/chat_ngram.py (inputs data/d24/{ifeval,multi}_b5.npz, BigMoE
+  data/r57/nie*/nil*_256_checks.json).
+
+### F2A feasibility: an EAGLE-3-style chat head on the 125B's own features (Sun 11-08 00:xx; CPU, sticky/f2a_headroom.py -> data/f2a_headroom.txt + desk; NewIdeas PROGRAM CHAT 150, 00:2x)
+
+**Answer.** F2a can be built by Tue-Wed, but the realistic gain is x1.1-1.3 in kept tokens on IFEval [G], not the x1.8
+that 150 needs (K 2.5 -> 4.5).
+- With F1 (NewIdeas' ~30 ms check), a modest better head gives ~90 tok/s on chat.
+- A head that fixed 80 % of the misses where the 125B is sure gives ~105.
+- 150 needs a near-perfect head (depth-1 0.95 on IFEval) plus F1, and even that lands at ~133-140 [P].
+
+**Headroom.** Simulated better heads on D-24's teacher-forced chain (head b5; 30 IFEval + 24 multi held-out answers).
+Each miss flips to a hit with a probability set by how sure the 125B is of that token (its top-1 p at that position,
+data/d02a), and a flipped token's head p is raised to >= 0.9. Walk and costs as in CHAT150. F1 = 30 ms at 3 rows +
+3.25 ms per extra row + a fused 0.6 ms per drafted row.
+
+| head | IFEval depth-1 | kept / check, cut 0.3 (cut 0.15) | tok/s, today's check | tok/s with F1 |
+|---|---|---|---|---|
+| today (b5) | 0.756 | 2.34 (2.57) | 36.2 | 74.0 |
+| modest: fixes 50 / 25 / 10 % of misses at the 125B's p1 >= 0.8 / 0.5-0.8 / < 0.5 | 0.827 | 2.93 (3.34) | 43.2 | 89.0 |
+| strong: 80 / 50 / 20 % | 0.886 | 3.56 (4.24) | 50.2 | 104.5 |
+| all sure tokens: 100 / 50 / 20 % | 0.906 | 3.90 (4.75) | 53.8 | 114.1 |
+| near-perfect: 100 / 80 / 50 % | 0.950 | 4.65 (5.88) | 61.3 | 133.1 |
+
+Multi runs 5-10 % higher on every row.
+- **Where today's head misses** (depth 1, IFEval): 30 % of misses are at tokens the 125B gives p1 < 0.5, 30 % at
+  0.5-0.8, 16 % at 0.8-0.95, and 24 % at >= 0.95. A head that hit every token the 125B is >= 0.8 sure of would reach
+  0.854 (multi 0.890).
+- **Caveat:** the stored answers are not the 125B's own greedy text. Its top-1 matches 82 % of IFEval tokens, 93 % multi
+  and 77 % GSM8K. So hit rates are against the answer text. The replay's 2.34 kept is close to the engine's 2.38 (N45,
+  12 IFEval).
+
+**Expected p for F2a [G]: depth-1 0.78-0.83 on IFEval**, i.e. the modest row, x1.15-1.25 kept.
+- The native MTP layer is already a target-trained one-layer head. Every chat tune so far moved it <= 3 % (D-22 b3-b5;
+  twice the chat windows gave +1 %), and the DFlash2 chat tunes (D-15a, E1, E5) were null.
+- F2a's new ingredient is volume: ~3-10M tokens in a night vs ~0.1M before, 5-7 doublings. At +1-4 % per doubling that
+  is +5-30 %.
+
+**Build, if NewIdeas keeps it:**
+- **Head.** Initialize from the native MTP layer (one decoder layer, width 2560). Add an EAGLE-3 fusion layer over 3 taps
+  (low / mid / high) and train it with training-time test (D-22's TTT code).
+- **Vocabulary.** The 125B's vocab is 248,320, so its output layer is 636M parameters.
+  - That layer likely dominates today's 2.6 ms draft step and the training cost.
+  - The fused <= 0.6 ms step of NewIdeas' F1c needs a draft vocab of roughly <= 96K at 4 bits [P].
+  - A 32K vocab covered only 53 % of multilingual answer tokens (FR-Spec desk KILL), so check coverage first.
+- **Features.** 3 taps x 2560 fp16 = 15.4 KB per token, plus the 125B's top-32 (192 B).
+  - At PFX's 2M tokens/hour that is ~31 GB/hour. The disk has 88 GB free, under its 100 GB floor, so nothing can be
+    stored.
+  - So training must be ONLINE: one MLX process holds the 125B's prefill path (~42 GB) and the head trainer (~3-5 GB),
+    alternating prefill chunks and training steps, and keeps only checkpoints.
+  - That is ~47-50 GB, a quiet whole-Mac job.
+- **Throughput [P].** Training costs ~25-30 GFLOP per token: the output layer, times the TTT steps. At an effective
+  ~5 TFLOPS that is ~0.6M tokens/hour of training. Sharing the GPU with the 2M/hour capture gives ~0.3-0.7M tokens/hour
+  end to end, so ~3-7M tokens in a 10-hour night.
+- **Data.** Local chat text is far short: IFEval prompts (541, no answers), MGSM, the drafter-data log's 175 multilingual
+  answers (on-policy) and D-22's 147 windows.
+  - A chat corpus has to be downloaded (e.g. UltraChat-200k or ShareGPT, ~1-2 GB), which needs Kamen's OK via the
+    orchestrator.
+  - Plan: teacher-force the corpus's answers, with labels = the 125B's own argmax per position (off-policy text,
+    on-policy labels).
+- **Timeline.** Sun: build + a 1-hour smoke test (the loss falls; held-out depth-1 on D-24's IFEval / multi). Sun night:
+  the ~10-hour online run. Mon: read it on D-24's replay, then an engine A/B. Tue: decide.
+- **Risks:** memory (two big things in one process), GPU sharing, off-policy text, and re-tuning the cut (D-23's lesson).
+
+**F2b** (a small same-tokenizer dense drafter): my data agrees with NewIdeas' x0.9-1.15. DFlash2 (5 layers) keeps
+0.59-0.65 per token on IFEval vs the native MTP head's 0.756, and small independent models start below the native head
+on chat.
+
+### D1: the chat draft step, measured (Sun 11-08 00:0x; quiet locks, sticky/mtp_step_bench.py -> data/mtp_step_bench{,_p4}.txt; shared, sticky/d1_variants.py -> data/d1_variants.txt; CHAT150 strike)
+
+**Bottom line.** The cheapest D1 by Monday puts the head's trained parts at 4 bits and drops the per-step sync. Each
+drafted row goes 2.63 -> 2.14 ms (-19 %), with chat hits unchanged: about -1.5 ms per chat check, +3-4 % chat tok/s
+[P]. The -5..-6 ms the board asks for would need a cheaper 248K output layer, and every cheaper output layer I tried
+loses chat hits.
+
+- **Step anatomy** (head b5 as the engine installs it, the engine's shapes, 512 context rows, 40 reps; drafts identical
+  between loops):
+  - Shipped loop: 2.63-2.82 ms per drafted row.
+  - Without the per-step host sync (the K steps as one graph): 2.43 ms, x1.08.
+  - The 4-bit 248K output layer (with the hyper-connection mixer): 1.49 ms. Re-quantized to 3 bits 1.11 ms, to 2 bits
+    0.85 ms.
+  - The MTP layer itself: ~1.1 ms.
+  - 4-bit trained parts: the 19 bf16 modules mtp125.install puts in (fc, q / k / v / o, router, shared expert) at 4 bits,
+    group 64. The shipped loop drops to 2.34 ms, and to 2.14 ms without the sync.
+- **Chat hits per variant** (teacher-forced chain, 30 IFEval + 24 multi held-out answers, depths 1-6; kept with the
+  shipped cut, K6):
+
+| variant | IFEval depth-1 | IFEval kept (rows) | multi depth-1 | multi kept (rows) |
+|---|---|---|---|---|
+| shipped (bf16 trained parts, 4-bit output) | 0.756 | 2.301 (2.88) | 0.784 | 2.507 (3.18) |
+| output layer 3-bit | 0.728 | 2.190 (2.74) | 0.762 | 2.402 (3.03) |
+| output layer 2-bit | 0.661 | 1.989 (2.62) | 0.700 | 2.130 (2.80) |
+| trained parts 4-bit | 0.756 | 2.427 (3.33) | 0.781 | 2.630 (3.75) |
+| trained parts 4-bit + output 3-bit | 0.736 | 2.343 (3.18) | 0.760 | 2.529 (3.59) |
+
+- **Reading.**
+  - The output layer can't be cut. 3-bit loses 5 % of kept for 0.4 ms a row, and 2-bit loses 14 %.
+  - A 64K vocabulary plus the prompt and answer tokens covers 97 % of IFEval tokens but only 67 % of multi tokens (CPU
+    check on the same answers), so a reduced vocabulary doesn't work for multilingual chat either.
+  - 4-bit trained parts keep the hits. They also raise the head's confidence a little, so the 0.3 cut lets more rows
+    through: kept +5 % at +0.45 rows.
+  - With chat's fitted check cost, 4-bit parts alone come to +2.8 % tok/s [P], and +3.9 % without the sync.
+  - Drafts can't change chat outputs: chat verifies exactly.
+- **Engine change** (BigMoE's screen, behind a flag): after `_M.install(...)`, quantize the head's bf16 Linear modules
+  at 4 bits, group 64 (the predicate in sticky/mtp_step_bench.py, D1_P4). Optionally, run the chain's steps
+  without the per-step `.item()`: evaluate pairs of steps and cut post hoc.

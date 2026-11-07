@@ -74,13 +74,14 @@ for k, r in cnt.items():
     e0 = max(p[6] for p in ph if p[1] == 0)                                     # the end of check 0's last phase
     eN = max(p[6] for p in ph)                                                  # the end of the last phase
     k0 = min(r["tok"], lg[0][2])
+    ssd = sum(p[8] - p[4] for p in ph) / 1e6                                   # (Sun 8 Nov) MB read inside the decode phases
     full = (r["tok"] - k0) / (eN - e0) if len(lg) > 1 and eN > e0 else None
     div = None if ref is None else next((i for i, (a, b) in enumerate(zip(toks, ref)) if a != b),
                                         None if len(toks) == len(ref) else min(len(toks), len(ref)))
     rows.append(dict(key=k, n_prompt=nprompt.get(k), tok=r["tok"], pf=r["pf"], dec=r["dec"], whole=r["tps"],
                      e2e=r["tok"] / max(1e-9, r["pf"] + r["dec"]), full=full, first_ms=1e3 * (r["dec"] - (eN - e0)),
                      after_tok=r["tok"] - k0, after_s=eN - e0, checks=r["checks"], kept=r["kept"], modes=r["modes"],
-                     ms=r["ms"], rerun=r["rerun"], sha=r["sha"], ref_same=None if ref is None else toks == ref,
+                     ms=r["ms"], rerun=r["rerun"], sha=r["sha"], ssd_mb=ssd, ref_same=None if ref is None else toks == ref,
                      ref_div=div, ref_len=None if ref is None else len(ref), theta=r["theta"]))
 out = []
 P = out.append
@@ -115,16 +116,21 @@ if rows:
     P(f"FULL-PERIOD STEADY (tokens after each prompt's first check / wall time after it, {len(fl)} prompts): geometric mean "
       f"{res['full_geo']:.2f}; pooled {res['full_pooled']:.2f}")
     P(f"END TO END (n / (prefill + decode)): geometric mean {res['e2e_geo']:.2f}; pooled {res['e2e_pooled']:.2f}")
+    res["ssd_mb_per_tok"] = sum(x["ssd_mb"] for x in rows) / tok
+    P(f"SSD in decode (the process's own reads inside the phases): {res['ssd_mb_per_tok']:.0f} MB per kept token (pooled), "
+      f"{sum(x['ssd_mb'] for x in rows) / 1e3 / max(1, res['checks']):.2f} GB per check; per prompt "
+      f"{min(x['ssd_mb'] / x['tok'] for x in rows):.0f}-{max(x['ssd_mb'] / x['tok'] for x in rows):.0f} MB per kept token")
     sets = sorted({x["key"].split("/")[0] for x in rows})      # (Sat 7 Nov, the table) per set when the run mixes sets
     for s_ in (sets if len(sets) > 1 else []):
         rs = [x for x in rows if x["key"].split("/")[0] == s_]
         fs = [x for x in rs if x["full"]]
         bs = dict(n=len(rs), whole_geo=geo([x["whole"] for x in rs]), whole_pooled=sum(x["tok"] for x in rs) / sum(x["dec"] for x in rs),
                   full_geo=geo([x["full"] for x in fs]), full_pooled=sum(x["after_tok"] for x in fs) / sum(x["after_s"] for x in fs),
-                  e2e_geo=geo([x["e2e"] for x in rs]))
+                  e2e_geo=geo([x["e2e"] for x in rs]), ssd_mb_per_tok=sum(x["ssd_mb"] for x in rs) / sum(x["tok"] for x in rs))
         res[f"set_{s_}"] = bs
         P(f"  {s_} ({bs['n']} prompts): WHOLE DECODE geo {bs['whole_geo']:.2f} / pooled {bs['whole_pooled']:.2f}; full-period "
-          f"geo {bs['full_geo']:.2f} / pooled {bs['full_pooled']:.2f}; end to end geo {bs['e2e_geo']:.2f}")
+          f"geo {bs['full_geo']:.2f} / pooled {bs['full_pooled']:.2f}; end to end geo {bs['e2e_geo']:.2f}; SSD "
+          f"{bs['ssd_mb_per_tok']:.0f} MB per kept token")
     P(f"Per check ({ch} checks, {tok / ch:.2f} tokens kept): ms draft "
       f"{sum(x['ms']['draft'] * x['checks'] for x in rows) / ch:.1f}, pass 1 {sum(x['ms']['p1'] * x['checks'] for x in rows) / ch:.1f}, "
       f"pass 2 / exact {sum(x['ms']['p2'] * x['checks'] for x in rows) / ch:.1f}, commit "

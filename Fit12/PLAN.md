@@ -3334,3 +3334,6 @@ so R-01 should find about the same slots, not ~1 GB more.
   each alone: /Users/kamen/Fit12/PLAN_12GB_90_fit12.md 'TABLE 12 GB CELLS'.
 - TABLE 12 GB CELLS RESULT (Sat 17:36-17:46): 12E verified greedy 18.58 (12 HE) / 18.18 (MBPP12) whole decode geo, 11.14 GB;
   12F theta 0.95 40.59 / 18.74, 11.28 GB. Details: /Users/kamen/Fit12/PLAN_12GB_90_fit12.md 'TABLE 12 GB CELLS'.
+- 12 GB CHAT + PREFILL (pre-registered Sat 23:5x; NewIdeas PROGRAM CHAT 150): 12 IFEval on the verified-greedy loop (MB per kept
+  token) + prefill A/B (s_moe 4096 vs 8192 on 1.6K / 4.7K / 7.9K), after CERT: /Users/kamen/Fit12/PLAN_12GB_90_fit12.md
+  '12 GB CHAT + PREFILL'. t95ck1u failed EvalSuite's code gate (-5.00): the 12 GB lossy cell fails quality.

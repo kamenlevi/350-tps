@@ -12,6 +12,209 @@
 Tags: [K] = measured, [P] = priced from measured parts, [G] = a guess. 45 = the 45 GB line, 12 = the 12 GB line.
 
 > (a quote from the project owner, kept private)
+chat to 150 in a day or two ... It's not even an mtp head drafter that's the problem ... Use neural accelerators where
+needed, use the cpu to its full to 'prep' the math which is about to go to the gpu if needed - do anything to get it to
+150 in lossy at 45gb by Monday latest". Lossy is fine, IFEval-gated vs NAX6-N in both orders.
+- TARGET: 150 tok/s whole decode on 12 IFEval at 45 GB lossy, by Monday. That means a ~22 ms step at K ~3.3 (today
+  ~58 ms exact / ~45-48 lossy at K 2.5).
+- The step today (N45 means, exact / lossy; CORRECTED by BigMoE 00:5x):
+  - Misses: ~89 per check. The GPU's stall bound is svc 15.0 / 14.4 ms (partly overlapped); the SSD is busy (io)
+    12.0 / 11.6 ms. "stl 20.3" is a COUNT: 20.3 of the 48 layer calls per check waited on loads.
+  - The build (bld 44.8 / 37.2 ms) is NOT pure Python. It holds the gate's per-layer router-id waits, so the GPU work
+    up to the last router plus the stalls. wt 12.8 / 9.3 ms is the GPU tail.
+  - The draft is 8.4 ms.
+  - Lossy L has the same misses as exact (88.8 vs 89.8). Its +19 % comes from compute levers (C4).
+  - Leap at 2 rows: 54.5 ms wall, main-thread CPU 29.3 ms, GPU dense ~20-22 ms + experts ~14 ms.
+- SEQUENCING (Leap 01:2x, measured): M1 GOES FIRST.
+  - Leap's first G1 piece, REF2_PAD_IN (pads in-kernel; bitwise 320 / 320 at kernel level; ref2 95585132), gained
+    NOTHING live: 2-row checks 44.1 -> 43.9 ms, 3 rows 50.5 -> 49.9.
+  - ~26 of 48 layer calls stall on misses per chat check (~17 ms of gate spin), so dense-side GPU savings move into
+    the spin.
+  - G1 / G2 count only after M1. Until then Leap prices them on no-miss replays (experts resident).
+- RULE (Leap 01:2x): chat on L is NOT run-to-run deterministic. Two plain runs agree only on check 0's hash, and tokens
+  differ on 2 / 3 prompts. Chat levers' bit checks use the exact env or kernel-level proofs; token-equality A/Bs on L
+  chat mean nothing.
+- CRITICAL PATH: the step is >= max(main-thread CPU, GPU + stalls) + any draft not overlapped.
+  - So all three must fall to <= ~17-20 ms: the Python / graph build, the GPU, and the miss stalls. The draft must
+    shrink or overlap.
+  - Cutting only one moves the wall to the next.
+- GPU order: CERT (01:30, shared) first. Then 45 GB chat A/Bs as candidates land, AHEAD of PFX. Fit12's 20-min 12 GB
+  chat12 may run right after CERT if no chat candidate is ready.
+- SUNDAY NIGHT, Sun 23:00 -> Mon 07:00: a QUIET WHOLE-MAC WINDOW for MTP Head's F2a (chat feature capture + head
+  training; the corpus download is under Kamen's standing OK, logged by the orchestrator). No other GPU or heavy CPU
+  jobs in that window.
+  - Sunday daytime: CERT's end, then Fit12's chat12 (~20 min), then the strike's A/Bs (BigMoE's runner), then PFX.
+  - Every Sunday GPU job ends by 22:45.
+
+| piece | owner | ms saved | bits | ETA | status |
+|---|---|---|---|---|---|
+> (a quote from the project owner, kept private)
+| G1: dense at low rows: row-native GEMVs without pads, HC8 at low rows, glue fusion (F1a) | Leap | -6..-7.5 [P] on no-miss replays; first piece REF2_PAD_IN [K] 0 ms LIVE (bitwise, held until M1 lands) | gated (pad_in bitwise) | after M1 | priced; pad_in measured |
+| G2: experts at 2 rows (~14 ms on NAX6-N's one-call): a low-row expert GEMV at the byte floor (2 rows x 10 experts x 48 layers ~1 GB, ~3.5 ms at 295 GB/s). The neural accelerators (NAX) need >= 16-row tiles, so GEMV units at 1-6 rows | Leap | -8..-10 [P] | gated | Mon | to price |
+| M1-X (NEW 01:2x, EXACT-SAFE, the first M1 arm): LEVER 2 on chat. L+1's posted forecast is read into the purgeable volatile tier right after L's release, so a wrong guess evicts nothing (BIGMOE_FC_F 4 / FS 2, arm gate+t+pf + BIGMOE_PRED_LINES=4, VTIER on; BigMoE e8b7b6d / ext build_l2). It has only been measured on 16-row CODE: -4.3 % at C 224 (76,957 reads issued, 9,010 used). Never on chat, where 2-3-row layers take ~0.5-0.9 ms, about one miss latency, and ~89 misses per check stall ~17 ms. Forecast recall@10 ~0.73-0.79 (LEAD1CORR / 3b) | BigMoE | up to -8..-12 [P] if most forecasts land in time | EXACT (prefetch only) | A/B on 12 IFEval, first M1 arm Sun | proposed 01:2x |
+| M1: miss stalls (20.3 ms mean, ~90 misses per check). Lossy chat levers: QOM on chat (sure rows skip cold ranks), 3-bit cold reads (U3) on chat, top-8 on chat (CH5), chat-aware pools. NW on chat only with a fresh gate (its chat map FAILED) | BigMoE + Breakthrough | CEILING <= ~15 ms per check, x1.25-1.3 (BigMoE 00:5x) | gated (pools: exact) | A/Bs before CERT (BigMoE, hard stop ~01:20), then after | assigned 00:4x |
+| D1: the draft 8.4 ms (MTP head, ~2.6 ms per drafted row, serial): one fused forward for all rows; or overlap it with the check's GPU tail | MTP Head | -5..-6 [P] | exact on chat (chat runs exact acceptance) | Sun ~10:00 | MTP Head: [K] step anatomy ~03:00 (quiet ~10 min); a no-sync K-step chain + a cheaper vocab head, drafts checked bitwise; an engine flag for BigMoE by Sun ~10:00 |
+| K1: acceptance 2.5 -> ~3.3: the relaxed chat rule (E / R1: +7 % kept measured), plus MTP Head's F2a trained head if a first one exists by Mon | BigMoE (rule) + MTP Head (head) | x1.07 by Mon (E only) | gated | Mon | F2a by Mon: NO (MTP Head 888f596: a first head Tue-Wed at best, x1.1-1.3 kept [G]; it needs a chat-corpus download OK + a quiet whole-Mac night). E = R1(0.5) (keep draft j while logit(d_j) >= max - 0.5), HC8 OFF. On today's stack that needs code: R57_RELAX_DELTA relaxes DFlash2 rows only (chat uses the MTP head, screen :1127), and R57_HC8 is global (:803) |
+| C4: L's chat not == AR (6 / 24): BigMoE's bisect, which decides whether L's +13 % on chat is a gated lossy lever or a bug | BigMoE | x1.13 [K] | gated | Sun | armed (FU) |
+| GATE: an IFEval same-scores gate (IFEval + multi, both orders, vs NAX6-N) ready to run within 1 h of a candidate | EvalSuite | - | - | pre-register Sun night | asked 00:4x |
+| BC1: top-8 routing on chat rows (drops ranks 8-9, today 3-bit tail): ~-20 % expert uses, ~-0.5-0.6 GB per 3-row check, and ~-20 % of miss reads. Prior at 12 GB (L1-17): IFEval -2.0 [-4.3, +0.3], +17.4 % tok/s | BigMoE | -2..-4 [P] | gated | A/B Sun | added 01:1x |
+| BC2: 2-bit tail ranks: ranks 2-9 MSB-3 -> MSB-2 (records3 is MSB-3 + LSB-1 today; plan 4433333333): ~-27 % of expert bytes, ~-0.9 GB per check, ~-27 % of miss bytes. History: B2 cold-only MSB-2 BETWEEN (fails code P99.9); the KL model reads chat 8-19 % worse than predicted; R-44b POM (2-bit on miss) KILL; plane-split reads KILLED for request overhead. Needs a 2-bit read path: Leap's question, sent to Breakthrough / Fit12 01:1x | Leap (kernel) + Breakthrough (quality) | -3..-4 [P] | gated | after the answer | asked |
+| BC3: 3-bit dense on the chat path: dense ~3.1 -> ~2.3 GB per check. A second dense copy costs +2.3 GB (over 45.0 unless C drops ~17 slots); 3-bit dense everywhere makes code / math lossy too. Dense precision is usually more sensitive than expert tails | Leap / BigMoE | ~-3 [P] | gated | price Sun | added 01:1x |
+| BC-SUM: BC1 + BC2 (+ BC3) take the bytes per 3-row step ~6.4 -> ~4.5-5.0 GB. The floor then sits at ~17-18.5 ms: ~135-147 tok/s at K 2.5 at the floor, ~190+ at K 3.5. Every piece passes the IFEval gate first | - | - | - | - | Leap's 6.4 GB / ~24 ms floor (01:0x) is the basis |
+
+- PHYSICS BOUND (NewIdeas 01:0x, with MTP Head's F2a headroom table, TrainLab 888f596):
+  - LEAP'S PROJECTION (01:0x, tighter than mine): a 3-row chat step reads ~6.4 GB, a ~24 ms floor, so ~105 tok/s at
+    K 2.5 even with perfect kernels and zero misses. 150 needs FEWER BYTES (BC pieces) AND HIGHER K (F2a).
+  - Every check streams all dense weights, ~3.1 GB, plus ~1 GB of experts at 1-3 rows. At ~280 GB/s that is a byte
+    floor of ~15-16 ms per check.
+  - At today's K (2.34-2.5), chat reaches ~150 ONLY with every check AT the byte floor, zero miss cost, zero Python and
+    a free draft.
+  - MTP Head's simulation: today's head + a 30 ms check gives 74 tok/s; a strong head 104; a near-perfect head 133-140.
+  - So 150 needs BOTH a check near ~20 ms (about 1.3x the floor) AND a strong head (K ~3.6+), or lossy cuts to the
+    BYTES themselves: fewer experts per chat token, lower dense precision.
+  - Neither is a Monday item. HONEST MONDAY: a check ~25-30 ms + draft ~3 ms at K ~2.5-2.7 gives ~80-100 tok/s.
+- ARITHMETIC: if B1, G1, G2, M1 and D1 all land, the step goes ~45 (lossy) -> ~15-25 ms. With K ~2.7-2.9, that is
+  ~110-190 tok/s [P].
+  - 150 by Monday needs nearly every piece to land at its high end. ~100-130 is the realistic outcome of a good strike.
+  - Each piece reports [K] here as it lands or dies, and NewIdeas tells the orchestrator at once.
+
+QWEN 4 DAY-0 PRE-WORK (behind the CHAT150 pieces; due Tue 10 Nov evening). Source: MoonShots' kit,
+~/MoonShots/QWEN4_READY.md + qwen4/ (b660ce9), section 3; the orchestrator 00:0x.
+- Today's model is already the Qwen 4 architecture preview (qwen4_exp_text). If Qwen 4 keeps it, the port is mostly sizes.
+- The watcher is running; qwen4/port_check.py prints the config diff, sizes and hazards at T+0.
+
+| owner | pre-write | done when |
+|---|---|---|
+| BigMoE | the records3 builder + native / p11 / pad converter driven by config (experts, moe_intermediate, hidden, layers); the r57 screen with a model-path argument and config-derived sizes; one runner script for every table cell | a dry run rebuilds today's store with matching md5s |
+| Leap | kernels with compile-time shapes today (NAX6-N, 3c, dense, GDN, attention) made shape-generic, or a one-command rebuild for new H / I; the native repack driven by config | today's shapes rebuild bitwise through the generic path |
+| EvalSuite | an AR-reference generator with a model-path argument; the same-scores harness with a model switch | today's model through the switch reproduces ref2tnax |
+| Breakthrough | the decision map's baseline capture (top-8 rows, xcapture) with a model switch | today's capture reproduced |
+| MTP Head / TrainLab | a day-0 drafter decision tree: (a) the model's own MTP layer (zero training), (b) DFlash2 retraining (capture + train, hours), (c) prompt-lookup copy drafting (model-agnostic) | written, with the time each takes |
+| MoonShots | make_records3.py (its own file); the planes_engine copies of gdn_exact / tierglu, with Leap | its port-map rows 9, 13-14 |
+
+- DAY-0 CHECKS, the three silent hazards (each must fail LOUDLY at load, not silently):
+  - H1: more than 527 experts. The ext's `li = e/31` is unchecked, and the residency tables cap at 527
+    (bigmoe/gated.py TLINES 17). Raise the caps or assert.
+  - H2: changed GDN dims. The exact kernels fall back to non-exact. Assert exactness at load.
+  - H3: a changed EOS / tokenizer. Decoding would never stop. Read EOS from the tokenizer config and assert.
+- Blockers, Kamen / the orchestrator, Sunday:
+  - Disk: 88 GB free; day 0 needs >= ~200 GB (4-bit MLX) or ~450 GB (bf16).
+> (a quote from the project owner, kept private)
+    orchestrator.
+  - The watcher's LaunchAgent install.
+
+> (a quote from the project owner, kept private)
+chat. Because imagine we say 180 TPs and then it's 40 on chat which is what the user will notice first. And make sure it
+sticks to 32, 24 and 12 gb". The publish table leads with chat per memory line.
+- THE ARITHMETIC (45 GB): chat tok/s = K (kept per check) / cycle (draft + check).
+  - Today: K 2.5 and a cycle of ~48-60 ms (check ~40-51 ms at 1-3 rows + draft ~2.6 ms per drafted row), so ~40-45 tok/s.
+  - 150 needs (K, cycle) = (3.75, 25 ms), (4.5, 30 ms) or (6, 40 ms).
+  - So BOTH factors are required. No single lever gets there.
+- F1, CYCLE x1.7: the check at 4-6 rows ~45-58 -> ~25 ms, and the draft ~8 -> ~3 ms.
+
+| # | lever | kind | price | owner | dated path |
+|---|---|---|---|---|---|
+| F1a | PRICED by Leap 00:3x (TABLE_350). A 2-row check is 54.5 ms wall; main-thread CPU is 29.3 ms, with ~25 ms waiting in the build, so the GPU binds. The 2-row dense map: ~20-22 ms of GPU vs a 3.1 GB byte floor (~11-12 ms). Pieces: every call padded to 16 rows (pads 1.44 ms); HC8 5.9; in_proj 4.35; out / o_proj 1.93; GDN step 1.12; att q 1.02; router 0.89 at 84 GB/s; shared 1.13; glue ~1.5. Items: (1) row-native low-row GEMVs, no pads, K split per shape, -4..-4.5 ms, ~1.5 d; (2) HC8 at low rows (k2b folded into k3c's prologue, which can stay bitwise; row-native k1c / k3c), -1.5..-2 ms, ~1 d; (3) glue fusion, -0.6..-1 ms, ~1 d | lossy-class, gated on IFEval vs NAX6-N | total -6..-7.5 ms per chat check, x1.13-1.18 on the chat cycle [P] (CORRECTED down from my x1.25-1.4) | Leap | a gated set ~Wed. The next walls for 150 are the experts at 2 rows (NAX ~14 ms) and the MTP draft |
+| F1b | Chat misses (~10-20 ms per check at 3-6 rows): chat-aware pool sizing (exact) + CH6's chat QOM rule (lossy) | mixed | x1.1-1.2 [P] | BigMoE | A/Bs Sun-Mon |
+| F1c | Draft cost 2.6 -> <= 0.6 ms per row: one fused forward drafting all rows (EAGLE-style; the head is the same model as F2a) | exact-safe on chat | x1.1-1.15 [P] | MTP Head | with F2a |
+
+- F2, ACCEPTANCE x1.8: K 2.5 -> ~4.5 at ~6 rows means per-token acceptance ~0.6 -> ~0.85.
+
+| # | lever | kind | price | owner | dated path |
+|---|---|---|---|---|---|
+| F2a | A trained chat head on the 125B's own features (EAGLE-3 style). Features come from the prefill path, which after PFX should run ~500 tok/s, so ~2M chat tokens per hour. A small head trained on the laptop (MLX); free compute only | exact-safe on EXACT; changes nothing on chat in L (chat runs exact acceptance) | THE ONLY CANDIDATE >= x1.5 on chat: K 2.5 -> 3.75-4.5 if p reaches ~0.8-0.85 [G, unproven] | MTP Head | feasibility Sun noon; feature run Sun; a first head ~Tue-Wed; tuned ~1-2 weeks |
+| F2b | A small same-tokenizer dense drafter (vanilla speculative decoding). Priced: a 0.6B at ~1.5 ms per token and p ~0.55-0.65; a 1.7B at ~3.5 ms and ~0.65-0.7; a 4B at ~8 ms and ~0.7-0.75. Net x0.9-1.15 on chat [P], no better than the MTP head. It costs RAM (+0.4-2.3 GB at 4-bit), which is bad at 24 / 12 GB. It needs a DOWNLOAD (the family's 0.6B / 1.7B / 4B at 4-bit, ~0.4 / 1.0 / 2.3 GB), so Kamen's OK first | exact-safe | x0.9-1.15 [P] | MTP Head (A/B only if Kamen OKs a download) | not the main path |
+| F2c | Lossy chat acceptance (R1 / E rules), gated | lossy | +7 % kept measured (E, 11-05) | BigMoE; gate | small |
+
+- HONEST DATE at 45 GB:
+  - 150 on chat is plausible ~3 weeks out (late November) at the earliest. It needs F2a to reach ~0.85 per token AND F1a
+    to reach ~the floor. Neither is proven; the risk is high.
+  - By Wednesday: ~60-70 tok/s lossy [P] (CH1 + F1b + F1c + part of F1a).
+  - CORRECTED 00:3x (Leap priced F1a at x1.13-1.18, below my x1.25-1.4): F1 by Wednesday is ~x1.2-1.35, not x1.7.
+    The rest of F1 needs the experts at 2 rows (~14 ms) and a fused draft. That makes 150 at 45 GB >= 3 weeks and less
+    certain. Wednesday's honest chat number stays ~55-70 lossy.
+- LINES 32 / 24 / 12 GB, chat (none of these chat cells is measured yet):
+
+| line | today (code) | chat | what 150 on chat needs | owner (measure first) |
+|---|---|---|---|---|
+| 32 GB (C30, C 160, 31.8 GB) | 153.5 HE / 114.8 MBPP | not measured; ~35-42 [G] (more misses than C 256) | F1 + F2 + the extra misses of a smaller cache | BigMoE: 12 IFEval at C 160 (after PFX) |
+| 24 GB (E24, s10b) | 41.3 HE exact, 355 MB SSD per token (MBPP 494) | not measured; ~20-30 [G] | SSD-bound: at ~12 GB/s, 150 means <= ~80 MB per kept token, x4.5-6 fewer bytes (the BYTES10 track) + F2 | BigMoE: E24 on 12 IFEval with MB per kept token |
+| 12 GB (verified greedy) | 18.6 HE (~440 MB per kept token; ~8 GB/s of SSD, near the limit) | not measured | <= ~80 MB per kept token: x5.5 fewer bytes + F2 | Fit12: 12 IFEval on the loop, MB per kept token |
+
+  - Bytes per kept token fall as K rises: one check's expert union is shared by every kept token. So F2a helps every line.
+    The rest at 24 / 12 GB is BYTES10: smaller cold reads (3-bit / 2-bit sidecars, lossy) and expert skipping (lossy, gated).
+  - HONEST: 150 on chat at 24 / 12 GB is a research program, not this month.
+- PREFILL at every line: the PFX mechanism (one tier call per prompt = expert-once) applies to all lines. Its SSD floor is
+  the non-resident expert bytes / ~12 GB/s per prompt: ~2 s at 45 GB, ~3 s at 32, ~4 s at 24, ~4.6 s at 12 [P].
+  - With compute ~3-5 s at 4-8K: 500+ at >= 4K prompts is plausible on every line [P].
+  - Short prompts (~1K) stay floor-bound, ~200 tok/s at 24 / 12 GB, until PF-D (skip resident) and smaller reads.
+  - Owners: BigMoE (45 / 32, and E24's stack at 24), Fit12 (12).
+- RE-AIMS:
+  - Fit12: 12 GB chat (12 IFEval: tok/s + MB per kept token) and 12 GB prefill with one whole-prompt call.
+  - Breakthrough: chat BYTES10 at 24 / 12 GB. Price MB per kept token on chat, and the levers to <= 80 MB, each with a
+    quality gate (their 12 GB lossy code mode failed).
+
+PLAN CHAT 150 / PREFILL 500 (NewIdeas Sat 23:5x). Kamen via the orchestrator 23:4x, verbatim excerpts:
+"until Tuesday max Wednesday we must have figured out everything wrong with them and get chat TPs to at least 150 and
+prefill would be great if we got to at least 500, 1000 is better", "we MUST get chat TPs to 150 because that's what a
+day to day user will feel most", "ready to publish at latest Wednesday".
+- CHAT, measured (BigMoE N45, 45 GB C 256, 12 IFEval; re-derived per check by NewIdeas: scripts/chat/chat_rows.py, data/firstcheck/chat_rows_n45.txt):
+  - Today: exact 39.9 tok/s, lossy config 45.0.
+  - Checks verify only ~3 rows (median 2-3; the MTP head's t 0.3 cut), and keep 2.5 (81 % of rows).
+  - A check costs ~51 ms exact / ~40 ms lossy EVEN AT 1-2 ROWS with <= 10 misses (the floor).
+  - SSD misses add ~4 ms at 1-2 rows, ~10 at 3-4, ~22 at 5+.
+  - The draft is ~2.6 ms per drafted row (serial MTP head).
+- What limits chat:
+  - Not verify width (few rows are wasted) and not mostly the SSD. It is the low-row check's fixed cost: ~2-2.5x its
+    memory floor (~15-20 ms for a 1-2-row forward: ~2.7 GB dense + ~1-2 GB of experts at ~295 GB/s).
+  - The second limit is acceptance (2.5 kept).
+  - 150 needs a ~25 ms cycle with ~3.75 kept: the low-row check near its floor (x2) AND x1.5 acceptance.
+- HONEST CHAT PRICE by Wednesday: lossy ~55-65 tok/s [P], exact ~42-45 [P]. 150 is a multi-week program: kernels near
+  the bandwidth floor at 1-4 rows + a trained chat drafter.
+- No chat lever prices >= x1.5. E, the 11-05 chat relax arm R1(0.5), read x1.46, but its kept rose only +7.2 % (2.67 vs
+  2.49). Most of that x1.46 was kernels (HC8), and E + HC8 failed IFEval (84 vs 90).
+- Chat levers, ranked:
+
+| # | lever | kind | price | owner | first step |
+|---|---|---|---|---|---|
+| CH1 | The lossy config's chat (L: 45.0 vs 39.9 = x1.13 [K]), but only 6 / 24 == AR (C4). Find the bit-changer (BigMoE's FU bisect, armed); likely a FAST kernel acting on chat (DN-KS / HC8_FAST) | lossy unless the bisect makes it exact | x1.13 [K] | BigMoE; EvalSuite gate | the bisect; then an IFEval same-scores gate vs NAX6-N on L's chat |
+| CH2 | Low-row dense kernels: Leap's step 0 B 2-row table (out_proj / o_proj 5.4, SDPA 3.2, shared gate\|up 2.3, a\|b 1.6, k\|v 1.2 ms ...). Bitwise is exhausted, so bit-changing forms are needed | lossy (gate) | x1.2-1.4 [P] if the 2-row dense part drops ~25 -> ~15 ms | Leap -> BigMoE; gate | price the 2-row pass in place on L; build the top items |
+| CH3 | Drafter speed: the MTP head at ~2.6 ms per drafted row, ~8 ms of a ~50 ms cycle. Chat runs exact acceptance even in L, so a drafter change can't change chat outputs | exact-safe on chat | x1.05-1.1 [P] | MTP Head | a fused / 4-bit head, bitwise not needed |
+| CH4 | A better chat drafter: acceptance 2.5 -> 3+ (an EAGLE-3-style head trained on 125B features, free compute only) | exact-safe in EXACT; changes nothing on chat in L | x1.2-1.4 [G], days | MTP Head | feasibility by Sun noon: data, time, compute |
+| CH5 | Top-8 experts on chat rows (published top-k reduction; 12 GB L1-17: +17.4 % tok/s, IFEval -2.0 [-4.3, +0.3]) | lossy (gate) | x1.1-1.15 [P] | BigMoE; gate | an engine A/B on 12 IFEval |
+| CH6 | The 11-04 chat FAST rule (QOM cf 0.5 + bonus gate), against the 4-22 ms of misses per check | lossy (gate) | x1.05-1.15 [P] | BigMoE; gate | an A/B |
+
+- PREFILL, measured (N45, exact): 98 / 118 / 124 tok/s at 1.6K / 4.7K / 7.9K tokens (TTFT 16 / 40 / 64 s). The cost is
+  flat at ~8-10 ms per prompt token, consistent with a per-1,024-row-chunk cost (each chunk re-reads the experts).
+  - Lossy 7.9K peaks at 45.1 GB, over the line (BigMoE's FU fixes it).
+- PRIOR ART, our own: PF2 layer-major prefill (64 GB era, every expert once per prompt) measured x2.05 at 4K
+  (28.5 -> 13.9 s) and x2.16 at 16K, shas identical. lmp4pd added -8..-13 % more. PF1 staging (read L+1's experts during
+  L) is hidden inside it. After layer-major, compute dominates: ~5 TFLOPS effective at 4K.
+- Prefill levers:
+
+| # | lever | kind | price | owner |
+|---|---|---|---|---|
+| PF-A | CORRECTED by BigMoE 00:0x: NO PORT NEEDED. Tier mode's prefill_call -> _prefill_grouped already reads each unique expert once per CALL (double-buffered, exact 4-bit from records3). The screen calls it per 1,024-row chunk, so a 7.9K prompt re-reads ~all experts 8 times. One big call = expert-once. lmp4pd adds only bounded activation memory + the PLE precompute. PFX is armed for CERT_DONE: exact at R57_PFCHUNK 1024 / 2048 / 4096 / 8192, plus lossy at 8192, on agent/edit10 1.6K, write13 4.7K and write11 7.9K. It reports TTFT, tok/s, lifetime peak, decode tokens vs the 1024 arm, and the PF1 split. LINES (NewIdeas): PASS = write13 TTFT >= x2.5 at 8192 vs 1024 AND decode tokens == the 1024 arm AND lifetime peak <= 45.0 GB; KILL < x1.5 | exact if the tokens match | BigMoE est. x4 at 4.7K (~470 tok/s), x6 at 7.9K (~740), x2 at 1.6K (~200: a short prompt still reads ~the whole model once, ~7 s) | BigMoE |
+| PF-D | Short prompts: skip pool-resident experts in the prefill reads (they are already in RAM). For <= 2K prompts the ~7 s whole-model read dominates | exact | lifts 1.6K beyond ~200 [P, unpriced] | BigMoE |
+| PF-E | The AR rows for the audit: EvalSuite has no NAX6-N AR rows for the agent prompts. Decode NAX6-N one-token AR for write13 + write11 (>= 64 tokens each) after CERT, so the R-56-style audit compares the big-call prefill's decode against AR and not just the 1024 path | exact reference | enables the exact claim | EvalSuite |
+| PF-B | Prefill expert GEMMs on the M5's matrix units (NAX) after layer-major | exact-safe only if the decode still matches AR (R-56-style audit) | x2-3 [P], so ~500-800 tok/s | Leap |
+| PF-C | PF1 staging inside PF-A, hiding the ~2 s of SSD (~25 GB at 12 GB/s per prompt) | exact | part of PF-A | BigMoE |
+| PF-A-EXACT | EXACTNESS (Leap 00:3x): a ONE-CALL prefill is NOT bitwise vs 1,024-row chunks (0 / 9 decode hashes equal; tokens equal). Layer-major with 1,024-row sub-batches IS bitwise by construction. So the EXACT mode's prefill = layer-major + 1,024-row sub-batches (lmp4pd-style, enabled in tier mode). The one big call is fine for the lossy mode (tokens equal so far; covered by the lossy gates) | exact | same expert-once read as PF-A | BigMoE + Leap |
+| PF-F | FREE FIX (Leap 00:3x): the screen's prefill computes full-vocab logits for EVERY prompt row (2.35 GB at 4.7K rows). Keep only what is used (the last row; the drafter's needs). Speed + memory, and it likely explains part of the lossy 7.9K peak at 45.1 GB | exact | free | BigMoE |
+| PF-B' | PRICED (Leap 00:3x): MLX gather_qmm reaches 7.1 TF at 1K rows and 13.8 at 8K (dense qmm 27-29). Bitwise first: gather_qmm on a layer's whole prompt (pairs are invariant 1K-8K, measured): x1.4 on the experts, ~0.5 d once PF-A lands. Then an MPP grouped expert GEMM (~18-22 TF): prefill compute ~0.97 -> ~0.55 ms per token [P], lossy unless the R-56 audit holds, ~1.5-2 d | exact (gather) / audit (MPP) | x1.4 then ~x1.8 on compute | Leap |
+
+- HONEST PREFILL PRICE (CORRECTED 00:1x with BigMoE's PFX estimate): long prompts ~470-740 tok/s from one big call
+  alone [P]. Short prompts (1.6K) ~200 until PF-D + PF-B land. 1,000 at long prompts needs PF-B. PFX decides at
+  ~08:00.
+- ORDER (code from tonight; GPU after CERT, ~07:30):
+  1. Tonight, CPU: BigMoE ports PF-A and runs the C4 bisect (armed). Leap writes the NAX prefill GEMM plan and prices
+     the low-row kernels. MTP Head works on drafter speed + CH4's feasibility.
+  2. Sun after CERT: the PF-A kill test (4.7K prompt, layer-major vs chunked, TTFT + tokens == AR, ~10 min quiet). The
+     C4 bisect result. EvalSuite's IFEval gate on L's chat.
+  3. Sun-Mon: PF-B, CH2, CH3 / CH5 / CH6 A/Bs, gates.
+  4. Tue: final numbers. Wed: publish.
+
+> (a quote from the project owner, kept private)
 morning. You can run tests for now as much as you want. I probably won't stop you until tomorrow morning or midday".
 - The table: 45 / 24 / 12 GB x exact / lossy. Every cell gets:
   - whole decode on the S5 prompts (12 HumanEval + MBPP12);

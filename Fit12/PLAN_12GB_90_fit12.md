@@ -263,3 +263,53 @@ rule: tokens per check, time per check from the table above, and divergences vs 
     rarely certifies, and some MBPP prompts run slower than verified greedy (/268 13.9 vs 17.5, /224 17.0 vs 19.8).
   - Findings note: /Users/kamen/FableGod/findings/2026-11-07_1747_12gb-table-cells.md. Ids for EvalSuite:
     /Users/kamen/Fit12/data/scr/tab12/tab12{e,f}_ids.json (r57rows form, CAP 256).
+- EvalSuite 20:16 (its RESULT_t80ck1u, t95 section): t95ck1u FAIL at the bar, HE+ 90.0 vs REF2-T 95.0 (-5.00, p 0.25) in both
+  orders; -1.67 vs NAX6 (information). With t80ck1u (-11.7) and t90ck1u (-8.3), the 12 GB lossy cell fails code quality on
+  every certificate tried; the verified-greedy loop (12E) is the 12 GB row.
+
+## 12 GB CHAT + PREFILL (pre-registered Sat 7 Nov 23:5x; NewIdeas 00:2x, QUEUE 9c65385 PROGRAM CHAT 150 / PREFILL 500)
+- Why: Kamen 23:5x wants 150 tok/s on chat at 32 / 24 / 12 GB. At ~12 GB/s, 150 on chat needs <= ~80 MB of SSD per kept
+  token; the 12 GB loop reads ~440 on code today. The MB per kept token on chat is the input for Breakthrough's chat BYTES10.
+- 1) chat12: the verified-greedy loop (arm ex, tab12's footing) on BigMoE N45's 12 IFEval prompts, CAP 256 as N45. Report:
+  whole decode / full period / end to end (geometric mean, pooled), tokens kept per check, SSD MB per kept token (the
+  process's own reads inside the decode phases, from the phase marks), lifetime peak; r57rows-form ids for EvalSuite.
+- 2) pf12a / pf12b: 12 GB PREFILL on BigMoE's PFX prompts (agent/edit10 1,565, agent/write13 4,730, agent/write11 7,932 tokens,
+  ascending; one process per arm; CAP 32). A = today's b12_prefill (s_moe 4096: each layer's experts read once per 4,096 prompt
+  rows; 1.6K is already one MoE call), B = s_moe 8192 (one MoE call per prompt, BigMoE's PFX form; the docstring says the
+  split leaves the arithmetic unchanged). Report: prefill s and tok/s (ids[:-1]), the prefill's own SSD reads, TTFT = prefill +
+  check 0 + the drafter's setup (the first tokens appear at check 0's commit), lifetime peak per length (does a 4.7K / 7.9K
+  prompt fit 12 GB?), decoded tokens A = B. [P] NewIdeas: an SSD floor of ~4.6 s per prompt at 12 GB for one expert pass.
+- Runner /Users/kamen/Fit12/scripts/chat12.sh (armed 23:55:40): after EvalSuite's results/CERT_DONE, 10 clear minutes (GO = 1
+  min, WAIT = hold), one 30-min quiet lock, start by Sun 09:00, swap +1 GB / 40 min guards, DONE at the end. Code: t3_twopass.py
+  F12_SMOE + the prefill's SSD bytes (sha256 800323c3ca97; backup .bak_pf); fit_t3.py PREFILL line (2338f9367b00; backup
+  .bak_pf); c1u16_read.py SSD MB per kept token; pf12_read.py. FAKE-tested 23:5x.
+
+## BC2 (Sun 8 Nov 00:1x; NewIdeas 01:1x for Leap's CHAT-150 strike, QUEUE c16f510): is there a 2-bit expert read path?
+- No read path exists, at 12 GB or 45 GB. records3 stores each expert's MSB-3 part as ONE MLX bits=3 bitstream (value i at
+  bits 3i..3i+2; Breakthrough's v3p tier.py planes(): m = q >> 1, s3 = 2s, b3 = b + s * the group mean of the dropped bit)
+  plus the LSB as a 1-bit stream. The top two bits of each weight sit inside the 3-bit stream, so a "top 2 planes" read of
+  records3 reads every byte of the MSB-3 part: 0 % saved. Every MSB-2 number we have (O2, Q2, B2, s7_cal / s7_cal_all) came
+  from in-memory emulation.
+- Store sizes (du, Sun 00:1x): /Users/kamen/BigMoE/models/bare/records3 and records3m are separate copies of 64 GB each
+  (1.43 / 1.42 GB per layer). records3 = 4.75 b/w (w3 3 + s3/b3 0.5 + l1 1 + b 0.25). Disk: 91 GB free.
+- Option A, a separate MSB-2 store: q2 = q >> 2 as an MLX bits=2 stream, s2 = 4s, b2 = b + s * mean(q & 3) per 64-group
+  (records3's bias rule) = 2.5 b/w, -29 % per read vs MSB-3's 3.5. Compute: mx.gather_qmm bits=2 natively (no new kernel). Work:
+  a third part type in r57's loader / pools and a tier plan with 2-bit ranks. Every expert can sit at rank 6-9, so the copy is
+  the whole model: ~0.75 GB per layer, ~36 GB. It does not fit (91 GB free, floor 100) without freeing space (Kamen's call).
+- Option B, re-lay records3 as prefix records [s3 b3 | MSB-2 plane | bit plane | LSB, b] with b2 = b3 + 0.5 s3 (midpoint, no
+  extra field): no new disk; one request per read at every precision (MSB-2 = the first segment, MSB-3 = the first two), so
+  it avoids the request overhead that killed plane-split reads; MSB-3 rebuilt on the GPU (the pattern of tier.py's q = 2m + l
+  kernel). Cost: it rewrites the store every exact mode reads (NAX6-N), so every loader changes and every exact mode needs a
+  re-proof (bitwise by construction, but checked).
+- IFEval expectation: MSB-2 = 5x MSB-3's weight MSE (15 vs 3 E4; O2 table above) and 7.8x its output error (RTN-2, Q2); the
+  data-aware 2-bit codes stayed 1.7-2.3x MSB-3 (B3b, B10-r: route closed). NewIdeas' s7_cal_all: IFEval KL 0.109, chat 8-19 %
+  above the linear-in-MSE model; today's FAST stack sits at 8.22 % IFEval flips vs the 8.13 % line [G]. Ranks 6-9 carry a
+  small share of the routing weight squared (my guess ~20-30 % of ranks 2-9's error, [G], not measured), but they are about
+  half the MSB-3 misses. Sure rows only does not isolate the error: lever 1 showed the certificate is token-exact and the
+  damage enters through the committed rows' KV. Expect BETWEEN at best for ranks 6-9 and KILL for 2-9 against NAX6-N.
+- Recommendation: measure before building. One map arm with ranks 6-9 at MSB-2 emulated in memory (the s7_cal machinery; no
+  store), read with map_kl.py on IFEval (KL + flips); build a store only if it holds, and only after disk is freed.
+- Reusable from the 12 GB loop: no 2-bit store and no 2-bit kernel exist. What carries over: the emulation formulas and quality
+  anchors (this file and /Users/kamen/Fit12/PLAN.md: O2, Q2, B3b, B10-r), the bias rule, and v3p tier.py's planes() / rebuild
+  kernel as the template for option B (Breakthrough's code). The 12 GB pools and loader are v3p's, not r57's: nothing ports
+  directly. Posted in the lounge Sun 00:1x (five notes).

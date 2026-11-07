@@ -31,6 +31,8 @@ COMMIT = os.environ.get("FCP_COMMIT") == "1"   # PLAN 220: split each commit (re
 CSYNC = os.environ.get("FCP_CSYNC") == "1"
 SEAMS = os.environ.get("FCP_SEAMS") == "1"     # PLAN 220 (4): every eval / async_eval + the cycle marks, for the GPU-idle seams
 SEAM_RUN0 = int(os.environ.get("FCP_SEAM_RUN0", "3"))
+LSYNC = os.environ.get("FCP_LSYNC") == "1"     # CHAT-150: sync before / after every MoE block in check windows (dense vs MoE split)
+LREC = []
 SEAMREC, MARKS = [], []     # + an eval of the cache states right after it: the commit's GPU time
 CREC = []   # the fix candidate: MLX's residency set (mx.set_wired_limit) keeps buffers wired
 S = {"on": False, "run": -1, "chk": -1, "phase": None, "wrapped2": False, "cur": None, "mtl": []}
@@ -226,6 +228,26 @@ def _wrap_late():                                      # bigmoe's modules exist 
         stream._stage_drop = _wrap("stream._stage_drop", stream._stage_drop)
     if gated is not None and hasattr(gated, "Gate"):
         gated.Gate.new_pass = _wrap("Gate.new_pass", gated.Gate.new_pass)
+    if LSYNC:
+        Qm = sys.modules.get("mtplx.models.qwen4_exp")
+        if Qm is not None:
+            import mlx.core as _mx
+            _moe = Qm.SparseMoeBlock.__call__
+
+            def _moe_sync(self_, x, *a, **k):
+                if not S["on"]:
+                    return _moe(self_, x, *a, **k)
+                t0, c0 = time.perf_counter(), time.thread_time()
+                _mx.eval(x)                                  # everything before this MoE block: done
+                t1, c1 = time.perf_counter(), time.thread_time()
+                y = _moe(self_, x, *a, **k)
+                t2, c2 = time.perf_counter(), time.thread_time()
+                _mx.eval(y)                                  # this MoE block (router, shared, gate, experts): done
+                t3, c3 = time.perf_counter(), time.thread_time()
+                LREC.append((S["run"], S["chk"], int(x.shape[1]) if x.ndim > 1 else 1, t0, t1, t2, t3, c0, c1, c2, c3))
+                return y
+            Qm.SparseMoeBlock.__call__ = _moe_sync
+        print(f"[fcp] FCP_LSYNC: MoE blocks synced in check windows ({Qm is not None})", flush=True)
     if COMMIT:
         r2, Qm = sys.modules.get("ref2"), sys.modules.get("mtplx.models.qwen4_exp")
         if r2 is not None and Qm is not None:
@@ -285,7 +307,7 @@ def mark(kind, chk=None):
 def dump():
     os.makedirs(OUT, exist_ok=True)
     p = os.path.join(OUT, f"{TAG}_fcp.json")
-    json.dump(dict(rec=REC, calls=CALLS, samp=SAMP, noclear=NOCLEAR, crec=CREC, csync=CSYNC, seams=SEAMREC, marks=MARKS), open(p + ".tmp", "w"))
+    json.dump(dict(rec=REC, calls=CALLS, samp=SAMP, noclear=NOCLEAR, crec=CREC, csync=CSYNC, seams=SEAMREC, marks=MARKS, lrec=LREC, clock=[time.time(), time.perf_counter()]), open(p + ".tmp", "w"))
     os.replace(p + ".tmp", p)
     print(f"[fcp] {len(REC)} check windows, {len(CALLS)} calls, {len(SAMP)} samples -> {p}", flush=True)
     r2 = sys.modules.get("ref2")

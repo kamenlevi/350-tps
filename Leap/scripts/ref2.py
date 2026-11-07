@@ -218,6 +218,7 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "commit_sub": int(os.environ.get("REF2_COMMIT_SUB", "0") or 0),   # PLAN 220 seam (e): send the commit's GDN replays every N (0 off)
        "tier_chunk": os.environ.get("REF2_TIER_CHUNK") == "1",   # F24: a tier call whose expert union exceeds the slots runs in row groups (default off)
        "tier_chunk_cap": int(os.environ.get("REF2_TIER_CHUNK_CAP", "0") or 0),   # test only: group at this union cap (0: the pools' own)
+       "pad_in": os.environ.get("REF2_PAD_IN") == "1",   # CHAT-150 G1: native <= 16-row calls pad in the kernel (qmm26m; bitwise; default off)
        "hc8_v": int(os.environ.get("REF2_HC8_V", "4")),
        "ooo_1c": os.environ.get("REF2_OOO_1C") == "1", "small_native": os.environ.get("REF2_SMALL_NATIVE") == "1",
        "nax_1cq": os.environ.get("REF2_NAX_1CQ") == "1",
@@ -234,7 +235,7 @@ _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
               kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
               fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0, ooo_1c_qom=0, nax_1cq=0, qom_split=0,
-              gdn_lazy=0, gdn_lazy_rows=0, gdn_lazy_flush=0, dn_ks=0, nw_calls=0, nw_late_calls=0, nw_writes=0, eprep=0, gdn_tg=0, sb_first=0, ple_late=0, ple_late_stale=0, commit_sub=0, tier_chunk=0, tier_chunk_groups=0)
+              gdn_lazy=0, gdn_lazy_rows=0, gdn_lazy_flush=0, dn_ks=0, nw_calls=0, nw_late_calls=0, nw_writes=0, eprep=0, gdn_tg=0, sb_first=0, ple_late=0, ple_late_stale=0, commit_sub=0, tier_chunk=0, tier_chunk_groups=0, pad_in=0)
 QCNT_1C = None                                       # Fri 11-06: a list -> each one-call's post-drop work (see the notes)
 NW_ON = False                                        # NEVER-WAIT (Fri 11-06): runtime switch, read per one-call (armed by
 NWCNT = None                                         # CFG["neverwait"]); NWCNT: a list -> per one-call float32 counters
@@ -437,7 +438,12 @@ def _dnr_qmm(x, w, orig, args, kw):
             and x.dtype == mx.bfloat16 and x.shape[-1] == K and scales.dtype == mx.bfloat16):
         ks = _dn_ks(N, K)
         nt = CFG["dense_native_nt"] if ks == 1 and N % (32 * CFG["dense_native_nt"]) == 0 else 1
-        y = _qmm16n()(_pad16(x.reshape(rows, K)), w, scales, biases, N, ks, nt)
+        if CFG["pad_in"]:                              # CHAT-150 G1: no materialized 16-row pad (qmm26m, bitwise)
+            from qmm26m import qmm16n_m
+            y = qmm16n_m(x.reshape(rows, K), w, scales, biases, N, ks, nt)
+            COUNTS["pad_in"] += 1
+        else:
+            y = _qmm16n()(_pad16(x.reshape(rows, K)), w, scales, biases, N, ks, nt)
         COUNTS["dense_native"] += 1
         return y[:rows].reshape(*lead, N)
     wm, sm, bm = _dn_unpack(w, scales, biases, N, K)
@@ -569,25 +575,37 @@ def _qmm(x, w, *args, **kw):
     if not (transpose and mode == "affine" and biases is not None and rows <= R and x.dtype == mx.bfloat16):
         return orig(x, w, *args, **kw)
     K_, N = x.shape[-1], w.shape[0]
-    x16 = _pad16(x.reshape(rows, K_))
+    x2 = x.reshape(rows, K_)
+    pin = CFG["pad_in"]                                  # CHAT-150 G1: the native forms pad in the kernel (qmm26m, bitwise)
+    x16 = None if pin else _pad16(x2)
     if bits == 4 and group_size == 64 and N >= CFG["dense_min_n"] and N % 64 == 0 and K_ % 64 == 0:
         e = _dn_get(w, scales, biases) if CFG["dense_native"] else None
         if e is not None:                                # DENSE-N: bitwise == qmm16c (ks 1); nt only groups tiles
             ks = _dn_ks(N, K_)
             nt = CFG["dense_native_nt"] if ks == 1 and N % (32 * CFG["dense_native_nt"]) == 0 else 1
-            y = _qmm16n()(x16, e[1], e[2], e[3], N, ks, nt)
+            if pin:
+                from qmm26m import qmm16n_m
+                y = qmm16n_m(x2, e[1], e[2], e[3], N, ks, nt)
+                COUNTS["pad_in"] += 1
+            else:
+                y = _qmm16n()(x16, e[1], e[2], e[3], N, ks, nt)
             COUNTS["dense_native"] += 1
         else:
-            y = qmm16c(x16, w, scales, biases)
+            y = qmm16c(_pad16(x2) if x16 is None else x16, w, scales, biases)
             COUNTS["qmm16c"] += 1
     else:
         e = (_sn_get(w, scales, biases) if (CFG["small_native"] and bits == 4 and group_size == 64 and K_ % 64 == 0
                                            and scales is not None and scales.dtype == mx.bfloat16) else None)
         if e is not None:                                # SMALL-N (FAST): qmm16n on the padded native copy
-            y = _qmm16n()(x16, e[1], e[2], e[3], e[4], _dn_ks(e[4], K_), 1)[:, :N]
+            if pin:
+                from qmm26m import qmm16n_m
+                y = qmm16n_m(x2, e[1], e[2], e[3], e[4], _dn_ks(e[4], K_), 1)[:, :N]
+                COUNTS["pad_in"] += 1
+            else:
+                y = _qmm16n()(x16, e[1], e[2], e[3], e[4], _dn_ks(e[4], K_), 1)[:, :N]
             COUNTS["small_native"] += 1
         else:
-            y = orig(x16, w, scales, biases, transpose=True, group_size=group_size, bits=bits, mode=mode)
+            y = orig(_pad16(x2) if x16 is None else x16, w, scales, biases, transpose=True, group_size=group_size, bits=bits, mode=mode)
             COUNTS["mlx16"] += 1
     return y[:rows].reshape(*lead, N)
 

@@ -6,12 +6,14 @@
    (humanevalx 104 + mathx 50), ref2tnaxn.r2 (MBPP 100). humanevalx / mathx items are scored as HumanEval+ / math (their
    set renamed for the scorers, as d4x's stage 2 does for ifevalx).
 2. Pooled over the three sets and both orders (728 pairs): delta > -2 pt AND McNemar p >= 0.05.
+1b. IFEval (amendment 3, Sat 23:3x: the shipped config's chat is not exact): decision 4 vs NAX6's IFEval rows
+   (results/ref2tnax) per order, the 100 core prompts, no stage 2 (2 more lines; the pooled line keeps its 3 sets).
 3. Long code: the 41 humanevalt rows, tfwin against the exact base: blunders (the base's p of a committed token < 0.01)
    <= 1 per 10K tokens.
 4. The chat check (PREREG_cert amendment 2; the orchestrator Sat 05:5x): IFEval prompts through the v1 engine, interleaved
    with code prompts (request-boundary profile swaps); their tokens must equal NAX6's AR rows (results/ref2tnax) on every
-   one -> CHAT-EXACT: YES | NO (results/cert/CERT_chat.txt). A check of its own, outside the 8 lines.
-CERT PASS = all 8 lines pass; DIFFERS (HIGHER) is named in the verdict, not a FAIL (d4x's convention). Information
+   one -> CHAT-EXACT: YES | NO (results/cert/CERT_chat.txt). A check of its own, outside CERT's lines.
+CERT PASS = all 10 lines pass (the 8 + IFEval's 2, amendment 3); DIFFERS (HIGHER) is named in the verdict, not a FAIL (d4x's convention). Information
 (CERT_info.txt): token agreement between the orders, rows token-identical to NAX6-N per set (which sets run FAST
 kernels), cap hits, the core 60 + 50 vs REF2-T. Rows without text get it
 from their ids in memory (tools/rows_text.py's decode, equal to the decode stage's text on 520 / 520 reference rows)."""
@@ -27,14 +29,15 @@ import d4x, mbpp_score as mb, rows_text as rt
 
 RES = os.path.join(ROOT, "results")
 OUT = os.environ.get("CERT_OUT", os.path.join(RES, "cert"))     # CERT_OUT: a test elsewhere
-N = {"humaneval": 164, "math": 100, "mbpp": 100}
-NAME = {"humaneval": "HumanEval+", "math": "math", "mbpp": "MBPP"}
+N = {"humaneval": 164, "math": 100, "mbpp": 100, "ifeval": 100}
+POOLED = ("humaneval", "math", "mbpp")      # the pre-registered pooled line (728 pairs); IFEval (amendment 3) is information there
+NAME = {"humaneval": "HumanEval+", "math": "math", "mbpp": "MBPP", "ifeval": "IFEval"}
 REFS = ("ref2tnax", "ref2tnaxn.r3", "ref2tnaxn.r2")
 NLONG = 41
 
 
 def items():
-    its = {k: it for k, it in dr.items().items() if it.get("set") in ("humaneval", "math")}
+    its = {k: it for k, it in dr.items().items() if it.get("set") in ("humaneval", "math", "ifeval")}
     for name, as_ in (("humanevalx", "humaneval"), ("mathx", "math")):
         its.update({it["key"]: dict(it, set=as_) for it in D.load("dec_" + name)})
     its.update({it["key"]: dict(it, set="mbpp") for it in D.load("dec_mbpp")})
@@ -105,8 +108,8 @@ def main(fwd, rev, lrun, crun=None):
     R = load(*REFS)
     A = {"fwd": load(fwd), "rev": load(rev)}
     res, vl, info = {}, [], []
-    B = Cc = n = 0
-    for s in ("humaneval", "math", "mbpp"):
+    B = Cc = n = B4 = C4 = n4 = 0
+    for s in ("humaneval", "math", "mbpp", "ifeval"):
         want = sorted(k for k in its if its[k]["set"] == s)
         assert len(want) == N[s], f"{s}: {len(want)} items, not {N[s]}"
         txt = []
@@ -117,7 +120,9 @@ def main(fwd, rev, lrun, crun=None):
             else:
                 sa, sr = score(A[o], its, s, keys), score(R, its, s, keys)
                 v, b, c, l = line(f"{NAME[s]} {o}", sa, sr, keys)
-                B, Cc, n = B + b, Cc + c, n + len(keys)
+                B4, C4, n4 = B4 + b, C4 + c, n4 + len(keys)
+                if s in POOLED:
+                    B, Cc, n = B + b, Cc + c, n + len(keys)
                 cap = sum(A[o][k].get("finish") == "length" for k in keys)
                 info.append(f"cap hits {NAME[s]} {o}: arm {cap}, reference {sum(R[k].get('finish') == 'length' for k in keys)}")
             res[(s, o)] = v
@@ -131,13 +136,13 @@ def main(fwd, rev, lrun, crun=None):
         same = [k for k in want if k in A["fwd"] and k in A["rev"]]
         info.append(f"token agreement {NAME[s]}: the two orders identical on "
                     f"{sum(A['fwd'][k]['completion_ids'] == A['rev'][k]['completion_ids'] for k in same)} of {len(same)}")
-    if n == 2 * sum(N.values()):
+    if n == 2 * sum(N[s] for s in POOLED):
         d, p = 100.0 * (B - Cc) / n, mcnemar_p(B, Cc)
         pv = "DIFFERS (HIGHER)" if p < 0.05 and B > Cc else "PASS" if d > -2 and p >= 0.05 else "FAIL"
         pl = (f"pooled (n {n} pairs: 3 sets x 2 orders): delta {d:+.2f} pt, McNemar p {p:.4f} (arm only {B} / reference only "
               f"{Cc}; bar: delta > -2 pt AND p >= 0.05): {pv}")
     else:
-        pv, pl = "INCOMPLETE", f"pooled: {n} of {2 * sum(N.values())} pairs: INCOMPLETE"
+        pv, pl = "INCOMPLETE", f"pooled: {n} of {2 * sum(N[s] for s in POOLED)} pairs: INCOMPLETE"
     res["pooled"] = pv
     vl.append(pl)
     open(os.path.join(OUT, "CERT_pooled.txt"), "w").write(pl + "\n")
@@ -156,6 +161,9 @@ def main(fwd, rev, lrun, crun=None):
         cv, cl = chat_check(crun)
         open(os.path.join(OUT, "CERT_chat.txt"), "w").write(cl + "\n")
         info.insert(0, cl)
+    if n4:
+        info.insert(0, f"pooled with IFEval (information; amendment 3): n {n4}, delta {100.0 * (B4 - C4) / n4:+.2f} pt, McNemar p "
+                       f"{mcnemar_p(B4, C4):.4f} (arm only {B4} / reference only {C4})")
     T = load("ref2t")      # information: the core 60 + 50 vs REF2-T
     for o in ("fwd", "rev"):
         for s in ("humaneval", "math"):

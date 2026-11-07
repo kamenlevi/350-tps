@@ -70,6 +70,13 @@ for arm in $ARMS; do
     fcpf) X="REF2_SB_FIRST=1 REF2_PLE_LATE=1 REF2_COMMIT_SUB=9 R57_WIRED=1";;   # seams (b, d, e) on v1' + wired: engagement
     fcpk) X="REF2_TIER_CHUNK=1 R57_WIRED=1" CC=112 KK="$KC6";;   # F24: v1' + wired at C 112 with row-chunking (the ungated check)
     fcpxk) X="REF2_TIER_CHUNK=1" E="$EXE" CC=112 KK="$KX";;   # F24 proof: the exact env at C 112, chunked sync path vs fcpx0 (C 224)
+    fcpch) X="R57_WIRED=1 FCP_SEAMS=1 FCP_NCHK=16" KK="ifeval/1220,ifeval/3280,ifeval/1561" CP=128;;   # CH2: chat checks on L
+    fcpcs) X="R57_WIRED=1 FCP_LSYNC=1 FCP_NCHK=16" KK="ifeval/1220,ifeval/3280,ifeval/1561" CP=128;;   # CHAT-150: dense vs MoE per layer (synced)
+    fcpcc) X="R57_WIRED=1 FCP_NCHK=16 MTPLX_QWEN4EXP_COMPILE=1" KK="ifeval/1220,ifeval/3280,ifeval/1561" CP=64;;   # B1 probe: MTPLX's compiled <= 4-row decode
+    fcpcb) X="R57_WIRED=1" KK="ifeval/1220,ifeval/3280,ifeval/1561" CP=128;;   # CHAT-150 base (no probe windows)
+    fcpcp) X="R57_WIRED=1 REF2_PAD_IN=1" KK="ifeval/1220,ifeval/3280,ifeval/1561" CP=128;;   # G1 exact: in-kernel pads
+    fcpp1) X="R57_PFCHUNK=1024" E="$EXE" CC=192 KK="agent/edit10,agent/write13" CP=16;;   # PREFILL: chunk 1024 (today's)
+    fcpp8) X="R57_PFCHUNK=8192" E="$EXE" CC=192 KK="agent/edit10,agent/write13" CP=16;;   # PREFILL: one call per prompt
     fcps) X="FCP_SEAMS=1 R57_WIRED=1" KK="$KC6" CP=128;;   # PLAN 220 (4): the cycle's GPU-idle seams on v1' + wired
     fcpx1) X="FCP_WIRED=1" E="$EXE" CC=224 KK="$KX";; *) say "unknown arm $arm"; continue;; esac
   if [ -e "$HOME/.local/share/quiet/PAUSE" ] || [ -e "$HOME/.local/share/quiet/HOLD" ]; then say "PAUSE / HOLD: $arm skipped"; rc_all=1; continue; fi

@@ -282,6 +282,10 @@ def run_prompt(ri, r):                                   # all arms of one promp
                  f"of row-layers over KU ({s['k1u_rl']} row-layers)" if s.get("k1u_rl") else "")
               + (f" | PF2: {s['pf2_ids']} late ids posted in {s['pf2_calls']} wide calls, loader late reads {dfs[2]}, "
                  f"forced to wait {dfs[3]}" if s.get("pf2_calls") else "") + kps, flush=True)
+        if "pf_mb" in s:                                 # (Sun 8 Nov, 12 GB prefill) the prefill of ids[:-1] alone, per arm
+            print(f"[{TAG}] {r['key']} {arm} PREFILL n {len(ids)} smoe {getattr(T3, 'S_MOE', [0])[0]} | {s['pf_s']:.3f} s, "
+                  f"{(len(ids) - 1) / max(1e-9, s['pf_s']):.1f} tok/s, SSD {s['pf_mb']:.0f} MB | lifetime {life_gb():.3f} GB",
+                  flush=True)
         temps.append(f"{arm} {ca}->{ssd_c()}")
     for b_, a_ in (("t80ck2", "t80ck2pf"), ("t80ck1u", "t80ck1upf")):   # P2-PREFETCH is exact: = its base arm
         if a_ in res and b_ in res:
