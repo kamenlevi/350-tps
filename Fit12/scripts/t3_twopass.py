@@ -108,6 +108,38 @@ W1 = [os.environ.get("F12_W1", "4")]   # (Sun 8 Nov, T2 CHAT WIDTH) the exact ch
                  # = W rows when the first draft's cf < C (else W2 when < C2, ...), else 4. Rows 0..k verified in any chunking give
                  # the same bits for calls of >= 2 rows (WV1 / WV2); a 1-row call takes B12_LATE3's late rule unless W1AW
 W1AW = [os.environ.get("F12_W1AW", "1") == "1"]   # (T2) a 1-row exact call runs with B.AW[0] (ALLWAIT: the verify rows' flags)
+GQ = dict(calls=0, sorted=0, maxm=0, exposed=0, padded=0)   # (Sun 8 Nov, MLX 0.32.2 sorted-gather bug; Leap a521e91) the
+                 # gather_qmm audit when installed: every call, the sorted ones, their largest row count, the EXPOSED ones
+                 # (rows > 32,767 and rows % 64 != 0: affine_gather_qmm_rhs_nax's short overflow leaves rows unwritten), padded
+
+
+def gq_install(pad=False):
+    """(Sun 8 Nov) wrap mx.gather_qmm in this process: count every call (GQ) and, with pad, take Leap's exact fix for an
+    exposed sorted call (rows padded to a multiple of 64 with copies of the last row and its expert; output sliced back)"""
+    import mlx.core as mx
+    if getattr(mx.gather_qmm, "_f12", False):
+        return
+    orig = mx.gather_qmm
+
+    def gq(x, w, scales, biases=None, lhs_indices=None, rhs_indices=None, *a, **kw):
+        GQ["calls"] += 1
+        if kw.get("sorted_indices", False) and rhs_indices is not None:
+            M = int(rhs_indices.size)
+            GQ["sorted"] += 1
+            GQ["maxm"] = max(GQ["maxm"], M)
+            if M > 32767 and M % 64:
+                GQ["exposed"] += 1
+                if pad:
+                    p_ = (-M) % 64
+                    x = mx.concatenate([x, mx.repeat(x[-1:], p_, axis=0)], axis=0)
+                    rhs_indices = mx.concatenate([rhs_indices, mx.repeat(rhs_indices[-1:], p_, axis=0)], axis=0)
+                    GQ["padded"] += 1
+                    return orig(x, w, scales, biases, lhs_indices, rhs_indices, *a, **kw)[:M]
+        return orig(x, w, scales, biases, lhs_indices, rhs_indices, *a, **kw)
+    gq._f12 = True
+    mx.gather_qmm = gq
+
+
 CALLS = [None]   # (T2) a list: one row per exact call (check, call index, width, rows kept in the call, then _mk() at start, at end)
 PHLOG = [None]   # (Tue 3 Nov, T3P) a list: one row per timed phase (name, check, then at start and at end: CLOCK_UPTIME_RAW s,
                  # the gate's pass seq, disk bytes read by this process, loader misses); None = off (no extra calls)
@@ -367,6 +399,7 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
     _PFTAP_FN[0] = pftap
     t0 = time.perf_counter()
     pfd0 = _diskread()                                 # (Sun 8 Nov) the prefill's own SSD bytes (rusage diskio)
+    gq0 = dict(GQ); GQ["maxm"] = 0; npl = len(getattr(B, "PFR_LOG", []))   # (Sun 8 Nov) the prefill's own audit + PFR chunk
     try:
         B.b12_prefill(model, mx.array([ids[:-1]]), cache, 512, S_MOE[0])
     finally:
@@ -379,6 +412,8 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
     mx.eval(T)
     t1 = time.perf_counter()
     st["pf_mb"] = (_diskread() - pfd0) / 1e6
+    st["gq"] = {k_: (GQ[k_] if k_ == "maxm" else GQ[k_] - gq0[k_]) for k_ in GQ}
+    st["pfr"] = list(getattr(B, "PFR_LOG", [])[npl:])                    # (P, s_moe) when PFR took this prefill
     dcache = draft.make_cache()
     start = max(0, (P - 1) - (SW - 1))
     for c in dcache:

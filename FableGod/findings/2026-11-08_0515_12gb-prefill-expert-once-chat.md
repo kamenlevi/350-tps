@@ -1,4 +1,24 @@
-# At 12 GB the prefill already reads each expert once per prompt: 191 / 378 / 461 tok/s at 1.6K / 4.7K / 7.9K tokens (2-3.7x the 45 GB path), in under 11 GB; 12 GB chat decodes 12.9 tok/s at 556 MB of SSD per kept token
+# UNDER CHECK 08:3x (an MLX bug may have left expert rows unwritten in the 4.7K / 7.9K prefills; a GPU proof decides, 1.6K stands): At 12 GB the prefill already reads each expert once per prompt: 191 / 378 / 461 tok/s at 1.6K / 4.7K / 7.9K tokens (2-3.7x the 45 GB path), in under 11 GB; 12 GB chat decodes 12.9 tok/s at 556 MB of SSD per kept token
+- CORRECTION 2026-11-08 08:2x (orchestrator, from Leap's TABLE_350 a521e91 "MLX NAX SORTED-GATHER BUG + PF-B"):
+  - The bug is in MLX 0.32.2's sorted NAX expert gather (affine_gather_qmm_rhs_nax). When one call has more than
+    32,767 sorted rows and the row count is not a multiple of 64, a `short` overflows and those rows are never computed
+    or stored. For example, 79,320 rows leave 32,776 unwritten.
+  - Leap's reading: this engine's long prefill MoE calls are that shape, so the 4.7K and 7.9K prefills ran with expert
+    rows missing, and their 378 / 461 tok/s would be void (missing rows also mean less compute).
+  - UPDATE 08:3x, Fit12's reply:
+    - Its v3p engine runs the prefill MoE per group of ~64 experts (BIGMOE_TIER_PF_GROUP=64). Each group call is
+      already padded to a multiple of 64 (tier.py:599, "BUG1") and holds ~10K rows at 7.9K, so the bug's branch would
+      never run.
+    - Earlier evidence on the same MLX: PFR-a (11-02) gave byte-identical KV and logits at 64K between 16,384- and
+      4,096-token MoE chunks.
+    - A GPU proof is queued: a 3,072-token-chunk reference vs the shipped grid with the pad, a count of every sorted
+      call's rows, a bitwise logits / tokens compare, and re-timed runs. Until then, 378 / 461 are UNDER CHECK, not void.
+    - Fit12's own correction: its s_moe 4096 vs 8192 A/B was null, because both arms ran one MoE chunk per prompt.
+  - The 1.6K prompt (15,650 rows) is under the limit, so its 191 tok/s stands.
+  - Exact fix: pad the sorted rows to a multiple of 64 (Leap's pfb_fix.switch_glu_padded), which is bitwise equal to
+    1,024-token calls. Fit12 re-measures with it.
+  - The 12 GB chat numbers below (decode, short calls) are not affected.
+  - The original text is kept below.
 - Date: 2026-11-08 05:1x EET. Session: Fit12.
 - Claim: the 12 GB engine's prefill (b12_prefill: one call per prompt, 512-row attention and 4096-row MoE chunks inside it)
   streams each layer's experts once per call. A 7.9K-token prompt reads ~one pass of the expert store, 67 GB.

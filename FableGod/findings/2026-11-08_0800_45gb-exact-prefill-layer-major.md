@@ -14,8 +14,14 @@
 - PF-A with a compact copy in today's call shape (R57_PFLM=2): 138 / 224 / 256 tok/s, exact, peak 45.90 GB.
 - Larger chunks alone (2,048-8,192 rows) are OUT. They change the logits (hash 0 / N), the decode tokens differ at
   4.7K / 7.9K, and peaks reach 46.5-53.8 GB. The pre-registered chunk-size verdict is BETWEEN.
-- Same speed at both memory lines: the 12 GB engine's prefill, which already reads each expert once, gives 191 / 378 / 461
-  tok/s within 10.95 GB (2026-11-08_0515).
+- CORRECTED 08:2x: this note first compared PF-A with the 12 GB engine's prefill (191 / 378 / 461 tok/s,
+  2026-11-08_0515). Its 4.7K / 7.9K figures are UNDER CHECK: an MLX 0.32.2 bug (Leap, a521e91) leaves expert rows
+  unwritten in sorted-gather calls over 32,767 rows that are not a multiple of 64. Fit12 says its engine already pads
+  per-group calls, and a GPU proof is queued. Its 1.6K figure (191) stands either way. PF-A is not hit:
+  its 1,024-token calls are at most 10,240 rows, and its logits match bitwise. BigMoE's pe4096 / pe8192 arms were hit;
+  pe2048 (20,480 rows) was not and still changes the logits, so the "larger chunks OUT" line stands.
+- Leap's PF-B, priced and exact with the pad-to-64 fix: one MoE call per layer is x1.9 on the prefill experts at 4.7K /
+  7.9K. Adding the read overlap that the call split allows projects ~590 / ~750 tok/s at 4.7K / 7.9K [P].
 - What limits it now:
   - The long prompts are compute-bound: SSD use is 3.8-5.2 GB/s at 7.9K / 4.7K (8.0 GB/s at 1.6K).
   - The levers toward 500-1000 are faster prefill compute (Leap's PF-B) and overlapping SSD with compute.

@@ -497,12 +497,21 @@ PFCHUNK = int(os.environ.get("R57_PFCHUNK", "1024") or "1024")   # Sat 23:4x (or
 PFNOLOG = os.environ.get("R57_PFNOLOG") == "1"           # Sun 00:2x (Leap: prefill built full-vocab logits for every row, ~508 MB + ~45 ms per 1K chunk)
 PFLM = int(os.environ.get("R57_PFLM", "0") or 0)         # Sun 00:3x PF-A (scripts/pflm.py): prompts > one chunk prefill LAYER-major over the same
 if PFLM:                                                 # chunks, each layer's experts read from records3 once (a full-E scratch): 1 = the
-    assert PFLM in (1, 2) and TIER and not (A6 & {"pools", "warm"}), \
-        "R57_PFLM=1|2 needs R57_TIER (tier.prefill_call, the 45 GB path) and no A6 pools / warm capture"   # call on original ids,
+    assert PFLM in (1, 2, 3) and TIER and not (A6 & {"pools", "warm"}), \
+        "R57_PFLM=1|2|3 needs R57_TIER (tier.prefill_call, the 45 GB path) and no A6 pools / warm capture"   # call on original ids,
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # 2 = on a compact copy (today's call shape, bitwise by
     import pflm as PFLMM                                 # construction, ~+1.5 GB). Off (unset / 0): nothing here runs.
     import bigmoe.tier as _BTP
     PFLMM.install(_BTP, PFLM)
+PFT = {"on": False, "t": {}}                             # Sun 08:5x (R57_PFSTAT=1, NewIdeas CT1): per layer, the experts the prefill routes to
+if os.environ.get("R57_PFSTAT") == "1" and TIER:         # (tier.prefill_call already reads the ids on the CPU: no extra sync)
+    import bigmoe.tier as _BTT
+    _pfc0 = _BTT.prefill_call
+    def _pfc_touch(cls, self, x, indices, bm, *a, **kw):
+        if PFT["on"]:
+            PFT["t"].setdefault(bm["L"], set()).update(np.unique(np.array(indices)).tolist())
+        return _pfc0(cls, self, x, indices, bm, *a, **kw)
+    _BTT.prefill_call = _pfc_touch
 if os.environ.get("R57_CACHE_GB"):                       # Sat 23:4x (FLAG 2): cap MLX's buffer cache (freed buffers kept for reuse) for the run
     _cl = int(float(os.environ["R57_CACHE_GB"]) * 1e9)
     say(f"R57_CACHE_GB: mx.set_cache_limit({_cl / 1e9:.2f} GB), was {getattr(mx, 'set_cache_limit', None) and mx.set_cache_limit(_cl) / 1e9:.2f} GB")
@@ -787,6 +796,11 @@ def _layer(self, *a, **kw):
         TAP["x"][i].append(o.reshape(B, L, 4, W // 4).astype(mx.float32).mean(axis=2)[0].astype(mx.float16))
     return out
 Q.DecoderLayer.__call__ = _layer
+def _tap_out(self, out):                                 # R57_PFLM=3 (PF-B, Sun 08:4x): pflm's split layer bypasses _layer, so
+    i = TAP_OF.get(id(self))                             # it calls this per (layer, chunk) output: _layer's TAP, verbatim
+    if TAP["on"] and i is not None:
+        B, L, W = out.shape
+        TAP["x"][i].append(out.reshape(B, L, 4, W // 4).astype(mx.float32).mean(axis=2)[0].astype(mx.float16))
 def tap_reset():
     TAP["x"] = [[] for _ in TAPS]
 def taps():
@@ -970,7 +984,8 @@ def prefill(ids, want_w=False, chunk=1024):
                 mx.eval(h_)
                 ws.append((k_ * chunk, h_))
         try:
-            cache, lg = PFLMM.prefill_layer_major(model, ids, chunk, states, on_chunk=_onc)
+            assert PFLM != 3 or not PR["on"], "R57_PFLM=3 bypasses _layer: no R57_PREROUTE captures"
+            cache, lg = PFLMM.prefill_layer_major(model, ids, chunk, states, on_chunk=_onc, on_layer=_tap_out)
             mx.eval(lg, states(cache), [x[-1] for x in TAP["x"]])
         finally:
             TAP["on"] = False
@@ -1022,10 +1037,13 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         SV.new_prompt(ids)                               # a short last prefill chunk takes SVH's <= 16-row path too)
     pfst_ = None                                         # Sun 00:2x (R57_PFSTAT=1, NewIdeas PF-D price): pool residency at prefill start
     if os.environ.get("R57_PFSTAT") == "1":              # (base MSB-3 pools / LSB sidecars: experts a prefill re-reads today) + its SSD bytes
-        _rb = sum(int((np.array(BS.ext.lookup(sw._bm["L"], list(range(512)))) >= 0).sum()) for sw in SW_ if not sw._bm.get("full"))
-        _rs = sum(int((np.array(BS.ext.lookup(sw._bm["tier"]["side"], list(range(512)))) >= 0).sum()) for sw in SW_
-                  if not sw._bm.get("full") and (sw._bm.get("tier") or {}).get("side") is not None)
+        _rbs = {sw._bm["L"]: set(np.nonzero(np.array(BS.ext.lookup(sw._bm["L"], list(range(512)))) >= 0)[0].tolist())
+                for sw in SW_ if not sw._bm.get("full")}
+        _rss = {sw._bm["L"]: set(np.nonzero(np.array(BS.ext.lookup(sw._bm["tier"]["side"], list(range(512)))) >= 0)[0].tolist())
+                for sw in SW_ if not sw._bm.get("full") and (sw._bm.get("tier") or {}).get("side") is not None}
+        _rb, _rs = sum(len(v_) for v_ in _rbs.values()), sum(len(v_) for v_ in _rss.values())
         pfst_ = [_rb, _rs, disk_read_bytes()]
+        PFT["t"] = {}; PFT["on"] = True                  # Sun 08:5x (NewIdeas CT1): the expert-layers this prefill routes to
     lm0_ = (PFLMM.LMC["reads"], PFLMM.LMC["hits"], PFLMM.LMC["calls"]) if PFLM else None   # R57_PFLM: this prefill's scratch counters
     tpf_ = time.perf_counter()                           # Sat 17:2x (E5): prefill wall (+ the first token's readback) for end-to-end tok/s
     cache, last, T, ws = prefill(ids, mtp, chunk=PFCHUNK)
@@ -1047,6 +1065,10 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
     tok = int(mx.argmax(last).item())
     tpf_ = time.perf_counter() - tpf_                    # s: prefill + the cache / drafter setup + the first token
     pfb_ = disk_read_bytes() if pfst_ is not None else 0  # R57_PFSTAT: the prefill's SSD bytes end here (A6's pre-loop steps excluded below)
+    if pfst_ is not None:                                # CT1: routed expert-layers, and those already resident at the start (PF-D's
+        PFT["on"] = False                                # exact price: what a resident-serving prefill would not read)
+        pfst_ += [sum(len(v_) for v_ in PFT["t"].values()), sum(len(v_ & _rbs.get(L_, set())) for L_, v_ in PFT["t"].items()),
+                  sum(len(v_ & _rss.get(L_, set())) for L_, v_ in PFT["t"].items())]
     if SV is not None:
         SV.committed([tok])
     set_arm(arm)
@@ -1557,7 +1579,8 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
     return dict(lh=lh_, out=out[:CAP], n=min(len(out), CAP), tps=min(len(out), CAP) / dec, drafter=drafter, hist=hist, a6=a6,
                 nwk=[ref2.COUNTS.get("nw_calls", 0) - nk0_[0], ref2.COUNTS.get("nw_late_calls", 0) - nk0_[1]] if NW else None,
                 pfs=round(tpf_, 4),                      # E5: prefill wall s (end to end = n / (pfs + n / tps))
-                pfst=None if pfst_ is None else dict(res_base=pfst_[0], res_side=pfst_[1], gb=round((pfb_ - pfst_[2]) / 1e9, 3)),
+                pfst=None if pfst_ is None else dict(res_base=pfst_[0], res_side=pfst_[1], gb=round((pfb_ - pfst_[2]) / 1e9, 3),
+                                                     routed=pfst_[3], routed_res_base=pfst_[4], routed_res_side=pfst_[5]),
                 pflm=None if lm0_ is None else dict(reads=PFLMM.LMC["reads"] - lm0_[0], hits=PFLMM.LMC["hits"] - lm0_[1],
                                                      calls=PFLMM.LMC["calls"] - lm0_[2]),   # R57_PFLM: expert reads / reuses / calls
                 rlx=rst if RLX_D > 0 else None,      # R57_RELAX_DELTA: rows checked, kept exact / in all, relaxed accepts

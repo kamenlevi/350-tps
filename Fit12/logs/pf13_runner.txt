@@ -1,0 +1,1 @@
+[Sun 08:36:52] pf13 armed: after /Users/kamen/Fit12/data/scr/chw12/DONE, 6 clear minutes (1 with /Users/kamen/Fit12/data/scr/pf13/GO; held while /Users/kamen/Fit12/data/scr/pf13/WAIT exists), start by Sun 21:30

@@ -1035,3 +1035,10 @@ one lever to the row above it.
   (kept 2.44), not speed. R1 gets back kept (2.50) for the best arm, 56.0 tok/s: +27 % over L (44.2) but 2.7x short of 150.
 - **What 150 needs:** at the stack's ~40 ms cycle, 150 tok/s takes 6 tokens kept per check (today 2.4-2.5). At 2.5 kept it takes a 17 ms cycle.
   The drafter's chat acceptance and the ~33 ms check are the two walls.
+- **CORRECTION (Sun 08:2x, Leap):** MLX 0.32.2's sorted NAX gather (affine_gather_qmm_rhs_nax, quantized_nax.h:1547) computes
+  short(M - (y_row + tm)). When a SwitchGLU call has more than 32,767 sorted rows (tokens x 10) and the count is not a multiple of 64,
+  the short overflows and those output rows are never written (deterministic, not a race). PFX arms it hits: pe4096 on write11
+  (second chunk 38,360 rows) and pe8192 / pe8192nl / pl8192 on write13 (47,300) and write11 (79,320). Their "tokens DIFF" there is partly
+  this bug. Safe: every 1024- and 2048-chunk call (<= 20,480 rows: pe1024, plm1, plm2, exact E) and 4096-token chunks (40,960 = 640 x 64).
+  The big-chunk TTFTs are therefore not valid prefill numbers on those prompts. Exact fix: pad the sorted rows to a multiple of 64
+  (Leap's ~/Leap/scripts/pfb_fix.py switch_glu_padded, bitwise == the 1024-token calls). PF-A's numbers stand.

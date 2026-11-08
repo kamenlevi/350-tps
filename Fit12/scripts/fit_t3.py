@@ -25,6 +25,8 @@ ENV = {"MTPLX_PREFILL_CHUNK_SIZE": "512", "BIGMOE_TIER_PF_GROUP": "64", "BIGMOE_
 for k in ("B12_ENGINE", "B12_FOLD", "B12_PFR_GRID", "B12_CM", "B12_CL", "B12_FOLD_CM", "B12_FOLD_AW", "B12_W", "B12_PMIN"):
     os.environ.pop(k, None)
 os.environ.update(ENV)
+if os.environ.get("F12_PFRGRID"):                    # (Sun 8 Nov) PFR's MoE grid: "keep" = the caller's s_moe (F12_SMOE);
+    os.environ["B12_PFR_GRID"] = os.environ["F12_PFRGRID"]   # bt_b12's fast-mode default is "balanced" (one chunk <= 16K)
 if os.environ.get("F12_CMCL"):                       # (23:2x) pass 1 on 16 rows posts up to 32 rank-0-1 LSB parts: C_l 20 -> 32
     os.environ["B12_CM"], os.environ["B12_CL"] = os.environ["F12_CMCL"].split(",")   # (C_m 51 -> 47 keeps the bytes)
 TAG = sys.argv[1] if len(sys.argv) > 1 else "t3"
@@ -236,6 +238,8 @@ def run_prompt(ri, r):                                   # all arms of one promp
         kc0 = KP.counts() if KP is not None else {}
         T3.PHLOG[0] = [] if os.environ.get("F12_PHLOG") == "1" else None   # (T3P) per-phase marks
         T3.CALLS[0] = [] if os.environ.get("F12_PHLOG") == "1" else None   # (Sun 8 Nov, T2) per exact call
+        if os.environ.get("F12_GQAUDIT") == "1" and hasattr(T3, "gq_install"):   # (Sun 8 Nov) MLX sorted-gather audit / pad
+            T3.gq_install(os.environ.get("F12_GQPAD") == "1")
         T3.CAL[0] = [] if os.environ.get("F12_CAL") == "1" else None       # (Thu 5 Nov) certificate calibration records
         ca = ssd_c()
         dfs0 = _EXT.defer_stats()                        # [rows, waited, late reads, late ids forced to wait]
@@ -287,8 +291,9 @@ def run_prompt(ri, r):                                   # all arms of one promp
               + (f" | PF2: {s['pf2_ids']} late ids posted in {s['pf2_calls']} wide calls, loader late reads {dfs[2]}, "
                  f"forced to wait {dfs[3]}" if s.get("pf2_calls") else "") + kps, flush=True)
         if "pf_mb" in s:                                 # (Sun 8 Nov, 12 GB prefill) the prefill of ids[:-1] alone, per arm
+            gqs = f" | pfr {s.get('pfr')} | gq {s['gq']}" if "gq" in s else ""   # PFR's (P, s_moe); the gather audit
             print(f"[{TAG}] {r['key']} {arm} PREFILL n {len(ids)} smoe {getattr(T3, 'S_MOE', [0])[0]} | {s['pf_s']:.3f} s, "
-                  f"{(len(ids) - 1) / max(1e-9, s['pf_s']):.1f} tok/s, SSD {s['pf_mb']:.0f} MB | lifetime {life_gb():.3f} GB",
+                  f"{(len(ids) - 1) / max(1e-9, s['pf_s']):.1f} tok/s, SSD {s['pf_mb']:.0f} MB | lifetime {life_gb():.3f} GB{gqs}",
                   flush=True)
         temps.append(f"{arm} {ca}->{ssd_c()}")
     for b_, a_ in (("t80ck2", "t80ck2pf"), ("t80ck1u", "t80ck1upf")):   # P2-PREFETCH is exact: = its base arm

@@ -353,3 +353,33 @@ small tests under share locks. T1 = chat12 (12.88 tok/s, 556 MB per kept token) 
   - Timings count only if no other GPU job ran (locks.txt, one line per minute). Bytes and tokens count either way.
 - Stage 2 (only after stage 1 passes): the chosen policy vs W1 4 in separate processes, idle-GPU share slot or quiet; PASS
   whole decode geo >= +5 % with the same tokens; KILL < +2 %.
+
+## PREFILL BUG CHECK (pre-registered Sun 08 Nov 08:36, before any GPU run; orchestrator 08:2x + Leap TABLE_350 a521e91)
+- The claim: MLX 0.32.2's sorted NAX gather (affine_gather_qmm_rhs_nax) leaves rows UNWRITTEN when one call has > 32,767
+  sorted rows and rows % 64 != 0 (Leap: 79,320 rows -> 32,776 missing; aligned -> 0). The orchestrator marked my 4.7K / 7.9K
+  prefill figures (378 / 461 tok/s) void and asked for a re-measure with Leap's pad-to-64 fix.
+- My correction first: the pf12 A/B (s_moe 4096 vs 8192) was NULL. bt_b12 defaults to B12_MODE=fast, which sets PFR's grid
+  to "balanced" with PFR_MIN 512 (bt_b12.py:124-129, :763), so every PFX prompt ran ONE MoE chunk per prompt in both arms;
+  F12_SMOE did nothing. x0.99-1.005 = run-to-run noise. The pf12a / pf12b logits hashes are equal 3 / 3, as expected for one
+  configuration. Still true: the shipped 12 GB prefill reads each expert once per prompt (one chunk up to 16K tokens).
+- Code reading [K, not yet measured]: inside that one chunk, the tier prefill MoE runs per group of ~64 experts
+  (BIGMOE_TIER_PF_GROUP=64 in fit_t3.py's ENV; v3p tier.py _prefill_grouped, _groups: <= 2G experts and >= 4 rows per
+  expert per group, else one single call). Every group call pads its rows to a multiple of 64 (tier.py:599, "BUG1") and holds
+  ~1/8 of the rows (~10K at 7.9K). So neither of the bug's conditions holds, unless _groups falls back to the single call
+  (79,310 rows at 7.9K: exposed).
+- Prior evidence on the same MLX (0.32.2, installed Oct 17): PFR-a (Nov 2) gave byte-identical KV and logits at 64K between
+  16,384- and 4,096-token MoE chunks. Both had unaligned tails > 32,767 rows (158,480 and 35,590), which a single-call path
+  with the bug would have broken differently.
+- Test (/Users/kamen/Fit12/scripts/pf13.sh; quiet lock, after chw12, ~8 min; reader pf13_read.py): arm ex, CAP 32, PFX's
+  1.6K / 4.7K / 7.9K, one process per arm.
+  - F (pf13f): the shipped grid + a gather_qmm audit in my process (t3_twopass.gq_install: every sorted call's rows, exposed =
+    rows > 32,767 and rows % 64 != 0) + Leap's pad on exposed calls (copies of the last row and its expert, output sliced).
+  - K (pf13k): B12_PFR_GRID=keep, s_moe 3072. Every MoE call <= 30,720 rows, so no call can reach the bug.
+  - NOT HIT (378 / 461 stand): exposed = 0 in both arms, F = K in the kept-row logits hash (lsha) AND tokens 3 / 3, and
+    F's tokens = pf12a's = pf12b's 3 / 3. Re-measured timings are reported either way.
+  - HIT: exposed > 0. Then F's figures replace pf12's (the pad engaged), and F = K bitwise tells whether the fix is exact on
+    this engine.
+  - Other: exposed = 0 but F != K means a chunking dependence that is not this bug. Report it and look into it.
+- Code: t3_twopass.py GQ / gq_install + st gq / pfr per prefill; fit_t3.py F12_GQAUDIT / F12_GQPAD / F12_PFRGRID + the PREFILL
+  line's pfr / gq fields (backups *.bak_gq). CPU check: the wrapper pads an exposed 32,790-row call bitwise = unpadded (CPU
+  kernel). FAKE dry test passed.
