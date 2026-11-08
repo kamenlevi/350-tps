@@ -20,8 +20,18 @@ if [ "$R" != 0 ]; then
   for p in $D $R; do kill -0 "$p" 2>/dev/null && log "hold: pid $p still alive"; done
   peer unlock > /dev/null 2>&1
 fi
-t0=$(date +%s)
+t0=$(date +%s); a0=$( [ -n "${HOLD_AFTER_LOG:-}" ] && wc -l < "$HOLD_AFTER_LOG" || echo 0)
 log "hold (pid $$): the runner is stopped (pid $R, children: ${D:-none}); $(grep -c . results/ref2tnaxn.r6/decode.jsonl) rows; no chunk until $F or $(date -r $((t0 + MIN * 60)) +%H:%M)"
 until [ -e "$F" ] || [ $(( $(date +%s) - t0 )) -ge $((MIN * 60)) ]; do sleep 30; done
+# Chain (optional): when the file appeared, another session's job gated on the same file goes first. Wait for a line
+# matching HOLD_AFTER_PAT in HOLD_AFTER_LOG written since this hold began (its "done" line; it may come before the file),
+# at most HOLD_AFTER_MAX minutes (40) after the file, then 60 s.
+if [ -e "$F" ] && [ -n "${HOLD_AFTER_LOG:-}" ]; then
+  t1=$(date +%s)
+  log "hold: $F exists; chained behind the next \"$HOLD_AFTER_PAT\" line of $HOLD_AFTER_LOG (at most ${HOLD_AFTER_MAX:-40} min)"
+  until tail -n +$((a0 + 1)) "$HOLD_AFTER_LOG" | grep -q "$HOLD_AFTER_PAT" || [ $(( $(date +%s) - t1 )) -ge $(( ${HOLD_AFTER_MAX:-40} * 60 )) ]; do sleep 20; done
+  log "hold: chain ends: $(tail -n +$((a0 + 1)) "$HOLD_AFTER_LOG" | grep "$HOLD_AFTER_PAT" | tail -1 | cut -c1-140)"
+  sleep 60
+fi
 log "hold ends: $([ -e "$F" ] && echo "$F exists" || echo "$MIN min passed"); re-arming the reference stage"
 exec env CARD_STAGE=ref CARD_TAG=ref CARD_WAIT_STRATA=1 CARD_CUTOFF="$CUT" tools/day_runner61.sh

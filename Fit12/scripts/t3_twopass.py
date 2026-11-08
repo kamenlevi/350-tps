@@ -107,6 +107,7 @@ W1 = [os.environ.get("F12_W1", "4")]   # (Sun 8 Nov, T2 CHAT WIDTH) the exact ch
                  # "4" = today's; "rand" = 1-4 per check from random.Random(F12_W1SEED) (the per-width cost fit); "cf:C:W[:C2:W2]"
                  # = W rows when the first draft's cf < C (else W2 when < C2, ...), else 4. Rows 0..k verified in any chunking give
                  # the same bits for calls of >= 2 rows (WV1 / WV2); a 1-row call takes B12_LATE3's late rule unless W1AW
+WL = [int(os.environ.get("F12_WL", "4"))]   # (Sun 8 Nov, C2c: Strata's chat width) the exact check's LATER call width (4 = today's)
 W1TAIL = [os.environ.get("F12_W1TAIL", "0") == "1"]   # (Sun 8 Nov, T2 stage 1b) no 1-row last chunk in an exact check
 W1AW = [os.environ.get("F12_W1AW", "1") == "1"]   # (T2) a 1-row exact call runs with B.AW[0] (ALLWAIT: the verify rows' flags)
 GQ = dict(calls=0, sorted=0, maxm=0, exposed=0, padded=0)   # (Sun 8 Nov, MLX 0.32.2 sorted-gather bug; Leap a521e91) the
@@ -548,7 +549,7 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
                 new_ += d_[pos:pos + len(ch)]
                 pos += len(ch)
                 _call(ci, len(ch), len(ch), kc, ts_)
-                ci, w_ = ci + 1, 4
+                ci, w_ = ci + 1, WL[0]                  # (C2c) later calls: F12_WL rows (default 4)
                 continue
             rt_ = commit(ch, sn_, m_ + 1, False)
             if ts_ is not None:

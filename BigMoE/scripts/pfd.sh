@@ -56,11 +56,19 @@ arm() {   # tag cap keys qom_sets env
   say "$1 rc=$?"; TAGS="$TAGS $1"
 }
 QC="humaneval,mbpp"; QZ="humaneval,mbpp,ifeval,multi"
-arm pde0 64 "$KI" $QC "$E"
-arm pde1 64 "$KI" $QC "$E,R57_PFD=1"
-arm pde1k 16 "$KI" $QC "$E,R57_PFD=1,R57_PFD_CHECK=1"
-arm pdz0 256 "$KI" $QZ "$ZS"
-arm pdz1 256 "$KI" $QZ "$ZS,R57_PFD=1"
+if [ -n "$PFD_DIAG" ]; then                             # 18:3x: v3 slowed the chat decode (ck 38.7 -> 49.1 ms, CPU build, after
+  arm pdz1 256 "$KI" $QZ "$ZS,R57_PFD=1"                 # the first 16 checks of a prompt, same misses): order swapped (PF-D first),
+  arm pdz0 256 "$KI" $QZ "$ZS"                           # then the control, PF-D installed but idle, and PF-D without reader
+  arm pdz1i 256 "$KI" $QZ "$ZS,R57_PFD=1,R57_PFD_IDLE=1" # threads outside its calls
+  arm pdz1p 256 "$KI" $QZ "$ZS,R57_PFD=1,R57_PFD_POOL=call"
+else
+  arm pde0 64 "$KI" $QC "$E"
+  arm pde1 64 "$KI" $QC "$E,R57_PFD=1"
+  arm pde1k 16 "$KI" $QC "$E,R57_PFD=1,R57_PFD_CHECK=1"
+  arm pdz0 256 "$KI" $QZ "$ZS"
+  arm pdz1 256 "$KI" $QZ "$ZS,R57_PFD=1"
+  arm pdz1n 256 "$KI" $QZ "$ZS,R57_PFD=1,R57_PFD_CC=0"
+fi
 A=$(avail_gb)
 if [ "${PFD_PARTS:-AB}" = A ]; then                     # PFD_PARTS=A (v2 re-run, 18:xx): part B settled in a6d5347
   say "part B not requested (PFD_PARTS=A)"
@@ -99,9 +107,21 @@ L = [f"PFD (data/pfd; snapshot {snap}; C 256; quiet): per prompt TTFT (pfs), pre
 def part_a(t, ctl, nm):
     R, T = load(t)
     R0, T0 = load(ctl)
+    if t not in tags:                                    # an arm this run did not request: no line (old files stay out)
+        return
     if not R:
         L.append(f"  {t} {nm}: MISSING")
         return
+    try:                                                 # decode side (18:3x): pooled whole decode, whole request, check ms
+        C_ = json.load(open(f"data/r57/{t}_256_checks.json"))
+        f_ = lambda k: [x for c in C_ for x in (c.get(k) or [])]
+        ck_, bl_ = f_("ck"), f_("bld")
+        late_ = [x for c in C_ for x in (c.get("ck") or [])[16:]]
+        N_ = sum(r["n"] for r in R.values()); Dd = sum(r["n"] / r["tps"] for r in R.values()); Pp = sum(r["pfs"] for r in R.values())
+        dec = (f"; whole decode {N_ / Dd:.1f} tok/s, whole request {N_ / (Dd + Pp):.1f} tok/s; check {S.mean(ck_):.1f} ms (CPU build "
+               f"{S.mean(bl_):.1f}; after a prompt's 16th check {S.mean(late_) if late_ else float('nan'):.1f})")
+    except (OSError, ValueError, KeyError, ZeroDivisionError):
+        dec = ""
     rows = []
     for k in sorted(R):
         r, r0 = R[k], R0.get(k) or {}
@@ -119,7 +139,7 @@ def part_a(t, ctl, nm):
                f"B {sum(x[4].get('bad_B', 0) for x in rows)}")
     L.append(f"  {t} {nm}: TTFT mean {S.mean(ttft):.2f} s (median {S.median(ttft):.2f}, {min(ttft):.2f}-{max(ttft):.2f}); SSD "
              f"{S.mean(gbs) if gbs else float('nan'):.1f} GB per prompt; rows A {pdA} / B {pdB} / C {pdC}{tok}; == AR {eq_ar(T)}/{len(T)}"
-             f"{chk}; lifetime peak {peak.get(f'{t}_256', float('nan')):.2f} GB")
+             f"{chk}{dec}; lifetime peak {peak.get(f'{t}_256', float('nan')):.2f} GB")
     for k, P, pfs, gb, pd, same, hs, hn in rows:
         L.append(f"      {k}: P {P}, TTFT {pfs:.2f} s, SSD {gb if gb is not None else float('nan'):.1f} GB, A/B/C {pd.get('A', '-')}/"
                  f"{pd.get('B', '-')}/{pd.get('C', '-')}" + ("" if same is None else f", tokens {'==' if same else 'DIFF'}, hash {hs}/{hn}"))
@@ -129,6 +149,9 @@ part_a("pde1", "pde0", "E + PF-D, CAP 64")
 part_a("pde1k", "pde0", "E + PF-D + CHECK (timing void), CAP 16")
 part_a("pdz0", "pdz0", "zs = M1-B + COH + SB1 (chat; control), CAP 256")
 part_a("pdz1", "pdz0", "zs + PF-D, CAP 256")
+part_a("pdz1n", "pdz0", "zs + PF-D, MLX buffer cache kept across calls (R57_PFD_CC=0), CAP 256")
+part_a("pdz1i", "pdz0", "zs + PF-D installed but idle (R57_PFD_IDLE=1: every call takes today's path), CAP 256")
+part_a("pdz1p", "pdz0", "zs + PF-D, reader threads shut down after each call (R57_PFD_POOL=call), CAP 256")
 R0, T0 = load("pdpa1")
 if R0 and "pdpa1" in tags:
     L.append("Part B (the 3 PFX agent prompts, E, CAP 64): prefill TTFT, x vs PF-A, tokens and logits hash vs PF-A")

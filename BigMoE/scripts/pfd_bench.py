@@ -84,3 +84,23 @@ def whole():
 
 
 stage("WHOLE (as in prefill_call, + zeros)", whole)
+rm = np.zeros((N, 3), np.int32)                              # v3: the same rows by rowmap, the pools read in place
+kinds = rng.permutation(np.array([0] * nA + [1] * nB + [2] * nC))
+ia = ib = ic = 0
+gnp, snp = np.array(gi), np.array(si)
+for k in range(N):
+    if kinds[k] == 0:
+        rm[k] = (0, gnp[ia], snp[ia]); ia += 1
+    elif kinds[k] == 1:
+        rm[k] = (1, gnp[nA + ib], ib); ib += 1
+    else:
+        rm[k] = (2, ic, 0); ic += 1
+scrC = [mx.zeros((nC, *sh), dt) for sh, dt in shapes4]
+mx.eval(*scrC)
+bl1s = [mx.array(lsbB[p][0]) for p in P]
+bbs = [mx.array(lsbB[p][1]) for p in P]
+mx.eval(*bl1s, *bbs)
+stage("v3 assemble (2 kernels x 3, pools in place)", lambda: pflm.assemble(t, rm, base, side, bl1s, bbs, scrC))
+stage("v3 WHOLE (C zeros + copies + assemble)", lambda: (lambda sC: pflm.assemble(t, rm, base, side,
+      [mx.array(lsbB[p][0]) for p in P], [mx.array(lsbB[p][1]) for p in P], sC))(
+      [mx.zeros((nC, *sh), dt) for sh, dt in shapes4]))

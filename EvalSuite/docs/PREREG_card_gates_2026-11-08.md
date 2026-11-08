@@ -248,3 +248,37 @@ Checked on the gate keys; the result is the same in scripts/r57_screen.py and th
   tools/card_hold.sh. That script stops a running runner after its chunk, holds for a file or a time, then re-arms the
   same reference command.
 - **Unchanged:** keys, row counts, settings and the verdict rules.
+
+## Amendment 6 (Sun 18:3x): no decode starts during the quiet PAUSE; operations only
+
+- **What happened:**
+  - At 18:05 the hold's 75-minute cap ended. A chunk ran 18:06-18:10 (rc 75, yielding to a 13-min quiet ticket):
+    191/381 rows.
+  - The next chunk's decode client waited for its share lock. When Strata released its quiet lock for a heat pause
+    (PAUSE at 18:31), the client got the lock and started a decode at 18:32:25, about 30 s into the PAUSE.
+  - The runner checks PAUSE before each chunk, but a client already waiting for its lock does not.
+- **Action:** I stopped the client (7362) and its 19-second-old loading stage (96140) by pid, then peer unlock. No row was
+  in flight. The runner logged rc 143 and went back to waiting for PAUSE to clear.
+- **Fix without editing the running runner or the code it imports:** tools/card_pause_guard.sh runs beside it.
+  - While PAUSE exists, it stops any decode client still waiting for its lock, and any stage younger than 120 s (still
+    loading, no row yet), then runs peer unlock.
+  - A stage already decoding rows is left alone: fanwatch freezes it, and a quiet ticket stops it at its next row.
+  - The proper fix (the client rechecks PAUSE after its lock is granted) waits until no runner 61 is running.
+- **Unchanged:** keys, row counts, settings and the verdict rules.
+
+## Amendment 7 (Sun 18:3x-19:0x; the orchestrator 18:3x and 18:5x): queue order after Strata's low-RAM run; scheduling only
+
+- **Order after Strata low12:**
+  - First: the reference was to follow a 7-min BigMoE diagnostic, then the reference.
+  - The runner was in its PAUSE wait, with no chunk running. I stopped it by pid at 18:37:08 so it could not start
+    first. Rows stay at 191/381.
+- **18:57:**
+  - Strata low12 wrote DRIVER_DONE. Its exact arm was dropped after repeated heat stops.
+  - BigMoE's diagnostic gave up without running: two grants found only 44 GB no-swap.
+  - The orchestrator put a 6-min Strata chat arm (12 IFEval, cache 1 GB, quiet lock) next.
+- **The reference's gate:** ~/StrataEval/h2h/results_fit12/DRIVER_DONE, or 19:45 if it never appears.
+- **tools/card_hold.sh** can now also chain behind another session's job: HOLD_AFTER_LOG / HOLD_AFTER_PAT /
+  HOLD_AFTER_MAX.
+  - It waits for that job's "done" line, written since the hold began, after the file appears.
+  - Mock-tested three ways: the done line after the file, the done line before the file, and no file until the cap.
+- **Unchanged:** keys, row counts, settings and the verdict rules.

@@ -51,6 +51,43 @@ for L in (0, 23, 47):
               f"{'' if rv.any() else '  (reference all zero!)'}")
 print(f"PFD UNIT ({'kernel' if os.environ.get('R57_PFD_KERNEL', '1') != '0' else 'ops'}): {'PASS' if bad == 0 else 'FAIL'} "
       f"({bad} differing words; {3 * n} experts, 9 pieces each)")
+# v3 ASSEMBLE: 24 experts of layer 23 as 8 A (base + side 'pooled'), 8 B (base pooled, side 'read'), 8 C (ext-rebuilt rows),
+# scratch rows in a shuffled order, against read_rebuilt_layout of the same 24 in that order
+r = ix["layers"]["23"]
+t = dict(r=r, rows3=rows3, shapes4=shapes4, offs=list(r["msb_piece_off"]) + list(r["lsb_piece_off"]),
+         msb_sz=r["msb_sz"], recsz=r["recsz"], path=os.path.join(D, r["file"]), layout=2)
+ids = np.sort(rng.choice(int(r["E"]), 24, replace=False))
+buf = pflm.read_parts(t, ids, 0, int(r["recsz"]))
+w3s, s3s = pflm.msb_pieces(t, buf[:, :r["msb_sz"]])
+l1s, bs = pflm.lsb_pieces(t, buf[:, r["msb_sz"]:])
+P3 = ("gate_proj", "up_proj", "down_proj")
+kind = np.array([0] * 8 + [1] * 8 + [2] * 8)
+perm = rng.permutation(24)                                   # scratch row k holds expert ids[perm[k]]
+Ai, Bi, Ci = np.arange(8), np.arange(8, 16), np.arange(16, 24)
+base = {p_: {"w3": w3s[p], "s3": s3s[p]} for p, p_ in enumerate(P3)}   # base 'pool': slot j = expert ids[j]
+side = {p_: {"l1": l1s[p][mx.array(Ai)], "b": bs[p][mx.array(Ai)]} for p, p_ in enumerate(P3)}   # side 'pool': slot j = ids[j]
+bl1s = [l1s[p][mx.array(Bi)] for p in range(3)]
+bbs = [bs[p][mx.array(Bi)] for p in range(3)]
+scrC = [mx.zeros((8, *sh), dt) for sh, dt in shapes4]
+mx.eval(*scrC)
+ext.read_rebuilt_layout(t["path"], int(r["recsz"]), int(r["msb_sz"]), pers4, ids[Ci].astype(np.int32).tolist(), list(range(8)),
+                        scrC, 2, rows3, t["offs"])
+rm = np.zeros((24, 3), np.int32)
+for k in range(24):
+    j = perm[k]
+    rm[k] = (0, j, j) if kind[j] == 0 else (1, j, j - 8) if kind[j] == 1 else (2, j - 16, 0)
+scr = pflm.assemble(t, rm, base, side, bl1s, bbs, scrC)
+ref = [mx.zeros((24, *sh), dt) for sh, dt in shapes4]
+mx.eval(*ref)
+ext.read_rebuilt_layout(t["path"], int(r["recsz"]), int(r["msb_sz"]), pers4, ids[perm].astype(np.int32).tolist(), list(range(24)),
+                        ref, 2, rows3, t["offs"])
+bad3 = 0
+for i, (g, rr) in enumerate(zip(scr, ref)):
+    gv = np.array(g.view(mx.uint16) if g.dtype == mx.bfloat16 else g)
+    rv = np.array(rr.view(mx.uint16) if rr.dtype == mx.bfloat16 else rr)
+    bad3 += int((gv != rv).sum())
+print(f"PFD UNIT v3 assemble (8 A / 8 B / 8 C, shuffled rows): {'PASS' if bad3 == 0 else 'FAIL'} ({bad3} differing words)")
+bad += bad3
 if os.environ.get("PFD_UNIT_TIME", "1") == "1" and bad == 0:   # speed: 96 experts of layer 23, kernel vs ops (same bytes)
     import time
     r = ix["layers"]["23"]

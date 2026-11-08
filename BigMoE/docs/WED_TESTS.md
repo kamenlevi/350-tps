@@ -1166,3 +1166,26 @@ ops 0.901 ms (96 experts of layer 23; kernel == ops on all 96).
   alone), the MoE call 0.21 s, everything else 1.19 s. The step that should cost ~0.3 s costs ~1 s: next, time its parts (gathers,
   numpy -> MLX copies, scatter) on synthetic pools (scripts/pfd_bench.py), then fuse or overlap them.
 - Peak: +2.5 GB over the control (44.3 / 45.0 GB vs 41.8 / 42.4): the gathered inputs, kernel outputs and the scattered scratch copy.
+
+## Sun 8 Nov 18:10-18:27: PFD v3 = PF-D with one-pass assemble kernels: EXACT and FASTER (data/pfd/pfd_report.txt, snapshot 7d50712, code 4d08ac9; data 862660f)
+Unit first (scripts/pfd_unit.py): the two assemble kernels (rowmap: A rows from the pools in place, B rows from the base pool + read side
+parts, C rows copied from the ext's rebuild) == read_rebuilt_layout on 8 A / 8 B / 8 C experts in shuffled scratch rows; pfd_bench.py
+4.65 ms per chat layer vs v2's 11.94 ms. In-run, 12 N45 IFEval prompts, C 256, quiet (EvalSuite's card reference yielded):
+| arm | first token mean (median, min-max) | prefill SSD per prompt | vs control | lifetime peak |
+|---|---|---|---|---|
+| pde0 E (exact; control), CAP 64 | 3.04 s (2.89, 2.29-3.84) | 20.4 GB | == AR 12/12 | 41.80 GB |
+| **pde1 E + PF-D v3** | **2.29 s (2.26, 1.72-2.70)** | 7.2 GB | tokens 12/12, logits hash 256/256, == AR 12/12 | 42.60 GB |
+| pde1k + CHECK (timing void), CAP 16 | - | - | 87,912 rows (A 26,570 / B 37,265 / C 24,077) compared: 0 differing | 46.00 GB |
+| pdz0 zs (M1-B + COH + SB1; control), CAP 256 | 3.14 s (3.02, 2.51-3.87) | 20.4 GB | - | 42.40 GB |
+| **pdz1 zs + PF-D v3** | **2.67 s (2.54, 2.19-3.19)** | 7.5 GB | tokens 12/12, logits hash 721/721 | 43.40 GB |
+| pdz1n zs + PF-D v3, MLX cache kept (R57_PFD_CC=0) | 2.58 s (2.48, 2.08-3.16) | 7.5 GB | tokens 12/12, logits hash 721/721 | 44.00 GB |
+- First token -25 % on E (exact to NAX6-N) and -15 % / -18 % on the chat config, bitwise to the control in every run; SSD bytes -64 %.
+- Where the 2.29 s goes now (pde1, per prompt, runs.json "pfd"): inside the MoE calls 2.03 s = side-part reads 0.21 + C-row scratch zeros
+  0.15 + C-row reads (ext CPU rebuild) 0.44 + assemble 0.59 (~12 ms per layer in-run vs 4.65 in the bench) + the MoE call 0.25 + per-call
+  Python / lookups / copies ~0.39; outside the MoE calls 0.26 s (zs: 0.55 s, the MTP head's prompt pass). Next levers: C rows as raw reads
+  + GPU rebuild (no CPU rebuild, no zeros), reads overlapped with the assemble of A rows, and Strata's next-layer read-ahead.
+- **CAVEAT (18:3x, same run): the chat DECODE got slower with PF-D**, with identical tokens and misses (18.2 per check). Pooled triples
+  (whole decode / whole request / first token median): pdz0 49.6 / 23.9 tok/s / 3.02 s; pdz1 40.0 / 23.0 / 2.54 s; pdz1n 38.2 / 22.8 /
+  2.48 s; E: pde0 35.8 / 12.5 / 2.89 s, pde1 35.1 / 14.7 / 2.26 s. The check's CPU build rose 34.2 -> 43.7 ms (zs), mostly after a prompt's
+  16th check (38.4 -> 52.3 ms); E's checks +2 %. The PF-D arms ran after the control (order / heat not excluded); PF-D also leaves ~0.35 GB
+  more footprint outside MLX. Until a diagnostic (order swapped, PF-D idle, no reader threads) explains it: no chat whole-request claim.

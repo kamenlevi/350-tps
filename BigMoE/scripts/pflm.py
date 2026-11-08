@@ -282,7 +282,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import time
 PFD = {"calls": 0, "A": 0, "B": 0, "C": 0, "ssd": 0, "checked": 0, "bad_A": 0, "bad_B": 0, "fallback": 0,
-       "tB": 0.0, "tC": 0.0, "tG": 0.0, "tM": 0.0}           # s: side-part reads, today's reads, GPU rebuild + scatter, the call
+       "tB": 0.0, "tC": 0.0, "tG": 0.0, "tM": 0.0,           # s: side-part reads, today's reads, GPU rebuild (+ scatter), the call
+       "tZ": 0.0, "tP": 0.0, "bad_C": 0}                      # scratch zeros; the whole wrapped call; v3 CHECK of copied C rows
 _and, _or, _shl, _shr = mx.bitwise_and, mx.bitwise_or, mx.left_shift, mx.right_shift
 
 
@@ -385,7 +386,91 @@ _P11_SRC = """
   if (HALVE_) v = ((v & 0x7FFFu) == 0u) ? v : ((v - 0x80u) & 0xFFFFu);
   out[(size_t)i * per + (b / KG_) * 32u * KG_ + (b % KG_) + r * KG_] = (uint16_t)v;
 """
+# PF-D v3 (18:1x; pfd_bench.py: v2's tG = gathers 2.3 + kernels 2.8 + zeros 2.0 + scatter 3.8 ms per layer, ~2x more in-run with
+# fresh buffers): two ASSEMBLE kernels write the call's whole scratch in one pass. rowmap[row] = (kind, i1, i2): kind 0 = A
+# (base pool slot i1, side pool slot i2), 1 = B (base pool slot i1, read side part i2), 2 = C (row i1 of the ext-rebuilt rows).
+# They read the pools in place (no gathers, no intermediates, no scatter).
+_P11_HDR = """
+inline uint p11code(const device uint* w, uint NB, uint b, uint r, uint halve) {
+  const device uint* q = w + (size_t)b * 11u;
+  uint bit = 11u * r, wi = bit >> 5, sh = bit & 31u;
+  uint c = q[wi] >> sh;
+  if (sh > 21u) c |= q[wi + 1u] << (32u - sh);
+  uint v = (((c & 0x400u) << 5) | ((c & 0x3FFu) + (w[11u * NB] << 7))) & 0xFFFFu;
+  if (halve) v = ((v & 0x7FFFu) == 0u) ? v : ((v - 0x80u) & 0xFFFFu);
+  return v;
+}
+"""
+_AW4_SRC = """
+  uint gid = thread_position_in_grid.x;
+  uint per = O_ * KG_;
+  uint row = gid / per, rem = gid - row * per;
+  int kind = rowmap[3u * row], i1 = rowmap[3u * row + 1u], i2 = rowmap[3u * row + 2u];
+  device uint* o = out + (size_t)row * per * 8u + (size_t)rem * 8u;
+  if (kind == 2) {
+    const device uint* s = cw + (size_t)i1 * per * 8u + (size_t)rem * 8u;
+    for (uint k = 0; k < 8u; k++) o[k] = s[k];
+    return;
+  }
+  uint orow = rem / KG_, g = rem - orow * KG_;
+  uint cn = ((orow >> 5) * KG_ + g) * 32u + (orow & 31u);
+  const device uint* a3 = bw3 + (size_t)i1 * per * 6u + (size_t)cn * 6u;
+  const device uint* a1 = (kind == 0 ? sl1 : bl1) + (size_t)i2 * per * 2u + (size_t)cn * 2u;
+  for (uint h = 0; h < 2u; h++) {
+    uint a = a3[3u * h], b = a3[3u * h + 1u], c = a3[3u * h + 2u], l = a1[h];
+    o[4u * h + 0u] = spread8(a & 0xFFFFFFu, l);
+    o[4u * h + 1u] = spread8((a >> 24) | ((b & 0xFFFFu) << 8), l >> 8);
+    o[4u * h + 2u] = spread8((b >> 16) | ((c & 0xFFu) << 16), l >> 16);
+    o[4u * h + 3u] = spread8(c >> 8, l >> 24);
+  }
+"""
+_AP11_SRC = """
+  uint gid = thread_position_in_grid.x;
+  uint per = NB_ * 32u;
+  uint row = gid / per, rem = gid - row * per;
+  uint b = rem >> 5, r = rem & 31u;
+  int kind = rowmap[3u * row], i1 = rowmap[3u * row + 1u], i2 = rowmap[3u * row + 2u];
+  size_t at = (b / KG_) * 32u * KG_ + (b % KG_) + r * KG_;
+  if (kind == 2) {
+    os[(size_t)row * per + at] = cs[(size_t)i1 * per + at];
+    ob[(size_t)row * per + at] = cb[(size_t)i1 * per + at];
+    return;
+  }
+  os[(size_t)row * per + at] = (uint16_t)p11code(bs3 + (size_t)i1 * WS_, NB_, b, r, 1u);
+  const device uint* bw = (kind == 0 ? sb + (size_t)i2 * WB_ : bb + (size_t)i2 * WB_);
+  ob[(size_t)row * per + at] = (uint16_t)p11code(bw, NB_, b, r, 0u);
+"""
 _KER = {}
+
+
+def _kernels_v3():
+    if "aw4" not in _KER:
+        _KER["aw4"] = mx.fast.metal_kernel(name="pfd_aw4", input_names=["bw3", "sl1", "bl1", "cw", "rowmap"],
+                                           output_names=["out"], source=_AW4_SRC, header=_W4_HDR)
+        _KER["ap11"] = mx.fast.metal_kernel(name="pfd_ap11", input_names=["bs3", "sb", "bb", "cs", "cb", "rowmap"],
+                                            output_names=["os", "ob"], source=_AP11_SRC, header=_P11_HDR)
+    return _KER["aw4"], _KER["ap11"]
+
+
+def assemble(t, rm, base, side, bl1s, bbs, scrC):
+    """v3: the call's whole 4-bit scratch (9 pieces, PIECES order) from rowmap rm (N, 3) int32: A rows from the pools in place,
+    B rows from the base pool + read side parts (bl1s / bbs per projection), C rows copied from scrC (the ext's rebuild)."""
+    kw, kp = _kernels_v3()
+    N = int(rm.shape[0])
+    rmx = mx.array(rm.astype(np.int32))
+    out = []
+    for p, p_ in enumerate(("gate_proj", "up_proj", "down_proj")):
+        O, KG = int(t["rows3"][p]), int(t["shapes4"][3 * p][0][1]) // 8
+        nb = O // 32 * KG
+        W = kw(inputs=[base[p_]["w3"], side[p_]["l1"], bl1s[p], scrC[3 * p], rmx], template=[("O_", O), ("KG_", KG)],
+               grid=(N * O * KG, 1, 1), threadgroup=(256, 1, 1), output_shapes=[(N, O, 8 * KG)], output_dtypes=[mx.uint32])[0]
+        S, B_ = kp(inputs=[base[p_]["s3"], side[p_]["b"], bbs[p], scrC[3 * p + 1].view(mx.uint16),
+                           scrC[3 * p + 2].view(mx.uint16), rmx],
+                   template=[("NB_", nb), ("KG_", KG), ("WS_", int(base[p_]["s3"].shape[1])), ("WB_", int(side[p_]["b"].shape[1]))],
+                   grid=(N * nb * 32, 1, 1), threadgroup=(256, 1, 1), output_shapes=[(N, O, KG), (N, O, KG)],
+                   output_dtypes=[mx.uint16, mx.uint16])
+        out += [W, S.view(mx.bfloat16), B_.view(mx.bfloat16)]
+    return out
 
 
 def _kernels():
@@ -477,6 +562,8 @@ def read_parts(t, ids, off, size):
                 raise OSError(f"PF-D: short read of record {int(ids[k])} at {base + got}")
             got += n_
     list(_PFD_POOL[0].map(one, range(len(ids))))
+    if os.environ.get("R57_PFD_POOL") == "call":         # diagnostic (18:3x): no reader threads alive outside the call
+        _PFD_POOL.pop().shutdown(wait=True)
     return buf
 
 
@@ -487,8 +574,15 @@ def install_pfd(tier, check=False):
         return
     orig = tier.prefill_call
     from bigmoe.stream import PIECES
+    V3 = os.environ.get("R57_PFD_V", "3") == "3"         # R57_PFD_V=2: v2 (gathers + fused rebuild + scatter)
+    CC = os.environ.get("R57_PFD_CC", "1") != "0"        # =0: keep MLX's buffer cache across layer calls (no re-faulting)
+    IDLE = os.environ.get("R57_PFD_IDLE") == "1"         # =1: installed but inactive (decode-slowdown diagnostic)
 
     def prefill_call(cls, self, x, indices, bm, *a, **kw):
+        tp_ = time.perf_counter()
+        if IDLE:                                         # diagnostic (18:3x): installed, every call takes the wrapped path
+            PFD["fallback"] += 1
+            return orig(cls, self, x, indices, bm, *a, **kw)
         t = bm["tier"]
         ids = np.array(indices)
         uniq = np.unique(ids)
@@ -508,15 +602,46 @@ def install_pfd(tier, check=False):
         lsb = read_parts(t, uniq[B], msb, lsz) if len(B) else None
         t1_ = time.perf_counter()
         tier._reuse_drop()
-        scr = [mx.zeros((len(uniq), *sh), dt) for sh, dt in t["shapes4"]]
-        mx.eval(*scr)
-        t2_ = time.perf_counter()
-        if len(C):                                       # C: today's path, into those rows
-            tier._read_rebuilt(t, uniq[C].astype(np.int32).tolist(), C.astype(np.int32).tolist(), scr)
-        t3_ = time.perf_counter()
-        PFD["tB"] += t1_ - t0_
-        PFD["tC"] += t3_ - t2_
-        AB = np.concatenate([A, B])
+        if V3:                                           # v3: C rows into their own small scratch, then one assemble pass
+            nC = len(C)
+            scrC = [mx.zeros((max(nC, 1), *sh), dt) for sh, dt in t["shapes4"]]
+            mx.eval(*scrC)
+            t2_ = time.perf_counter()
+            if nC:
+                tier._read_rebuilt(t, uniq[C].astype(np.int32).tolist(), list(range(nC)), scrC)
+            t3_ = time.perf_counter()
+            rm = np.zeros((len(uniq), 3), np.int32)
+            rm[A, 1], rm[A, 2] = sb[A], ss[A]
+            rm[B, 0], rm[B, 1], rm[B, 2] = 1, sb[B], np.arange(len(B))
+            rm[C, 0], rm[C, 1] = 2, np.arange(nC)
+            if len(B):
+                bl1s, bbs = lsb_pieces(t, lsb)
+            else:                                        # never read (no kind 1 rows): one-row placeholders
+                bl1s = [mx.zeros((1, *t["sideP"][p_]["l1"].shape[1:]), mx.uint32) for p_ in ("gate_proj", "up_proj", "down_proj")]
+                bbs = [mx.zeros((1, *t["sideP"][p_]["b"].shape[1:]), mx.uint32) for p_ in ("gate_proj", "up_proj", "down_proj")]
+            scr = assemble(t, rm, t["base"], t["sideP"], bl1s, bbs, scrC)
+            t4_ = time.perf_counter()
+            mx.eval(*scr)                                # the assemble pass, timed apart from the call
+            PFD["tG"] += time.perf_counter() - t4_
+            PFD["tZ"] += t2_ - t1_
+            PFD["tB"] += t1_ - t0_
+            PFD["tC"] += t3_ - t2_
+            if check:
+                _pfd_check_rows(tier, t, uniq, scr, rm[:, 0])
+            del scrC, bl1s, bbs
+            A_B = ()
+        else:
+            scr = [mx.zeros((len(uniq), *sh), dt) for sh, dt in t["shapes4"]]
+            mx.eval(*scr)
+            t2_ = time.perf_counter()
+            if len(C):                                   # C: today's path, into those rows
+                tier._read_rebuilt(t, uniq[C].astype(np.int32).tolist(), C.astype(np.int32).tolist(), scr)
+            t3_ = time.perf_counter()
+            PFD["tB"] += t1_ - t0_
+            PFD["tZ"] += t2_ - t1_
+            PFD["tC"] += t3_ - t2_
+            A_B = np.concatenate([A, B])
+        AB = A_B
         if len(AB):
             gi = mx.array(sb[AB].astype(np.int32))
             w3s = [mx.take(t["base"][p_]["w3"], gi, axis=0) for p_ in ("gate_proj", "up_proj", "down_proj")]
@@ -561,11 +686,29 @@ def install_pfd(tier, check=False):
             for (proj, field), arr in zip(PIECES, saved):
                 setattr(getattr(self, proj), field, arr)
         del scr
-        mx.clear_cache()
+        if CC:
+            mx.clear_cache()
+        PFD["tP"] += time.perf_counter() - tp_
         return y
 
     tier.prefill_call = prefill_call
     tier._pfd_installed = True
+
+
+def _pfd_check_rows(tier, t, uniq, scr, kinds):
+    """v3 R57_PFD_CHECK: every row of the assembled scratch vs tier._read_rebuilt of the same experts; differing rows by kind."""
+    ref = [mx.zeros((len(uniq), *sh), dt) for sh, dt in t["shapes4"]]
+    mx.eval(*ref)
+    tier._read_rebuilt(t, uniq.astype(np.int32).tolist(), list(range(len(uniq))), ref)
+    bad = np.zeros(len(uniq), bool)
+    for g, r_ in zip(scr, ref):
+        gv = np.array(g.view(mx.uint16) if g.dtype == mx.bfloat16 else g).reshape(len(uniq), -1)
+        rv = np.array(r_.view(mx.uint16) if r_.dtype == mx.bfloat16 else r_).reshape(len(uniq), -1)
+        bad |= (gv != rv).any(axis=1)
+    PFD["checked"] += len(uniq)
+    PFD["bad_A"] += int(bad[kinds == 0].sum())
+    PFD["bad_B"] += int(bad[kinds == 1].sum())
+    PFD["bad_C"] += int(bad[kinds == 2].sum())
 
 
 def _pfd_check(tier, t, ids, reb, nA):
