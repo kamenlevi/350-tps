@@ -64,6 +64,16 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     7. MON 07:05 (Strata's old slot, free; NewIdeas places it): the card-gate arm work left from tonight. It's
        resumable; quiet lock, MEM 47 GB, hard stop at Kamen's day start.
     - RULE (11:3x) stays: a job that fits in ~30 GB never waits behind a memory-gated one. One > 5 GB job at a time.
+  - FIT12 CHAT WIDTH (12 GB; NewIdeas places it, 12:2x):
+    - The lever: the 2-row first exact call when the first draft's cf < 0.9. Chat whole decode +9.6 % (12.68 -> 13.89
+      tok/s), code -1.0 %. Rounding-level, not bit-exact [K].
+    - Under Kamen's rule its gate is a card benchmark. A full 12 GB card arm (~450K tokens in two orders at ~14 tok/s)
+      costs ~9 h [P], more than any window before Wednesday, and EvalSuite's card gates have no 12 GB arm.
+    - PLACED: a 12 GB IFBench arm (150 keys, one order, ~150K tokens, ~3 h [P], MEM ~12-16 GB), Monday by day. It's
+      scored vs the NAX6-N IFBench rows the card reference makes anyway, with the card's own line on IFBench.
+    - It needs Fit12's env and a 12 GB screen whose SETOF maps ifbench.
+    - Without that run it can still be published as a non-exact 12 GB chat mode, ungated, with its measured speed.
+      Adopting it is Kamen's call.
   - BREAKTHROUGH 11:56 [K]:
     - The Qwen 4 capture reproduction PASSES bit-exact (053b3b6), so the Qwen 4 board item is DONE.
     - Chat map screens (c159451; map flips, INFORMATION / screens under Kamen's rule):

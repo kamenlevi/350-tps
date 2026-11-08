@@ -53,7 +53,7 @@ Checked on the gate keys; the result is the same in scripts/r57_screen.py and th
 ## Reference: NAX6-N's AR -> results/ref2tnaxn.r6 (runner 61, CARD_STAGE=ref)
 - The decode stage on the converted store, in the same environment as CERT's references and runner 60's stage 0.
 - C is chosen by free memory: 192, 160 or 128 (need 36 / 32 / 27 GB). ref2tnax's rows were made at C 192.
-- **Line check before any chunk below C 192:** 12 IFEval rows decoded at that C (results/ref2tnaxn.lc<C>) must be
+- **Line check before any chunk below C 192:** 12 IFEval rows decoded at that C (results/ref2tnaxn.r<C>) must be
   token-identical to ref2tnax's. If they are not, that C is not used and the stage waits for 40 GB. A pass lets the
   reference run by day in Kamen's ~36 GB.
 - Cost, estimated from NAX6-N's own rows (11-14 tok/s per row on IFEval / math): ~225K tokens (range 190-300K), ~5-6 h.
@@ -190,3 +190,10 @@ Checked on the gate keys; the result is the same in scripts/r57_screen.py and th
   below 192 has its line check.
 - Mock-tested: the yield function returns at once while Chrome runs or Strata has ended. With Chrome gone it waits for
   Strata, then the PFB waiter, then quiet locks, then resumes.
+- **A failed start, 12:06:54 to 12:07:3x, with no row.**
+  - What happened: the first line check's run name (ref2tnaxn.lc160) is not a name the decode stage takes, which is
+    `<variant>.r<digits>`. The stage exited in 5 s before loading the model, and the runner kept retrying.
+  - I stopped it by pid (the runner and its sleep) and ran peer unlock; no lock was left. Its log is
+    results/day61_ref_runner.lcname_1206.log.
+  - Fix (fdab3dd): the line-check runs are ref2tnaxn.r<C>, and a line-check decode that fails with no row now stops the
+    runner.

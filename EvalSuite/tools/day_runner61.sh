@@ -297,12 +297,16 @@ refdecode() {   # run, sets, keys file, C, need GB, max rows: one chunk of the r
     EVALSUITE_STAGE_ENV="BIGMOE_TIER=4433333333,BIGMOE_TIER_GLU=3c,BIGMOE_TIER_CL=112" ./bin/evalsuite gpu decode "$1" --sets "$2" \
       --keys "$3" --max-rows "$6" --chunk-minutes 45 --share --C "$4" --need "$5" --minutes 60 ) >> "$LOG" 2>&1
 }
-linecheck() {   # C, need: 12 IFEval rows at this C == ref2tnax's (made at C 192); the verdict is kept per C
-  local c=$1 ok=$AF/linecheck_C$1.ok bad=$AF/linecheck_C$1.bad lk=$AF/linecheck_keys.txt run=ref2tnaxn.lc$1
+linecheck() {   # C, need: 12 IFEval rows at this C == ref2tnax's (made at C 192); the verdict is kept per C. The run is
+  #               ref2tnaxn.r<C> (the stage takes scratch runs as <variant>.r<digits> only)
+  local c=$1 ok=$AF/linecheck_C$1.ok bad=$AF/linecheck_C$1.bad lk=$AF/linecheck_keys.txt run=ref2tnaxn.r$1 rc
   [ -f "$ok" ] && return 0; [ -f "$bad" ] && return 1
   python3 -c 'import json; print("\n".join(sorted(json.loads(l)["key"] for l in open("data/items/dec_ifeval.jsonl"))[:12]))' > "$lk"
   say "line check: 12 IFEval rows at C $c -> results/$run (need $2 GB)"
-  refdecode "$run" ifeval "$lk" "$c" "$2" 12; say "line check: chunk rc=$?"
+  refdecode "$run" ifeval "$lk" "$c" "$2" 12; rc=$?; say "line check: chunk rc=$rc"
+  if [ "$rc" != 0 ] && [ "$rc" != 75 ] && [ ! -s "results/$run/decode.jsonl" ]; then
+    say "line check: the decode failed with no row (rc $rc; results/gpu_stage.log): runner stops"; exit 4
+  fi
   python3 - "$run" "$lk" <<'LC' > "$AF/linecheck_C$c.txt" 2>&1
 import json, sys
 ks = open(sys.argv[2]).read().split()

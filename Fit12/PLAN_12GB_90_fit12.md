@@ -512,3 +512,58 @@ fixed-cost bet. This is a measurement only: no setting changes.
   - None of the three: the fixed cost is spread thin; I close the fixed-cost lever on my side (KILL).
   - The hash (t5 - t4) is harness-only: if >= 2 ms per call, my 12 GB whole-decode figures understate the shipped loop by
     that much (information).
+
+## T2 FIXED COST PROFILE RESULT (chw15.sh, share lock 12:02:13-12:04:19, GPU 0 % at start, no other session's lock during it (locks.txt), swap flat, rc 0; data /Users/kamen/Fit12/data/scr/chw15, chw15_prof.txt (reader v2) / chw15_eq.txt)
+- Sanity: tokens 12 / 12 and lsha 12 / 12 = chw14c2 (same env, run 2 h earlier). The stamps change nothing, and the loop
+  repeats bit for bit. Whole decode 13.80 geo (13.90 pooled) vs 13.89: x0.993.
+- 629 exact calls (first calls: 340 at 2 rows, 164 at 4; later calls: 113 at 4). Per call, ms = a[w] + b * GB:
+
+  | stage | a[1] | a[2] | a[3] | a[4] | ms per GB |
+  |---|---|---|---|---|---|
+  | whole call (t0..t5) | 43.3 | 43.6 | 53.2 | 58.8 | 82.7 |
+  | loader reading (io over t0..t2) | 9.4 | 9.4 | 14.3 | 15.0 | 80.3 |
+  | loader overhead (proc - io) | 0.1 | 0.1 | 0.0 | 0.0 | 0.0 |
+  | loader idle over t0..t2 ("nl": Python + GPU side + handoffs) | 32.0 | 31.0 | 36.1 | 40.4 | 2.4 |
+  | tolist + compare | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+  | commit | 0.0 | 1.2 | 1.3 | 1.8 | -0.1 |
+  | lsha hash (harness only) | 0.5 | 0.7 | 0.9 | 1.1 | 0.0 |
+
+- Shares of draft + exact time: reads 63.7 %, loader idle 27.5 %, commit 1.0 %, hash 0.6 %, drafts 6.3 % (10.4 ms per check).
+- DEVIATION from the pre-registered stamp meaning:
+  - forward() is not graph-only: the harness env sets BIGMOE_ASYNC_EVERY=1, which submits every layer as it is built.
+  - So the loader is busy 30-124 ms inside forward(), and the mx.eval window holds only the last 3.5-5 ms + 6.6 ms per GB.
+  - So 'build' (t1 - t0) is not graph building.
+  - And 'eval - proc' (3.0-4.1 ms) is only the tail of the loader-idle time. The quantity the idle line meant is nl.
+- Routing (the pre-registered lines):
+  - Host stages: tolist + compare 0.0, commit 1.2-1.8, hash 0.5-1.1 ms per call, all < 8 ms: no host lever.
+    'build' is 115 ms mean by the letter, but it holds the reads and the GPU work.
+  - Loader overhead 0.1 ms per call (< 8): no loader lever. KILL.
+  - Loader idle by the letter (eval - proc): 3.0-4.1 ms < 25, so not triggered. The meant quantity nl = 31-40 ms >= 25.
+    - But nl mixes Python graph building with the GPU side (+ the GPU <-> loader handoffs), and these stamps cannot split
+      them.
+    - Reads add at the full read rate (82.7 vs 80.3 ms per GB), so nothing hides under Python. A Python-bound pipeline is
+      therefore unlikely: [K] slope, [P] reading.
+    - Before anything goes to Leap: chw16 (below) splits Python from the GPU side.
+  - Hash 0.5-1.1 ms per call (< 2): my 12 GB whole-decode figures understate the shipped loop by ~0.6 % (information).
+- Also [K]: the reads carry 9-15 ms of fixed time per call (per stalled layer: latency, not bytes; 19-47 misses per call).
+
+## T2 FIXED COST SPLIT (chw16, pre-registered Sun 08 Nov 12:0x: `date` 12:08 at arming; the chw16.sh header says 12:1x in error; before any run): Python vs the GPU side inside nl
+- Same run as chw15p (P2' + PR1 + tail, 12 IFEval, CAP 128, F12_GSTAT=1).
+- Each TS row adds at its end the main thread's CPU time (time.thread_time) at t0, t1 and t2.
+- cpu_f = the main thread's CPU over t0..t1; the reader fits it per width like the other stages.
+- Sanity: tokens + lsha = chw14c2 / chw15p 12 / 12.
+- Routing:
+  - cpu_f intercept >= 0.8 x nl's intercept (Python busy for the idle time): Python is on the critical path. That is my
+    lever (my copies: fewer ops per layer, or building ahead); I price it [P].
+  - cpu_f intercept <= 0.5 x nl's: nl is the GPU side + handoffs. It goes to Leap / Breakthrough with both tables; my side
+    of the fixed-cost lever closes (KILL).
+  - Between: both, reported.
+
+## T2 CHAT WIDTH GATE ENV (Sun 08 Nov 12:23; NewIdeas 12:2x placed the gate as a 12 GB IFBench arm, Monday by day, scored vs NAX6-N's card rows)
+- Env file /Users/kamen/Fit12/data/gate/card12_chw_env.txt (EvalSuite's format; it parses with runner 61's parse_env). It is
+  not an r57 screen, so it is driven like runner 57.
+- Harness frozen at /Users/kamen/Fit12/snap/chw1108 (read-only): stage 2's code. Its fit_t3.py (sha 7a9ffd8375ed) differs
+  only in the sys.path line, which loads its own folder.
+- IFBench maps through EvalSuite's dec_ifbench.jsonl (300 items, max_tokens 1536).
+- Smoke test chw17 (/Users/kamen/Fit12/scripts/chw17.sh) armed after chw16: ifeval/1220 + ifeval/3280 must = chw14c2
+  (tokens + lsha); ifbench/10 must decode.

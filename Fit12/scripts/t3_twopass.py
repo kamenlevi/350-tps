@@ -497,7 +497,8 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
         if CALLS[0] is not None and kc is not None:
             CALLS[0].append((st["checks"], ci, w, kept) + kc + _mk())
         if TS[0] is not None and ts is not None:       # (T2 PROF) stamps [t0, t1, t2, t3, t4] + gate stats [g0, g1, g2]
-            TS[0].append((st["checks"], ci, w, kept) + tuple(ts[:5]) + (_now(),) + tuple(ts[5]) + tuple(ts[6]) + tuple(ts[7]))
+            TS[0].append((st["checks"], ci, w, kept) + tuple(ts[:5]) + (_now(),) + tuple(ts[5]) + tuple(ts[6]) + tuple(ts[7])
+                         + tuple(ts[8]))                # (chw16) the main thread's CPU time at t0, t1, t2
 
     def _exact_loop(toks_, d_, new_, tps_, pos, w1=4):
         ci, w_ = 0, w1
@@ -510,6 +511,7 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
             ch = toks_[pos:pos + w_]
             kc = _mk()
             ts_ = None if TS[0] is None else [_now()]        # (T2 PROF) t0
+            cp_ = None if ts_ is None else [time.thread_time()]   # (chw16) the main thread's CPU at t0
             gs_ = None if ts_ is None else [_gs()]           # (T2 PROF) g0
             aw = W1AW[0] and len(ch) == 1 and (wc == 1 or W1TAIL[0]) and not B.AW[0]   # a chosen 1-row call; with the
             # tail rule also the cap's last token (no drafts), whose late-rule bits would otherwise depend on the pools
@@ -519,10 +521,12 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
                 lg_, tp_, sn_ = forward(ch, False)
                 if ts_ is not None:
                     ts_.append(_now()); gs_.append(_gs())    # t1, g1: the graph is built (any syncs inside forward included)
+                    cp_.append(time.thread_time())
                 g_ = mx.argmax(lg_, axis=-1)
                 mx.eval(g_, tp_)
                 if ts_ is not None:
                     ts_.append(_now()); gs_.append(_gs())    # t2, g2: the GPU + loader work is done
+                    cp_.append(time.thread_time())
             finally:
                 if aw:
                     B.AW[0] = False
@@ -538,7 +542,7 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
             if m_ == len(ch) and pos + len(ch) <= len(d_) and pos + len(ch) < len(toks_):   # all matched: next chunk
                 rt_ = commit(ch, sn_, len(ch), False)
                 if ts_ is not None:
-                    ts_.append(_now()); ts_ += gs_           # t4: commit done
+                    ts_.append(_now()); ts_ += gs_ + [cp_]           # t4: commit done
                 tps_.append(rt_ if rt_ is not None else tp_)
                 h.update(np.array(lg_.view(mx.uint32)).tobytes())
                 new_ += d_[pos:pos + len(ch)]
@@ -548,7 +552,7 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
                 continue
             rt_ = commit(ch, sn_, m_ + 1, False)
             if ts_ is not None:
-                ts_.append(_now()); ts_ += gs_               # t4: commit done
+                ts_.append(_now()); ts_ += gs_ + [cp_]               # t4: commit done
             tps_.append((rt_ if rt_ is not None else tp_)[: m_ + 1])
             h.update(np.array(lg_[: m_ + 1].view(mx.uint32)).tobytes())
             new_ += d_[pos:pos + m_] + [g_[m_]]

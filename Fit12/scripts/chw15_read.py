@@ -23,7 +23,9 @@ for f in sorted(glob.glob(os.path.join(D, f"{TAG}_*_ex_ts.json"))):
                          build=(t[1] - t[0]) * 1e3, ev=(t[2] - t[1]) * 1e3, host=(t[3] - t[2]) * 1e3,
                          commit=(t[4] - t[3]) * 1e3, hsh=(t[5] - t[4]) * 1e3, tot=(t[5] - t[0]) * 1e3,
                          proc=(g2[0] - g1[0]) * 1e3, io=(g2[1] - g1[1]) * 1e3, proc_b=(g1[0] - g0[0]) * 1e3, io_b=(g1[1] - g0[1]) * 1e3,
-                         miss=g2[3] - g1[3], stalled=g2[4] - g1[4], gb=(c[10] - c[6]) / 1e9))
+                         miss=g2[3] - g1[3], stalled=g2[4] - g1[4], gb=(c[10] - c[6]) / 1e9,
+                         cpu_f=(a[29] - a[28]) * 1e3 if len(a) >= 31 else float("nan"),   # (chw16) main-thread CPU
+                         cpu_e=(a[30] - a[29]) * 1e3 if len(a) >= 31 else float("nan")))  # over t0..t1, t1..t2
     ph_all += [p for p in ph]
 if not rows:
     sys.exit(f"no {TAG} TS rows in {D}")
@@ -34,6 +36,8 @@ for r in rows:
     r["rd"] = r["io_b"] + r["io"]                       # mostly land in the build window); rd = its reads
     r["nl"] = r["build"] + r["ev"] - r["busy"]          # (v2) t0..t2 with the loader idle: Python + GPU critical path + syncs
 K = ["build", "ev", "proc", "io", "ovh", "idle", "host", "commit", "hsh", "tot", "busy", "rd", "nl"]
+if all(r["cpu_f"] == r["cpu_f"] for r in rows):      # (chw16) the CPU stamps exist
+    K += ["cpu_f", "cpu_e"]
 print(f"T2 FIXED COST PROFILE ({D}, {TAG}): {len(rows)} exact calls; ms per call (mean). ev = mx.eval window = loader proc"
       f" (io + ovh) + loader idle (the GPU side's path); proc_b = loader busy while forward() built the graph")
 print("  group            n   GB   miss | " + " ".join(f"{k:>6}" for k in K) + " | proc_b")
