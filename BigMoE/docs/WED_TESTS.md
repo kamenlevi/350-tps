@@ -1086,3 +1086,46 @@ prefill call to the first token's readback (chat drafts with the MTP head, so no
   one: model loaded once, warm-up discarded, caches kept). Levers: parallel reads (8 -> 12-14 GB/s), a resident-set prefill (PF-D,
   lossy; CT1 prices it). CT1 (in PFB's slot: zs = M1-B + COH + SB1 on the same 12 keys, CAP 16, R57_PFSTAT) logs per prompt TTFT,
   prefill SSD GB, residency at start, routed and resident expert-layers.
+
+## Sun 8 Nov 16:18-16:21: C32, the 32 GB chat cell (data/chs/c32_report.txt; the orchestrator's OK of NewIdeas' 32 GB arm)
+12 IFEval (N45's keys, CAP 256) at C 160 (C30's ~32 GB route), card snapshot e057abf (FU's code), one pass per arm, quiet
+(a heat pause froze the runner 16:17:06-16:18:07, before the first arm: no arm timed through it).
+| arm | config | whole decode | kept / check | cycle ms | misses / check | MB / kept | lifetime peak | == AR | TTFT median | end to end |
+|---|---|---|---|---|---|---|---|---|---|---|
+| e32 | E (exact) | 33.8 tok/s | 2.53 | 73.7 | 168.4 | 80.8 | 30.60 GB | 12/12 | 2.83 s | 19.8 tok/s |
+| zs32 | M1-B + COH + SB1 | **51.3 tok/s** | 2.52 | 48.6 | 42.7 | 20.8 | 31.20 GB | 2/12 | 2.99 s | 22.5 tok/s |
+- **zs32 is LOSSY and UNGATED at 32 GB**: M1-B's IFEval gate (EvalSuite runner 59) ran at C 256, and QOM skips more cold ranks at C 160.
+  Its tokens match AR on 2/12 prompts, the same count as at C 256 (z0 / zs / z0b 2/12).
+- vs C 256 on the same prompts: E 36.4 (CHS1 e0) -> 33.8 (-7 %); zs 51.9 (CHS5) -> 51.3 (-1 %): QOM's cold-rank skips absorb most of
+  the smaller cache (misses 42.7 vs 24.6 per check; E's 168.4 vs 89.8).
+- Against Strata (the orchestrator's h2h at its 33.6-34.9 GB peak): decode 37.4, TTFT 0.97 s, end to end 25.7 tok/s. At ~31 GB we lead
+  on decode (51.3 lossy / 33.8 exact) but trail end to end (22.5 / 19.8) because TTFT is ~3 s here (the prompt's expert reads; see
+  the chat-TTFT section above and PFB's CT1).
+
+## Sun 8 Nov 16:26-16:35: PFB = PF-B vs PF-A + CT1 (chat prefill anatomy) + FU's fb0 re-run (data/pfb/pfb_report.txt, d44ec7a)
+Snapshot b5e0d1f (ref2 d05063fa), quiet lock, no heat pause during the run; E (exact) at C 256, CAP 64, the 1.6K / 4.7K / 7.9K agent prompts.
+**PF-B (R57_PFLM=3) is +15-22 % over PF-A but NOT bit-exact.**
+| arm | 1.6K | 4.7K | 7.9K | vs PF-A logits hash | tokens | lifetime peak |
+|---|---|---|---|---|---|---|
+| pa1 PF-A (control) | 189 tok/s (8.3 s) | 360 (13.1 s) | 425 (18.7 s) | - | - | 45.10 GB |
+| pb3 PF-B, TOK 4096 + read-ahead | 218 (x1.15) | 428 (x1.19) | 490 (x1.15) | 0/7, 0/24, 0/22 | ==, DIFF, DIFF | 46.00 GB |
+| pb38 PF-B, TOK 8192 | 218 (x1.15) | 438 (x1.22) | **499 (x1.17)** | 0/7, 0/28, 0/21 | ==, DIFF, DIFF | 46.20 GB |
+| pb3n PF-B, no read-ahead | 197 (x1.04) | 384 (x1.06) | 456 (x1.07) | 0/7, 0/24, 0/22 | ==, DIFF, DIFF | 45.80 GB |
+| pb3c PF-B + clear_cache per layer | 197 (x1.04) | 404 (x1.12) | 483 (x1.14) | 0/7, 0/24, 0/22 | ==, DIFF, DIFF | 45.80 GB |
+- The read-ahead (the CPU reads the layer's experts while the GPU runs all chunks' attention) is most of the gain (no read-ahead: +4-7 %).
+- Not exact in any PF-B arm, the read-ahead-free one included: the logits differ from PF-A at every hashed decode step and the tokens
+  diverge on the 4.7K / 7.9K prompts. Suspect: the MoE runs on concatenated, 64-padded chunk groups (M up to TOK) where PF-A calls it per
+  1,024-row chunk, so the expert matmuls see a different M (tiling / accumulation order). Untested exact variant: groups of one chunk
+  (TOK = PFCHUNK) and no padding while rows x top-k <= 32,767 (LEDGER BUG1 needs > 32,767), same M as PF-A, read-ahead kept.
+- Peaks rise 0.7-1.1 GB over PF-A (45.8-46.2 GB, line 45.0).
+**CT1 (NewIdeas' pre-registered chat prefill price; zs = M1-B + COH + SB1, the 12 N45 IFEval prompts, CAP 16, R57_PFSTAT):**
+- TTFT mean 3.10 s; prefill SSD 20.4 GB per prompt (15.6-25.9); routed expert-layers 7,321 (of 24,576); base residency at start 45.7 %;
+  of the routed expert-layers 65.5 % had their MSB-3 base and 25.1 % their LSB side resident.
+- **The chat prefill re-reads every routed expert-layer, resident or not: SSD bytes = routed x 2.79 MB on all 12 prompts (2.78-2.79).**
+- **TTFT = 0.32 s + bytes / 7.33 GB/s (r = 0.993): the chat TTFT is the SSD read.**
+- PF-D (serve resident base / side parts from the pools; exact, same weights) would keep ~45 % of the bytes (1 - 0.75 x 0.655 - 0.25 x
+  0.251) = ~9.1 GB: TTFT ~1.56 s at today's rate, ~1.1 s at 12 GB/s (estimates; Strata 0.97 s).
+- Pre-registration (NewIdeas QUEUE): bytes vs 12 GB's prefill (15-26 GB per prompt) ~100 % (>= 80 %), mean base residency at start 45.7 %
+  (< 50 %, >= 25 %): BETWEEN by its letter; the routed-resident share (65.5 % base) is the direct measure of what PF-D skips.
+**fb0r:** FU's fb0 (L at C 256; the orchestrator's publish job overlapped it) re-run: TTFT 16.7 / 66.6 / 40.9 s vs 16.5 / 68.1 / 41.4 s,
+peak 45.10 GB both: the overlap did not change fb0 beyond ~2 %; FU's numbers stand.

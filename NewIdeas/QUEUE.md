@@ -35,8 +35,17 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     - Order: card-reference leftover (0.5-2.5 h), then lcoh (~3.6 h), then whichever next arm fits.
     - The last chunk or arm must END by 15:00.
     - Fit12's 12 GB IFBench arm (~3 h, MEM ~12-16 GB) goes after 15:00, by day.
-  - PROPOSED 15:36 to the orchestrator (its call; BigMoE runs it): a 32 GB CHAT ARM right after PFB, before the card
-    reference resumes (~12 min, MEM ~33 GB, quiet).
+  - ORDER AT 16:12 (the orchestrator 16:1x):
+    1. Strata finished 8 / 8 at 16:07. Its arena was only 25-28 GB with Chrome open, so it is re-running B and D at
+       the full 33 GB arena (results_arena33; started 16:12, ~12 min).
+    2. BigMoE's 32 GB CHAT ARM (APPROVED; below), ~12 min, straight after.
+    3. PFB stays blocked: its 48 GB gate can't pass with Chrome open (46 GB). The orchestrator is asking Kamen about
+       closing Chrome.
+    4. GAP until 17:07 (if PFB stays blocked): Fit12's chw18 (one share lock, MEM 12 GB, ~10 min; smoke + history test
+       + chw16 profile). Its own gate (6 clear minutes) opens there. It must END by 17:07. If Chrome closes and PFB
+       queues first, chw18 goes right after PFB.
+    5. 17:07: EvalSuite's card reference resumes (it waits on PFB's pid until then at most).
+  - APPROVED 16:1x (proposed 15:36; BigMoE runs it): a 32 GB CHAT ARM (~12 min, MEM ~33 GB, quiet).
     - Why: Strata peaks at 33.6-34.9 GB, so the fair answer to Kamen's question is our chat at ~32 GB. The publish
       table's 32 GB chat cell is also still empty.
     - What: the 12 IFEval (N45 keys, CAP 256) at C 160 (C30's 31.8 GB route), E (exact) and zs (M1-B + COH + SB1),

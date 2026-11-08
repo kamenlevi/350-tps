@@ -16,6 +16,8 @@
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 cd "${CHS_ROOT:-$HOME/BigMoE}" || exit 1
 B=${CHS_BATCH:-chs1}
+C=${CHS_C:-256}; NEED=${CHS_NEED:-47.2}                 # Sun 16:1x (the orchestrator: the 32 GB chat cell): CHS_C = the cache C
+# (tags <arm>_<C>), CHS_NEED = the NO-SWAP floor in GB; CHS_SNAP=<name> reuses data/r57/snap/<name> (committed) instead of a new freeze
 D=data/chs; mkdir -p $D
 LOG="$PWD/$D/chs.log"
 say() { echo "$(date '+%m-%d %H:%M:%S') [$B] $*" >> "$LOG"; }
@@ -25,10 +27,10 @@ END_E=$(date -j -f '%Y-%m-%d %H:%M' "$(date +%Y-%m-%d) ${CHS_END:-01:18}" +%s)
 [ $END_E -lt $(date +%s) ] && END_E=$((END_E + 86400))
 [ $((END_E - $(date +%s))) -gt 43200 ] && { say "CHS_END ${CHS_END:-01:18} is > 12 h away (passed?): not run"; exit 0; }
 A=${CHS_AVAIL:-$(avail_gb)}
-awk -v a="$A" 'BEGIN {exit !(a >= 47.2)}' || { say "NO-SWAP $A GB < 47.2: not run"; exit 0; }
+awk -v a="$A" -v n="$NEED" 'BEGIN {exit !(a >= n)}' || { say "NO-SWAP $A GB < $NEED: not run"; exit 0; }
 [ -n "$CHS_DRYRUN" ] || sleep 20
 A=${CHS_AVAIL:-$(avail_gb)}
-awk -v a="$A" 'BEGIN {exit !(a >= 47.2)}' || { say "NO-SWAP $A GB < 47.2 at the 20 s look-again: not run"; exit 0; }
+awk -v a="$A" -v n="$NEED" 'BEGIN {exit !(a >= n)}' || { say "NO-SWAP $A GB < $NEED at the 20 s look-again: not run"; exit 0; }
 L=$(grep -v '^#' data/stack/s5p_env.txt | grep . | tail -1 | sed 's/,R57_QOM_SETS=humaneval,mbpp$//')
 drop() { echo "$L" | tr ',' '\n' | grep -vxE "$1" | paste -sd, -; }
 BUN="BIGMOE_PAUSE_EVERY_MS=50,R57_S0CARRY=1,REF2_SB_FIRST=1,REF2_PLE_LATE=1,REF2_COMMIT_SUB=9,R57_DQ1=1"
@@ -44,23 +46,36 @@ for a in "${AL[@]}"; do                                  # every bisect arm must
 done
 KI=$(sed -n 1p data/n45/keys.txt)
 [ "$(echo "$KI" | tr ',' '\n' | grep -c '^ifeval/')" = 12 ] || { say "data/n45/keys.txt line 1 is not 12 IFEval keys: not run"; exit 2; }
-FR=$(bash scripts/deep_freeze.sh $B) || { say "freeze failed: $FR"; exit 2; }
-SD=data/r57/snap/$B
-grep -q 'R57_CHAT_RULE' "$SD/r57_screen_$B.py" || { say "the frozen screen has no R57_CHAT_RULE: not run"; exit 2; }
+SN=${CHS_SNAP:-$B}                                       # the snapshot's name: a new freeze, or CHS_SNAP's committed one
+SD=data/r57/snap/$SN
+if [ -n "$CHS_SNAP" ]; then
+  [ -f "$SD/r57_screen_$SN.py" ] && [ -f "data/r57/snap/c45_runner_$SN.sh" ] \
+    && git diff --quiet HEAD -- "$SD" "data/r57/snap/frozen_$SN" "data/r57/snap/c45_runner_$SN.sh" \
+    && [ -z "$(git ls-files --others --exclude-standard "$SD" "data/r57/snap/frozen_$SN")" ] \
+    || { say "snapshot $SN is missing or not committed clean: not run"; exit 2; }
+  FR="reused $SN"
+else
+  FR=$(bash scripts/deep_freeze.sh $B) || { say "freeze failed: $FR"; exit 2; }
+fi
+grep -q 'R57_CHAT_RULE' "$SD/r57_screen_$SN.py" || { say "the frozen screen has no R57_CHAT_RULE: not run"; exit 2; }
 if [ -n "$CHS_DRYRUN" ]; then
   echo "dry run: $FR; L $(nk "$L") K=V; END $(date -r $END_E '+%a %H:%M')"
   for a in "${AL[@]}"; do t=${a%%|*}; r=${a#*|}; q=${r%%|*}; e=${r#*|}; echo "  $t: QOM_SETS=$q, $(nk "$e") K=V ($(( $(nk "$e") - $(nk "$L") )) vs L)"; done
   exit 0
 fi
-git add data/r57/snap/frozen_$B ":!data/r57/snap/frozen_$B/**/__pycache__/**" "$SD" ":!$SD/__pycache__/**" data/r57/snap/c45_runner_$B.sh \
+if [ -z "$CHS_SNAP" ]; then
+  git add data/r57/snap/frozen_$B ":!data/r57/snap/frozen_$B/**/__pycache__/**" "$SD" ":!$SD/__pycache__/**" data/r57/snap/c45_runner_$B.sh \
 > (a quote from the project owner, kept private)
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_011DvdV6eUB4NgBbVkyVFPrT" || { say "snapshot commit failed: not run"; exit 3; }
-SNAP=$(git rev-parse --short HEAD)
-RUN="/bin/bash data/r57/snap/c45_runner_$B.sh"
+  SNAP=$(git rev-parse --short HEAD)
+else
+  SNAP=$(git log -1 --format=%h -- "$SD/r57_screen_$SN.py")
+fi
+RUN="/bin/bash data/r57/snap/c45_runner_$SN.sh"
 export C45_OUT="$PWD/$D" C45_SWAP0=$(sysctl -n vm.swapusage | awk '{gsub("M","",$6); print $6 / 1024}') C45_ALARM=600 \
-  MG=4 C45_DEADLINE=$(date -r $END_E +%H%M) C45_SCREEN="$SD/r57_screen_$B.py" R57_MODMAN=1 \
+  MG=4 C45_DEADLINE=$(date -r $END_E +%H%M) C45_SCREEN="$SD/r57_screen_$SN.py" R57_MODMAN=1 \
   C45_REFTOK="$PWD/data/n45/ar_ref_tokens.json:gate+t"      # exact arms compare in-run vs NAX6-N's AR (L's arms carry R57_REFTOK=)
 rm -f $D/${B}_DONE
 say "start (pid $$, NO-SWAP $A GB, snapshot $SNAP, end $(date -r $END_E +%H:%M), arms: $(for a in "${AL[@]}"; do echo -n "${a%%|*} "; done))"
@@ -68,13 +83,13 @@ TAGS=""
 for a in "${AL[@]}"; do
   t=${a%%|*}; r=${a#*|}; q=${r%%|*}; e=${r#*|}
   [ $(( $(date +%s) + ${CHS_ARMS_S:-150} )) -le $END_E ] || { say "$t skipped: it could not end before $(date -r $END_E +%H:%M)"; continue; }
-  rm -f data/r57/${t}_256_* $D/${t}_256.txt
-  R57_QOM_SETS=$q R57_KEYS=$KI C45_ARMS="${t}_256:256:$e" $RUN
+  rm -f data/r57/${t}_${C}_* $D/${t}_${C}.txt
+  R57_QOM_SETS=$q R57_KEYS=$KI C45_ARMS="${t}_${C}:${C}:$e" $RUN
   say "$t rc=$?"; TAGS="$TAGS $t"
 done
-"$PY" -I - "$D" "$SNAP" "$B" "$TAGS" >> "$LOG" 2>&1 <<'EOF'
+"$PY" -I - "$D" "$SNAP" "$B" "$TAGS" "$C" >> "$LOG" 2>&1 <<'EOF'
 import json, math, re, statistics as S, sys
-D, snap, B, tags = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4].split()
+D, snap, B, tags = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4].split(); CS = sys.argv[5] if len(sys.argv) > 5 else "256"
 g = lambda xs: (lambda ys: math.exp(sum(map(math.log, ys)) / len(ys)) if ys else float("nan"))([x for x in xs if x and x > 0])
 peak = {}
 for ln in open(f"{D}/c45.log"):
@@ -82,15 +97,15 @@ for ln in open(f"{D}/c45.log"):
     if m:
         peak[m.group(1)] = float(m.group(2))
 AR = json.load(open("data/n45/ar_ref_tokens.json"))
-L = [f"CHS {B} (data/chs; snapshot {snap}; 12 IFEval (N45's keys), C 256, one pass per arm, quiet): WHOLE DECODE pooled (geo of runs);"
+L = [f"CHS {B} (data/chs; snapshot {snap}; 12 IFEval (N45's keys), C {CS}, one pass per arm, quiet): WHOLE DECODE pooled (geo of runs);"
      " per check means: kept, rows, ck / drf / cycle ms, misses, svc / io ms, stl (count), bld / wt ms; MB SSD per kept token;"
      " lifetime peak; runs == NAX6-N's AR; relaxed accepts (rule R1 / span)"]
 base = None
 for t in tags:
     try:
-        R = [r for r in json.load(open(f"data/r57/{t}_256_runs.json")) if r["key"].startswith("ifeval")]
-        C = [c for c in json.load(open(f"data/r57/{t}_256_checks.json")) if c["key"].startswith("ifeval")]
-        T = {k: list(v.values())[0][0] for k, v in json.load(open(f"data/r57/{t}_256_tokens.json")).items()}
+        R = [r for r in json.load(open(f"data/r57/{t}_{CS}_runs.json")) if r["key"].startswith("ifeval")]
+        C = [c for c in json.load(open(f"data/r57/{t}_{CS}_checks.json")) if c["key"].startswith("ifeval")]
+        T = {k: list(v.values())[0][0] for k, v in json.load(open(f"data/r57/{t}_{CS}_tokens.json")).items()}
     except (OSError, ValueError, KeyError, IndexError) as e:
         L.append(f"  {t}: MISSING ({type(e).__name__})"); continue
     if not R:
@@ -113,12 +128,12 @@ for t in tags:
     L.append(f"  {t:4s}: WHOLE DECODE {pooled:6.1f} tok/s ({100 * (pooled / base - 1):+5.1f} % vs first) geo {g([r['tps'] for r in R]):.1f}; "
              f"kept {m('kept'):.2f} rows {m('rows'):.2f}; ck {m('ck'):.1f} drf {m('drf'):.1f} cycle {m('ck') + m('drf'):.1f} ms; "
              f"miss {m('miss'):.1f} svc {m('svc'):.1f} io {m('io'):.1f} stl {m('stl'):.1f}; bld {m('bld'):.1f} wt {m('wt'):.1f}; "
-             f"{mbk:.1f} MB/kept; peak {peak.get(f'{t}_256', float('nan')):.2f} GB; == AR {eq}/{len(T)}; relaxed R1 {rl} span {sp}"
+             f"{mbk:.1f} MB/kept; peak {peak.get(f'{t}_{CS}', float('nan')):.2f} GB; == AR {eq}/{len(T)}; relaxed R1 {rl} span {sp}"
              + (f"; BAD {bad}" if bad else ""))
 open(f"{D}/{B}_report.txt", "w").write("\n".join(L) + "\n"); print("\n".join(L))
 EOF
 say "report rc=$? ($D/${B}_report.txt)"
-git add $D $(for t in $TAGS; do echo data/r57/${t}_256_*; done) 2>/dev/null
+git add $D $(for t in $TAGS; do echo data/r57/${t}_${C}_*; done) 2>/dev/null
 > (a quote from the project owner, kept private)
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
