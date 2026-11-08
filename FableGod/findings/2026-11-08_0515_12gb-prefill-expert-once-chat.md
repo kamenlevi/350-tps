@@ -1,4 +1,4 @@
-# UNDER CHECK 08:3x, LIKELY VALID 08:5x (an MLX bug was suspected in the 4.7K / 7.9K prefills; the engine already pads its grouped calls; a GPU proof decides): At 12 GB the prefill already reads each expert once per prompt: 191 / 378 / 461 tok/s at 1.6K / 4.7K / 7.9K tokens (2-3.7x the 45 GB path), in under 11 GB; 12 GB chat decodes 12.9 tok/s at 556 MB of SSD per kept token
+# VALID (GPU proof 09:54: the MLX sorted-gather bug does not reach this engine; re-measured 192 / 373 / 459 tok/s; was UNDER CHECK 08:3x): At 12 GB the prefill already reads each expert once per prompt: 191 / 378 / 461 tok/s at 1.6K / 4.7K / 7.9K tokens (2-3.7x the 45 GB path), in under 11 GB; 12 GB chat decodes 12.9 tok/s at 556 MB of SSD per kept token
 - CORRECTION 2026-11-08 08:2x (orchestrator, from Leap's TABLE_350 a521e91 "MLX NAX SORTED-GATHER BUG + PF-B"):
   - The bug is in MLX 0.32.2's sorted NAX expert gather (affine_gather_qmm_rhs_nax). When one call has more than
     32,767 sorted rows and the row count is not a multiple of 64, a `short` overflows and those rows are never computed
@@ -17,6 +17,20 @@
   - UPDATE 08:5x: Leap withdrew the "hit" reading. This bug is already known in-house (BigMoE LEDGER BUG1), the tier
     prefill pads for it, so 378 / 461 are most likely valid; the GPU proof decides. Upstream it is MLX issue #4632
     (reported 2026-10-05), fixed by PR #3922 in MLX 0.32.3+; this engine pins 0.32.2, where padding is the exact fix.
+  - UPDATE 09:5x, GPU PROOF (Fit12): NOT HIT, the figures stand.
+    - Run: /Users/kamen/Fit12/scripts/pf13.sh, quiet lock 09:52:17-09:54:12, rc 0, GPU idle at start, swap flat; data
+      /Users/kamen/Fit12/data/scr/pf13 (pf13_report.txt).
+    - A gather_qmm audit in the process counted every sorted call: 0 exposed (> 32,767 rows and rows % 64 != 0) in both
+      arms. The largest call had 4,672 / 10,496 / 15,872 rows at 1.6K / 4.7K / 7.9K, all multiples of 64. Leap's pad,
+      installed as a wrapper, never had to act.
+    - The shipped grid (one MoE chunk per prompt: PFR's balanced grid, s_moe 2,048 / 5,120 / 8,192) is bitwise equal to a
+      reference with 3,072-token chunks (no call can pass 30,720 rows): kept-row logits hash and tokens 3 / 3. Its tokens
+      equal the 05:1x runs' 3 / 3.
+    - Re-measured (shipped grid + pad): 191.6 / 373.4 / 459.4 tok/s, TTFT 8.48 / 13.17 / 17.57 s, SSD 63.8 / 66.8 /
+      68.9 GB, lifetime 10.59 / 10.77 / 10.95 GB (x1.005 / 0.989 / 0.996 vs 05:1x).
+    - The real chunk A/B, replacing the null one: 3,072-token chunks re-read the store once per chunk and run 187.3 /
+      259.4 / 272.7 tok/s with 63.3 / 122.3 / 180.5 GB read. So the shipped one-chunk grid is x1.44 at 4.7K and x1.68 at
+      7.9K with the same bits (~5.6-5.9 s per extra store pass).
   - The 1.6K prompt (15,650 rows) is under the limit, so its 191 tok/s stands.
   - Exact fix: pad the sorted rows to a multiple of 64 (Leap's pfb_fix.switch_glu_padded), which is bitwise equal to
     1,024-token calls. Fit12 re-measures with it.

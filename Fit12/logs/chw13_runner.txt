@@ -1,0 +1,7 @@
+[Sun 09:43:44] chw13 armed: after /Users/kamen/Fit12/data/scr/pf13/DONE, 6 clear minutes (1 with /Users/kamen/Fit12/data/scr/chw13/GO; held while /Users/kamen/Fit12/data/scr/chw13/WAIT exists), start by Sun 21:30
+[Sun 09:59:47] chw13: clear for 6 min (42 GB free): no quiet ticket for 5 min, then the share lock
+[Sun 10:00:27] chw13: chw13a (W1 4) start
+[Sun 10:02:38] chw13: chw13a end rc 0
+[Sun 10:02:38] chw13: chw13p (W1 cf:0.9:2:1.01:3) start
+[Sun 10:05:04] chw13: chw13p end rc 0
+[Sun 10:05:04] chw13: chw13q (W1 rand:2,3,4) start

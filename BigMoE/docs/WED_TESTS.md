@@ -1053,3 +1053,22 @@ one lever to the row above it.
   config's own multi baseline, never gated before. Either QOM causes the blunders, or S5''s lossy levers (HC8 / DN_KS / SMALL_NATIVE) do.
 - PFX correction addendum: the MLX sorted-gather bug is BigMoE LEDGER BUG1 (PrefillKernels' align_probe.py; fixed in MLX 0.32.4). The
   tier's grouped prefill already pads to x64. Fast24 (F24) prefills in 1,024-token calls (<= 10,240 rows): safe.
+
+## Sun 8 Nov 09:24-09:42: FU part B, the 45.1 GB agent-prompt peak on L + PF-A on L (data/fu/fu_report.txt)
+
+L = S5' (lossy), the 3 agent prompts (1.6K / 4.7K / 7.9K) at CAP 16, then 12 HumanEval for the decode cost. The orchestrator's publish
+job ran beside FU's quiet lock 09:24:44-09:29 (fb0 and the start of fb1): fb0's TTFTs are re-run in PFB (fb0r).
+
+| arm | config | lifetime peak | TTFT 1.6K / 4.7K / 7.9K s | 12 HumanEval whole decode |
+|---|---|---|---|---|
+| fb0 / fh0 | L at C 256 | 45.10 GB | 16.5 / 41.4 / 68.1 (perturbed) | 175.2 tok/s (42.9 GB) |
+| fb1 / fh1 | L at C 248 | 45.70 GB | 16.9 / 42.1 / 67.4 | 172.3 (43.5 GB) |
+| fb2 | L + R57_PFCHUNK=512 | **44.00 GB** | 22.8 / 63.1 / 109.0 | |
+| fb3 / fh3 | L + R57_CACHE_GB=2 | 45.20 GB | 16.2 / 40.6 / 65.4 | 175.7 (42.9 GB) |
+| **fb4** | **L + PF-A (R57_PFLM=1)** | 45.50 GB | **8.5 / 13.7 / 19.2 (x1.9 / x3.0 / x3.5)** | |
+| fb5 | L + PF-A + CACHE_GB 2 | 46.40 GB | 8.5 / 13.6 / 19.2 | |
+
+- PF-A carries over to the lossy config: x1.9 / x3.0 / x3.5 TTFT on the agent prompts (fb4 vs fb0; fb0r will firm up the reference).
+- The 7.9K prompt's lifetime peak stays over the 45.0 line in every variant except 512-token chunks (44.0 GB, at 1.4-1.6x the TTFT).
+  C 248 and the 2 GB cache limit do not lower it (45.7 / 45.2 / 46.4 GB): the lifetime peak moves about 0.5 GB with the
+  allocation pattern, so a fix needs more than 0.5 GB of margin. Decode cost of the fixes is nil (175.2 / 172.3 / 175.7 tok/s).

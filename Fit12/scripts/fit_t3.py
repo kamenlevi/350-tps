@@ -85,6 +85,11 @@ else:
     rt, _ = B.load_b12(0.10, mtp=False)
     model = rt.model
     draft, DF = T3.load_draft(B, model)
+    if os.environ.get("F12_PR1") == "1":                # (Sun 8 Nov, T2 stage 1b) PR1: keep-1 commits replay the PLE layer on 2 rows
+        import fit_pr1                                   # (MTPLX's commit_verified_window patched in this process; asserts the
+        from mtplx.models import qwen4_exp as _Q         # source still matches), so verify widths >= 2 give one token stream
+        fit_pr1.install(_Q)
+        print(f"[{TAG}] PR1 installed: keep-1 commits replay the PLE layer on 2 rows", flush=True)
     if os.environ.get("F12_WIRED") == "1":             # (Sat 7 Nov, Leap's FIRSTCHK fix, BigMoE's R57_WIRED form) MLX keeps its
         _wl = int(mx.device_info()["max_recommended_working_set_size"])   # buffers wired for the run (IOGPU stops unwiring the
         print(f"[{TAG}] WIRED: mx.set_wired_limit({_wl / 1e9:.2f} GB), was {mx.set_wired_limit(_wl) / 1e9:.2f} GB", flush=True)   # pools)
@@ -367,4 +372,7 @@ if os.environ.get("F12_K12SYNC") == "1" and not FAKE:
 if IDS:
     dump_ids()
     print(f"[{TAG}] IDS: {len([k for k, v in PER.items() if ARMS[0][0] in v])} keys -> {IDS}", flush=True)
+if os.environ.get("F12_PR1") == "1" and not FAKE:      # (stage 1b) how many keep-1 commits PR1 replayed on 2 rows
+    import fit_pr1
+    print(f"[{TAG}] PR1: {fit_pr1.CALLS[0]} keep-1 commits replayed on 2 rows", flush=True)
 print(f"[{TAG}] done; lifetime {life_gb():.3f} GB", flush=True)

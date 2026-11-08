@@ -383,3 +383,56 @@ small tests under share locks. T1 = chat12 (12.88 tok/s, 556 MB per kept token) 
 - Code: t3_twopass.py GQ / gq_install + st gq / pfr per prefill; fit_t3.py F12_GQAUDIT / F12_GQPAD / F12_PFRGRID + the PREFILL
   line's pfr / gq fields (backups *.bak_gq). CPU check: the wrapper pads an exposed 32,790-row call bitwise = unpadded (CPU
   kernel). FAKE dry test passed.
+
+## T2 CHAT WIDTH stage 1 RESULT (ran Sun 09:19:34-09:24:11, share lock, GPU 0 % at start; locks.txt: only BigMoE FU queued, no other GPU job; swap flat, rc 0 x2, no PAUSE; data /Users/kamen/Fit12/data/scr/chw12)
+- A (W1 4, the control) = chat12's tokens on the first 128: 12 / 12. The harness change is inert and the loop repeats.
+- R (W1 rand 1-4) != A: tokens 5 / 12, kept-row logits hash 0 / 12. NOT exact-preserving as built.
+  - Cause (WV1-WV3, 24 Oct): one verify pass and full-accept chunking give the same bits at widths >= 2, but a keep-1 commit
+    replays the PLE layer as a 1-row forward (decode-width arithmetic), and so does a 1-row call. Moving the call
+    boundaries moves the keep-1 events: A keeps 1 row when kept = 1, 5, 9 ...; a 2-row first call adds kept = 3, 7 ... .
+  - PR1 (scripts/fit_pr1.py: 2-row replay of keep-1 commits; PASS 24 Oct on the MTP path, draft-policy-invariant for verify
+    width >= 2) is not in the pinned engine. So without PR1 no width matches, and the pre-registered fallback ("restrict to
+    the matching widths") has nothing to restrict to.
+- Cost per exact call [K] (R: 651 calls, check 0 dropped, rms 3.4 ms): fixed 42.3 / 43.5 / 54.3 / 58.9 ms for 1 / 2 / 3 / 4
+  rows (later 4-row calls 58.0); 84.1 ms per GB (11.9 GB/s marginal); 300 / 531 / 868 / 1,158 MB per first call (~290 MB
+  per row: rows share few experts beyond what the pools hold).
+- Pricing on A's 498 checks (kept 2.337; 10.9 ms per check outside the exact calls; all-4 = 174.7 exact ms per check):
+  - best "cf0 < 0.9 -> 2 rows, else 3": 145.1 ms, x1.190 decode [P]; "cf0 < 0.9 -> 2, else 4": x1.174 [P];
+  - with 1-row calls, "cf0 < 0.5 -> 1, < 0.9 -> 2": x1.178 [P]. No better: a 1-row call still costs 42 ms fixed.
+- Measured side note [K; random widths, not a policy]: R 12.97 vs A 12.54 tok/s whole decode geo (+3.4 %); 509 vs 559 MB
+  per kept token; lifetime peaks 10.99 / 10.96 GB.
+- Stage 1 verdict: PRICE PASS (x1.17-1.19 [P], line +5 %); EXACTNESS FAIL as built. Stage 1b below.
+
+## T2 CHAT WIDTH stage 1b (pre-registered Sun 08 Nov 09:27, before any run): PR1 + widths 2-4 only
+- Build: fit_t3.py F12_PR1=1 -> fit_pr1.install(MTPLX qwen4exp) (asserts the patched source still matches). t3_twopass: the
+  width policy never picks 1 row, and a tail rule never leaves a 1-row last chunk (rem - w == 1 -> w - 1 if w >= 3, else
+  w + 1). The only 1-row call left is the cap's last token (no drafts), at the same position in every arm.
+- Arms (share lock, chat12's 12 IFEval, CAP 128, one process each): A' = W1 4 + PR1 + tail rule (the new reference);
+  P' = "cf:0.9:2:1.01:3" + PR1 + tail; Q' = W1 rand over {2, 3, 4} + PR1 + tail (a harder invariance probe).
+- Lines:
+  - P' = A' and Q' = A' in tokens AND kept-row logits hash, 12 / 12 -> exact-preserving w.r.t. A'. Any mismatch -> KILL the
+    exact form (PR1 does not cover the T3 path); the lossy form would need EvalSuite's IFEval gate.
+  - A' vs chat12: information (expected to differ at near-ties where ex committed a keep-1 pass, as U2 vs U1 in October).
+  - Speed P' vs A' (whole decode geo; timings count only with an idle GPU): >= +8 % -> stage 2 (quiet, 12 IFEval at CAP 256,
+    + 16 HumanEval so code is not hurt); < +5 % -> KILL.
+- Adoption: PR1 gives the 12 GB loop new tokens at near-ties (same model math), so adopting it = EvalSuite same-scores
+  (FAST-track rule, 11-04) or Kamen's call, as PR1's U2 in October.
+- Stage 1b build note (Sun 09:43, before any run): with the tail rule on, the cap's last token (no drafts) is the only 1-row call.
+  It now takes ALLWAIT (verify flags), because its late-rule bits would depend on the pools, which differ between arms. PR1's
+  source match checked on the installed MTPLX (qwen4_exp.py: 1 match). FAKE dry test passed with the stage 1b flags.
+
+## PREFILL BUG CHECK RESULT (pf13.sh, quiet lock 09:52:17-09:54:12, GPU 0 % at start, swap flat, rc 0 x2; data /Users/kamen/Fit12/data/scr/pf13, pf13_report.txt)
+- NOT HIT: all three pre-registered lines pass.
+  - Exposed sorted gather_qmm calls (> 32,767 rows and rows % 64 != 0): 0 in both arms. Largest call: 4,672 / 10,496 /
+    15,872 rows (one-chunk grid) and 4,672 / 6,080 / 6,400 (3,072-token chunks), all multiples of 64. Leap's pad never acted.
+  - F (shipped grid + pad) = K (3,072-token chunks) bitwise: kept-row logits hash 3 / 3, tokens 3 / 3.
+  - F's tokens = pf12a's = pf12b's 3 / 3.
+- PFR's log confirms the grids: F one MoE chunk per prompt (s_moe 2,048 / 5,120 / 8,192, the balanced grid); K 3,072.
+  Sorted calls per prompt: F 1,140 / 474 / 396 (the one-chunk path forms 3-5 larger groups per layer at 4.7K / 7.9K, 8 at
+  1.6K); K 1,140 / 1,870 / 2,538.
+- Re-measured [K] (F): 191.6 / 373.4 / 459.4 tok/s, TTFT 8.48 / 13.17 / 17.57 s, SSD 63.8 / 66.8 / 68.9 GB, lifetime
+  10.587 / 10.773 / 10.949 GB. x1.005 / 0.989 / 0.996 vs pf12a: the 05:1x figures stand.
+- The real chunk A/B [K] (replacing the null pf12 A/B): K's 3,072-token chunks re-read the store once per chunk: 187.3 /
+  259.4 / 272.7 tok/s, TTFT 8.68 / 18.74 / 29.41 s, SSD 63.3 / 122.3 / 180.5 GB. The shipped one-chunk grid is x1.44
+  (4.7K) and x1.68 (7.9K) with the same bits; each extra store pass costs ~5.6-5.9 s (~56 GB).
+- Findings note 2026-11-08_0515 updated (header VALID, UPDATE 09:5x block). Leap's 08:42 note agreed: tier.py's BUG1 pad covers it.

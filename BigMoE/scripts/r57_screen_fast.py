@@ -119,7 +119,7 @@ PICK = (("humaneval", "humaneval/HumanEval/68"), ("math", "math500/test/prealgeb
 ARMS_ = tuple(os.environ.get("R57_ARMS", "slot,gate,gate+pf").split(","))
 PICK = PICK[:int(os.environ.get("R57_PROMPTS", "2"))]
 SETOF = {"humaneval": "humaneval", "math500": "math", "gsm8k": "math", "ifeval": "ifeval", "multi": "multi", "agent": "agent",
-         "agentlong": "agentlong", "mbpp": "mbpp", "humanevalt": "humanevalt", "humanevalx": "humanevalx", "mathx": "mathx"}   # Fri 08:2x-21:5x: EvalSuite dec_agentlong / mbpp / humanevalt / humanevalx / mathx (FAST there needs R57_QOM_SETS)
+         "agentlong": "agentlong", "mbpp": "mbpp", "humanevalt": "humanevalt", "humanevalx": "humanevalx", "mathx": "mathx", "mgsm": "mgsm"}   # Fri 08:2x-21:5x: EvalSuite dec_agentlong / mbpp / humanevalt / humanevalx / mathx (FAST there needs R57_QOM_SETS)
 if os.environ.get("R57_KEYS"):                           # an explicit prompt list ("set/key,..." or '+'-joined inside c45_runner's
     PICK = tuple((SETOF[k.split("/")[0]], k) for k in os.environ["R57_KEYS"].replace("+", ",").split(","))   # arm lists)
 TAG = os.environ.get("R57_TAG", "r57")

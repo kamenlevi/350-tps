@@ -10,7 +10,7 @@ sys.path.insert(0, HERE)
 from evalsuite import decode_report as dr
 import d4x, rows_text as rt
 
-N = {"humaneval": 60, "math": 50, "ifeval": 100}
+N = {"humaneval": 60, "math": 50, "ifeval": 100, "mgsm": 80}
 
 
 def load(run):

@@ -56,6 +56,9 @@ done
 rm -f data/r57/ct1_256_* $D/ct1_256.txt                  # CT1: the chat prompts' prefill (NewIdeas), TTFT + PFSTAT only
 R57_KEYS=$KI C45_CAP=16 R57_PFSTAT=1 R57_QOM_SETS=humaneval,mbpp,ifeval,multi C45_ARMS="ct1_256:256:$ZS" $RUN
 say "ct1 rc=$?"
+rm -f data/r57/fb0r_256_* $D/fb0r_256.txt                # FU's fb0 (L at C 256, CAP 16) again: the orchestrator's publish job ran beside
+R57_KEYS=$KP C45_CAP=16 C45_ARMS="fb0r_256:256:$L" $RUN  # FU's quiet lock 09:24:44-09:29 (fb0 + the start of fb1): TTFT reference for fb4 / fb5
+say "fb0r rc=$?"
 "$PY" -I - "$SNAP" >> "$LOG" 2>&1 <<'EOF'
 import json, re, sys, statistics as S
 snap = sys.argv[1]
@@ -104,10 +107,22 @@ if rows:
              f"routed expert-layers {f('routed'):.0f}, resident share of the routed: base "
              f"{sum(r['pfst'].get('routed_res_base') or 0 for _, r in rows) / max(rt, 1):.1%} / side "
              f"{sum(r['pfst'].get('routed_res_side') or 0 for _, r in rows) / max(rt, 1):.1%}")
+try:                                                     # FU's arms: their lifetime peaks are in data/fu/c45.log
+    for ln in open("data/fu/c45.log"):
+        m = re.search(r"done (\S+) rc=\d+:.*lifetime peak ([\d.]+) GB", ln)
+        if m:
+            peak.setdefault(m.group(1), float(m.group(2)))
+except OSError:
+    pass
+L.append("FU re-check (the orchestrator's publish job ran beside FU's quiet lock 09:24:44-09:29, over fb0): L at C 256, CAP 16, TTFT s by prompt")
+for t, nm in (("fb0", "FU's L at C 256 (perturbed)"), ("fb0r", "the same, re-run in PFB"), ("fb4", "FU's L + PF-A"), ("fb5", "FU's L + PF-A + CACHE_GB 2")):
+    R, _ = load(t)
+    tt = {k.split("/")[-1]: round(r.get("pfs") or float("nan"), 1) for k, r in sorted(R.items())}
+    L.append(f"  {t} {nm}: lifetime peak {peak.get(f'{t}_256', float('nan')):.2f} GB; TTFT {tt}")
 open("data/pfb/pfb_report.txt", "w").write("\n".join(L) + "\n"); print("\n".join(L))
 EOF
 say "report rc=$? ($D/pfb_report.txt)"
-git add $D $(for t in pa1 pb3 pb3n pb38 pb3c ct1; do echo data/r57/${t}_256_*; done) 2>/dev/null
+git add $D $(for t in pa1 pb3 pb3n pb38 pb3c ct1 fb0r; do echo data/r57/${t}_256_*; done) 2>/dev/null
 > (a quote from the project owner, kept private)
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

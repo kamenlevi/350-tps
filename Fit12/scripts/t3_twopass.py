@@ -107,6 +107,7 @@ W1 = [os.environ.get("F12_W1", "4")]   # (Sun 8 Nov, T2 CHAT WIDTH) the exact ch
                  # "4" = today's; "rand" = 1-4 per check from random.Random(F12_W1SEED) (the per-width cost fit); "cf:C:W[:C2:W2]"
                  # = W rows when the first draft's cf < C (else W2 when < C2, ...), else 4. Rows 0..k verified in any chunking give
                  # the same bits for calls of >= 2 rows (WV1 / WV2); a 1-row call takes B12_LATE3's late rule unless W1AW
+W1TAIL = [os.environ.get("F12_W1TAIL", "0") == "1"]   # (Sun 8 Nov, T2 stage 1b) no 1-row last chunk in an exact check
 W1AW = [os.environ.get("F12_W1AW", "1") == "1"]   # (T2) a 1-row exact call runs with B.AW[0] (ALLWAIT: the verify rows' flags)
 GQ = dict(calls=0, sorted=0, maxm=0, exposed=0, padded=0)   # (Sun 8 Nov, MLX 0.32.2 sorted-gather bug; Leap a521e91) the
                  # gather_qmm audit when installed: every call, the sorted ones, their largest row count, the EXPOSED ones
@@ -362,6 +363,8 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
         p_ = W1[0]
         if p_ == "rand":
             return _rng.randint(1, 4)
+        if p_.startswith("rand:"):                     # (stage 1b) a random width from a set, e.g. "rand:2,3,4"
+            return _rng.choice([int(v_) for v_ in p_[5:].split(",")])
         if p_.startswith("cf:"):
             v_ = p_.split(":")[1:]
             for i_ in range(0, len(v_) - 1, 2):
@@ -488,9 +491,15 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
     def _exact_loop(toks_, d_, new_, tps_, pos, w1=4):
         ci, w_ = 0, w1
         while True:
+            wc = w_                                            # the chosen width (W1's pick for the first call, else 4)
+            if W1TAIL[0]:                                      # (stage 1b) never leave a 1-row last chunk (decode-width
+                w_ = min(w_, len(toks_) - pos)                 # arithmetic): 4 + 1 -> 3 + 2, 2 + 1 -> 3
+                if len(toks_) - pos - w_ == 1:
+                    w_ = w_ - 1 if w_ >= 3 else w_ + 1
             ch = toks_[pos:pos + w_]
             kc = _mk()
-            aw = W1AW[0] and len(ch) == 1 and w_ == 1 and not B.AW[0]   # a chosen 1-row call (not a short tail)
+            aw = W1AW[0] and len(ch) == 1 and (wc == 1 or W1TAIL[0]) and not B.AW[0]   # a chosen 1-row call; with the
+            # tail rule also the cap's last token (no drafts), whose late-rule bits would otherwise depend on the pools
             if aw:
                 B.AW[0] = True
             try:

@@ -35,16 +35,25 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     - NewIdeas' multi bisect: the orchestrator's 09:2x request, replaced at 09:3x before registration.
     - m1bi (chat3_env; EvalSuite amendment 1 7ad132b).
   - HELD: m1bs (chat2_env). It carries M1-B's QOM, so it takes the same MGSM gate after M1-B's.
-  - QUEUE (chat first), placed by NewIdeas 09:2x:
-    1. Fit12 chw12 (share lock, running).
-    2. BigMoE FU (quiet #1, ~25 min).
-    3. THE MGSM GATE: EvalSuite, M1-B (chat_env) + L (cert_env; COH is HEAD's default) vs NAX6-N. If the reference
-       is NAX6-N, its own 80 rows go first.
-    4. BigMoE PFB (~12 min). It runs before step 3 only if MGSM's registration isn't committed when FU ends.
-    5. Breakthrough's slot (done by 22:30), then Sun 23:00 F2a.
-  - COST [P]: ~15 min per pass at 45-50 tok/s with loads, NAX6-N's pass ~20 min (exact, ~36 tok/s). M1-B + L in two
-    orders ~60 min, ~80 min in all.
-  - NEWIDEAS' GUESS [G], written before any row: both pass decision 4 at n 80, where -5 pt is 4 problems, so power is
+  - MGSM HELD 09:3x FOR KAMEN'S DECISION (the orchestrator):
+    - All 80 MGSM prompts are typed math in the engine, so M1-B's chat lever (QOM on the chat sets) never runs on them.
+    - The 125B's card lists no natural-language multilingual benchmark.
+    - Kamen is asked to choose: M1-B on English chat only (a request-level language switch), or MGSM re-templated as
+      chat for all languages.
+    - EvalSuite registered the gate (e876e4c). Before its arms can run it needs chat4_env (mgsm added to the QOM sets)
+      and lcoh_env (L + COH).
+    - CORRECTION to NewIdeas 09:2x: cert_env pins snapshot s5, whose ref2 has no COH, so cert_env alone is L without
+      COH.
+    - NAX6-N's 80 MGSM rows come from EvalSuite's AR decode stage at 14.2 tok/s (measured on mathx): ~45 min, not
+      ~20. About 2 h in all with both arms in two orders (EvalSuite).
+  - QUEUE WITHOUT MGSM (the orchestrator 09:3x; `date` 09:30):
+    1. BigMoE FU (quiet lock to 10:04, running since 09:24).
+    2. BigMoE PFB (~12 min, with NewIdeas' CT1 arm).
+    3. Breakthrough's slot.
+    4. Strata.
+    5. Fit12's prefill proof (pf13).
+    6. Sun 23:00 F2a.
+  - NEWIDEAS' GUESS [G], written before any row (it stands if the gate runs as registered): both pass decision 4 at n 80, where -5 pt is 4 problems, so power is
     low. M1-B 0-6 pt under NAX6-N; L within 3 pt. If M1-B passes, its multilingual misspellings stay information: MGSM
     scores the final number, not the text.
 - SUN 07:44 (`date`) STATE (chs4, re-derived by NewIdeas from the per-prompt lines; 12 IFEval, C 256, one pass per arm):

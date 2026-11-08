@@ -94,3 +94,35 @@ Written before any row of any chat candidate.
     That is a separate decision.
 - **The runner:** tools/day_runner60.sh (runner 59's checks; stage 1 the reference rows, stage 2 the candidate) ->
   results/mgsm_<tag>_{fwd,rev}, results/MGSM_<tag>_DONE. It starts when NewIdeas queues it.
+
+## Amendment 3 (Sun 10:0x, before any MGSM row): the arms, and what MGSM can and cannot say
+- **The arms (NewIdeas 09:2x; the orchestrator asked for L).** Each arm has its own verdict on amendment 2's line.
+  - **L + COH (tag lcoh):** the certified config as it would ship. That is cert_env's levers + REF2_NAX_COH=1, on a
+    snapshot whose frozen ref2 has COH; cert_env's s5 snapshot has none. BigMoE writes data/stack/lcoh_env.txt.
+  - **M1-B (tag m1bg):** chat_env's config with mgsm in R57_QOM_SETS (BigMoE's chat4_env.txt). It waits for the
+    orchestrator's decision below.
+- **The screens.** chs4's and s5's SETOF has no mgsm, so R57_KEYS=mgsm/... raises a KeyError.
+  - Each arm's env must name a snapshot whose screen maps "mgsm": "mgsm".
+  - Runner 60 checks this and stops before any GPU step otherwise.
+- **What MGSM tests in the engine.** The screen's own rule() types all 80 MGSM prompts "math": they carry an English
+  instruction and \boxed. So they draft on DFlash, not MTP, and M1-B's MTP + QOM gating (its chat lever) does not act on
+  them.
+  - For L, MGSM tests the release config's multilingual math path: a valid release check.
+  - For M1-B, an MGSM PASS would not speak to its multilingual chat lever. The orchestrator decides between:
+    - (a) MGSM re-templated so the engine types it chat (native-language instruction, no \boxed), with the typing checked
+      before any row;
+    - (b) MMMLU, which needs a download;
+    - (c) MGSM as registered.
+- **Order:** stage 0 (NAX6-N's rows), then L + COH, then M1-B's arm or its replacement.
+- **Runner 60** = tools/day_runner60.sh, one arm per invocation (MGSM_TAG, MGSM_FENV).
+- **HOLD (the orchestrator, 09:3x):** both arms wait for Kamen's decision on how M1-B's multilingual chat is judged.
+- **An accidental start, 09:43:18 to 09:45:41, during the hold.**
+  - What happened: a dry run of runner 60 took the real path. An apostrophe in the ${MGSM_FENV:?...} message opened a
+    quote that swallowed lines 23-~55, so DRY and several helpers were never set. The undefined `say` fell through to
+    macOS's speech command.
+  - Effect: it decoded 2 NAX6-N MGSM rows under a shared lock for 2.4 min and delayed BigMoE's PFB ticket. No arm row
+    ran.
+  - I stopped it by pid (4 processes) and ran peer unlock. Its rows and log are moved aside (results/ref2tnaxn.r5.void_0943,
+    results/day60_lcoh_runner.void_0943.log).
+  - Fix: no apostrophe inside ${} text. Re-tested: the head gives DRY=1 with the helpers defined, and the dry run stops
+    at the SETOF check as it should (CHS4's screen).
