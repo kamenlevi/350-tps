@@ -13,7 +13,21 @@
 - Then I read the prefill chunking in the code each run used.
 
 **Bottom line:** every EvalSuite gate and reference is unaffected. Only the b12 family's agent rows can be exposed (3 rows
-per run). fast24's prefill chunking was not checked.
+per run), and probably are not: see the 08:5x update. fast24 is safe (BigMoE, 08:5x).
+
+**Update 08:5x:**
+- Leap: this is BigMoE's LEDGER BUG1, fixed in MLX 0.32.4.
+- BigMoE: fast24 (f24b16, f24nat) is safe.
+  - Its f24_env (f24k snapshot 4caa5a3) sets no R57_PFCHUNK, so the r57 screen prefills in 1,024-token calls.
+  - The tier's grouped prefill pads each call to a multiple of 64.
+  - Only BigMoE's own PFX big-chunk arms (pe4096 / pe8192 / pe8192nl / pl8192) crossed the line. They are marked
+    invalid in WED_TESTS (f9739e0) and fed no gate.
+- Fit12, checked here: the b12 engine's grouped tier prefill pads every routed call to a multiple of 64, so it cannot
+  take the bug's branch.
+  - Source: ~/Breakthrough/v3f/bigmoe_v3f/tier.py:559, "BUG1: keep the routed row count a multiple of 64".
+  - The padding landed with D1i itself (a45b99a, 10-22 04:21) and runs when BIGMOE_TIER_PF_GROUP > 0 (default 0).
+  - The b12 runs' decode.json does not record that variable, so the runs below stay listed until Fit12's queued GPU
+    proof settles them.
 
 ## Which prompts are long
 - Only three sets have long prompts:
@@ -51,8 +65,6 @@ per run). fast24's prefill chunking was not checked.
 
 - Affected runs (10-22..11-05): b12, b12g, b12l, b12ll, b12llff, b12llff2, b12llff3, b12llff4, b12llff4p, b12llff4t0c,
   b12llfoff, b12llfon, b12llfx, b12llfx2, b8, b8fast. The single-row .r9 runs have none.
-- **fast24 (f24b16, f24nat; 10-23):** prefilled by BigMoE's fast24.generate_fast24, whose chunking I did not check.
-  - Per-4,096 calls would expose the same 3 rows.
-  - One call per prompt would expose 27 of 29.
-- Any agent score from these runs (the 12 GB line's October agent results) should be re-run with Leap's fix
-  (~/Leap/scripts/pfb_fix.py switch_glu_padded), or read with these rows left out.
+- **fast24 (f24b16, f24nat; 10-23):** SAFE per BigMoE (08:5x update above).
+- If Fit12's proof finds a b12 run that ran without the padding, re-run that run's agent rows with Leap's fix
+  (~/Leap/scripts/pfb_fix.py switch_glu_padded), or read its agent score with these rows left out.

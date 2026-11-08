@@ -1,4 +1,4 @@
-# UNDER CHECK 08:3x (an MLX bug may have left expert rows unwritten in the 4.7K / 7.9K prefills; a GPU proof decides, 1.6K stands): At 12 GB the prefill already reads each expert once per prompt: 191 / 378 / 461 tok/s at 1.6K / 4.7K / 7.9K tokens (2-3.7x the 45 GB path), in under 11 GB; 12 GB chat decodes 12.9 tok/s at 556 MB of SSD per kept token
+# UNDER CHECK 08:3x, LIKELY VALID 08:5x (an MLX bug was suspected in the 4.7K / 7.9K prefills; the engine already pads its grouped calls; a GPU proof decides): At 12 GB the prefill already reads each expert once per prompt: 191 / 378 / 461 tok/s at 1.6K / 4.7K / 7.9K tokens (2-3.7x the 45 GB path), in under 11 GB; 12 GB chat decodes 12.9 tok/s at 556 MB of SSD per kept token
 - CORRECTION 2026-11-08 08:2x (orchestrator, from Leap's TABLE_350 a521e91 "MLX NAX SORTED-GATHER BUG + PF-B"):
   - The bug is in MLX 0.32.2's sorted NAX expert gather (affine_gather_qmm_rhs_nax). When one call has more than
     32,767 sorted rows and the row count is not a multiple of 64, a `short` overflows and those rows are never computed
@@ -14,6 +14,9 @@
     - A GPU proof is queued: a 3,072-token-chunk reference vs the shipped grid with the pad, a count of every sorted
       call's rows, a bitwise logits / tokens compare, and re-timed runs. Until then, 378 / 461 are UNDER CHECK, not void.
     - Fit12's own correction: its s_moe 4096 vs 8192 A/B was null, because both arms ran one MoE chunk per prompt.
+  - UPDATE 08:5x: Leap withdrew the "hit" reading. This bug is already known in-house (BigMoE LEDGER BUG1), the tier
+    prefill pads for it, so 378 / 461 are most likely valid; the GPU proof decides. Upstream it is MLX issue #4632
+    (reported 2026-10-05), fixed by PR #3922 in MLX 0.32.3+; this engine pins 0.32.2, where padding is the exact fix.
   - The 1.6K prompt (15,650 rows) is under the limit, so its 191 tok/s stands.
   - Exact fix: pad the sorted rows to a multiple of 64 (Leap's pfb_fix.switch_glu_padded), which is bitwise equal to
     1,024-token calls. Fit12 re-measures with it.

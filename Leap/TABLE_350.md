@@ -9608,11 +9608,17 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
     rows unwritten (13,784..46,559; the formula predicts 13,785..46,552); 47,300 -> 14,560; 38,360 -> 5,600; 40,960
     (aligned) -> 0. Deterministic, the same in any call order and with the input evaluated first (not a race);
     mx.argsort is fine. Only this kernel has the cast (dense NAX qmm does not).
-  - **Who is hit:** any SwitchGLU (mlx_lm) call with > 32,768 sorted rows (> 3,276 tokens at top-10) and M % 64 != 0:
-    Fit12's b12_prefill (pfr_chunk makes ONE MoE call per prompt up to 16K tokens: its 4.7K / 7.9K prefills ran with
-    rows missing; its note blamed "gather kernel shapes"), BigMoE's pe4096 / pe8192 arms, and D1i-prefill users
-    (EvalSuite, TrainLab) on long prompts. Safe: 1,024-token chunks (<= 10,240 rows: PF-A plm1, pe1024, exact E),
-    decode, dense calls.
+  - **CORRECTION 08:5x: a rediscovery.** This is BigMoE's LEDGER BUG1 (found earlier by PrefillKernels,
+    align_probe.py: "wrong rows at bm 64 when the routed row count is not a multiple of 64"; MLX 0.32.4 fixes it).
+    bm 64 starts at rows / E >= 64, i.e. M >= 32,768 at E 512, exactly where the short can overflow. New here: the
+    trigger line (quantized_nax.h:1547, > 32,767 rows following) and the measured counts. I broadcast it before
+    grepping the owner's LEDGER; corrected to the orchestrator, the lounge and Fit12.
+  - **Who is hit:** any SwitchGLU (mlx_lm) call with > 32,768 sorted rows (> 3,276 tokens at top-10) and M % 64 != 0
+    that does not pad. BigMoE's tier prefill (BIGMOE_TIER_PF_GROUP, D1i's tier path) already pads to x64 (tier.py
+    BUG1), so Fit12's 12 GB tier prefill is likely unaffected (Fit12's GPU proof queued). EvalSuite's audit (a67de24):
+    every gate and ref is safe; exposed = 3 b12-family agent rows (edit02 / write11 / write12). BigMoE's pe4096 /
+    pe8192 arms and fast24's prefill are unchecked. Safe: 1,024-token chunks (<= 10,240 rows: PF-A plm1, pe1024,
+    exact E), decode, dense calls.
   - **Workaround, exact:** pad the sorted rows to a multiple of 64 (copies of the last row, same expert) so the
     kernel takes its aligned path: pfb_fix.switch_glu_padded is bitwise == the 1,024-token calls at 1.6K / 4.7K /
     7.9K, no unwritten rows.
@@ -9626,3 +9632,25 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   - **CHS5 (BigMoE 08:12): NGEMV_ROWS=2 KILL as a speed lever** (1-row check 31.9 vs 31.4 ms, 2-row 30.0 vs 30.7; its
     +3.5 % whole decode is different tokens). The check is now CPU-bound (bld ~31.5 ms of ~33, wt ~3): GPU-only kernel
     levers at 1-2 rows stop paying.
+- **ENC2 + PF-B dense invariance (Sun 08:28-08:5x, share locks beside EvalSuite's gate; scripts/enc2*.py,
+  pfb_dense_inv.py; data/enc2*.txt, pfb_dense_inv.txt).**
+  - **ENC2 (check-side CPU lever: SB's mid-loop async_eval on a second thread while the main thread builds the next
+    layers):** MLX 0.32.2 releases the GIL in eval (a side thread keeps 99-104 % of its solo rate). Streams are
+    thread-local ("There is no Stream(gpu, 0) in current thread"): the encoder thread must create the stream and the
+    main thread build the check's graph on it (`with mx.stream(enc.s)`), with every eval, the final one included, run
+    on the encoder thread. That form is bitwise == serial and survived 200 checks. Speed on a 48-layer toy: x0.96 by the
+    pre-registered line (KILL). The toy turned out GPU-bound per kernel (build 2.2 ms, async_eval blocked ~55 ms), and
+    its timings swung 50 -> 35 ms with EvalSuite's load, so the gain is unpriced. A narrow variant read x1.34 post hoc,
+    and a same-thread new stream read x0.98-1.01. In the real check, the gain needs the GPU busy time per check
+    (unknown) to sit below the CPU's ~31.5 ms. Engine form: wrap the check's forward in the encoder stream and route
+    every mx.eval (gate readbacks, final) through that thread (BigMoE's loop). Parked as a lead.
+  - **PF-B batching risk (BigMoE R57_PFLM=3 batches the router + shared expert over 4-8K rows):** MLX's
+    quantized_matmul (q4, q8 g64) is per-row bitwise invariant at 1,024 vs 4,096 / 7,932 / 8,192 rows for the router
+    (2560->512), shared gate / up (2560->640), shared down (640->2560) and shared-expert gate shapes. Plain bf16
+    matmul is NOT (K 2560: 210-538 rows differ). The model quantizes the router (8-bit) and shared expert (4-bit), and
+    ref2's DENSE-N-RAM unpacks to MLX's quantized_matmul above 16 rows, so the batching should keep the logits hash.
+- **GPU-UTIL (Sun 08:5x, read-only, ioreg "Device Utilization %", 40 x 0.5 s; data/gpu_util_m1b.txt): during EvalSuite's
+  M1-B + COH chat gate decode the GPU is busy 81 % (median 81, p10 74, p90 86), the one-call's spin on expert loads
+  included.** At a ~40 ms cycle that leaves ~8 ms of GPU idle per cycle: the ceiling for every CPU-side lever (ENC2,
+  compiled glue, fewer ops) is ~-20 % cycle even at zero CPU cost; GPU levers face an 81 %-busy GPU. 150 tok/s (x2.7
+  over 56) cannot come from the check side; it needs more kept tokens per check (BigMoE's read too).
