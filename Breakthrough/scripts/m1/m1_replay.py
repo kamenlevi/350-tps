@@ -41,7 +41,9 @@ B.RULES.update({
 ORDER = ["EXACT", "Q1 0.5", "QOM0", "QOM0+next", "QOM0+ball", "QOM0.5+next", "QOM0.5+ball", "TOP8", "TOP8+QOM0.5",
          "U3 sure0.5", "U3 all", "Q1 0.5 t3", "Q1 0 t3 +bonus all"]
 SPLIT_RULES = ("EXACT", "QOM0", "QOM0.5+next", "QOM0+next", "QOM0+ball")
-SPLITS = (0, 16, 32, 48, 64)
+POOL = os.environ.get("M1_POOL", "45")          # Sun 04:1x: the 24 / 12 GB pool lines (the ledger's C_m 147 + C_l 46 / 51 + 32)
+SPLITS = {"45": (0, 16, 32, 48, 64), "24": (0, 8, 16, 32, 48), "12": (0, 4, 8, 16, 24)}[POOL]
+SFX = "" if POOL == "45" else f"_{POOL}"
 OPT_RULES = ("EXACT", "QOM0+ball")
 
 
@@ -49,8 +51,8 @@ def main():
     t0 = time.time(); lines = []; res = {}
     def say(s=""): print(s, flush=True); lines.append(s)
     W = B.windows(); W = {d: W[d] for d in ("ifeval", "multi")}
-    Cm0, Cl0 = B.POOLS["45"]
-    say(f"M1 replay (45 GB line: C_m mean {np.mean(Cm0):.0f}, C_l mean {np.mean(Cl0):.0f} per layer; MSB record {B.MR} B, "
+    Cm0, Cl0 = B.POOLS[POOL]
+    say(f"M1 replay ({POOL} GB line: C_m mean {np.mean(Cm0):.0f}, C_l mean {np.mean(Cl0):.0f} per layer; MSB record {B.MR} B, "
         f"LSB sidecar {B.LR} B); windows {dict((d, len(v)) for d, v in W.items())}; live checks (t 0.3); LRU unless named")
     say("| domain | rule | MB per kept (MSB) | vs EXACT | misses per check (MSB + LSB) | MB per check | OPT MB per kept | kept | rows |")
     say("|---|---|---|---|---|---|---|---|---|")
@@ -82,8 +84,8 @@ def main():
             print(f"  ({dom} {rule}: {time.time() - t0:.0f} s)", flush=True)
     say(f"done in {time.time() - t0:.0f} s")
     os.makedirs(DST, exist_ok=True)
-    open(os.path.join(DST, "m1_replay.out"), "w").write("\n".join(lines) + "\n")
-    json.dump(res, open(os.path.join(DST, "m1_replay.json"), "w"), indent=0)
+    open(os.path.join(DST, f"m1_replay{SFX}.out"), "w").write("\n".join(lines) + "\n")
+    json.dump(res, open(os.path.join(DST, f"m1_replay{SFX}.json"), "w"), indent=0)
 
 
 if __name__ == "__main__":

@@ -3755,3 +3755,85 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
     80 / 61 (no chat gate passes it).
   - <= 80 MB: at 24 GB, the passing route + fewer wasted rows (F2a) + the QOM pool split are the candidates (to price
     after Monday). At 12 GB no gated rule gets near it [P].
+
+- Sun 04:2x: M1-B [K] AGAINST MY [P], AND WHAT THE ENGINE'S M1-B IS (BigMoE CHS2, data/chs/chs2_report.txt; NewIdeas
+  e26eb0e).
+
+  | arm (12 IFEval, C 256, whole decode) | MB per kept | misses per check | svc ms | tok/s | my [P] for MB per kept |
+  |---|---|---|---|---|---|
+  | x2c0 (L) | 41.8 | 97.8 | 15.8 | 44.8 | (replay EXACT 38.1) |
+  | x2qm1 (QOM on drafted rows, bonus row exact) | 22.8 (-45 %) | 42.8 | 10.1 | 45.3 (+1.0 %) | QOM0 -32 % |
+  | x2qm2 (+ the bonus row gated = M1-B) | 15.5 (-63 %) | 25.8 | 6.3 | 49.0 (+9.5 %) | QOM0+ball -58 % |
+  | x2qm2s (+ BigMoE's pool split) | 15.1 (-64 %) | 28.2 | 7.9 | 52.0 (+16.1 %; kept 2.72 vs 2.41) | + split S 32: -75 % |
+
+  - **The replay was low on the miss cut** (-38 % predicted vs -74 % measured for M1-B) **and high on the split** (-41 %
+    more predicted vs ~0 measured).
+  - The engine already holds more sidecar slots than the replay's 45 GB line: C_l 112 + VTIER 32 against 89. So the
+    split's lever was mostly in place already.
+  - x2qm2s's +16 % over x2qm2 rides on kept 2.72 vs 2.41 (lossy outputs differ); it is not a split effect.
+  - **The engine's M1-B also includes U3.** r57_screen.py FASTARMS["QOM"] = _S(thr 0, q1u, t3=True, qom=True); "Tail
+    3"; the screen asserts that QOM needs the t3 path.
+    - Its t3 turns OFF the gated rows' sidecar READS. A pair whose LSB slot is resident still runs at 4 bits (LP1:
+      "unchanged for slots >= 0"). So it is U3 at its real rate (cold sidecars only), not the map's t3, which puts every
+      sure row's ranks 0-1 at 3 bits.
+    - The map brackets it: `qom_0_live_ball` (no 3 bits) 4.03 [1.00] / 3.26 [0.91] PASS, and `qom_0_live_bq_t3` (every
+      sure row at 3 bits) 6.09 [2.48] / 5.29 [2.36] FAIL. The real rate should sit near the first [P].
+  - **If the IFEval gate fails M1-B,** the clean fallback (QOM without U3) needs a build: R57_QOM_TAIL=4 is "not built",
+    and QOM asserts the t3 path.
+
+- Sun 04:2x: 24 / 12 GB CHAT BYTES10, PRICED [P] (scripts/m1/m1_replay.py with M1_POOL=24 / 12; data/m1/m1_replay_24.out,
+  _12.out; the ledger's pools: 24 GB = C_m 147 + C_l 46, 12 GB = 51 + 32; 12 IFEval + 12 multi windows, live checks,
+  LRU). MB per kept token, IFEval / multi:
+
+  | rule | 24 GB | 12 GB | chat gate on the map |
+  |---|---|---|---|
+  | EXACT | 210 / 183 (OPT 94 / 84) | 622 / 487 (OPT 387 / 304) | - |
+  | QOM0 (drafted rows skip cold ranks 2-9) | 105 / 96 (-50 / -48 %) | 276 / 242 (-56 / -50 %) | free at 45 GB; untested at 147 / 51 slots |
+  | QOM0.5 + bonus gated at the next draft's cf >= 0.5 (~ the 24 GB chat route) | 82 / 77 (-61 / -58 %) | 216 / 199 | `qom_0.5_live_c147_bonus5g` PASS (4.30 / 2.73 %) |
+  | QOM0 + ball (= M1-B without U3) | 49 / 35 (-77 / -81 %) | 113 / 83 (-82 / -83 %) | c208 PASS thin (5.27 [2.12] / 3.38 [1.30]); 147 / 51 untested |
+  | QOM0 + ball + split (best S) | 34 / 25 (S 32) | 111 / 82 (S 4; more slots hurt) | as above |
+  | QOM0 + ball + U3 everywhere (`Q1 0 t3 +bonus all`) | 20 / 14 | 76 / 56 | the map's worst-case t3 FAILs (c147: 7.83 / 5.99) |
+  | U3 alone | -14 / -11 % | -6 / -6 % | at 24 / 12 GB the base reads dominate, so U3 is small |
+
+  - **The <= 80 MB line** (150 tok/s at ~12 GB/s):
+    - 24 GB: reached by the map-PASSing chat route (~80) and by QOM0 + ball (49 / 35, gate open).
+    - 12 GB: only QOM0 + ball + U3 reaches it (76 / 56), with no chat gate at 51 slots.
+  - Absolute bytes differ by engine, so ratios are what to use. The 45 GB replay matched N45 within ~5 %. At 24 GB on
+    code the replay reads 0.7x E24 (C 128, s10b); at 12 GB, 1.45x Fit12's loop.
+  - **After the bytes, the GPU floor binds.** The same model's chat check has a fixed GPU cost of ~39-42 ms at 45 GB
+    (BigMoE CHS2 FLOOR).
+    - 24 GB with QOM0 + ball: ~113 MB per check, ~10-15 ms of SSD, so chat ~45-50 tok/s [P] (today ~20-30 [G]).
+    - 12 GB: ~263 MB per check, so ~35-40 [P].
+    - 150 at 24 / 12 GB needs the same B1 / G1 / G2 + K work as 45 GB, plus these byte cuts.
+  - **Gates to pre-register before any run:** map arms `qom_0_live_ball_c147` and `qom_0_live_c147` (no 3 bits; masks
+    by NewIdeas' dm_oea_masks rule at 147 slots), then the same at 51 slots. Each is ~5 min of GPU at 36 windows.
+    Lines: VERDICT2 per domain; McNemar vs `qom_0.5_live_c147_bonus5g`. Waiting for NewIdeas to slot them (after
+    Monday, or a gap).
+
+- Sun 04:4x: QWEN 4 DAY-0 PRE-WORK, the decision map's capture with a model switch (NewIdeas' board, due Tue evening).
+  INSTALLED.
+  - Patched ~/FableGod/decision_map/dm_common.py (483b7247 -> 558671e0; the old file kept as dm_common.py.pre_q4) with
+    the anchored patcher scripts/q4/q4_map_switch.py (10 anchors; a scratch copy tested first, then an atomic move, no map
+    process running):
+    - DM_MODEL picks the store (default today's ~/BigMoE/models/bare).
+    - DM_ARCH picks the architecture module (default mtplx.models.qwen4_exp). A module without today's class names fails
+      loudly at import.
+    - The routing and x-capture ranks follow the MoE block's own top_k (CAPK, today 10).
+    - The routing / scores / xcap write-outs stack over the discovered MoE layers (MOEL, today 0..47) instead of
+      range(48).
+  - CPU checks, all OK: the default env gives the same MD and module; DM_MODEL switches the store; a wrong DM_ARCH
+    raises ModuleNotFoundError.
+  - PRE-REGISTRATION, "today's capture reproduced" (GPU, ~20 min, share lock MEM 18 GB, when NewIdeas slots it; disk is
+    at 55 GB free, so only small outputs):
+    - Run: DM_OUT=<scratch>/q4repro DM_C=51 run_map.py capture (36 windows), then xcapture --max 1 (3 windows).
+    - PASS = bit-identical tk / lp vs out/baseline.json, routing ids / tokens / gen vs out/routing, and x / w / ids vs
+      out/xcap for those 3 windows. Anything else is a bug in the switch.
+  - Day-0 hazards for the map (each fails loudly or needs a rebuild; none is silent):
+    1. The windows are today's token ids (TrainLab's d02b walks, ids only). A new tokenizer needs windows rebuilt from
+       the texts plus the new model's own AR answers (EvalSuite's AR generator with a model switch).
+    2. cf-based arms need a drafter walk for the new model (gate_dfl2.json, floor_rows.json, the masks). QOM0 and 'ball'
+       arms need no cf.
+    3. The "gate" check compares against today's D-02a top-1. Skip it for a new model, or point it at the new
+       baseline.
+    4. The ablation paths (reuse, nw, t3, masks) still hold 48 / 10 literals. Sweep them before any arm runs on a new
+       model; the capture itself is covered.

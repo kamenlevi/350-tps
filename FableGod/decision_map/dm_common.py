@@ -41,12 +41,13 @@ import mlx.core as mx
 sys.path.insert(0, os.path.expanduser("~/BigMoE"))
 sys.path.insert(1, os.path.expanduser("~/Leap/scripts"))      # pausewait (read-only import, as d02a_extract.py)
 sys.path.insert(2, os.path.expanduser("~/TrainLab/sticky"))
-from mtplx.models import qwen4_exp as Q
+import importlib as _imp                            # Qwen 4 day-0 (Breakthrough Sun 11-08): DM_ARCH switches the module
+Q = _imp.import_module(os.environ.get("DM_ARCH", "mtplx.models.qwen4_exp"))   # (default = today's); same class names
 from mtplx import generation as G
 import mtplx.kernels.qwen4_moe_prefill_combine as PC
 
 TD = os.path.expanduser("~/TrainLab/data")
-MD = os.path.expanduser("~/BigMoE/models/bare")
+MD = os.path.expanduser(os.environ.get("DM_MODEL", "~/BigMoE/models/bare"))   # Qwen 4 day-0: DM_MODEL switches the store
 OUT = os.path.expanduser(os.environ.get("DM_OUT", "~/FableGod/decision_map/out")); os.makedirs(OUT, exist_ok=True)
 SETS = [("code", "d02b_walk_code.npz"), ("ifeval", "d02b_walk_d02a_ifeval.npz"), ("multi", "d02b_walk_d02a_multi.npz")]
 TOPK = 8
@@ -128,6 +129,8 @@ def classes(lp):
 
 # ---- layer discovery and perturbation registry -----------------------------------------------------------------
 LAYERS = {}   # id(module) -> (layer_index, kind)
+MOEL = []     # Qwen 4 day-0: the MoE layer indices in order (today 0..47), set by discover_layers
+CAPK = [10]   # Qwen 4 day-0: the routing capture's ranks = the MoE block's top_k (today 10), set by discover_layers
 ACTIVE = {}   # kind -> callable(layer_index, self, args, y_out) -> y_out' ; set by dm_ablations (att / gdn / hc)
 PREV = {}     # per (kind, layer) previous-position output for "reuse previous position" perturbations
 PERT = {}     # MoE block perturbation (A5): topk k, renorm, shared_zero, reuse (None / "all" / set of layers), q (bits)
@@ -154,6 +157,8 @@ def discover_layers(model):
     assert not missing, missing
     blk = layers[0].mlp
     print(f"[dm] MoE block: top_k {blk.top_k}, norm_topk_prob {blk.norm_topk_prob!r}", flush=True)
+    MOEL[:] = sorted(i for i, k in LAYERS.values() if k == "moe"); CAPK[0] = int(blk.top_k)   # Qwen 4 day-0
+    print(f"[dm] model {MD}; MoE layers {len(MOEL)} ({MOEL[0]}..{MOEL[-1]}); capture ranks {CAPK[0]}", flush=True)
     return LAYERS
 
 def _moe_on():
@@ -378,9 +383,9 @@ def install():
     def moe_inner(self, x, li):
         if CAPR["on"] and li is not None:                 # the block's own router, ranked (argpartition has no order)
             g = self.gate(x); g = g.reshape(-1, g.shape[-1])
-            CAPR["L"].setdefault(li, []).append(mx.argsort(-g.astype(mx.float32), axis=-1)[:, :10].astype(mx.int16))
+            CAPR["L"].setdefault(li, []).append(mx.argsort(-g.astype(mx.float32), axis=-1)[:, :CAPK[0]].astype(mx.int16))
             if CAPR.get("x") or CAPR.get("s"):            # sketch-on-miss (11-02): the routed experts' input + router weights; "s" (Thu 11-05): scores only
-                gg = mx.softmax(g.astype(mx.float32), axis=-1, precise=True); o = mx.argsort(-gg, axis=-1)[:, :10]
+                gg = mx.softmax(g.astype(mx.float32), axis=-1, precise=True); o = mx.argsort(-gg, axis=-1)[:, :CAPK[0]]
                 wv = mx.take_along_axis(gg, o, axis=-1)
                 if self.norm_topk_prob: wv = wv / wv.sum(axis=-1, keepdims=True)
                 if CAPR.get("x"): CAPR["X"].setdefault(li, []).append(x.reshape(-1, x.shape[-1]).astype(mx.float16))
@@ -542,19 +547,19 @@ def measure(model, windows, name, setup):
                 extra = f"; WARNING reuse row counts {sorted(seen, key=str)} for {len(ids)} ids (rows misaligned)"
                 res[nm]["warn"] = extra
         if CAPR["on"]:                                      # out/routing/<window>.npz: ids [n - 1, 48, 10], rank-sorted
-            R = [np.array(mx.concatenate(CAPR["L"][L])) for L in range(48)]
+            R = [np.array(mx.concatenate(CAPR["L"][L])) for L in MOEL]   # Qwen 4 day-0: the discovered MoE layers
             assert len({r.shape[0] for r in R}) == 1 and R[0].shape[0] in (len(ids) - 1, len(ids)), [r.shape for r in R]
             os.makedirs(os.path.join(OUT, "routing"), exist_ok=True)
             np.savez(os.path.join(OUT, "routing", nm), ids=np.stack(R, axis=1)[:len(ids) - 1], tokens=ids, gen=gen)
             extra += f"; routing {R[0].shape[0]} rows"
             if CAPR.get("s"):                               # <OUT>/scores/<window>.npz: every row's top-10 scores (Thu 11-05, C3-R6)
-                S = np.stack([np.array(mx.concatenate(CAPR["W"][L])) for L in range(48)], axis=1)[:len(ids) - 1]
+                S = np.stack([np.array(mx.concatenate(CAPR["W"][L])) for L in MOEL], axis=1)[:len(ids) - 1]
                 os.makedirs(os.path.join(OUT, "scores"), exist_ok=True)
                 np.savez(os.path.join(OUT, "scores", nm), scores=S.astype(np.float16), ids=np.stack(R, axis=1)[:len(ids) - 1], a=a)
                 extra += f"; scores {S.shape}"
             if CAPR.get("x"):                               # out/xcap/<window>.npz: answer rows' MoE input x [m, 48, 2560] and
-                X = np.stack([np.array(mx.concatenate(CAPR["X"][L]))[a:len(ids) - 1] for L in range(48)], axis=1)   # weights
-                W = np.stack([np.array(mx.concatenate(CAPR["W"][L]))[a:len(ids) - 1] for L in range(48)], axis=1)
+                X = np.stack([np.array(mx.concatenate(CAPR["X"][L]))[a:len(ids) - 1] for L in MOEL], axis=1)   # weights
+                W = np.stack([np.array(mx.concatenate(CAPR["W"][L]))[a:len(ids) - 1] for L in MOEL], axis=1)
                 os.makedirs(os.path.join(OUT, "xcap"), exist_ok=True)
                 np.savez(os.path.join(OUT, "xcap", nm), x=X, w=W, ids=np.stack(R, axis=1)[a:len(ids) - 1], a=a)
                 extra += f"; x {X.shape}"
