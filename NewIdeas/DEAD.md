@@ -244,3 +244,36 @@ expert union is larger than the cache, so the ~16 % extra slots buy nothing and 
 Quality (K2 passed): ranks 0-1 within 0.475 E4 of W4, ranks 2-9 at 0.5x MSB-3, so vs the bf16 weights it trades top-2
 accuracy (+48 %) for ranks 2-9 accuracy (-36 %). Knowledge kept: a 1-bit trellis residual removes ~69 % of a trellis base's
 error. Reopen only for a non-exact 24 GB mode with disk for a second format. Data: ~/Fit12/data/t3r/.
+
+## ROWS-FREE: wider chat drafts once the check is CPU-bound (killed Sun 8 Nov 15:32, NewIdeas, CPU replay of logs)
+Idea: Leap's CHS5 note says the 1-2-row chat check is CPU-bound (bld ~31.5 of ~33 ms). If so, extra verify rows ride on
+GPU slack and cost ~0, so longer chains or depth-1 trees (TREE_WALL priced them at ~3-4 ms per row) would pay now.
+Kill test (pre-registered before the fit): KILL if a verify row costs >= 1.0 ms in the current check, which with the
+head's 2.6 ms per drafted row puts the 4th row below the cycle's average yield. Data: BigMoE CHS5 per-check logs
+(data/r57/{zsgcb,zsgc,zs}_256_checks.json, 12 IFEval, C 256, ~710 checks each, first check per key dropped);
+scripts/chat/rows_free.py, data/chat/rows_free.txt.
+Result [K]: ck = 25.5 + 1.96 x rows + 0.161 x misses (zsgcb, resid sd 1.7 ms); zsgc 25.7 + 1.98 / 0.161; zs 27.7 +
+1.95 / 0.168. Medians by rows: 1 31.5 (26 misses; drafter-unsure positions), 2 30.6, 3 33.7, 4 36.9, 5 39.7, 6+ 44.5
+ms. bld grows with rows at the same ~2 ms (the per-layer syncs hold GPU time), so the build is not pure CPU.
+Why dead: a row costs ~2.0 (verify) + 2.6 (draft) + misses ~= 4.6-5 ms. The chain's survival to depth 4 is ~0.15
+tokens (head b5 depth hits, sr2.txt), i.e. ~0.03 tokens per ms against the cycle's 2.35 / 43.2 = 0.054. Depth 2 pays
+(~0.10), depth 3 is break-even (~0.06): today's cut 0.3 (~3 rows) already sits at the optimum. A depth-1 top-2 branch
+adds ~0.09 tokens [G] for ~2 ms = ~0.045, also below average. What remains is the fixed ~25.5 ms per check, which is
+Leap's ENC2 / encode lever, and acceptance (F2a).
+
+## PAR-CHAT: parallel answer streams (Skeleton-of-Thought style) as a chat fast mode (killed Sun 8 Nov 15:40, NewIdeas, CPU)
+Idea (IDEAS.md, pre-registered 15:38, 1cac993): CHS5's chat check is 25.5 ms fixed + 1.96 ms per row, so B independent
+streams of one answer share the fixed part. Priced per stream at 53.8 / 44.1 / 37.4 / 32.4 tok/s with 1-4 streams
+(aggregate 2.41x at 4); 150 was out of reach even before the test (it needs ~8 streams and >= ~90 % parallel text).
+Kill test: the 125B's own reference answers (NAX6-N AR; ref2tnax IFEval 100 + ref2tnaxn.r6 IFBench 150), parallel
+groups = >= 3 sibling list items / sections (STRICT), plus >= 3 plain paragraphs (LOOSE); dynamic assignment of
+branches to <= 4 streams; skeleton 8 tokens per branch + 40 ms per start event. scripts/chat/par_chat.py,
+data/chat/par_chat.txt.
+Result [K, CPU]: STRICT finds a group in 21 / 100 IFEval and 33 / 150 IFBench answers (14-16 % of characters):
+x1.091 / x1.078, pooled x1.083. LOOSE (stanzas and essay paragraphs count as parallel, which a real expansion would
+hurt) x1.295 / x1.212, pooled x1.242. Pre-registered KILL line: LOOSE < 1.25. KILL, and the generous LOOSE number
+is an upper bound: it ignores quality (independent stanzas, paragraphs that build on each other) and the multi-stream
+engine change (per-stream GDN state + KV in one check) is days. Spot check: only 2 / 100 answers with >= 3 item / head
+lines got no STRICT group (inline bold "First," paragraphs, an all-caps resume), and LOOSE takes both.
+Why: benchmark chat answers are short (IFEval median 218 tokens) and mostly prose; lists / sections hold ~15 % of the
+text, so Amdahl caps the gain near x1.1 however cheap the streams are.

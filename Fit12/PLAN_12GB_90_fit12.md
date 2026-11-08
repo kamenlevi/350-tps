@@ -567,3 +567,19 @@ fixed-cost bet. This is a measurement only: no setting changes.
 - IFBench maps through EvalSuite's dec_ifbench.jsonl (300 items, max_tokens 1536).
 - Smoke test chw17 (/Users/kamen/Fit12/scripts/chw17.sh) armed after chw16: ifeval/1220 + ifeval/3280 must = chw14c2
   (tokens + lsha); ifbench/10 must decode.
+
+## T2 SMOKE + HISTORY TEST (chw18, pre-registered Sun 08 Nov 15:29, before any run; EvalSuite's question: is P2' history-independent, or does the IFBench arm need 2 orders?)
+- What is shown so far: the base ex path is pool-independent (Fri kp2 ex = Thu c51 g1 on 16 / 16 HumanEval, token count +
+  sha, other process, arm mix and cache history). P2' adds only >= 2-row calls (2-row first calls, PR1's 2-row replays) and
+  one 1-row call at the cap with ALLWAIT. All of these are pool-independent by design, but P2' was never run in two orders.
+- chw18 (/Users/kamen/Fit12/scripts/chw18.sh) replaces chw17 (smoke) and chw16 (profile). Both were stopped while they
+  waited in their gates; neither had run. One share lock, MEM 12 GB, ~10 min, three processes:
+  - chw18s: the frozen harness (snap/chw1108) on ifeval/1220, ifeval/3280, ifbench/10, CAP 128.
+    - SMOKE PASS = both IFEval keys = chw14c2 (tokens + lsha; same positions) and ifbench/10 decodes (rc 0).
+  - chw18r: the same harness and env on ifbench/10 first, then the 12 IFEval in reversed order, CAP 128.
+    - HISTORY PASS = 12 / 12 IFEval = chw14c2 (tokens + lsha) and ifbench/10 = chw18s's (3rd there, 1st here).
+    - PASS -> one order is enough for the IFBench arm (evidence over 128-token prefixes; lsha checks the kept rows' logits
+      bit for bit).
+    - Any mismatch -> history-dependent: EvalSuite runs 2 orders, and I find the pool-dependent call.
+  - chw16p: chw16's pre-registered profile ('T2 FIXED COST SPLIT'), same tag, folder, env and live shas (fit_t3 42266985905b,
+    t3_twopass 75b89b71b40b).

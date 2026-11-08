@@ -167,3 +167,54 @@ stack adding F(x_L^0) - G(x_L^0) (the missing experts on the sweep-1 input) at t
 in the sweep-to-sweep change instead of first order in d layers' Jacobians; costs a second dense sweep (~2x compute).
 
 ## I4. (DEAD, see DEAD.md: all routed experts one layer late costs KLD 0.40)
+
+## PAR-CHAT. Parallel answer streams for chat, priced on today's check cost (status: DEAD Sun 8 Nov 15:40, see DEAD.md; pre-registered 15:38)
+The assumption it breaks: one chat answer = one sequential token stream. With CHS5's measured chat check
+(ck = 25.5 ms fixed + 1.96 ms per verify row + 0.161 ms per miss, DEAD ROWS-FREE), ~60 % of each 43-ms cycle is the
+fixed part, paid once per check however many rows ride on it. Rows from B INDEPENDENT streams share that fixed part.
+Skeleton-of-Thought (Ning et al., ICLR 2024; also APAR 2024, PASTA / learned asynchronous decoding 2025) writes a short
+skeleton, then expands its points as parallel streams. MoonShots parked it on 10-26 (L1-32p) as "not a 350 route, maybe
+a chat fast mode"; the chat line and today's cost split are new. Hogwild-style shared state is dead (a GDN state can't
+take interleaved writers), so each stream keeps its own GDN state and attention KV, sharing the prefix by copy.
+Model (B streams, ~2.96 rows each, misses ~13 per stream, the MTP head batched across streams ~ +1.2 ms per extra
+stream per cycle): aggregate tok/s ~ b x 2.35 / (25.5 + 5.8 b + 2.1 b + 8.0 + 1.2 (b - 1)) ms, scaled so b = 1 gives
+the measured 53.8. Per-stream rates b = 1..4: ~54 / 44 / 37 / 32 tok/s; aggregate at 4 streams ~2.4x sequential. So
+150 is out of reach even at f = 1 with 4 streams (needs ~8 streams and f >= ~0.9); a ~1.3-1.6x chat fast mode is the
+realistic prize, and it is LOSSY by construction (a different answer), gated by the card benchmarks like any FAST mode.
+CHEAPEST KILL (CPU, minutes, before any engine work): on the 125B's own reference answers (NAX6-N AR: ref2tnax IFEval
+100 + ref2tnaxn.r6 IFBench 150, texts), find the parallel groups (>= 3 sibling blocks) and price each answer:
+sequential part at the b = 1 rate, each group in waves of <= 4 streams at the per-stream rate (time = the wave's
+longest branch), plus overhead per group: a skeleton line of ~8 tokens per branch at the b = 1 rate and one extra
+check (~40 ms) per wave. Characters stand in for tokens (fractions only). Two segmentations: STRICT = list items and
+header / bold-title sections only; LOOSE = STRICT + plain paragraphs (>= 3 blank-line-separated).
+PRE-REGISTERED: KILL if the pooled modeled speedup (sum of sequential times / sum of modeled PAR times, all 250
+answers) < 1.25 under LOOSE (the most generous). PASS-to-quality-test if >= 1.5 under STRICT. Else BETWEEN. A PASS
+only buys a quality test (IFBench on the PAR mode); the engine change (multi-stream checks) is days.
+
+## NATIVE-CK. A native (Swift / Metal) executor for the chat check's dispatch chain (status: PRE-REGISTERED Sun 8 Nov 15:44)
+The assumption it breaks: that the check's host side must be MLX's (Python graph build + MLX eval / encode per op).
+Facts: CHS5's chat check is ~25.5 ms fixed + 1.96 ms per row (DEAD ROWS-FREE) and CPU-bound (Leap: bld ~31.5 of ~33 ms).
+Leap's S3-PYFLOOR split (Sat): Python build ~15-16 ms + Metal encode in async_eval ~18-19 ms per cycle for ~2,000
+dispatches, i.e. ~17 us of host CPU per op. MoonShots measured a dependent GPU dispatch at ~1.3-1.6 us (megakernel
+KILL, 10-18). If a native encoder costs ~1-2 us per dispatch, the 2-row check falls from ~30 ms toward its GPU side
+(~15 ms byte floor + ~3 ms of dispatch latency, ~18-20 ms), chat x1.3-1.4 [P] before any other lever; with a fused draft
+(F1c) and F2a's acceptance it is the first priced path that multiplies toward 150. Native engines (llama.cpp's Metal
+backend, Strata) encode this way; R-11b / #686 killed command-buffer replay on 10-18 because passes were GPU-bound then.
+The CPU-bound check is new (CHS5, 11-08).
+CHEAPEST KILL (microbenchmarks, seconds of GPU, run only when no quiet lock is held):
+  M-A, MLX toy: a dependent chain of 2,000 ops shaped like the check's small ops (alternating a 4-bit quantized matvec
+  1 x 2560 by 2560 x 512, an add and an rms_norm), built in Python and evaluated once; per-op Python build time and
+  per-op thread CPU in mx.eval (encode), 20 reps, medians. It must land near the engine's ~17 us per op, or the
+  engine's host cost is not MLX's per-op cost and the idea is mispriced.
+  M-B, native: one Swift program, 2,000 dependent dispatches of a small compute kernel (a 2560-element fused
+  multiply-add over one buffer) on one serial compute encoder in one command buffer; per-dispatch CPU encode time and
+  GPU time per dispatch (GPUStartTime / GPUEndTime), 20 reps, medians.
+PRE-REGISTERED: KILL if M-B's encode per dispatch >= 1/3 of M-A's host CPU per op, or if the projected saving
+2,000 x (M-A - M-B) < 10 ms per check. PASS-to-route (BigMoE + Leap: a design option with the numbers, not a build) if
+the projected saving >= 20 ms per check AND M-B's GPU time per dependent dispatch <= 3 us. Else BETWEEN.
+Prior art (web, 15:4x): MLX issue #3313 (fused transformer-layer kernels for bandwidth-bound generation) reports ~360
+dispatches per token for a 36-layer 4-bit model and ~45 % of bandwidth lost to dispatch gaps at batch 1; the
+mlx-native Rust crate batches a whole forward into one command buffer + one compute encoder (~13x lower per-dispatch
+wall vs a per-op-encoder pattern, its own benchmark, not MLX); llama.cpp's Metal backend splits the graph into n_cb
+command buffers encoded in parallel (dispatch_apply), enqueued in order. Principle known; nobody here has priced it
+against the CPU-bound check. Sources: github.com/ml-explore/mlx/issues/3313, docs.rs/mlx-native, ggml-metal sources.

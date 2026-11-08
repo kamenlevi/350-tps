@@ -20,6 +20,9 @@
 # Amendment 3 (the orchestrator 14:4x): Strata starts with Chrome open. CARD_WAIT_STRATA=1: no chunk until Strata has ended,
 #   Chrome or not (then the pids and no quiet lock, as in amendment 2). The swap guard's base is re-read when a yield ends
 #   (swap others added while this runner waited is not its own).
+# Amendment 4 (the orchestrator 15:2x): Strata counts as ended only when it finished: DRIVER_DONE, or a last waiter.log
+#   line "WAITER END: DONE". An INCOMPLETE or GAVE UP end does not release the runner (15:19 was INCOMPLETE and the waiter
+#   was re-armed). touch results/card/STRATA_RELEASE releases it by hand, only on the orchestrator's word.
 # Stop it by pid only, and its children too; then peer unlock.
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 cd "$HOME/EvalSuite" || exit 1
@@ -336,7 +339,7 @@ yield_check() { # amendment 2: Google Chrome closed while Strata has not ended =
     pgrep -x "Google Chrome" > /dev/null && return 0
     say "reference: Google Chrome is not running: yielding to Strata ($(refcount) of $RNK rows); no new chunk until WAITER END, PFB, no quiet lock"
   fi
-  until strata_done; do waitlog "reference: yielding: waiting for Strata's WAITER END / DRIVER_DONE"; sleep 60; cutoff_or_stop "Strata not done"; done
+  until strata_done; do waitlog "reference: yielding: waiting for Strata's DRIVER_DONE / WAITER END: DONE"; sleep 60; cutoff_or_stop "Strata not done"; done
   t_s=$(date +%s); say "reference: Strata ended; waiting for pids ${CARD_AFTER_PIDS:-none} (PFB; at most ${CARD_AFTER_MAXWAIT:-60} min)"
   until pids_gone || [ $(( $(date +%s) - t_s )) -ge $(( ${CARD_AFTER_MAXWAIT:-60} * 60 )) ]; do sleep 60; cutoff_or_stop "PFB not done"; done
   sleep 120     # a job that starts on the same signal takes its lock first
@@ -379,7 +382,10 @@ assert all(s in d["extend"] for s in ext), ext
 print("\n".join(k for s in ext for k in d["extend"][s]))
 XK
 grep . "$KF" "$XF" -h > "$RKF"; RNK=$(sort -u "$RKF" | grep -c .)
-strata_done() { tail -1 "$HOME/StrataEval/h2h/logs/waiter.log" 2>/dev/null | grep -q "WAITER END" || [ -e "$HOME/StrataEval/h2h/results/DRIVER_DONE" ]; }
+strata_done() { # amendment 4: a finished Strata only (DRIVER_DONE, or a last waiter line "WAITER END: DONE"), or the release file
+  [ -e "$HOME/StrataEval/h2h/results/DRIVER_DONE" ] || [ -e "$AF/STRATA_RELEASE" ] \
+    || tail -1 "$HOME/StrataEval/h2h/logs/waiter.log" 2>/dev/null | grep -q "WAITER END: DONE"
+}
 pids_gone() { local p_; for p_ in ${CARD_AFTER_PIDS:-}; do kill -0 "$p_" 2>/dev/null && return 1; done; return 0; }
 if [ "$STAGE" = ref ]; then
   YW="Chrome closed"; [ "${CARD_WAIT_STRATA:-0}" = 1 ] && YW="waits for its end"

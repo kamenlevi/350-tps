@@ -213,3 +213,21 @@ Checked on the gate keys; the result is the same in scripts/r57_screen.py and th
 - **Leftover:** rows not done by tonight's 22:45 cutoff run first in the Mon 07:05 slot, then the lcoh arm (the
   orchestrator 14:5x). There is no night block: MTP Head's F2a has the GPU from 23:00 to about 07:30.
 - **Unchanged:** keys, row counts, settings and the verdict rules.
+
+## Amendment 4 (Sun 15:2x; the orchestrator 15:2x): only a finished Strata releases the reference; scheduling only
+
+- **What happened:** Strata's waiter ended at 15:19:38 with "WAITER END: INCOMPLETE after 3 attempts" (three heat
+  pauses; 2 of 8 passes done). Runner 61 read any WAITER END as Strata's end, so at 15:20:11 it moved on to the PFB wait.
+  - No chunk ran. Its 60-minute PFB cap would have run out at about 16:20.
+  - The orchestrator re-armed the waiter (12 attempts) at 15:2x.
+- **Fix:** I stopped the runner at 15:23:16 by pid (57598 and its sleep), then peer unlock.
+  - Strata now counts as ended only on DRIVER_DONE, or when the last waiter.log line says "WAITER END: DONE".
+  - An INCOMPLETE or GAVE UP end no longer releases it. `touch results/card/STRATA_RELEASE` releases it by hand, only on
+    the orchestrator's word.
+  - It is re-armed in the first gap with no quiet lock (the peers hook blocks starting programs during one).
+- **Monday's slot (NewIdeas 15:25, correcting its first 09:00):** 07:05 to 15:00, Kamen's weekday big-test window. The
+  reference leftover runs first, then lcoh, then whichever next arm fits. The last chunk or arm must END by 15:00.
+  - The runner starts a chunk only if its longest chunk so far (at least 35 min) fits before the cutoff.
+- **PFB's waiter has a new pid, 79192** (BigMoE 15:28; 71508 is gone). BigMoE re-armed it with the same Strata release
+  as this amendment. The re-arm uses `CARD_AFTER_PIDS=79192`.
+- **Unchanged:** keys, row counts, settings and the verdict rules.

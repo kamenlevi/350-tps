@@ -1072,3 +1072,17 @@ job ran beside FU's quiet lock 09:24:44-09:29 (fb0 and the start of fb1): fb0's 
 - The 7.9K prompt's lifetime peak stays over the 45.0 line in every variant except 512-token chunks (44.0 GB, at 1.4-1.6x the TTFT).
   C 248 and the 2 GB cache limit do not lower it (45.7 / 45.2 / 46.4 GB): the lifetime peak moves about 0.5 GB with the
   allocation pattern, so a fix needs more than 0.5 GB of margin. Decode cost of the fixes is nil (175.2 / 172.3 / 175.7 tok/s).
+
+## Sun 8 Nov 15:2x: chat TTFT on M1-B + COH, from CHS5's records (data/chs/chat_ttft.txt; the orchestrator's "how bad is our chat")
+No new run: CHS5's runs (12 N45 IFEval prompts, 37-101 tokens, C 256, CAP 256, quiet) already log `pfs`, the wall from the
+prefill call to the first token's readback (chat drafts with the MTP head, so no drafter-cache setup inside it: TTFT = prefill).
+- **M1-B + COH (z0b): TTFT median 2.92 s (2.34-3.81 s); fit 1.7 s + 22 ms per prompt token.** z0 / zsgcr agree within ~0.2 s per prompt.
+- **At CAP 256 the TTFT is half the wall: decode 49.9 tok/s, end to end 24.4 tok/s** (TTFT 36.6 s of 71.5 s; the stack zsgcr:
+  decode 56.0, end to end 24.6). Strata's h2h (the orchestrator): median TTFT 0.97 s on these prompts.
+- Not a fixed cost (an ESTIMATE until PFB's CT1 arm measures it): each token routes top-10 of 512 experts per layer, so 40-100
+  tokens touch ~55-85 % of each layer's experts; base residency at a prompt's start was 36-57 % in the agent records (PFSTAT), so
+  ~6-14K expert-layers are read at ~2.6-2.8 MB = ~16-35 GB at PF-A's ~8 GB/s = ~2-4 s, the measured range. It saturates at the full
+  63.6 GB read (PF-A's ~5.5 s + 1.57 ms/token on long prompts). A persistent server repeats it per request (the screen already is
+  one: model loaded once, warm-up discarded, caches kept). Levers: parallel reads (8 -> 12-14 GB/s), a resident-set prefill (PF-D,
+  lossy; CT1 prices it). CT1 (in PFB's slot: zs = M1-B + COH + SB1 on the same 12 keys, CAP 16, R57_PFSTAT) logs per prompt TTFT,
+  prefill SSD GB, residency at start, routed and resident expert-layers.

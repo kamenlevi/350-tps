@@ -98,6 +98,15 @@ prompt orders.
 | 24 GB | - | not measured (Breakthrough priced bytes only: EXACT 210 / 183 MB per kept token) | - | Breakthrough 2bb8413 | - |
 | 12 GB | VERIFIED GREEDY (ex, B12 + MTP) | 12.88 geo mean (pooled 12.76) [K, alone, quiet] | 10.96 GB | Fit12 chat12 (Sun 05:07-05:12), re-derived from chat12.txt | verified greedy |
 
+- STRATA HEAD-TO-HEAD, PARTIAL (the orchestrator's run, Sun 14:54-15:39, ~/StrataEval/h2h/results/REPORT.md; arms
+  C / D, Strata's exact mode, still running at 15:41; re-derived by NewIdeas from the request rows) [K]:
+  - Strata 0.1.58-metal on the same 12 IFEval prompts, greedy, cap 256, experts streamed from the SSD. It runs
+    ISTA-DASLab IQ3_XXS (~3 bits), not the 4-bit weights, so its tokens differ from NAX6-N's (1 of 12 rows equal).
+  - Pooled decode, IFEval: default 28.0 tok/s (A1; A2 25.6), default + its MTP 37.4 (B1; B2 done 15:39, not yet
+    read). TTFT median 0.86 / 0.97 s (A1 / B1).
+    Peak footprint 34.9 / 33.6 GB.
+  - Ours on the same prompts (rows above): 45 GB exact 39.9, M1-B 49.0-50.5, best measured stack 56.05, at ~42.4 GB.
+    The equal-memory row (our ~32 GB chat) is not measured yet (proposed to the orchestrator 15:36).
 - CHAT TTFT (time to the first token; the whole-decode chat column leaves it out), 12 IFEval prompts of 37-101
   tokens [K]:
   - 45 GB: 3.05 s mean (2.51-3.65), the same in exact and lossy configs (BigMoE CHS5 zs / yeh / zsgcr runs.json).

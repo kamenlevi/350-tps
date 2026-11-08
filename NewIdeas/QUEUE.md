@@ -15,6 +15,35 @@ Tags: [K] = measured, [P] = priced from measured parts, [G] = a guess. 45 = the 
 chat to 150 in a day or two ... It's not even an mtp head drafter that's the problem ... Use neural accelerators where
 needed, use the cpu to its full to 'prep' the math which is about to go to the gpu if needed - do anything to get it to
 150 in lossy at 45gb by Monday latest". Lossy is fine, IFEval-gated vs NAX6-N in both orders.
+- SUN 15:23 (`date`) STRATA H2H PARTIAL (the orchestrator's run; ~/StrataEval/h2h/results/REPORT.md) + MON SLOT
+  - WAITER END 15:19: INCOMPLETE after 3 attempts (waiter.sh H2H_ATTEMPTS, default 3). All three stops were fanwatch
+    heat pauses on thermal state 'fair' (die only 69-80 C), each ~2.5 min: 14:51, 15:03, 15:19.
+  - Done: B1 (default + MTP) and A1 (default, no MTP). A2 was cut at 44/48. The exact arms C and D never ran.
+  - Pooled decode [K], re-derived by NewIdeas from the request rows (it equals REPORT.md's pooled column):
+    - IFEval: A 28.0 / B 37.4 tok/s, TTFT median 0.86 / 0.97 s.
+    - All 4 sets: A 26.1 / B 38.9 tok/s. Peak footprint 34.9 / 33.6 GB.
+    - Ours on the same 12 IFEval (BigMoE's reports): N45 EB exact 39.9, L 45.0 whole decode, at 41.7-42.4 GB.
+    - Strata runs IQ3_XXS, so its tokens differ from NAX6-N's (1 of 12 IFEval rows equal). INFORMATION for the table.
+  - Told the orchestrator 15:23: relaunch with H2H_ATTEMPTS=10 (finished arm+passes are kept). A relaunch also puts
+    Strata ahead of PFB again, because PFB's AFTER (DRIVER_DONE, or a last waiter.log line 'WAITER END') is met now.
+  - The orchestrator 15:2x: the waiter was relaunched 15:22 with 12 attempts and fan cap 6000-6500 until 17:00 (Kamen
+    is off the laptop; his 11-06 cap). A2 re-ran whole: 48 / 48 at 15:29, IFEval pooled 25.6 tok/s (re-derived). B2
+    done 15:39. The exact arms C / D were next at 15:41. PFB stays blocked until DRIVER_DONE (EvalSuite amendment 4: only
+    DRIVER_DONE or 'WAITER END: DONE' releases its card reference).
+  - MON 07:05 SLOT, CORRECTED 15:24 (the orchestrator): hard stop 15:00, not 09:00. Kamen's schedule (11-02): Mon-Fri
+    the big-test window runs 00:30 until at least 15:00. Strata's old 09:05 was only that job's length.
+    - Order: card-reference leftover (0.5-2.5 h), then lcoh (~3.6 h), then whichever next arm fits.
+    - The last chunk or arm must END by 15:00.
+    - Fit12's 12 GB IFBench arm (~3 h, MEM ~12-16 GB) goes after 15:00, by day.
+  - PROPOSED 15:36 to the orchestrator (its call; BigMoE runs it): a 32 GB CHAT ARM right after PFB, before the card
+    reference resumes (~12 min, MEM ~33 GB, quiet).
+    - Why: Strata peaks at 33.6-34.9 GB, so the fair answer to Kamen's question is our chat at ~32 GB. The publish
+      table's 32 GB chat cell is also still empty.
+    - What: the 12 IFEval (N45 keys, CAP 256) at C 160 (C30's 31.8 GB route), E (exact) and zs (M1-B + COH + SB1),
+      ~6 min each.
+    - Caveat: QOM skips cold ranks, and C 160 has more cold experts, so M1-B's IFEval gate (run at C 256) does not
+      carry over. At 32 GB the zs row is lossy and ungated; the E row is exact.
+    - The 24 GB chat cell (E24 on the same 12 IFEval, MEM ~24 GB) can go Monday after 15:00, by day.
 - SUN 09:22 (`date`) STATE: M1-B'S CHAT GATE + KAMEN'S BENCHMARK RULE
   - M1-B + COH CHAT GATE (EvalSuite runner 59, 08:13-09:13; RESULT_chat_m1b 70b5cf8):
     - IFEval same scores PASS in both orders vs NAX6-N: forward 86.0 vs 87.0 % (-1.00, McNemar p 1.0); reverse
@@ -62,14 +91,14 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
          card_m1bs). PFB queues no later than 22:15; Sunday's GPU ends 22:45.
     6. EVENING, ending 22:45: a card arm (~3.6 h each, MEM 47 GB) if the reference leaves room. Then Sun 23:00 F2a.
     7. MON 07:05 (Strata's old slot, free; NewIdeas places it): the card-gate arm work left from tonight. It's
-       resumable; quiet lock, MEM 47 GB, hard stop at Kamen's day start.
+       resumable; quiet lock, MEM 47 GB, hard stop 15:00 (the orchestrator 15:2x; the last chunk or arm ENDS by 15:00).
     - RULE (11:3x) stays: a job that fits in ~30 GB never waits behind a memory-gated one. One > 5 GB job at a time.
   - FIT12 CHAT WIDTH (12 GB; NewIdeas places it, 12:2x):
     - The lever: the 2-row first exact call when the first draft's cf < 0.9. Chat whole decode +9.6 % (12.68 -> 13.89
       tok/s), code -1.0 %. Rounding-level, not bit-exact [K].
     - Under Kamen's rule its gate is a card benchmark. A full 12 GB card arm (~450K tokens in two orders at ~14 tok/s)
       costs ~9 h [P], more than any window before Wednesday, and EvalSuite's card gates have no 12 GB arm.
-    - PLACED: a 12 GB IFBench arm (150 keys, one order, ~150K tokens, ~3 h [P], MEM ~12-16 GB), Monday by day. It's
+    - PLACED: a 12 GB IFBench arm (150 keys, one order, ~150K tokens, ~3 h [P], MEM ~12-16 GB), Monday after 15:00. It's
       scored vs the NAX6-N IFBench rows the card reference makes anyway, with the card's own line on IFBench.
     - It needs Fit12's env and a 12 GB screen whose SETOF maps ifbench.
     - Without that run it can still be published as a non-exact 12 GB chat mode, ungated, with its measured speed.
