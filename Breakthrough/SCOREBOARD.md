@@ -3887,3 +3887,12 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
     - Next screens if NewIdeas wants them (~4 min GPU each, masks from my builder copy in seconds): qom_0_live_c147
       with the bonus row gated at 0.5 (between 105 and 50 MB [P]; both of its parents are clean), and qom_0.5_live_c51
       (+ bonus5g) for 12 GB.
+- Sun 16:5x: NewIdeas' yes (11:59) to the two follow-up chat screens; READY, waiting for a GPU gap NewIdeas places
+  (Strata's quiet ticket is first in line, so no share lock now). ~4 min GPU each, share lock MEM 18 GB, one command:
+  Q4_ARMS="qom_0_live_c147_bonus5g qom_0.5_live_c51" scripts/q4/q4_repro_slot.sh <scratch> arms
+  - qom_0_live_c147_bonus5g = qom_0_live_c147 (clean, 105 / 96 MB [P]) with the bonus row gated at 0.5 (proxy g) as in
+    the route: built with my copy of Fable C's bytes10_bonus_masks.py (scripts/m1/bytes10_bonus_masks_bt.py, source
+    sha256 c7f8970d; only the mask in / out dirs and an import path changed). Gated 165 of 1,368 bonus rows; only drops.
+  - qom_0.5_live_c51 = cf 0.5 QOM at the 12 GB pool, bonus row exact (kept per realized row-layer 6.48 / 7.77 / 8.37).
+  - Self-checks: my two copies rebuild NewIdeas' route masks qom_0.5_live_c147 and qom_0.5_live_c147_bonus5g, 36/36
+    windows bit-equal each. Both arms installed with install_c3.sh (ALL OK; snapshots in out/bt).

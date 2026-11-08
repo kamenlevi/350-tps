@@ -2029,3 +2029,6 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 12:04:19 SCR chw15 end (rc 0, 126 s, swap 4933 MB)
 16:36:27 SCR chw18 start: snapshot smoke (chw18s) + history (chw18r) + chw16p profile, P2' + PR1 + tail, CAP 128, share lock (49 GB free, swap 5558 MB, GPU 0%)
 16:37:02 SCR chw18 chw18s end (rc 0)
+16:39:13 SCR chw18 chw18r end (rc 0)
+16:42:09 SCR chw18 chw16p end (rc 0)
+16:42:09 SCR chw18 end (rc 0, 342 s, swap 5558 MB)

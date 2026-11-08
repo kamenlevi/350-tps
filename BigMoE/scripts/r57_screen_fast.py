@@ -506,6 +506,13 @@ if PFLM:                                                 # chunks, each layer's 
     import pflm as PFLMM                                 # construction, ~+1.5 GB). Off (unset / 0): nothing here runs.
     import bigmoe.tier as _BTP
     PFLMM.install(_BTP, PFLM)
+PFD_ON = os.environ.get("R57_PFD") == "1"                # Sun 17:xx PF-D (scripts/pflm.py; the orchestrator's GO): a tier prefill
+if PFD_ON:                                               # call's pool-resident experts rebuilt on the GPU from their base / side
+    assert TIER and not (A6 & {"pools", "warm"}), "R57_PFD=1 needs R57_TIER (the 45 GB pools) and no A6 pools / warm capture"
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # slots (side read if absent), absent bases as today;
+    import pflm as PFLMM                                 # the same scratch and call: bitwise by construction (R57_PFD_CHECK=1
+    import bigmoe.tier as _BTD                           # compares every rebuilt row with the ext's)
+    PFLMM.install_pfd(_BTD, check=os.environ.get("R57_PFD_CHECK") == "1")
 PFT = {"on": False, "t": {}}                             # Sun 08:5x (R57_PFSTAT=1, NewIdeas CT1): per layer, the experts the prefill routes to
 if os.environ.get("R57_PFSTAT") == "1" and TIER:         # (tier.prefill_call already reads the ids on the CPU: no extra sync)
     import bigmoe.tier as _BTT
@@ -1047,6 +1054,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
         _rb, _rs = sum(len(v_) for v_ in _rbs.values()), sum(len(v_) for v_ in _rss.values())
         pfst_ = [_rb, _rs, disk_read_bytes()]
         PFT["t"] = {}; PFT["on"] = True                  # Sun 08:5x (NewIdeas CT1): the expert-layers this prefill routes to
+    pd0_ = dict(PFLMM.PFD) if PFD_ON else None           # R57_PFD: this prefill's row counters
     lm0_ = (PFLMM.LMC["reads"], PFLMM.LMC["hits"], PFLMM.LMC["calls"]) if PFLM else None   # R57_PFLM: this prefill's scratch counters
     tpf_ = time.perf_counter()                           # Sat 17:2x (E5): prefill wall (+ the first token's readback) for end-to-end tok/s
     cache, last, T, ws = prefill(ids, mtp, chunk=PFCHUNK)
@@ -1586,6 +1594,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                                                      routed=pfst_[3], routed_res_base=pfst_[4], routed_res_side=pfst_[5]),
                 pflm=None if lm0_ is None else dict(reads=PFLMM.LMC["reads"] - lm0_[0], hits=PFLMM.LMC["hits"] - lm0_[1],
                                                      calls=PFLMM.LMC["calls"] - lm0_[2]),   # R57_PFLM: expert reads / reuses / calls
+                pfd=None if pd0_ is None else {k_: PFLMM.PFD[k_] - pd0_[k_] for k_ in PFLMM.PFD},   # R57_PFD: rows A / B / C, SSD bytes, check
                 rlx=rst if RLX_D > 0 else None,      # R57_RELAX_DELTA: rows checked, kept exact / in all, relaxed accepts
                 spn=sst if SPAN else None,           # R57_RELAX_SPAN: rows checked, kept exact / in all, relaxed, span rows
                 inert=dict(ist, arm=INERT["name"]) if INERT is not None else None,   # R57_INERT: rows checked, kept exact / in
@@ -1681,7 +1690,7 @@ for n_p, (s, key) in enumerate(PICK):
         RUNS.append(dict(key=key, arm=arm, type=typ, bad=r["bad"], cut=r["cut"], P=len(ids),
                          **{k_: r[k_] for k_ in ("drafter", "hist", "a6", "n", "tps", "tpsw", "kept", "checks", "cyc", "ck",
                                                  "drf", "miss", "io", "mb", "mpk", "mem", "copy", "fast", "pf", "lh", "inert")},
-                         d7b=draft is DRAFT4, rlx=r.get("rlx"), spn=r.get("spn"), nwk=r.get("nwk"), pfs=r.get("pfs"), pfst=r.get("pfst"), pflm=r.get("pflm")))   # Thu 18:5x / Fri 10:0x: relaxed / span / INERT
+                         d7b=draft is DRAFT4, rlx=r.get("rlx"), spn=r.get("spn"), nwk=r.get("nwk"), pfs=r.get("pfs"), pfst=r.get("pfst"), pflm=r.get("pflm"), pfd=r.get("pfd")))   # Thu 18:5x / Fri 10:0x: relaxed / span / INERT
                                                          # stats were computed but never written (the pre-flight's MISSING)
         m = min(len(want), r["n"])
         agree = same(r["out"], want)

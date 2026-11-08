@@ -3891,3 +3891,25 @@ loses chat hits.
 - **D1 closed.** The draft step stays bf16 in both configs.
 - The CHAT150 picture is unchanged. Chat acceptance is the wall: BigMoE CHS5 08:13 puts 150 tok/s at ~6 kept per check
   at a 40 ms cycle, against 2.4-2.5 today.
+
+### PAPER SPEED: whole request and first token for the live drafter A/Bs (Sun 11-08 16:5x; CPU on the existing rows, no new runs; sticky/paper_speed.py -> data/paper_speed.txt)
+- Why: the papers' rule 2 asks for whole decode, whole request and first token with the lifetime peak.
+- Definitions:
+  - whole decode = tokens / decode seconds, the rows' own tok_s;
+  - whole request = tokens / (decode + prefill seconds);
+  - first token = the median prefill seconds.
+- Each selection reproduces its read-out's decode numbers: D-20b 15.95 / 20.30, D-23 29.43 / 28.65, D-23d chat 23.11 /
+  28.78.
+
+| A/B | arm | whole decode | whole request | first token (median) | lifetime peak |
+|---|---|---|---|---|---|
+| D-23d chat (19) | block drafter | 23.11 | 18.56 | 1.91 s | 37.9 GB (logs/d23d.out) |
+| D-23d chat (19) | MTP K15 + cut | 28.78 (+24.5 %) | 21.95 (+18.3 %) | 1.88 s | same run |
+| D-20b chat (6) | block drafter / MTP K7 | 11.38 / 15.07 | 9.18 / 11.61 (+26.5 %) | 3.87 / 3.93 s | not logged |
+| D-20b whole set (17) | block drafter / switch | 15.95 / 20.30 | 7.11 / 6.42 | 3.94 / 3.94 s | not logged |
+| D-23 whole set (18) | block drafter / switch | 29.43 / 28.65 | 7.09 / 7.04 | 3.80 / 3.82 s | 42.4 GB |
+
+- On whole sets the agent prompts' first tokens (median 62-89 s, prefill of long agent contexts at the time) dominate the
+  whole-request time, so whole request barely sees the drafter there. D-20b's switch reads lower on whole request
+  (6.42 vs 7.11) only because its agent rows' prefills ran longer; the prefill doesn't use the drafter.
+- On chat (short prompts) the drafter's decode gain carries to whole request at about three quarters of its size.

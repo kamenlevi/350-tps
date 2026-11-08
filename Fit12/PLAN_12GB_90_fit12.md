@@ -583,3 +583,46 @@ fixed-cost bet. This is a measurement only: no setting changes.
     - Any mismatch -> history-dependent: EvalSuite runs 2 orders, and I find the pool-dependent call.
   - chw16p: chw16's pre-registered profile ('T2 FIXED COST SPLIT'), same tag, folder, env and live shas (fit_t3 42266985905b,
     t3_twopass 75b89b71b40b).
+
+## T2 SMOKE + HISTORY TEST RESULT (chw18; recorded Sun 08 Nov 16:44)
+- Run: share lock 16:36:27-16:42:09, GPU 0 % at start, 49 GB free, swap flat (5558 MB), no other lock in locks.txt, rc 0 x3.
+- Data: /Users/kamen/Fit12/data/scr/chw18 (chw18_eq.txt, chw18_hist.txt). Checked again per prompt by a separate script.
+- SMOKE: PASS.
+  - The frozen harness (snap/chw1108, fit_t3 7a9ffd8375ed) gives stage 2's tokens + lsha on ifeval/1220 and ifeval/3280,
+    which ran in the same positions.
+  - ifbench/10 loads and decodes: 76 tokens (EOS before the cap), prefill 63 tokens, lifetime 10.906 GB.
+- HISTORY: PASS, 13 / 13 prompts bit-identical (token list, sha, kept-row logits hash) in another order.
+  - The 12 IFEval prompts ran reversed vs chw14c2's forward order. ifbench/10 ran 1st in chw18r vs 3rd in chw18s.
+  - The cache contents really differed: each prompt's decode SSD bytes moved by -1.1 % to +12.5 % between the orders
+    (ifeval/2239 +12.5 %, ifbench/10 +2.0 %). The kept rows' logits matched anyway.
+  - For EvalSuite's IFBench arm: one order is enough.
+  - Scope: 13 prompts and 128-token prefixes. Beyond 128 tokens, the mechanism covers it: P2' makes no pool-dependent call
+    (ex reads and waits for all top-10 ranks; the 1-row cap call runs with ALLWAIT).
+- Speed (rough, share lock): chw18r 13.63 tok/s geo vs chw14c2 13.89 (x0.981).
+
+## T2 FIXED COST SPLIT RESULT (chw16p, run inside chw18 16:39:13-16:42:09; recorded Sun 08 Nov 16:44)
+- Run: rc 0; tokens + lsha = chw14c2 12 / 12. Data: /Users/kamen/Fit12/data/scr/chw16 (chw16_prof.txt, chw16_eq.txt).
+- 629 exact calls in 513 checks. Fits: ms = a[w] + b * GB.
+
+| per exact call | 1 row | 2 rows | 3 rows | 4 rows | per GB |
+|---|---|---|---|---|---|
+| nl (loader idle in t0..t2) | 31.6 | 31.0 | 36.1 | 40.4 | 2.4 |
+| cpu_f (main thread CPU in forward()) | 25.3 | 21.8 | 20.2 | 20.9 | 1.9 |
+| nl - cpu_f (>= GPU side + handoffs) | 6.3 | 9.2 | 15.9 | 19.5 | 0.5 |
+| cpu_f / nl | 0.80 | 0.70 | 0.56 | 0.52 | |
+
+- Calls per width: 3 (1 row), 342 (2 rows), 7 (3 rows), 277 (4 rows). cpu_e (main thread CPU in mx.eval) is 0.3 ms.
+- Whole call: 42.4 / 43.9 / 52.5 / 59.4 + 83.7 ms per GB. This repeats chw15's 43.3 / 43.6 / 53.2 / 58.8 + 82.7.
+- Verdict: BETWEEN (pre-registered: >= 0.8 means Python, <= 0.5 means GPU side). Both levers are real; both are reported.
+- Reading:
+  - The main thread spends 21-25 ms of CPU per call in forward() (48 layers, ~0.45 ms per layer), and that doesn't grow with
+    width.
+  - The loader-idle time grows with width. At least 6-20 ms of it is GPU side + handoffs (more rows: more GPU work per layer).
+- Price [P], upper bounds on chat:
+  - Python: 23.2 ms per call x 1.226 calls per check = 28.4 ms of a 168.6 ms check.
+    - Only the part not hidden behind reads / GPU counts. Removing all of it: <= x1.20; halving it: <= x1.09.
+  - GPU side: >= 13.8 ms per call (call-weighted) = 16.9 ms per check. Removing all of it: <= x1.11.
+- Next:
+  - A causal CPU-pad screen [P -> K]: a known busy-wait at the start of each layer's graph build. The call grows by the pad
+    if the main thread is on the critical path, and by ~0 if it is hidden.
+  - Send the GPU-side table to Leap / Breakthrough.

@@ -35,3 +35,4 @@
 - Status: measured, rough (share lock, texts differ between arms); not adopted.
 - Next: EvalSuite's gate when NewIdeas queues it. Bigger 12 GB chat levers remain kept per check (a chat drafter: MTP
   Head's F2a) and the 42-59 ms fixed cost per exact call.
+- Update 2026-11-08 16:44: the gate is placed as a 12 GB IFBench arm (EvalSuite, Mon >= 15:00, scored vs the 45 GB card reference). The frozen gate harness passed its smoke test, and the loop is history-independent on 13 prompts (bit-identical tokens + logits hash in another order): one order is enough.

@@ -191,7 +191,7 @@ PRE-REGISTERED: KILL if the pooled modeled speedup (sum of sequential times / su
 answers) < 1.25 under LOOSE (the most generous). PASS-to-quality-test if >= 1.5 under STRICT. Else BETWEEN. A PASS
 only buys a quality test (IFBench on the PAR mode); the engine change (multi-stream checks) is days.
 
-## NATIVE-CK. A native (Swift / Metal) executor for the chat check's dispatch chain (status: PRE-REGISTERED Sun 8 Nov 15:44)
+## NATIVE-CK. A native (Swift / Metal) executor for the chat check's dispatch chain (status: BETWEEN Sun 8 Nov 16:37; pre-registered 15:44)
 The assumption it breaks: that the check's host side must be MLX's (Python graph build + MLX eval / encode per op).
 Facts: CHS5's chat check is ~25.5 ms fixed + 1.96 ms per row (DEAD ROWS-FREE) and CPU-bound (Leap: bld ~31.5 of ~33 ms).
 Leap's S3-PYFLOOR split (Sat): Python build ~15-16 ms + Metal encode in async_eval ~18-19 ms per cycle for ~2,000
@@ -218,3 +218,19 @@ mlx-native Rust crate batches a whole forward into one command buffer + one comp
 wall vs a per-op-encoder pattern, its own benchmark, not MLX); llama.cpp's Metal backend splits the graph into n_cb
 command buffers encoded in parallel (dispatch_apply), enqueued in order. Principle known; nobody here has priced it
 against the CPU-bound check. Sources: github.com/ml-explore/mlx/issues/3313, docs.rs/mlx-native, ggml-metal sources.
+RESULT (16:37, share lock, taskpolicy -b, no quiet lock held; scripts/native_ck/, data/native_ck.txt) [K]:
+  M-B native: encode 0.624 / 0.633 us per dispatch (thread CPU, two runs); GPU 0.878 / 0.961 us per dependent
+  dispatch (1.8-1.9 ms per 2,000-dispatch chain).
+  M-A MLX: host CPU 6.70 us per op on the stock chain (build 0.75 + eval 5.95), 7.49 on the custom-kernel chain (build
+  2.07 + eval 5.42).
+  By the letter: native / MLX = 0.09 (kill line 1/3: no); projected saving 2,000 x (M-A - M-B) = 12.1 / 13.7 ms per
+  check (kill < 10: no; pass >= 20: no) -> BETWEEN. GPU per dependent dispatch 0.9 us (<= 3: yes).
+  Information (post hoc, not a line): M-A did NOT land near the engine's ~14.5-17 us per op (Leap: ~29 ms of main CPU
+  per ~2,000-dispatch chat check). So about half of the engine's host time per op is the engine's own work beyond
+  MLX's bare per-op cost. That half (~2,000 x (14.5 - 7) ~= 15 ms per check) is reachable inside MLX (trim the
+  engine's per-op host work), and a native executor would add the other ~12-14 ms. Neither pays more than the check's
+  GPU side allows; that number (GPU busy per check) is still the unknown, as Leap's ENC2 note says.
+  Caveat (16:41): the run (16:37:01-16:37:04) overlapped Fit12's chw18 (share, MEM 12 GB, started 16:36:27; its smoke /
+  history parts compare tokens, not timing, so chw18 is unaffected). My gate checked only quiet locks. M-B's GPU
+  0.9 us per dispatch may be slightly inflated by chw18's GPU work; it is under the 3 us line either way. The CPU
+  encode numbers do not depend on GPU load. Next runner: also wait for share locks with MEM > 5 GB.

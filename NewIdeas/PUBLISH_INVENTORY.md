@@ -94,24 +94,40 @@ prompt orders.
 | 45 GB | L + M1-B (QOM on the MTP head's chat drafts, bonus gated) | 49.0 [K, one pass, mean of 2]; chs4 again 49.3 / 50.5 | 42.4 GB | BigMoE CHS2 87156ea + CHS4, re-derived | IFEval same scores PASS both orders vs NAX6-N (-1.00 / -4.00 pt; EvalSuite RESULT_chat_m1b 70b5cf8). Multilingual: gate HELD for Kamen (MGSM is typed math, so QOM never runs on it; the options are English-only with a language switch, or MGSM as chat). The multi blunder line, 334 per 10K, is information |
 | 45 GB | L + M1-B + R57_SB1 (1-row checks overlap their reads; schedule only) | 52.0 [K, one pass; +4.2 % vs M1-B's mean] | 42.3 GB | BigMoE CHS4 ybs1, re-derived (1-row checks 35.4 vs 48.0 / 45.3 ms) | SB1 is BIT-EXACT: E vs E + SB1 logits hashes identical on 676 / 676 checks (CHS5). CHS5 repeat on identical tokens: 51.89 vs 49.67 / 49.94 (+4.2 %), so it shares M1-B's gate. NOT adopted (BigMoE / Kamen) |
 | 45 GB | L + M1-B + COH + SB1 + FAST bundle / HC8_G + rank cut 8 + R1 (best measured stack) | 56.05 [K, one pass] | 42.4 GB | BigMoE CHS5 zsgcr, re-derived | LOSSY, UNGATED (FAST kernels + the R1 rule): needs its own IFEval + MGSM gate (Kamen's rule); HELD behind M1-B's MGSM gate (it carries M1-B's QOM) |
-| ~32 GB | - | not measured | - | - | - |
+| ~32 GB | EXACT (E at C 160) | 33.8 [K, one pass; 12 / 12 == NAX6-N AR] | 30.6 GB | BigMoE c32 (Sun 16:2x, data/chs/c32_report.txt), re-derived from runs.json | exact |
+| ~32 GB | L + M1-B + COH + SB1 (zs at C 160) | 51.3 [K, one pass] | 31.2 GB | BigMoE c32, re-derived | LOSSY, UNGATED at 32 GB: QOM skips cold ranks, and C 160 has more cold experts than the gated C 256 |
 | 24 GB | - | not measured (Breakthrough priced bytes only: EXACT 210 / 183 MB per kept token) | - | Breakthrough 2bb8413 | - |
 | 12 GB | VERIFIED GREEDY (ex, B12 + MTP) | 12.88 geo mean (pooled 12.76) [K, alone, quiet] | 10.96 GB | Fit12 chat12 (Sun 05:07-05:12), re-derived from chat12.txt | verified greedy |
 
-- STRATA HEAD-TO-HEAD, PARTIAL (the orchestrator's run, Sun 14:54-15:39, ~/StrataEval/h2h/results/REPORT.md; arms
-  C / D, Strata's exact mode, still running at 15:41; re-derived by NewIdeas from the request rows) [K]:
+- STRATA HEAD-TO-HEAD, DONE (the orchestrator's runs: 8 / 8 arms Sun 14:54-16:07 at the default arena, B and D again
+  16:12-16:25 at a 33 GB arena; ~/StrataEval/h2h/results{,_arena33}/REPORT.md; every number re-derived by NewIdeas
+  from the request rows) [K]:
   - Strata 0.1.58-metal on the same 12 IFEval prompts, greedy, cap 256, experts streamed from the SSD. It runs
-    ISTA-DASLab IQ3_XXS (~3 bits), not the 4-bit weights, so its tokens differ from NAX6-N's (1 of 12 rows equal).
-  - Pooled decode, IFEval: default 28.0 tok/s (A1; A2 25.6), default + its MTP 37.4 (B1; B2 done 15:39, not yet
-    read). TTFT median 0.86 / 0.97 s (A1 / B1).
-    Peak footprint 34.9 / 33.6 GB.
-  - Ours on the same prompts (rows above): 45 GB exact 39.9, M1-B 49.0-50.5, best measured stack 56.05, at ~42.4 GB.
-    The equal-memory row (our ~32 GB chat) is not measured yet (proposed to the orchestrator 15:36).
+    ISTA-DASLab IQ3_XXS (~3 bits), not the 4-bit weights, so its tokens differ from NAX6-N's (1-2 of 12 rows equal).
+    Its 'exact' arms (C, D: STRATA_HC_Q8=0) are exact only to its own 3-bit weights.
+  - EQUAL MEMORY, by peak footprint (pooled IFEval decode, tok/s):
+
+| peak footprint | ours (config) | Strata (arm) | ratio |
+|---|---|---|---|
+| ~41-42 GB | lossy 51.9 (zs) / 53.8 (zsgcb), 42.4 GB; exact 39.9 (N45 EB) | lossy 41.8 (B, 33 GB arena, 40.8 GB); exact 40.6 (D, 41.2 GB) | lossy x1.24-1.29; exact 0.98x |
+| ~31-35 GB | lossy 51.3 (zs at C 160, 31.2 GB, UNGATED at 32 GB); exact 33.8 (E at C 160, 30.6 GB, 12 / 12 == AR) | lossy 37.4 / 37.1 (B1 / B2, default arena, 33.5-33.6 GB); exact 36.1 / 35.6 (D1 / D2, 33.5-34.0 GB) | lossy x1.37; exact 0.94x |
+
+  - Strata without its MTP head: 28.0 / 25.6 (A1 / A2), exact 25.5 / 25.3 (C1 / C2) at the default arena.
+  - TTFT is where Strata wins: median 0.83-1.06 s vs ours 2.9-3.1 s on the same prompts. End to end (TTFT included)
+    ours is 24.8 at 45 GB (zs) vs Strata's 29.7 (B, 33 GB arena). CT1 below is the reason and PF-D the fix.
 - CHAT TTFT (time to the first token; the whole-decode chat column leaves it out), 12 IFEval prompts of 37-101
   tokens [K]:
   - 45 GB: 3.05 s mean (2.51-3.65), the same in exact and lossy configs (BigMoE CHS5 zs / yeh / zsgcr runs.json).
   - 12 GB: 2.73 s mean prefill (2.07-3.25), reading 15-26 GB from the SSD per prompt (Fit12 chat12).
-  - So 45 GB's TTFT is 1.12x 12 GB's: its pools don't help the chat prefill yet (QUEUE CT1).
+  - So 45 GB's TTFT is 1.12x 12 GB's: its pools don't help the chat prefill yet.
+  - CT1 MEASURED (BigMoE PFB 16:26-16:35, zs + R57_PFSTAT=1, acf8ac3; judged by NewIdeas' pre-registered script
+    scripts/chat/ct1_judge.py, BigMoE's numbers identical): the 45 GB chat prefill reads 244.9 GB over the 12 prompts,
+    100.9 % of the 12 GB line's 242.7 GB (20.4 GB per prompt = routed expert-layers x 2.79 MB: every routed record is
+    re-read). 65.5 % of the routed base expert-layers (25.1 % of the sides) were already resident. Mean base
+    residency at start 45.7 % (37-51 %). Verdict BETWEEN (pass line 50 %).
+  - PF-D for chat (serve resident experts in the prefill, exact) prices TTFT 3.1 -> ~1.6 s [P] (TTFT = 0.32 s + SSD
+    GB / 7.33, fitted by BigMoE; bytes x (1 - 0.75 x 0.655 - 0.25 x 0.251) = x0.45). End to end at 45 GB 24.8 ->
+    ~33 tok/s [P]. Strata's ~0.9 s needs ~4 GB per prompt.
   - At ~52 tok/s and ~145-token answers, TTFT is about half of each chat answer's wall time.
 - 12 GB PREFILL [K] (same run, s_moe 4096, today's): 1.6K 190.6 tok/s (TTFT 8.5 s), 4.7K 377.7 (13.0 s), 7.9K 461.3
   (17.5 s). Each prompt streams ~63-67 GB from the SSD. s_moe 8192 (one MoE call per prompt) is x0.99-1.01: no gain.

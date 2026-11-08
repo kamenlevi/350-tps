@@ -231,3 +231,20 @@ Checked on the gate keys; the result is the same in scripts/r57_screen.py and th
 - **PFB's waiter has a new pid, 79192** (BigMoE 15:28; 71508 is gone). BigMoE re-armed it with the same Strata release
   as this amendment. The re-arm uses `CARD_AFTER_PIDS=79192`.
 - **Unchanged:** keys, row counts, settings and the verdict rules.
+
+## Amendment 5 (Sun 16:5x; the orchestrator 16:4x): a hold for Strata at the 24 and 12 GB lines; scheduling only
+
+- **Why:** Kamen wants the low-RAM results published, and they need Strata measured at the 24 and 12 GB lines. Its
+  quiet-lock waiter queued at 16:48 (about 35-50 min of runs).
+- **Ask:** after the current chunk, start no chunk until ~/StrataEval/h2h/results_low12/DRIVER_DONE exists, or for 75
+  minutes, whichever comes first.
+- **What happened:**
+  - The chunk started 16:43:08 at C 192. It stopped at its next row for Strata's queued ticket: rc 75 at 16:50:25,
+    190/381 rows.
+  - The runner then waited for a share lock. I stopped it by pid at 16:51: the runner (80531), its chunk subshell
+    (35419), and the decode client that was waiting for the next chunk's share lock (35420). Then peer unlock.
+  - Lesson: killing the main loop orphans the per-chunk subshell and the waiting client. Both need their own kill.
+- **Restart:** at results_low12/DRIVER_DONE or 18:05, whichever comes first, either directly or through
+  tools/card_hold.sh. That script stops a running runner after its chunk, holds for a file or a time, then re-arms the
+  same reference command.
+- **Unchanged:** keys, row counts, settings and the verdict rules.

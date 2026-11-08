@@ -9649,8 +9649,41 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
     (2560->512), shared gate / up (2560->640), shared down (640->2560) and shared-expert gate shapes. Plain bf16
     matmul is NOT (K 2560: 210-538 rows differ). The model quantizes the router (8-bit) and shared expert (4-bit), and
     ref2's DENSE-N-RAM unpacks to MLX's quantized_matmul above 16 rows, so the batching should keep the logits hash.
+    **CORRECTION (Sun 16:5x):** the quantized arms skipped N < 32, so the shared-expert gate (q4, N 1) was only tested in bf16.
+    It is NOT invariant: MLX runs it through qmm_splitk with an M-dependent split (PrefillKernels FINDINGS N3, 10-18). PF-B's
+    logits-hash break came from it: see "PF-B EXACTNESS" below.
 - **GPU-UTIL (Sun 08:5x, read-only, ioreg "Device Utilization %", 40 x 0.5 s; data/gpu_util_m1b.txt): during EvalSuite's
   M1-B + COH chat gate decode the GPU is busy 81 % (median 81, p10 74, p90 86), the one-call's spin on expert loads
   included.** At a ~40 ms cycle that leaves ~8 ms of GPU idle per cycle: the ceiling for every CPU-side lever (ENC2,
   compiled glue, fewer ops) is ~-20 % cycle even at zero CPU cost; GPU levers face an 81 %-busy GPU. 150 tok/s (x2.7
   over 56) cannot come from the check side; it needs more kept tokens per check (BigMoE's read too).
+
+- **PF-B EXACTNESS: the break is shared_expert_gate (N 1, MLX split-K), a REDISCOVERY of PrefillKernels N3; the fix is
+  that gate per chunk (Sun 16:4x-16:5x, share lock; scripts/pfb_moe_inv.py, pfb_seg.py; data/pfb_moe_inv.txt,
+  pfb_seg.txt, pfb_bigmoe_report.txt).**
+  - Trigger: BigMoE's PFB A/B (d44ec7a). PF-B runs x1.15-1.22 over PF-A (pb38: 218 / 438 / 499 tok/s on 1.6K / 4.7K /
+    7.9K, peak 46.2 GB vs 45.1). But the decode logits hash vs PF-A is 0/7, 0/24, 0/22 in every arm, pb3n included, and
+    on edit10 too (one 1,565-row MoE call vs 1,024 + 541: below the 2,048-row DQ-GEMM lane and below BUG1).
+  - Test [K]: the engine's whole prefill MoE block, i.e. mlx_lm 0.31.3 Qwen3NextSparseMoeBlock.__call__ (qwen4_exp's
+    SparseMoeBlock calls it at prefill when the switch is unfused), plus qwen4_exp._hyper_residual_write (hc 4).
+    - Real shapes and quantization: router q8 g64 N 512, SwitchGLU q4 g64, shared expert q4 g64, shared_expert_gate
+      q4 g64 N 1. Synthetic weights; skewed routing (up to 6,216 rows on one expert).
+    - PF-A's shape: 1,024-token chunk calls with the stock SwitchGLU. PF-B's shape: pflm._split_layers' grouping
+      verbatim, switch_glu_padded, Y sliced per chunk.
+  - Result: only shared_expert_gate differs: 304 / 1,565 rows (edit10's shape), 2,326 / 4,730 and 4,451 / 7,932 at TOK
+    4,096. The difference reaches shared_y / out / write on 64 / 449 / 850 rows. Everything else is ==: router,
+    softmax, argpartition, take, norm, padded SwitchGLU, weighted sum, shared expert, residual write. TOK 1,024 (one
+    chunk per group) is ALL ==.
+  - Fix [K]: shared_expert_gate per PF-A chunk inside the group, everything else batched: ALL == at all six shapes
+    (1.6K / 4.7K / 7.9K x TOK 4,096 / 8,192). Probe: one call vs 1,024-row calls differ from M 1,100 up (at M 2,048,
+    rows 0..2,047 differ). The N 640 control is ==.
+  - Mechanism (PrefillKernels FINDINGS N3, 2026-10-18, real layer-0 weights: 4,748 of 8,192 rows differ): MLX 0.32.2
+    runs narrow-N quantized matmuls through qmm_splitk with split_k = 512 / ceil(M / 32), so their bits depend on M.
+    N >= 512 gets split 1 -> qmm_t_nax, which is per-row invariant. PrefillKernels' PK2 split (experts per group, the
+    rest of the block per chunk) was already bit-identical.
+  - CORRECTION: my 08:5x dense-invariance PASS skipped quantized N < 32, and my "bitwise" PF-B advice to BigMoE
+    covered the switch alone. This is a REDISCOVERY, not new: the owners' grep found N3 before any broadcast.
+  - Peak [P]: PF-B's +0.9-1.1 GB is the group's transient MoE activations (sorted xs, h, y, y x scores: ~1.6 GB at
+    8,192 tokens vs ~0.2 GB at 1,024).
+  - Next (BigMoE builds): pb38 + the gate per chunk vs pa1 (expect logits hash == everywhere), and a TOK 2,048 arm
+    for the 45.0 line.
