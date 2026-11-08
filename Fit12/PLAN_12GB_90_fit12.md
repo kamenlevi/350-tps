@@ -436,3 +436,47 @@ small tests under share locks. T1 = chat12 (12.88 tok/s, 556 MB per kept token) 
   259.4 / 272.7 tok/s, TTFT 8.68 / 18.74 / 29.41 s, SSD 63.3 / 122.3 / 180.5 GB. The shipped one-chunk grid is x1.44
   (4.7K) and x1.68 (7.9K) with the same bits; each extra store pass costs ~5.6-5.9 s (~56 GB).
 - Findings note 2026-11-08_0515 updated (header VALID, UPDATE 09:5x block). Leap's 08:42 note agreed: tier.py's BUG1 pad covers it.
+
+## T2 CHAT WIDTH stage 1b RESULT (chw13.sh, share lock 10:00:27-10:08:10, GPU 0 % at start, no other session's lock during it, swap flat, rc 0 x3, PR1 installed in all three; data /Users/kamen/Fit12/data/scr/chw13)
+| arm (ex + PR1 + tail rule, 12 IFEval, CAP 128) | whole decode geo (pooled) | MB per kept token | kept / check | first-call widths | tokens / lsha = A' |
+|---|---|---|---|---|---|
+| A' W1 4 (reference) | 12.68 (12.56) | 564 | 2.348 | 4: 487, 3: 6, 2: 2, 1: 3 (cap-end tails) | - |
+| P' cf0 < 0.9 -> 2 rows, else 3 | 14.05 (14.07): x1.108 (x1.120) | 475 (x0.843) | 2.326 | 2: 339, 3: 171, 1: 3 | 5 / 12, 1 / 12 |
+| Q' random 2-4 | 13.13 (13.15): x1.035 (x1.047) | 520 (x0.922) | 2.410 | 2: 185, 3: 170, 4: 130, 1: 2 | 3 / 12, 0 / 12 |
+- EXACT FORM: KILL (pre-registered line: any mismatch). Even with PR1 (264 / 217 keep-1 replays on 2 rows), widths >= 2
+  and the tail rule, the committed state depends on the call widths on this T3 path. Example: ifeval/1220 diverges at
+  token 3, after two checks with the same kept counts (2, 1) done as 2-row vs 4-row calls. WV1-WV3 (24 Oct) covered the MTP
+  path (B12LL) at widths 2-4 from one state; the T3 path's commits evidently are not covered. Not chased further (low pace).
+- SPEED [K, rough: share lock, idle GPU, texts differ on 7 / 12 prompts]: x1.108 geo / x1.120 pooled for P' (priced
+  x1.19). PR1 itself costs ~0 (A' 12.68 vs stage 1's A 12.54 without it).
+- What the lever is now: a rounding-level change of the verified-greedy loop. Every committed token is still the full
+  model's own verify argmax, as in today's loop, whose tokens already depend on the drafts' acceptance pattern (exd, WV3).
+  Adopting it = EvalSuite same-scores (FAST-track rule) on IFEval + code, after a code check (a 3-row first call on
+  high-cf code checks may add a call on full accepts).
+
+## T2 CHAT WIDTH stage 2 (pre-registered Sun 08 Nov 10:11, before any run): the 2-or-4 rule on chat + a code check (rough, share lock)
+- Why: the exact form is killed, so the lever is a rounding-level change that EvalSuite must judge. Before asking for that
+  gate: (1) does the code-safe rule P2' = "cf0 < 0.9 -> 2 rows, else 4" (x1.174 [P]) keep most of P''s chat gain, and (2) is
+  code speed unhurt? P''s 3-row first call on high-cf code checks can add a call on full accepts; P2' keeps 4 rows there.
+- Runner /Users/kamen/Fit12/scripts/chw14.sh (share lock, idle GPU, ~11 min; after chw13's DONE). All arms ex + PR1 + tail
+  rule, one process each: c2 = P2' on chat12's 12 IFEval, CAP 128; ha = W1 4 on 16 HumanEval (c1u16's keys), CAP 256;
+  h2 = P2' on the same 16 HumanEval.
+- Lines:
+  - Chat: c2 vs stage 1b's A' (12.68 tok/s geo, same day) >= +8 % -> P2' is the candidate. Otherwise report it; P' stays
+    the faster rule pending its own code check.
+  - Code: h2 vs ha whole decode geo >= -2 % -> code not hurt.
+  - Both lines pass -> hand P2' to EvalSuite: IFEval + HumanEval same-scores at 12 GB, both orders, its protocol.
+  - Tokens: information.
+
+## T2 CHAT WIDTH stage 2 RESULT (chw14.sh, share lock 10:18:01-10:30:16, GPU 0 % at start, no other session's lock during it, swap flat, rc 0 x3; data /Users/kamen/Fit12/data/scr/chw14, chw14_chat.txt / chw14_code.txt)
+| arm (ex + PR1 + tail rule) | prompts | whole decode geo (pooled) | MB per kept token | kept / check | tokens / lsha = ref |
+|---|---|---|---|---|---|
+| A' W1 4 (stage 1b, 10:00) | 12 IFEval, CAP 128 | 12.68 (12.56) | 564 | 2.348 | ref |
+| P2' cf0 < 0.9 -> 2 rows, else 4 | 12 IFEval, CAP 128 | 13.89 (13.97): x1.096 (x1.112) | 491 (x0.870) | 2.326 | 5 / 12, 1 / 12 |
+| ha W1 4 | 16 HumanEval, CAP 256 | 18.68 (18.69) | 441 | 10.095 | ref |
+| h2 P2' | 16 HumanEval, CAP 256 | 18.50 (18.47): x0.990 (x0.988) | 439 (x0.995) | 10.376 | 12 / 16, 6 / 16 |
+- Chat line (>= +8 %): PASS, +9.6 % geo / +11.2 % pooled. P' (2 or 3 rows) was +10.8 / +12.0 %; P2' keeps 4 rows on high cf.
+- Code line (>= -2 %): PASS, -1.0 % geo (51 of 333 code checks took the 2-row first call; texts differ on 4 / 16).
+- ha = 18.68 tok/s matches 12E's 18.58 (HumanEval, no PR1): PR1 + the tail rule cost nothing on code either.
+- Verdict: both lines pass. P2' goes to EvalSuite as a FAST-track candidate (IFEval + HumanEval same-scores at 12 GB, its
+  protocol); NewIdeas places it. It stays a rounding-level change of the verified-greedy loop (not bit-exact, like today's ex).

@@ -4,12 +4,12 @@ CAP 128, one process per arm: A' = W1 4 (the reference), P' = cf:0.9:2:1.01:3 (t
 Per arm: tokens + kept-row logits hash (lsha) = A' per prompt; whole decode (n / decode wall, geometric mean + pooled); SSD
 MB per kept token (the decode phases' own reads); kept per check; first-call widths; PR1's keep-1 replays; the lifetime
 peak. A' vs chat12 (no PR1): tokens, information.
-Usage: python -I -B chw13_read.py [DIR] [TAG_A] [TAG_P] [TAG_Q] [REF_IDS]"""
+Usage: python -I -B chw13_read.py [DIR] [TAG_REF] [TAG ...] [REF_IDS.json]  (stage 2 reuses it: any number of tags)"""
 import glob, json, math, os, re, sys
 
 D = sys.argv[1] if len(sys.argv) > 1 else "/Users/kamen/Fit12/data/scr/chw13"
-TAGS = sys.argv[2:5] if len(sys.argv) > 4 else ["chw13a", "chw13p", "chw13q"]
-REF = sys.argv[5] if len(sys.argv) > 5 else "/Users/kamen/Fit12/data/scr/chat12/chat12_ids.json"
+TAGS = [a for a in sys.argv[2:] if not a.endswith(".json")] or ["chw13a", "chw13p", "chw13q"]   # the first = the reference
+REF = next((a for a in sys.argv[2:] if a.endswith(".json")), "/Users/kamen/Fit12/data/scr/chat12/chat12_ids.json")
 
 
 def read(tag):
