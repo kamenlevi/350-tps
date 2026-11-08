@@ -60,3 +60,37 @@ Written before any row of any chat candidate.
   (pf.qom_opt == 0). Otherwise the split is VOID.
 - **A PASS is a diagnosis, not a shippable config.** In the engine, ifeval and multi are both type 'chat'. "QOM on
   English chat only" needs a request-level switch (e.g. by language or script) and its own gate.
+
+## Amendment 2 (Sun 09:4x, before any MGSM row): Kamen's 11-08 rule — known benchmarks decide; MGSM replaces the multi line
+> (a quote from the project owner, kept private)
+  compare against known benchmarks of the model. Not something new".
+- **Line 2 (multi blunders) is information from now on**, for every candidate, m1b included. So are the long-code
+  blunder lines elsewhere. CERT, S4, C30 and STACK passed those lines, so their verdicts do not change.
+- **Amendment 1 (m1bi) is withdrawn:** it decided on the multi line. As information it would still split QOM from S5''s
+  levers, if NewIdeas queues it.
+- **The new line 2: MGSM same scores.**
+  - MGSM is the published multilingual grade-school math benchmark (Shi et al. 2022). EvalSuite holds 80 items:
+    10 languages (bn de es fr ja ru sw te th zh) x 8, max 1,024 tokens, data/items/dec_mgsm.jsonl.
+  - Scoring: decode_report's MGSM scorer (dec_math's final-answer check).
+  - Decision 4 vs NAX6-N per order: delta > -5 pt AND exact McNemar p >= 0.05, no stage 2. DIFFERS (HIGHER) passes.
+    Two orders (forward = the keys sorted, then reverse). PASS = both orders.
+- **The chat gate = IFEval same scores (unchanged) + MGSM same scores.** m1b's IFEval PASS stands; it needs only MGSM.
+- **NAX6-N's MGSM rows do not exist yet.** They come first, as ref2tnaxn.r5 (80 rows), on the same decode stage and
+  environment as CERT's references ref2tnaxn.r2 / .r3.
+  - Cost: NAX6-N ran mathx at 14.2 tok/s. REF's MGSM rows average 427 tokens, so ~45 min.
+  - REF's MGSM rows (results/ref, 91.2 % in RESULT_fastmode_b16) are information.
+- **The candidate's QOM must run on MGSM.** QOM is switched per eval set, and mgsm is in none of the env files so far.
+  - BigMoE writes the env: M1-B + COH (chat_env 97e81b8) with R57_QOM_SETS adding mgsm, i.e. QOM on every chat set.
+  - Engagement: every MGSM row must show QOM optional uses, else VOID.
+  - The other checks are runner 59's: code pin, manifests, memory and swap gates.
+  - Cost: 80 rows x 2 orders, ~45 min.
+- **Information:** MGSM per language, rows token-identical to NAX6-N, order agreement, cap hits, MGSM vs REF.
+- **Anchoring NAX6-N to the model card: not possible on MGSM.**
+  - The 125B's card (models/bare/README-upstream-qwen.md) lists no natural-language multilingual benchmark. Its only
+    "multilingual" entry is SWE-bench Multilingual, i.e. programming languages.
+  - Its general benchmarks are IFBench 81.3, GPQA Diamond 91.7, HLE 35.9 and LiveCodeBench v6 91.9, in thinking mode
+    with sampling.
+  - EvalSuite holds GPQA Diamond's 198 items (data/items/gpqa.jsonl). An anchor there needs thinking-mode decoding.
+    That is a separate decision.
+- **The runner:** tools/day_runner60.sh (runner 59's checks; stage 1 the reference rows, stage 2 the candidate) ->
+  results/mgsm_<tag>_{fwd,rev}, results/MGSM_<tag>_DONE. It starts when NewIdeas queues it.

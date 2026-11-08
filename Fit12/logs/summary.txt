@@ -2007,3 +2007,6 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 05:12:41 SCR chat12 pf12b end (rc 0)
 05:12:41 SCR chat12 end (rc 0, 296 s, swap 4703 MB)
 09:19:34 SCR chw12 start: T2 chat width (ex, 12 IFEval, CAP 128; W1 4 then rand), share lock (46 GB free, swap 5245 MB, GPU 0%)
+09:21:45 SCR chw12 chw12a end (rc 0)
+09:24:11 SCR chw12 chw12r end (rc 0)
+09:24:11 SCR chw12 end (rc 0, 277 s, swap 5245 MB)

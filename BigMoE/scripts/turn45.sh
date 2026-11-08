@@ -24,7 +24,10 @@ busy45() { peer ls 2>/dev/null | grep -E "benchmarking: quiet lock|waiting for a
 why_blocked() { [ -e "$Q/PAUSE" ] && { echo "PAUSE"; return; }   # the first gate that holds, named (11-08: CHS4 hung 2 h silent)
   ioreg -r -k AppleClamshellState -d 1 | grep -q '"AppleClamshellState" = Yes' && { echo "lid closed"; return; }
   grep -q "Verdict: ACT" "$Q/HEALTH.md" 2>/dev/null && { echo "HEALTH ACT"; return; }
-  local p; p=$(pgrep -f "quiet/soft_end.sh" | head -1); [ -n "$p" ] && echo "soft_end pid $p: $(ps -o command= -p $p | cut -c1-100)"; }
+  local p; p=$(pgrep -f "quiet/soft_en[d][.]sh" | head -1); [ -n "$p" ] && echo "soft_end pid $p: $(ps -o command= -p $p | cut -c1-100)"; }
+# 11-08 09:2x ROOT CAUSE of CHS4's 2-h hang: the plain pattern "quiet/soft_end.sh" also matched ANOTHER turn45's pgrep process
+# (its argv holds the pattern). Two waiting turn45 loops that line up on the same second then block each other every minute,
+# forever (FU + PFB at 09:13-09:18: 'soft_end pid N' with an empty command, adjacent pids). The bracket form cannot match a pgrep.
 blocked() { [ -n "$(why_blocked)" ]; }
 lastg=; held=0                                          # hold GATE: log the gate when it changes, then every ~30 min
 hold() { if [ "$1" = "$lastg" ]; then held=$((held + 1)); else held=0; lastg=$1; fi

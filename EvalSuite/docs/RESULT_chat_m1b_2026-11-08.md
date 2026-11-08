@@ -1,6 +1,13 @@
-# RESULT: the CHAT150 chat gate on M1-B + COH (Sun 2026-11-08 09:1x) — FAIL on the multi line; IFEval same scores PASS
+# RESULT: the CHAT150 chat gate on M1-B + COH (Sun 2026-11-08 09:1x) — IFEval same scores PASS; the multilingual verdict waits for MGSM
 
 Pre-registered in docs/PREREG_chat_gate_2026-11-08.md (02:4x, before any row).
+
+> (a quote from the project owner, kept private)
+should compare against known benchmarks of the model. Not something new".
+- Quality gates are scored only on known benchmarks: lossy vs its exact reference on the same harness.
+- Our own blunder lines (multi and long code) are information only.
+- So the multi FAIL below is **information under Kamen's 11-08 rule**. The IFEval PASS stands.
+- The multilingual verdict comes from MGSM vs NAX6-N (PREREG amendment 2).
 
 **The config:** BigMoE's data/stack/chat_env.txt as rewritten at 07:48 (97e81b8), 35 keys.
 - M1-B = S5' + QOM on the chat sets (R57_QOM_SETS=humaneval,mbpp,ifeval,multi) + QOM gating on MTP drafts
@@ -23,10 +30,12 @@ Pre-registered in docs/PREREG_chat_gate_2026-11-08.md (02:4x, before any row).
 |---|---|---|
 | IFEval forward (n 100) | 86.0 vs 87.0 %, -1.00 pt, McNemar p 1.0 (4 / 5) | PASS |
 | IFEval reverse | 83.0 vs 87.0 %, -4.00 pt, p 0.388 (4 / 8) | PASS |
-| multi blunders (forward, 24 rows, tfwin vs NAX6-N) | 7,033 tokens, 235 blunders = 334 per 10K (bar <= 1), deviations 15.29 % | **FAIL** |
-| **Chat gate** | | **FAIL (multi)** |
+| multi blunders (forward, 24 rows, tfwin vs NAX6-N) | 7,033 tokens, 235 blunders = 334 per 10K (bar <= 1), deviations 15.29 % | FAIL: information under Kamen's 11-08 rule |
+| **Chat gate** | | **IFEval PASS; the multilingual line (MGSM, amendment 2) is pending** |
 
-## Is the multi FAIL real?
+Written 09:1x as "FAIL (multi)". Changed 09:4x under Kamen's ruling; the numbers are unchanged.
+
+## Is the multi FAIL real? (information)
 Checks (tools/tfwin_rows.py chat_m1b_multi chat_m1b_rev):
 - **Not a prompt or template mismatch.**
   - The multi items carry fixed prompt_ids, which the screen and tfwin both use.
@@ -67,10 +76,11 @@ Checks (tools/tfwin_rows.py chat_m1b_multi chat_m1b_rev):
   - BigMoE's quiet A/B: 49.8 (CHS5).
 
 ## What this means
-- **M1-B's chat is not releasable as is.** It gives the same IFEval scores, but its multilingual output commits a token
-  the exact model gives < 1 % on 1 in 30 tokens. That ranges from 1 in 15 (zh) to 1 in 86 (fr).
-- **m1bs** (chat2_env, BigMoE's CHS5 stack, DRY OK 08:15) carries M1-B's QOM plus more lossy parts. It meets the same
-  multi line.
+- **The verdict waits for MGSM.** M1-B gives the same IFEval scores. On multilingual prompts it commits a token the
+  exact model gives < 1 % on about 1 in 30 tokens (1 in 15 for zh, 1 in 86 for fr). That is information; MGSM vs
+  NAX6-N decides (amendment 2).
+- **m1bs** (chat2_env, BigMoE's CHS5 stack, DRY OK 08:15) carries M1-B's QOM plus more lossy parts. It needs the same
+  MGSM line.
 
 Runs: results/chat_m1b_{fwd,rev}, results/chat_m1b_multi (tfwin), results/chat_m1b_{fwd,rev}_d4.txt,
 results/chat_m1b_multi_report.txt, results/CHAT_m1b_DONE; log results/day59_m1b_runner.log.

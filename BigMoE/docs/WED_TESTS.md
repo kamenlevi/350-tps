@@ -1042,3 +1042,14 @@ one lever to the row above it.
   this bug. Safe: every 1024- and 2048-chunk call (<= 20,480 rows: pe1024, plm1, plm2, exact E) and 4096-token chunks (40,960 = 640 x 64).
   The big-chunk TTFTs are therefore not valid prefill numbers on those prompts. Exact fix: pad the sorted rows to a multiple of 64
   (Leap's ~/Leap/scripts/pfb_fix.py switch_glu_padded, bitwise == the 1024-token calls). PF-A's numbers stand.
+
+### Sun 8 Nov 09:13: EvalSuite's chat gate on M1-B + COH (their docs/RESULT_chat_m1b_2026-11-08.md, 70b5cf8): IFEval PASS, multi FAIL
+
+- IFEval vs NAX6-N: -1.00 forward (p 1.0), -4.00 reverse (p 0.39): PASS. Multi (24 rows): 334 blunders per 10K (bar 1), 15.3 % deviations,
+  worst zh 686 / ar 475 / ru 441 / bg 400 / ja 330 per 10K. M1-B is deterministic on one history but history-dependent (the two orders
+  agree on 9 / 100 IFEval and 0 / 24 multi rows).
+- So M1-B, CHS5's stack (chat2_env, which inherits QOM on multi) and the 56.0 tok/s figure hold for English chat only, pending the split
+  gate chat3_env.txt (m1bi, 2187975). That gate puts QOM on humaneval, mbpp and ifeval but not multi, so multi runs S5' + COH: the base
+  config's own multi baseline, never gated before. Either QOM causes the blunders, or S5''s lossy levers (HC8 / DN_KS / SMALL_NATIVE) do.
+- PFX correction addendum: the MLX sorted-gather bug is BigMoE LEDGER BUG1 (PrefillKernels' align_probe.py; fixed in MLX 0.32.4). The
+  tier's grouped prefill already pads to x64. Fast24 (F24) prefills in 1,024-token calls (<= 10,240 rows): safe.

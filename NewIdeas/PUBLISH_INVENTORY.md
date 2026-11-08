@@ -91,9 +91,9 @@ prompt orders.
 |---|---|---|---|---|---|
 | 45 GB | EXACT (E5 / N45 exact env) | 39.9 (36.4-39.9 across runs) [K] | ~43 GB | BigMoE N45 (Sat 23:5x), NewIdeas chat_rows.py | exact |
 | 45 GB | shipped lossy config (L) | 45.0 (42-45) [K] | ~43 GB | BigMoE N45 / CHS2 | CERT: lossy, same scores |
-| 45 GB | L + M1-B (QOM on the MTP head's chat drafts, bonus gated) | 49.0 [K, one pass, mean of 2]; chs4 again 49.3 / 50.5 | 42.4 GB | BigMoE CHS2 87156ea + CHS4, re-derived | IFEval + multi gate PENDING (EvalSuite runner 59; chat_env.txt = M1-B) |
+| 45 GB | L + M1-B (QOM on the MTP head's chat drafts, bonus gated) | 49.0 [K, one pass, mean of 2]; chs4 again 49.3 / 50.5 | 42.4 GB | BigMoE CHS2 87156ea + CHS4, re-derived | IFEval same scores PASS both orders vs NAX6-N (-1.00 / -4.00 pt; EvalSuite RESULT_chat_m1b 70b5cf8). Multilingual: MGSM gate PENDING (Kamen 09:3x: gates = known benchmarks; the multi blunder line, 334 per 10K, is information) |
 | 45 GB | L + M1-B + R57_SB1 (1-row checks overlap their reads; schedule only) | 52.0 [K, one pass; +4.2 % vs M1-B's mean] | 42.3 GB | BigMoE CHS4 ybs1, re-derived (1-row checks 35.4 vs 48.0 / 45.3 ms) | SB1 is BIT-EXACT: E vs E + SB1 logits hashes identical on 676 / 676 checks (CHS5). CHS5 repeat on identical tokens: 51.89 vs 49.67 / 49.94 (+4.2 %), so it shares M1-B's gate. NOT adopted (BigMoE / Kamen) |
-| 45 GB | L + M1-B + COH + SB1 + FAST bundle / HC8_G + rank cut 8 + R1 (best measured stack) | 56.05 [K, one pass] | 42.4 GB | BigMoE CHS5 zsgcr, re-derived | LOSSY, UNGATED (FAST kernels + the R1 rule): needs its own IFEval + multi gate |
+| 45 GB | L + M1-B + COH + SB1 + FAST bundle / HC8_G + rank cut 8 + R1 (best measured stack) | 56.05 [K, one pass] | 42.4 GB | BigMoE CHS5 zsgcr, re-derived | LOSSY, UNGATED (FAST kernels + the R1 rule): needs its own IFEval + MGSM gate (Kamen's rule); HELD behind M1-B's MGSM gate (it carries M1-B's QOM) |
 | ~32 GB | - | not measured | - | - | - |
 | 24 GB | - | not measured (Breakthrough priced bytes only: EXACT 210 / 183 MB per kept token) | - | Breakthrough 2bb8413 | - |
 | 12 GB | VERIFIED GREEDY (ex, B12 + MTP) | 12.88 geo mean (pooled 12.76) [K, alone, quiet] | 10.96 GB | Fit12 chat12 (Sun 05:07-05:12), re-derived from chat12.txt | verified greedy |
