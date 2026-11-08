@@ -252,10 +252,11 @@ have = {json.loads(l)["key"] for l in open(p)} if os.path.exists(p) else set()
 print(",".join(k for k in sys.argv[2].split(",") if k not in have))' "$1" "$2"
 }
 order() {       # run, label, keys (comma list): chunks of $CHUNK per process; any missed keys go into the next process
-  local run=$1 lab=$2 all=$3 i=0 m tag tries=0
+  local run=$1 lab=$2 all=$3 i=0 m tag tries=0 cap
+  cap=$(( $(echo "$all" | tr ',' '\n' | grep -c .) / CHUNK + 10 ))   # (was 30: CERT's 464 keys need 47; stopped Sun 02:22)
   while :; do
     m=$(missing "$run" "$all"); [ -z "$m" ] && break
-    i=$((i + 1)); tries=$((tries + 1)); [ "$tries" -le 30 ] || { say "$lab: 30 processes without all rows: runner stops"; exit 3; }
+    i=$((i + 1)); tries=$((tries + 1)); [ "$tries" -le "$cap" ] || { say "$lab: $cap processes without all rows: runner stops"; exit 3; }
     while [ -e "$AF/${TAGP}${lab}${i}_tokens.json" ] || [ -e "$AF/${TAGP}${lab}${i}_modules.json" ]; do i=$((i + 1)); done   # a restart
     tag="${TAGP}${lab}${i}"
     fast "$tag" "$(echo "$m" | tr ',' '\n' | head -"$CHUNK" | paste -sd, -)" "$lab process $i"
@@ -278,7 +279,7 @@ IFE
 count() { [ -f "$1" ] && wc -l < "$1" | tr -d ' ' || echo 0; }
 # ------------------------------------------------ start: cert_env.txt, then runners 53 / 54 out of the way
 if [ "$DRY" != 1 ]; then
-for r in cert_fwd cert_rev cert_ht cert_chat; do [ -e "results/$r" ] && { echo "results/$r exists: move it aside first"; exit 2; }; done
+[ "${CERT_RESUME:-0}" = 1 ] || for r in cert_fwd cert_rev cert_ht cert_chat; do [ -e "results/$r" ] && { echo "results/$r exists: move it aside first (or CERT_RESUME=1)"; exit 2; }; done
 echo $$ > results/q55.pid; trap 'rm -f results/q55.pid' EXIT
 rm -f results/CERT_DONE
 say "runner 55 (CERT) start (pid $$); waits for $FENV (written after Sat 12:00), then runners 53 / 54"
@@ -360,6 +361,7 @@ done
 # ------------------------------------------------ 1. the config on CERT's 364 rows, two orders
 say "CERT: $(echo "$KEYS" | tr ',' '\n' | grep -c .) keys per order; QOM sets $Q1"
 PHASE="CERT"; EXTRAENV=("R57_QOM_SETS=$Q1"); TAGP=es_ct_; IFECOPY=0; CHUNK=10
+[ -s "$AF/es_ct_fwd1_modules.json" ] && [ -s results/cert_fwd/decode.jsonl ] && { REFMAN="$AF/es_ct_fwd1_modules.json"; REFMAN1=$REFMAN; say "restart: reference manifest $REFMAN"; }
 order cert_fwd fwd "$KEYS"
 order cert_rev rev "$RKEYS"
 # ------------------------------------------------ 1b. the chat check: IFEval interleaved with code, 8 per process
