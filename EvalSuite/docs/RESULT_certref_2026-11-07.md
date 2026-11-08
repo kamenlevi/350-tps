@@ -12,3 +12,10 @@ runner yielded twice for S4.
 
 These are in line with NAX6's core sets (HumanEval+ 91.7 %, math 88.0 %). They are CERT's reference rows with
 ref2tnax (the core 60 + 50) and ref2tnaxn.r2 (MBPP 100).
+
+## PF-E: NAX6-N AR rows for two long agent prompts (Sun 2026-11-08 04:57)
+NewIdeas' PLAN PREFILL (PF-E, QUEUE 0f5a964) asked for these. They let BigMoE's big-call prefill (PFX: R57_PFCHUNK 8192 vs
+1024) be audited against the exact AR, not just the 1024 path.
+- The decode stage (NAX6-N's exact AR on the converted store, TIERENV 4433333333 / 3c / 112, C 192) ran on
+  agent/write13 (4,730 prompt tokens) and agent/write11 (7,932) via `--keys results/pfe_keys.txt`.
+- Output: results/ref2tnaxn.r4/decode.jsonl, 128 tokens each (the items' max_tokens), finish = length, in 125 s.
