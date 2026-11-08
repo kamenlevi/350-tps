@@ -2001,3 +2001,8 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 17:42:03 SCR tab12 tab12e end (rc 0)
 17:46:44 SCR tab12 tab12f end (rc 0)
 17:46:44 SCR tab12 end (rc 0, 592 s, swap 6733 MB)
+05:07:45 SCR chat12 start: 12 GB chat (ex, 12 IFEval, CAP 256) + prefill A/B (ex, PFX prompts, s_moe 4096 / 8192), quiet lock (46 GB free, swap 4703 MB, GPU 0%)
+05:10:26 SCR chat12 chat12 end (rc 0)
+05:11:51 SCR chat12 pf12a end (rc 0)
+05:12:41 SCR chat12 pf12b end (rc 0)
+05:12:41 SCR chat12 end (rc 0, 296 s, swap 4703 MB)

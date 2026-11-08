@@ -75,9 +75,30 @@ out the host work between cycles (~2.35 ms per check, so ~4 % high) and any wait
 'steady' rows above are labeled as such. The same-metric table for every arm is in findings note
 2026-11-07_0500. On it, v1 = 142.1 whole decode (137.5 without NW v3), and 200 is x1.41 away.
 
-Stated limits in any release: agent turns run EXACT; chat runs EXACT (or E without HC8 once its launch exists); every
-code number names its workload (HumanEval is flattered by prompt copying); FAST outputs can differ between runs at
-near-ties (BigMoE, Fri), so FAST quality is certified under 2 prompt orders.
+Stated limits in any release: agent turns run EXACT; every code number names its workload (HumanEval is flattered by
+prompt copying); FAST outputs can differ between runs at near-ties (BigMoE, Fri), so FAST quality is certified under 2
+prompt orders.
+- CORRECTED Sun 05:2x (`date`), from CERT (EvalSuite RESULT_cert 2cfed64, re-derived by NewIdeas):
+  - Chat in the shipped 45 GB config is NOT exact. Only 1 of 12 IFEval rows is token-identical to NAX6's AR.
+  - Its quality is certified as the same scores (IFEval PASS in both orders).
+  - Every set runs FAST kernels in that config: token-identical rows to NAX6-N are HumanEval+ 62 / 56 of 164, math
+    17 / 14 of 100, MBPP 34 / 32 of 100, IFEval 11 / 11 of 100.
+  - The old line "chat runs EXACT" is withdrawn.
+  - An exact chat mode is the E5 env (exact stack), at the exact chat speed below.
+
+### CHAT per memory line (Kamen: the publish table leads with chat; 12 IFEval prompts, greedy, cap 256, whole decode)
+| line | mode | chat tok/s (whole decode) | peak | source | quality |
+|---|---|---|---|---|---|
+| 45 GB | EXACT (E5 / N45 exact env) | 39.9 (36.4-39.9 across runs) [K] | ~43 GB | BigMoE N45 (Sat 23:5x), NewIdeas chat_rows.py | exact |
+| 45 GB | shipped lossy config (L) | 45.0 (42-45) [K] | ~43 GB | BigMoE N45 / CHS2 | CERT: lossy, same scores |
+| 45 GB | L + M1-B (QOM on the MTP head's chat drafts, bonus gated) | 49.0 [K, one pass, mean of 2] | 42.4 GB | BigMoE CHS2 87156ea, re-derived | IFEval + multi gate PENDING (EvalSuite runner 59, after chs4) |
+| ~32 GB | - | not measured | - | - | - |
+| 24 GB | - | not measured (Breakthrough priced bytes only: EXACT 210 / 183 MB per kept token) | - | Breakthrough 2bb8413 | - |
+| 12 GB | VERIFIED GREEDY (ex, B12 + MTP) | 12.88 geo mean (pooled 12.76) [K, alone, quiet] | 10.96 GB | Fit12 chat12 (Sun 05:07-05:12), re-derived from chat12.txt | verified greedy |
+
+- 12 GB PREFILL [K] (same run, s_moe 4096, today's): 1.6K 190.6 tok/s (TTFT 8.5 s), 4.7K 377.7 (13.0 s), 7.9K 461.3
+  (17.5 s). Each prompt streams ~63-67 GB from the SSD, so prefill is SSD-bound. s_moe 8192 (one MoE call per prompt) is
+  x0.99-1.01: no gain. Tokens are equal.
 
 Missing before a release table is complete:
 - 45 GB EXACT quiet tok/s per workload (HumanEval, MBPP, math, IFEval) on the certified kernel at the release C.

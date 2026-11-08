@@ -313,3 +313,15 @@ rule: tokens per check, time per check from the table above, and divergences vs 
   anchors (this file and /Users/kamen/Fit12/PLAN.md: O2, Q2, B3b, B10-r), the bias rule, and v3p tier.py's planes() / rebuild
   kernel as the template for option B (Breakthrough's code). The 12 GB pools and loader are v3p's, not r57's: nothing ports
   directly. Posted in the lounge Sun 00:1x (five notes).
+- RESULT (Sun 05:07:45-05:12:41, chat12.sh after CERT PASS 04:54, one quiet lock, rc 0 x3, no PAUSE, swap flat 4703 MB):
+  - chat12 (verified greedy, 12 IFEval, CAP 256): whole decode 12.88 tok/s geo / 12.76 pooled (1,577 tokens in 123.59 s; 9.26-
+    17.06), full period 13.16 / 12.85, end to end 9.02 / 10.09; 675 checks, 2.34 tokens kept per check, 172.1 ms verify + 10.4
+    ms draft; SSD 1.30 GB per check = 556 MB per kept token pooled (479-749 per prompt); lifetime 10.962 GB = 10.21 GiB.
+  - Prefill A (s_moe 4096) / B (8192), tokens 1,565 / 4,730 / 7,932: prefill 8.21 / 12.52 / 17.19 s = 190.6 / 377.7 / 461.3
+    tok/s (B 191.6 / 376.0 / 458.1, x1.005 / 0.995 / 0.993); TTFT 8.53 / 13.03 / 17.50 s; prefill SSD 63.4 / 66.0 / 67.1 GB in
+    both arms; lifetime 10.619 / 10.773 / 10.948 GB (all fit 12 GB); decoded tokens A = B on 3 / 3.
+  - Reading: b12_prefill is one call per prompt; its stream reads each layer's experts once per call, so the 12 GB prefill is
+    already expert-once (bytes ~ one pass of records3m's ~68 GB at every length). s_moe only batches the MoE compute: no
+    gain. It is 2-3.7x the 45 GB exact prefill (N45 98 / 118 / 124 tok/s), whose screen re-streams per 1,024-row call; BigMoE's
+    PFX is this form. Effective SSD 7.7 / 5.3 / 3.9 GB/s: longer prompts turn compute-bound (Leap's PF-B lever).
+  - Findings note: /Users/kamen/FableGod/findings/2026-11-08_0515_12gb-prefill-expert-once-chat.md. Lounge posts 05:1x.

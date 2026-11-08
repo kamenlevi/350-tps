@@ -3337,3 +3337,6 @@ so R-01 should find about the same slots, not ~1 GB more.
 - 12 GB CHAT + PREFILL (pre-registered Sat 23:5x; NewIdeas PROGRAM CHAT 150): 12 IFEval on the verified-greedy loop (MB per kept
   token) + prefill A/B (s_moe 4096 vs 8192 on 1.6K / 4.7K / 7.9K), after CERT: /Users/kamen/Fit12/PLAN_12GB_90_fit12.md
   '12 GB CHAT + PREFILL'. t95ck1u failed EvalSuite's code gate (-5.00): the 12 GB lossy cell fails quality.
+- 12 GB CHAT + PREFILL RESULT (Sun 05:07-05:12): chat 12.88 tok/s whole decode geo (12 IFEval, verified greedy), 2.34 kept per
+  check, 556 MB SSD per kept token, 10.96 GB; prefill 191 / 378 / 461 tok/s at 1.6K / 4.7K / 7.9K (TTFT 8.5 / 13.0 / 17.5 s),
+  already expert-once (s_moe 8192 = no gain), <= 10.95 GB. Details: PLAN_12GB_90_fit12.md '12 GB CHAT + PREFILL'.
