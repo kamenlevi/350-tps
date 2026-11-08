@@ -221,6 +221,9 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "hc8_fold": os.environ.get("REF2_HC8_FOLD") == "1",   # CHAT-150 G1 / B1: HC8 reads with <= 4 rows fold K2 into K3 (hc8f; bitwise; default off)
        "hc8_k1m": os.environ.get("REF2_HC8_K1M") == "1",   # CHAT-150 G1: HC8 reads with <= 4 rows: K1 reads the M-row h / pending (no pad launches), then k2b + k3c, or K3F with hc8_fold (hc8f; bitwise; default off)
        "hc8_g": int(os.environ.get("REF2_HC8_G", "0") or 0),   # CHAT-150 G1: HC8 reads with <= N (1-4) rows in GEMV form (hc8g; FAST: sums reordered, IFEval-gated; 0 off)
+       "g2_rows": int(os.environ.get("REF2_G2_ROWS", "0") or 0),   # CHAT-150 G2: FAST-NAX one-calls with <= N rows run 3c-N's GEMV one-call (g2k, U3-capable; FAST, IFEval-gated; 0 off)
+       "nax_coh": os.environ.get("REF2_NAX_COH") == "1",   # COH-1CQ (test, default off): FAST-NAX one-call kernels read everything coherent(system) (coh1cq; bitwise == plain on static slots)
+       "ngemv_rows": int(os.environ.get("REF2_NGEMV_ROWS", "0") or 0),   # CHAT-150 G1: native 4-bit dense calls with <= N (1-4) rows run NGEMV (ngemv.py; FAST, IFEval-gated; 0 off)
        "pad_in": os.environ.get("REF2_PAD_IN") == "1",   # CHAT-150 G1: native <= 16-row calls pad in the kernel (qmm26m; bitwise; default off)
        "hc8_v": int(os.environ.get("REF2_HC8_V", "4")),
        "ooo_1c": os.environ.get("REF2_OOO_1C") == "1", "small_native": os.environ.get("REF2_SMALL_NATIVE") == "1",
@@ -238,7 +241,7 @@ _ON = [False]
 COUNTS = dict(qmm16c=0, mlx16=0, linear=0, hc_read=0, hc_eager16=0, attention=0, experts=0, slot_calls=0, sdpa_split=0,
               kb_pad=0, tier_calls=0, gdnx=0, nax4=0, att_single=0, gdn_inproj=0, att_rope=0, idx_prep=0, hc_write=0, gdn_inproj_x=0, nax6=0, nax6_ooo=0, gdnb=0, hc_b=0, nax_hybrid=0, nax_native=0, nax_repack=0, native_3c=0,
               fatt_verify=0, verify_old=0, verify_old_eligible=0, fatt_r8=0, dense_native=0, dense_native_repack=0, hc8_fast=0, dense_native_unpack=0, ooo_1c=0, small_native=0, hc_pend=0, screened_head=0, ooo_1c_qom=0, nax_1cq=0, qom_split=0,
-              gdn_lazy=0, gdn_lazy_rows=0, gdn_lazy_flush=0, dn_ks=0, nw_calls=0, nw_late_calls=0, nw_writes=0, eprep=0, gdn_tg=0, sb_first=0, ple_late=0, ple_late_stale=0, commit_sub=0, tier_chunk=0, tier_chunk_groups=0, pad_in=0, hc8_fold=0, hc8_k1m=0, hc8_g=0)
+              gdn_lazy=0, gdn_lazy_rows=0, gdn_lazy_flush=0, dn_ks=0, nw_calls=0, nw_late_calls=0, nw_writes=0, eprep=0, gdn_tg=0, sb_first=0, ple_late=0, ple_late_stale=0, commit_sub=0, tier_chunk=0, tier_chunk_groups=0, pad_in=0, hc8_fold=0, hc8_k1m=0, hc8_g=0, g2_3cn=0, ngemv=0, nax_coh=0)
 QCNT_1C = None                                       # Fri 11-06: a list -> each one-call's post-drop work (see the notes)
 NW_ON = False                                        # NEVER-WAIT (Fri 11-06): runtime switch, read per one-call (armed by
 NWCNT = None                                         # CFG["neverwait"]); NWCNT: a list -> per one-call float32 counters
@@ -441,7 +444,11 @@ def _dnr_qmm(x, w, orig, args, kw):
             and x.dtype == mx.bfloat16 and x.shape[-1] == K and scales.dtype == mx.bfloat16):
         ks = _dn_ks(N, K)
         nt = CFG["dense_native_nt"] if ks == 1 and N % (32 * CFG["dense_native_nt"]) == 0 else 1
-        if CFG["pad_in"]:                              # CHAT-150 G1: no materialized 16-row pad (qmm26m, bitwise)
+        if rows <= CFG["ngemv_rows"]:                  # CHAT-150 G1 NGEMV (FAST): the GEMV form at few rows
+            import ngemv as _NG
+            y = _NG.ngemv(x.reshape(rows, K), w, scales, biases, N)
+            COUNTS["ngemv"] += 1
+        elif CFG["pad_in"]:                            # CHAT-150 G1: no materialized 16-row pad (qmm26m, bitwise)
             from qmm26m import qmm16n_m
             y = qmm16n_m(x.reshape(rows, K), w, scales, biases, N, ks, nt)
             COUNTS["pad_in"] += 1
@@ -586,7 +593,11 @@ def _qmm(x, w, *args, **kw):
         if e is not None:                                # DENSE-N: bitwise == qmm16c (ks 1); nt only groups tiles
             ks = _dn_ks(N, K_)
             nt = CFG["dense_native_nt"] if ks == 1 and N % (32 * CFG["dense_native_nt"]) == 0 else 1
-            if pin:
+            if rows <= CFG["ngemv_rows"]:              # CHAT-150 G1 NGEMV (FAST)
+                import ngemv as _NG
+                y = _NG.ngemv(x2, e[1], e[2], e[3], N)
+                COUNTS["ngemv"] += 1
+            elif pin:
                 from qmm26m import qmm16n_m
                 y = qmm16n_m(x2, e[1], e[2], e[3], N, ks, nt)
                 COUNTS["pad_in"] += 1
@@ -600,7 +611,11 @@ def _qmm(x, w, *args, **kw):
         e = (_sn_get(w, scales, biases) if (CFG["small_native"] and bits == 4 and group_size == 64 and K_ % 64 == 0
                                            and scales is not None and scales.dtype == mx.bfloat16) else None)
         if e is not None:                                # SMALL-N (FAST): qmm16n on the padded native copy
-            if pin:
+            if rows <= CFG["ngemv_rows"]:                # CHAT-150 G1 NGEMV (FAST)
+                import ngemv as _NG
+                y = _NG.ngemv(x2, e[1], e[2], e[3], e[4])[:, :N]
+                COUNTS["ngemv"] += 1
+            elif pin:
                 from qmm26m import qmm16n_m
                 y = qmm16n_m(x2, e[1], e[2], e[3], e[4], _dn_ks(e[4], K_), 1)[:, :N]
                 COUNTS["pad_in"] += 1
@@ -904,6 +919,9 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
     assert not lo4 or lo4[0][0] == 0, t["segs"]
     offs = _ooo1c_offs(bm, t, R4)
     nlz = t.get("nolsb")                             # U3's 3-bit sure rows (BigMoE r57_screen _ooo_call_t3)
+    g2 = bool(nax and CFG["g2_rows"] and M <= CFG["g2_rows"] and CFG["nax_1cq"] and CFG["nax_native"] and _native(t))
+    if g2:                                           # CHAT-150 G2 (FAST): 3c-N's GEMV one-call (g2k, U3-capable) at few rows
+        nax = False
     qn = bool(nax and CFG["nax_1cq"] and CFG["nax_native"])   # FAST-NAX (Thu 11-05): U3 + QOM on NAX6-N's one-call (ooo1cq)
     if offs is None or (nlz is not None and nax and not qn):   # (NAX + t3 without FAST-NAX: not here; the two phases
         return None                                  # ignore nolsb too: BigMoE told)
@@ -1019,6 +1037,10 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
             import ooo1cq as OQ
             f1c = OQ.tier_glu_nax6n_1cq
             COUNTS["nax_1cq"] += 1
+            if CFG["nax_coh"]:                       # COH-1CQ (test): every device read coherent(system) (S7B-PROBE B4 / B6)
+                import coh1cq
+                f1c = coh1cq.tier_glu_nax6n_1cq_coh
+                COUNTS["nax_coh"] += 1
         else:
             f1c = OC.tier_glu_nax6n_1c if native else OC.tier_glu_nax6_1c
 
@@ -1028,7 +1050,12 @@ def _ooo_1c_call(x, ids, bm, t, post, sc, shared, nax):
                                      sc_.reshape(-1, K)), rs_)
         COUNTS["nax6_ooo"] += 1
     else:
-        f1c = OC.tier_glu_3cn_1c if native else OC.tier_glu_3c_1c
+        if g2:
+            import g2k
+            f1c = g2k.tier_glu_3cn_1c_u3
+            COUNTS["g2_3cn"] += 1
+        else:
+            f1c = OC.tier_glu_3cn_1c if native else OC.tier_glu_3c_1c
         qom_ = qm is not None                        # QOM-OOO: dropped optional uses (-2) read rank 0's slot at weight 0
 
         def _kern(xin_, pm_, pl_, sc_):

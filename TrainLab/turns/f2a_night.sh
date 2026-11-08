@@ -6,19 +6,19 @@
 #   3. eval:    f2a vs b5 on held-out + on-policy chat, the pre-registered line -> data/f2a/f2a_eval.txt
 #   4. commit the small outputs; release the lock by 06:50
 # Guards per phase: swap +2 GB -> SIGTERM (the phase saves), free disk < 25 GB -> SIGTERM, PAUSE -> the scripts wait.
-# Memory: capture at frac 0.5 (C 256, ~42 GB) when NO-SWAP >= 46 GB, else 0.375 (C 192) at >= 40, else 0.25 (C 128).
+# Memory (smoke Sun 01:17): peak ~21 GB + 0.118 GB per pool slot -> C 256 at NO-SWAP >= 54, C 192 >= 46, C 128 >= 38, C 64 >= 31, else C 16.
 # Usage (attached, run_in_background): cd ~/TrainLab && ./turns/f2a_night.sh > data/f2a/night.log 2>&1
 cd ~/TrainLab || exit 1
 mkdir -p data/f2a
 log() { echo "[$(date '+%a %H:%M:%S')] $*"; }
 at() { date -j -f "%Y-%m-%d %H:%M" "$1" +%s; }
 NB=$(at "${NOTBEFORE:-2026-11-08 23:00}")
-CAP_END=$(at "${CAPEND:-2026-11-09 03:45}"); TRAIN_END=$(at "${TRAINEND:-2026-11-09 06:10}"); END=$(at "2026-11-09 06:50")
+CAP_END=$(at "${CAPEND:-2026-11-09 05:15}"); TRAIN_END=$(at "${TRAINEND:-2026-11-09 06:10}"); END=$(at "2026-11-09 06:50")
 PY=~/BigMoE/.venv/bin/python3
 swap_mb() { sysctl -n vm.swapusage | awk '{print $6}' | tr -d M; }
 noswap_gb() { vm_stat | awk '/page size of/ {ps = $8} /^Pages (free|speculative|purgeable):/ || /^File-backed pages:/ {v = $NF; sub("[.]", "", v); s += v} END {printf "%d", s * ps / 2^30}'; }
 disk_gb() { df -g / | awk 'NR == 2 {print $4}'; }
-log "F2a night armed: not before ${NOTBEFORE:-2026-11-08 23:00}; capture to ${CAPEND:-03:45}, train to ${TRAINEND:-06:10}, end 06:50"
+log "F2a night armed: not before ${NOTBEFORE:-2026-11-08 23:00}; capture to ${CAPEND:-05:15}, train to ${TRAINEND:-06:10}, end 06:50"
 while [ "$(date +%s)" -lt "$NB" ]; do sleep 30; done
 [ "$(date +%s)" -ge "$END" ] && { log "past 06:50: nothing runs"; exit 5; }
 mins=$(( (END - $(date +%s)) / 60 ))
@@ -41,12 +41,12 @@ phase() {   # $1 name, $2 deadline (epoch), rest: the command
   log "phase $nm rc=$rc: $(tail -1 data/f2a/$nm.log | cut -c1-200)"
   return $rc
 }
-A=$(noswap_gb); FR=0.25
-[ "$A" -ge 40 ] && FR=0.375
-[ "$A" -ge 46 ] && FR=0.5
+A=$(noswap_gb); FR=0.03   # measured peak ~21 GB + 0.118 GB per pool slot (smoke Sun 01:17); gate peak + 4
+[ "$A" -ge 31 ] && FR=0.125; [ "$A" -ge 38 ] && FR=0.25; [ "$A" -ge 46 ] && FR=0.375
+[ "$A" -ge 54 ] && FR=0.5
 log "NO-SWAP $A GB -> capture frac $FR"
-phase capture "$CAP_END" env F2A_RING_GB=${RINGGB:-34} $PY -I sticky/f2a_capture.py --frac $FR --eval 24
-phase train "$TRAIN_END" $PY -I sticky/f2a_train.py
+phase capture "$CAP_END" env F2A_RING_GB=${RINGGB:-50} $PY -I sticky/f2a_capture.py --frac $FR --eval 24
+phase train "$TRAIN_END" env F2A_EPOCHS=${EPOCHS:-2} $PY -I sticky/f2a_train.py
 phase eval "$END" $PY -I sticky/f2a_eval.py f2a
 cat data/f2a/f2a_eval.txt 2>/dev/null | tail -8
 git add data/f2a/*.txt data/f2a/*.log ckpt/d22_f2a.json 2>/dev/null

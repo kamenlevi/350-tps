@@ -9551,3 +9551,30 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
     (FAST, unwired) + row-native in_proj ~-0.5 (FAST) = ~-2.3..-3.1 ms of ~43. Kernels alone do not move the 1-2-row
     floor (BigMoE: ~39-42 ms even at < 30 misses). Next: measure where that floor goes (GPU busy, per-layer router-id
     waits, encode) on L + M1-B before building more.
+- **NGEMV + G2 wired + one-call determinism (Sun 01:15-01:19, share lock, GPU ~free; data/ngemv.txt, data/d1c_check.txt;
+  scripts/ngemv.py, g2k.py, g2_check.py, d1c_check.py; live ref2 8f5933c7, both new switches default off, self_test PASS).**
+  - **NGEMV (FAST, REF2_NGEMV_ROWS=N):** one GEMV on ref2's native 4-bit layout (lane = 4 rows x 16 k of a group,
+    threadgroup = a 32-row tile with KS simdgroups splitting K) for DENSE-N, SMALL-N and DENSE-N-RAM calls at <= N rows.
+    The first build left half the M 4 outputs unwritten (64 threads for 128 outputs at KS 2); fixed. v2 extracts each
+    code once per group. Check v2: max rel error vs qmm16n <= 3.8e-3, 0.1-0.2 % of outputs differ (bf16 ulps), all 7
+    shapes. vs L's qmm16n (DN-KS 1) per check: **M 1 -1.41 ms, M 2 -0.80 ms, M 4 +3.46 ms** (in_proj 1 / 2 rows 90.5 /
+    93.3 us vs 103; narrow calls 5-7 us vs 8-13). Use N = 2. Through ref2._dnr_qmm: 6 / 6 engaged, max rel diff 2.1e-3.
+  - **G2 wired (FAST, REF2_G2_ROWS=N):** FAST-NAX one-calls at <= N rows run 3c-N's one-call with LP1's tier-3 line
+    (g2k; U3's -2 sidecars, no loader LP1). G2-CHECK: 36 / 36 cases finite and within 5e-2 of the NAX one-call (worst
+    2.4e-2, the two kernels' known difference), M 1-3, QOM on / off, late pairs. Price: -0.55..-0.71 ms per check.
+  - **One-call determinism (BigMoE C4 found E + OOO_1C + NAX_1CQ != AR and different run to run):** on real pools with
+    static slots, 1cq and plain 1c are bitwise identical over 8 repeats in 16 / 16 configs (1-6 rows, all resident,
+    late pairs released before or 5 ms after the launch). So the kernels and the in-kernel poll are deterministic; the
+    live difference needs the loader: (a) a victim slot reused while this layer's resident pairs still read it (the
+    one-call runs them beside the misses), or (b) S7B-PROBE's same-command-buffer stale lines. Sent to BigMoE; a
+    coherent(system) 1cq variant can split (b).
+- **COH-1CQ (Sun 01:2x, share lock; scripts/coh1cq.py, data/coh/d1c_coh.txt; live ref2 11fa14ff, REF2_NAX_COH=1, default
+  off): BigMoE ruled out slot reuse in the ext (make_room never evicts a call's need list; reserve() only for look-ahead /
+  oracle, off in E / L), so S7B-PROBE's stale-line hazard is the live suspect for E + OOO_1C + NAX_1CQ's run-to-run diffs.**
+  - FAST-NAX's one-call kernels A / B with every expert-pool read coherent(system): the body's code / LSB pointers in
+    tierglu_coh's "cn" form, the p11 scale / bias words through a coherent cast inside renamed P11 helpers placed after
+    the SYS block. Learned: `coherent(system)` is rejected in struct members, in function parameters that must bind, and
+    in header code before the SYS block (MLX's preamble); inside helpers after SYS, `coherent(system) device` casts compile.
+  - Bitwise == the plain kernels on static slots: 16 / 16 configs (odd repeats coherent, even plain; 1-6 rows, all
+    resident and late pairs). BigMoE runs E + OOO_1C + NAX_1CQ +- REF2_NAX_COH=1, two runs each, after CERT: == AR and the
+    same across runs means (b) is the cause.

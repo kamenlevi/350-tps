@@ -49,19 +49,40 @@ def ring_bytes():
     return sum(os.path.getsize(f) for f in glob.glob(os.path.join(RING, "w_*.npz")))
 
 
-# ---- on-policy eval windows: the 125B's greedy IFEval answers (EvalSuite reference decodes), prompt + answer
+# ---- on-policy eval windows (amendment 1, Sun 01:2x): EvalSuite's reference IFEval decodes are in b5's training (92 of 95;
+# all 24 planned), so the 125B answers IFEval prompts that neither b5 (data/d22c) nor dec_ifeval holds: greedy, <= 192 tokens,
+# stop at <|im_end|>, the template as EvalSuite's prompts; then the same capture as training windows.
 if a.eval and not glob.glob(os.path.join(EVAL, "e_*.npz")):
+    from tokenizers import Tokenizer
+    tkz = Tokenizer.from_file(os.path.expanduser("~/BigMoE/models/bare/tokenizer.json"))
+    IMS, IME = tkz.token_to_id("<|im_start|>"), tkz.token_to_id("<|im_end|>")
     E = os.path.expanduser("~/EvalSuite")
-    comp = {}
-    for l in open(f"{E}/results/ref/decode.jsonl"):
-        r = json.loads(l); comp[r["key"]] = r["completion_ids"]
-    items = [json.loads(l) for l in open(f"{E}/data/items/dec_ifeval.jsonl")]
-    items = [it for it in items if it["key"] in comp and len(comp[it["key"]]) >= 32][-a.eval:]   # the last N (D-22 b2 took the first)
-    for j, it in enumerate(items):
-        p, c = list(it["prompt_ids"]), list(comp[it["key"]])
-        save(os.path.join(EVAL, f"e_{j:03d}"), p + c, [0] * len(p) + [1] * len(c))
-    json.dump([it["key"] for it in items], open(os.path.join(EVAL, "keys.json"), "w"))
-    print(f"[f2a-cap] eval windows: {len(items)} on-policy IFEval answers in {time.time() - t0:.0f} s", flush=True)
+    seen = {os.path.basename(f)[:-4].split("_")[-1] for f in glob.glob(os.path.expanduser("~/TrainLab/data/d22c/*.npz"))}
+    seen |= {str(json.loads(l)["key"]).split("/")[-1] for l in open(f"{E}/data/items/dec_ifeval.jsonl") if l.strip()}
+    raw = [json.loads(l) for l in open(f"{E}/data/raw/ifeval_input_data.jsonl") if l.strip()]
+    raw = [r for r in raw if str(r["key"]) not in seen][:a.eval]
+    keys = []
+    for j, r in enumerate(raw):
+        p = [IMS] + tkz.encode("user\n" + r["prompt"], add_special_tokens=False).ids + [IME] + \
+            tkz.encode("\n", add_special_tokens=False).ids + [IMS] + \
+            tkz.encode("assistant\n<think>\n\n</think>\n\n", add_special_tokens=False).ids
+        cache = lm.make_cache()
+        lg = None
+        for c0 in range(0, len(p), 2048):
+            lg = lm(mx.array([p[c0:c0 + 2048]]), cache=cache)
+        tok = int(mx.argmax(lg[0, -1]).item()); out = []
+        while len(out) < int(os.environ.get("F2A_GEN_MAX", "192")):
+            out.append(tok)
+            if tok == IME:
+                break
+            lg = lm(mx.array([[tok]]), cache=cache)
+            tok = int(mx.argmax(lg[0, -1]).item())
+        del cache
+        save(os.path.join(EVAL, f"e_{j:03d}"), p + out, [0] * len(p) + [1] * len(out))
+        keys.append(r["key"])
+    json.dump(keys, open(os.path.join(EVAL, "keys.json"), "w"))
+    print(f"[f2a-cap] eval windows: {len(keys)} fresh greedy IFEval answers (not in b5's training) in {time.time() - t0:.0f} s",
+          flush=True)
 
 z = np.load(os.path.join(TD, "seqs.npz"))
 ids_all, asst_all, off = z["ids"], z["asst"], z["off"]

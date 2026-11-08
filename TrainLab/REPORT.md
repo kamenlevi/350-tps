@@ -3834,3 +3834,17 @@ loses chat hits.
     on L after CERT. Expected: E's numbers, i.e. whole decode +0.5-1 % [P].
   - A no-sync / pairwise chain isn't worth it: a chain cut at an odd step wastes a ~2.3 ms step, more than the ~0.2 ms
     saved per sync.
+- **Amendment 1** (Sun 01:2x, before any night run; pipeline smoke 01:16-01:18, data/f2a/smoke/):
+  - **On-policy eval set changed.** All 24 planned eval answers (EvalSuite's reference IFEval decodes) are in b5's
+    training windows: 92 of the 95 decodes are in data/d22c. So the night instead first generates the 125B's own greedy
+    answers (<= 192 tokens) for 24 IFEval prompts that neither data/d22c nor dec_ifeval holds, and uses those as the
+    on-policy eval. The line is unchanged.
+  - **Smoke results.**
+    - Capture: 112-143 tok/s at a 16-slot pool, peak 20.9 GB.
+    - Training: 0.3 s per step after its first, peak 22.8 GB. The lr is b5's 1e-5 x 0.5 = 5e-6; 69.1M trainable.
+    - Eval: b5 reproduces D1's numbers (IFEval kept 2.301, multi 2.507). The template matches EvalSuite's IFEval prompts,
+      and tokenizers 0.23.3 is in both venvs.
+  - **Runner rebalanced, since capture, not training, is the bottleneck.**
+    - Capture to 05:15 or a 50 GB ring (~2.4M tokens), then 2 epochs of training.
+    - The pool is sized from the measured peak (~21 GB + 0.118 GB per slot, gated at peak + 4): C 256 at NO-SWAP >= 54,
+      C 192 >= 46, C 128 >= 38, C 64 >= 31, else C 16.
