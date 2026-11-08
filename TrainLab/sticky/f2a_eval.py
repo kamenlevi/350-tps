@@ -15,7 +15,7 @@ import mlx.core as mx
 RUN = sys.argv[1] if len(sys.argv) > 1 else "f2a"
 CK = os.path.expanduser("~/TrainLab/ckpt")
 EV = os.path.expanduser("~/TrainLab/data/f2a/eval")
-OUT = os.path.expanduser("~/TrainLab/data/f2a/f2a_eval.txt")
+OUT = os.path.expanduser(f"~/TrainLab/data/f2a/{RUN}_eval.txt")   # f2a -> f2a_eval.txt (the pre-registered verdict)
 D24.D = 6
 L_ = []
 
@@ -48,13 +48,16 @@ def kept_cut(p1, rk, gen, n_ids, t=0.3, K=6):
 M.limit_memory()
 rt, lm, head = M.load(0.03)
 heads = {}
-for nm in ("b5", RUN):
+names = ["b5"] + (["f2a"] if RUN != "f2a" and os.path.exists(os.path.join(CK, "d22_f2a.safetensors")) else []) + [RUN]
+for nm in names:                                                  # stage 2 (amendment 2): b5, f2a, f2a2
     P = M.Trainable(head); P.load_weights(os.path.join(CK, f"d22_{nm}.safetensors")); mx.eval(P.parameters()); heads[nm] = P
 sets = {"heldout ifeval": [("d16w", os.path.basename(f)[:-4]) for f in sorted(glob.glob(os.path.join(T.TD, "d16w", D24.PAT["ifeval"] + ".npz")))],
         "heldout multi": [("d16w", os.path.basename(f)[:-4]) for f in sorted(glob.glob(os.path.join(T.TD, "d16w", D24.PAT["multi"] + ".npz")))],
         "onpolicy ifeval": [("eval", f) for f in sorted(glob.glob(os.path.join(EV, "e_*.npz")))]}
 res = {}
 for st, items in sets.items():
+    if not items:                                                 # e.g. the on-policy windows were not captured
+        say(f"{st:16s}: no windows"); continue
     for nm, P in heads.items():
         hit = np.zeros(6); tot = np.zeros(6); TT = CC = RR = SS = 0
         for kind, k in items:
@@ -81,4 +84,11 @@ onp = res[("onpolicy ifeval", RUN)][0] / res[("onpolicy ifeval", "b5")][0] if ("
 v = "PASS" if pooled >= 1.08 and onp >= 1.05 else ("KILL" if pooled < 1.03 else "BETWEEN")
 say(f"Verdict F2a ({RUN} vs b5; pre-registered): {v}: held-out kept x{pooled:.3f} (geo of IFEval x{ho[0]:.3f}, multi x{ho[1]:.3f}), "
     f"on-policy IFEval kept x{onp:.3f} (PASS >= x1.08 AND on-policy >= x1.05; KILL < x1.03)")
+if "f2a" in heads and RUN != "f2a":
+    hs = [res[(s, RUN)][0] / res[(s, "f2a")][0] for s in ("heldout ifeval", "heldout multi")]
+    g2 = float(np.sqrt(hs[0] * hs[1]))
+    o2 = res[("onpolicy ifeval", RUN)][0] / res[("onpolicy ifeval", "f2a")][0] if ("onpolicy ifeval", "f2a") in res else float("nan")
+    rd = "more data pays" if g2 >= 1.02 else ("flat" if g2 < 1.005 else "small")
+    say(f"Data scaling ({RUN} = f2a + 2 epochs on ring 2, vs f2a; amendment 2): {rd}: held-out kept x{g2:.3f} "
+        f"(IFEval x{hs[0]:.3f}, multi x{hs[1]:.3f}), on-policy x{o2:.3f} (more data pays >= x1.02; flat < x1.005)")
 open(OUT, "w").write("\n".join(L_) + "\n")

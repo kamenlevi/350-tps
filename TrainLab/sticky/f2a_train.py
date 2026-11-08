@@ -1,7 +1,7 @@
 """F2a step 3 (MTP Head, Sun 11-08; GPU, the night's phase 2): continue the chat head (D-22 b5) on the captured ring.
 D-22's trainer (sticky/d22_ttt.py: training-time-test chain, per-depth KL to the 125B's top-32 on assistant targets, AUF as
 b5) over data/f2a/ring/w_*.npz (f2a_capture.py), one window per step, random order, F2A_EPOCHS passes (default 1).
-Init = ckpt/d22_b5.safetensors; depth F2A_DEPTH (default 6: chat chains stop by depth ~4-6 under the 0.3 cut); lr =
+Init = ckpt/d22_<F2A_INIT>.safetensors (default b5; stage 2 of the night: F2A_INIT=f2a --run f2a2); depth F2A_DEPTH (default 6: chat chains stop by depth ~4-6 under the 0.3 cut); lr =
 F2A_LR (default b5's lr x 0.5), Adam, warm-up 20, cosine to 10 % over the planned steps; clip 1.0.
 Writes ckpt/d22_f2a.safetensors (+ .json state) every 10 min and at the end; stops cleanly at F2A_UNTIL (epoch s) or
 SIGTERM (checkpoint saved; same command resumes); waits while ~/.local/share/quiet/PAUSE exists.
@@ -27,6 +27,7 @@ b5 = json.load(open(os.path.join(CK, "d22_b5.json")))["args"]
 D = int(os.environ.get("F2A_DEPTH", "6"))
 LR = float(os.environ.get("F2A_LR", str(float(b5["lr"]) * 0.5)))
 EP = float(os.environ.get("F2A_EPOCHS", "1"))
+INIT = os.environ.get("F2A_INIT", "b5")
 WD, AUF = float(b5.get("wdecay", 1.0)), bool(b5.get("auf", True))
 until = float(os.environ.get("F2A_UNTIL", "1e12"))
 stop = {"now": False}
@@ -48,12 +49,12 @@ ckw, ckj = os.path.join(CK, f"d22_{a.run}.safetensors"), os.path.join(CK, f"d22_
 files = sorted(glob.glob(os.path.join(RING, "w_*.npz")))
 steps = min(a.max_steps, int(EP * len(files)))
 state = {"step": 0, "order": [], "loss": [], "per": [], "files": len(files), "steps": steps, "status": "running",
-         "args": {"depth": D, "lr": LR, "epochs": EP, "wdecay": WD, "auf": AUF, "init": "d22_b5"}}
+         "args": {"depth": D, "lr": LR, "epochs": EP, "wdecay": WD, "auf": AUF, "init": f"d22_{INIT}"}}
 if os.path.exists(ckj):
     state = json.load(open(ckj)); P.load_weights(ckw); steps = state["steps"]
     print(f"[f2a-train] resume at step {state['step']} of {steps}", flush=True)
 else:
-    P.load_weights(os.path.join(CK, "d22_b5.safetensors"))
+    P.load_weights(os.path.join(CK, f"d22_{INIT}.safetensors"))
 mx.eval(P.parameters())
 P.freeze(); P.unfreeze()
 opt = optim.Adam(learning_rate=lambda s: LR * mx.minimum(1.0, (s + 1) / 20.0)

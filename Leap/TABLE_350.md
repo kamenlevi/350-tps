@@ -9598,3 +9598,31 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   - **Read:** a GPU win of 1-2 ms on 1-2-row checks is below one-pass whole-decode noise (same-config pairs y0 / y0b and
     yb / ybb differ by 1.6 / 2.4 %). The 1-row checks were scheduler-bound (46.7 ms; NewIdeas' SB1 -> 35.4 ms), which hid
     the 1-row kernels. CHS5 arm asked: the stack (with SB1) + REF2_NGEMV_ROWS=2, read on chs_strat's 1-2-row median.
+- **MLX NAX SORTED-GATHER BUG + PF-B (Sun 08:13-08:25, share locks beside EvalSuite's gate; scripts/pfb_inv.py,
+  pfb_diag*.py, pfb_order.py, pfb_fix.py; data/pfb_*.txt). BigMoE's PFX: PF-A plm1 195 / 368 / 441 tok/s; long prompts
+  compute-bound.**
+  - **Bug (MLX 0.32.2, affine_gather_qmm_rhs_nax, quantized_nax.h:1547):** `sgp_sm = align_M ? SM : min(SM,
+    short(max(0, (M - (y_row + tm)))))`. When the call's row count M (tokens x top-k) is not a multiple of the tile
+    height, the `short` overflows wherever more than 32,767 rows follow, and those simdgroups neither compute nor
+    store: the rows stay UNWRITTEN (zeros in a fresh buffer, stale data in a reused one). Seen: 79,320 rows -> 32,776
+    rows unwritten (13,784..46,559; the formula predicts 13,785..46,552); 47,300 -> 14,560; 38,360 -> 5,600; 40,960
+    (aligned) -> 0. Deterministic, the same in any call order and with the input evaluated first (not a race);
+    mx.argsort is fine. Only this kernel has the cast (dense NAX qmm does not).
+  - **Who is hit:** any SwitchGLU (mlx_lm) call with > 32,768 sorted rows (> 3,276 tokens at top-10) and M % 64 != 0:
+    Fit12's b12_prefill (pfr_chunk makes ONE MoE call per prompt up to 16K tokens: its 4.7K / 7.9K prefills ran with
+    rows missing; its note blamed "gather kernel shapes"), BigMoE's pe4096 / pe8192 arms, and D1i-prefill users
+    (EvalSuite, TrainLab) on long prompts. Safe: 1,024-token chunks (<= 10,240 rows: PF-A plm1, pe1024, exact E),
+    decode, dense calls.
+  - **Workaround, exact:** pad the sorted rows to a multiple of 64 (copies of the last row, same expert) so the
+    kernel takes its aligned path: pfb_fix.switch_glu_padded is bitwise == the 1,024-token calls at 1.6K / 4.7K /
+    7.9K, no unwritten rows.
+  - **PF-B priced (exact):** one padded MoE call per layer vs PF-A's 1,024-token calls: x1.42 / x1.89 / x1.96 at
+    1.6K / 4.7K / 7.9K (7.9K: 136 -> 69 ms per layer, 5.7 -> 11.2 TF; GPU shared, indicative) = ~1.8 s of 12.9 at
+    4.7K and ~3.2 s of 18.0 at 7.9K. My first unpadded timing (x2.84, 16.8 TF) was inflated by the skipped rows.
+    Using it needs PF-A's loop split at the MoE (each chunk's attention part in order, then ONE MoE call per layer,
+    then each chunk's residual). The same split lets the layer's expert read overlap its attention parts: PFX fits
+    TTFT = SSD bytes / 11.3 GB/s + 1.5 ms per token within 0.1 s at all three lengths, i.e. the reads (~6.0 s at
+    7.9K) are serialized with compute (~11.9 s), because _read_rebuilt is synchronous in the first chunk's call.
+  - **CHS5 (BigMoE 08:12): NGEMV_ROWS=2 KILL as a speed lever** (1-row check 31.9 vs 31.4 ms, 2-row 30.0 vs 30.7; its
+    +3.5 % whole decode is different tokens). The check is now CPU-bound (bld ~31.5 ms of ~33, wt ~3): GPU-only kernel
+    levers at 1-2 rows stop paying.

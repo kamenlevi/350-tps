@@ -26,7 +26,7 @@ def build():
     m = SwitchGLU(D, F, E)
     for p, (o, i) in (("gate_proj", (F, D)), ("up_proj", (F, D)), ("down_proj", (D, F))):
         q = QuantizedSwitchLinear(i, o, E, bias=False, group_size=64, bits=4)
-        q.weight = mx.random.bits((E, o, i // 8), width=4)
+        q.weight = mx.array(rng.integers(0, 2 ** 32, (E, o, i // 8), dtype=np.uint32))
         q.scales = mx.random.uniform(0.002, 0.02, (E, o, i // 64)).astype(mx.bfloat16)
         q.biases = (-7.5 * q.scales.astype(mx.float32)).astype(mx.bfloat16)
         mx.eval(q.weight, q.scales, q.biases)

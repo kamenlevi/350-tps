@@ -3848,3 +3848,46 @@ loses chat hits.
     - Capture to 05:15 or a 50 GB ring (~2.4M tokens), then 2 epochs of training.
     - The pool is sized from the measured peak (~21 GB + 0.118 GB per slot, gated at peak + 4): C 256 at NO-SWAP >= 54,
       C 192 >= 46, C 128 >= 38, C 64 >= 31, else C 16.
+- **Amendment 2** (Sun 11-08 08:2x, before any night run; runner v2 re-armed at 08:24):
+  - **Disk.** Free disk is 54 GB (Sun 08:14). So a 50 GB ring can't fit above Kamen's 20 GB swap reserve.
+    - The v1 runner also had a flaw. Once capture filled the disk to the 25 GB guard, the same guard would have
+      stopped the training and eval phases within 15 s, because the ring stays on disk.
+    - Fix: capture now stops itself at 28 GB free (F2A_DISK_MIN), 3 GB above the guard.
+    - Ring 1 = ~26 GB = ~1.2-1.3M tokens, if the disk stays at 54 GB free.
+  - **Stage 1 = the pre-registered run.** Capture to 02:00 or the disk floor; 2 epochs to 03:00; eval by 03:15;
+    commit. The line and the verdict are unchanged: f2a vs b5, data/f2a/f2a_eval.txt.
+  - **Stage 2 (new, secondary).** Ring 1 fills by about 02:00, so stage 1 ends near 02:45 and the window would idle
+    for 4 h. If stage 1 ends by 03:30:
+    - delete ring 1, capture ring 2 (the next corpus sequences) to 05:10;
+    - train f2a for 2 more epochs on ring 2 (same lr, schedule restarted) -> f2a2;
+    - eval f2a2 vs b5 and vs f2a -> data/f2a/f2a2_eval.txt.
+  - **Stage 2 lines.**
+    - f2a2 vs b5: the same PASS / KILL line.
+    - Data scaling, f2a2 vs f2a on held-out kept (geo): >= x1.02 = "more data pays", < x1.005 = "flat", else "small".
+    - "More data pays" makes faster capture worth building for the next night and for Qwen 4, e.g. a packed form of
+      BigMoE's layer-major prefill (PF-A runs one sequence per call; ours are ~470 tokens).
+    - Monday's engine A/B gets whichever head passes with the higher held-out kept.
+  - **Guards.** A ring under 200 windows isn't trained on (NO DATA). The eval skips an empty window set instead of
+    failing.
+  - **Checked.** A dry run of the runner with stub programs (both stages, and the NO DATA path). The three Python
+    scripts parse. Unchanged since the smoke: the capture, training and eval code paths, apart from the disk floor, the
+    init name and the output name.
+
+### D1 v1b in the engine: KILL, and D1 is closed (Sun 11-08 08:2x; BigMoE CHS4 07:42, data/chs/chs4_report.txt arms y0 / y0p4)
+- Setup: 12 IFEval prompts at C 256, one pass per arm, quiet.
+- On the lossy config L, v1b (only the 11 trained modules at 4 bits) is a KILL:
+
+  | | whole decode tok/s | kept per check | rows | drf ms per check | cycle ms |
+  |---|---|---|---|---|---|
+  | L (y0) | 43.8 | 2.54 | 3.22 | 8.7 | 57.6 |
+  | L + v1b (y0p4) | 40.2 (-8.2 %) | 2.57 | 3.45 | 14.9 | 63.2 |
+
+- So leaving the hyper-connection mixers in bf16 didn't fix L.
+  - Kept and rows rose, as the replay predicted.
+  - But L's draft costs +6.2 ms per check.
+- Untested hypothesis: L's draft path takes a slower route for 4-bit weights in these modules, for example a
+  dequantize every step. On E the same weights were neutral.
+- Not worth chasing: the whole D1 lever was +0.5-1 % at best.
+- **D1 closed.** The draft step stays bf16 in both configs.
+- The CHAT150 picture is unchanged. Chat acceptance is the wall: BigMoE CHS5 08:13 puts 150 tok/s at ~6 kept per check
+  at a 40 ms cycle, against 2.4-2.5 today.

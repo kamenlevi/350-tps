@@ -6,10 +6,10 @@ tk int32 [S, 32], lp float16 [S, 32], asst uint8 [S]. The ring is the night's tr
 First, --eval: the 125B's own greedy IFEval answers as on-policy eval windows (data/f2a/eval/), from EvalSuite's
 reference decodes (results/ref/decode.jsonl, the IFEval keys NOT used by D-22's general_items training: none were, it
 fed D-22 b2 only; checked in f2a_eval) -> same format.
-Stops at: the ring's disk budget (F2A_RING_GB, default 28), the wall deadline (F2A_UNTIL epoch s), SIGTERM, or the
+Stops at: the ring's disk budget (F2A_RING_GB, default 28), free disk under F2A_DISK_MIN GB (default 28), the wall deadline (F2A_UNTIL epoch s), SIGTERM, or the
 corpus end; resumes from data/f2a/ring/cursor.json. Waits while ~/.local/share/quiet/PAUSE exists.
 Usage: [BigMoE venv] python3 -I sticky/f2a_capture.py [--frac 0.5] [--eval N] [--max N]"""
-import os, sys, json, time, signal, argparse, glob
+import os, sys, json, time, signal, argparse, glob, shutil
 sys.path.insert(0, os.path.expanduser("~/TrainLab"))
 import mtp125 as M
 import numpy as np
@@ -25,6 +25,7 @@ ap.add_argument("--max", type=int, default=10 ** 9)              # corpus window
 a = ap.parse_args()
 os.makedirs(RING, exist_ok=True); os.makedirs(EVAL, exist_ok=True)
 budget = float(os.environ.get("F2A_RING_GB", "28")) * 2 ** 30
+disk_min = float(os.environ.get("F2A_DISK_MIN", "28")) * 2 ** 30   # free-disk floor (amendment 2): the runner TERMs any phase < 25 GB
 until = float(os.environ.get("F2A_UNTIL", "1e12"))
 stop = {"now": False}
 signal.signal(signal.SIGTERM, lambda *_: stop.update(now=True))
@@ -97,6 +98,8 @@ while cur["next"] < len(off) - 1 and done < a.max:
         why = "SIGTERM" if stop["now"] else "deadline"; break
     if ring_bytes() >= budget:
         why = "ring budget"; break
+    if shutil.disk_usage(RING).free < disk_min:
+        why = "disk floor"; break
     i = cur["next"]
     n = save(os.path.join(RING, f"w_{i:06d}"), ids_all[off[i]:off[i + 1]], asst_all[off[i]:off[i + 1]])
     cur["next"] += 1; cur["tokens"] += n; cur["windows"] += 1; done += 1
