@@ -1,1 +1,3 @@
 [Sun 07:21:36] chw12 armed: 6 clear minutes (1 with /Users/kamen/Fit12/data/scr/chw12/GO; held while /Users/kamen/Fit12/data/scr/chw12/WAIT exists), start by Sun 21:30
+[Sun 09:19:26] chw12: clear for 6 min (47 GB free): no quiet ticket for 5 min, then the share lock
+[Sun 09:19:34] chw12: chw12a (W1 4) start

@@ -44,3 +44,19 @@ Written before any row of any chat candidate.
   results/CHAT_<tag>_DONE.
 - Cost: ~124 rows x 2 orders at ~45-50 tok/s ≈ 30-40 min, plus tfwin on 24 rows ≈ 10 min.
 - It never runs during CERT; it starts after CERT's end, or when NewIdeas' queue says.
+
+## Amendment 1 (Sun 09:2x, before any m1bi row): m1bi, the split of M1-B's multi FAIL
+- **The candidate:** BigMoE's data/stack/chat3_env.txt (2187975), tag m1bi, dry run OK 09:19.
+  - It is M1-B + COH with QOM on humaneval / mbpp / ifeval but NOT multi.
+  - Same CHS4 snapshot (342f914), the same code pin as m1b (6b6a4fb64229), Sat 256, MEM 47 GB.
+- **The lines are unchanged.** IFEval same scores in both orders, and multi blunders on the forward order.
+- **What multi measures here:** S5' + COH with no QOM on multi. BigMoE: QOM_MTP only acts where QOM runs. That is the
+  base config's first multilingual line; CERT had no multi line.
+- **Reading, fixed now:**
+  - multi PASS: QOM is the cause of m1b's multi FAIL.
+  - multi FAIL: the cause is in S5''s own non-exact levers (the bisect is BigMoE's). The release config's multilingual
+    chat would then be untested by CERT and failing.
+- **Validity check (post hoc, from the screen's row stats):** every multi row must show no QOM optional uses
+  (pf.qom_opt == 0). Otherwise the split is VOID.
+- **A PASS is a diagnosis, not a shippable config.** In the engine, ifeval and multi are both type 'chat'. "QOM on
+  English chat only" needs a request-level switch (e.g. by language or script) and its own gate.
