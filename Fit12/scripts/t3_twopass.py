@@ -103,6 +103,12 @@ _TOPK = [0]      # (Thu 5 Nov 20:1x, 12 GB plan lever 2, Breakthrough 19:5x) k >
 _K2 = [os.environ.get("F12_P1K2", "0") == "1"]   # pass 1's tier_glu on ranks 0-1 only (plan '44'): the 8 weight-0 pairs dropped
 S_MOE = [int(os.environ.get("F12_SMOE", "4096"))]   # (Sun 8 Nov, 12 GB prefill) b12_prefill's MoE chunk: experts read once per
                  # layer per S_MOE prompt rows (a multiple of 512); 8192 = one MoE call for prompts up to 8K (BigMoE's PFX form)
+W1 = [os.environ.get("F12_W1", "4")]   # (Sun 8 Nov, T2 CHAT WIDTH) the exact check's FIRST call width (later calls 4 rows):
+                 # "4" = today's; "rand" = 1-4 per check from random.Random(F12_W1SEED) (the per-width cost fit); "cf:C:W[:C2:W2]"
+                 # = W rows when the first draft's cf < C (else W2 when < C2, ...), else 4. Rows 0..k verified in any chunking give
+                 # the same bits for calls of >= 2 rows (WV1 / WV2); a 1-row call takes B12_LATE3's late rule unless W1AW
+W1AW = [os.environ.get("F12_W1AW", "1") == "1"]   # (T2) a 1-row exact call runs with B.AW[0] (ALLWAIT: the verify rows' flags)
+CALLS = [None]   # (T2) a list: one row per exact call (check, call index, width, rows kept in the call, then _mk() at start, at end)
 PHLOG = [None]   # (Tue 3 Nov, T3P) a list: one row per timed phase (name, check, then at start and at end: CLOCK_UPTIME_RAW s,
                  # the gate's pass seq, disk bytes read by this process, loader misses); None = off (no extra calls)
 CAL = [None]     # (Thu 5 Nov 20:0x, 12 GB plan lever 1, certificate calibration) a list: one dict per check (path, the draft d,
@@ -315,7 +321,22 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
     st.update(checks=0, pass2=0, exact=0, rows1=0, rows2=0, calls2=0, refused=0, skipped=0, cfgate=0,
               t_draft=0.0, t_p1=0.0, t_p2=0.0, t_commit=0.0, miss1=0, miss2=0,   # timers: at the loop's own eval points
               k1u_kept=0, k1u_over=0, k1u_rl=0,                # P1-K1: kept pairs, row-layers over KU, row-layers
-              pf2_ids=0, pf2_calls=0)                          # P2-PREFETCH: late ids posted, wide pass-1 calls
+              pf2_ids=0, pf2_calls=0,                          # P2-PREFETCH: late ids posted, wide pass-1 calls
+              w1_calls={})                                     # (T2) the exact checks' first calls, by width
+    import random
+    _rng = random.Random(int(os.environ.get("F12_W1SEED", "1")))   # (T2) "rand": the same width sequence per prompt
+
+    def w1_pick(cf0):                                  # (T2) the exact check's first call width (W1's policy)
+        p_ = W1[0]
+        if p_ == "rand":
+            return _rng.randint(1, 4)
+        if p_.startswith("cf:"):
+            v_ = p_.split(":")[1:]
+            for i_ in range(0, len(v_) - 1, 2):
+                if cf0 is not None and cf0 < float(v_[i_]):
+                    return int(v_[i_ + 1])
+            return 4
+        return int(p_)
     K1U_ACC.clear()
     PF2_ACC.clear()
     from bigmoe_v3f.gated import ext as _ext
@@ -412,24 +433,39 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
         model.clear_verify_capture(cache)
         return tp_
 
-    def exact(toks_, d_):
-        """the exact check of toks_ (= [x] + d_) in <= 4-row calls, stopping at the first miss: (new, taps of kept rows)"""
+    def exact(toks_, d_, w1=4):
+        """the exact check of toks_ (= [x] + d_) in <= 4-row calls (the first one w1 rows), stopping at the first miss:
+        (new, taps of kept rows)"""
         new_, tps_, pos = [], [], 0
         _t, _m = time.perf_counter(), _miss()
         _k = _mk()
         try:
-            return _exact_loop(toks_, d_, new_, tps_, pos)
+            return _exact_loop(toks_, d_, new_, tps_, pos, w1)
         finally:
             st["t_p2"] += time.perf_counter() - _t
             st["miss2"] += _miss() - _m
             _ph("exact", _k)
 
-    def _exact_loop(toks_, d_, new_, tps_, pos):
+    def _call(ci, w, kept, kc):                        # (T2) one exact call's row
+        if CALLS[0] is not None and kc is not None:
+            CALLS[0].append((st["checks"], ci, w, kept) + kc + _mk())
+
+    def _exact_loop(toks_, d_, new_, tps_, pos, w1=4):
+        ci, w_ = 0, w1
         while True:
-            ch = toks_[pos:pos + 4]
-            lg_, tp_, sn_ = forward(ch, False)
-            g_ = mx.argmax(lg_, axis=-1)
-            mx.eval(g_, tp_)
+            ch = toks_[pos:pos + w_]
+            kc = _mk()
+            aw = W1AW[0] and len(ch) == 1 and w_ == 1 and not B.AW[0]   # a chosen 1-row call (not a short tail)
+            if aw:
+                B.AW[0] = True
+            try:
+                lg_, tp_, sn_ = forward(ch, False)
+                g_ = mx.argmax(lg_, axis=-1)
+                mx.eval(g_, tp_)
+            finally:
+                if aw:
+                    B.AW[0] = False
+            st["w1_calls"][len(ch)] = st["w1_calls"].get(len(ch), 0) + (ci == 0)
             g_ = g_.tolist()
             st["calls2"] += 1
             st["rows2"] += len(ch)
@@ -442,11 +478,14 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
                 h.update(np.array(lg_.view(mx.uint32)).tobytes())
                 new_ += d_[pos:pos + len(ch)]
                 pos += len(ch)
+                _call(ci, len(ch), len(ch), kc)
+                ci, w_ = ci + 1, 4
                 continue
             rt_ = commit(ch, sn_, m_ + 1, False)
             tps_.append((rt_ if rt_ is not None else tp_)[: m_ + 1])
             h.update(np.array(lg_[: m_ + 1].view(mx.uint32)).tobytes())
             new_ += d_[pos:pos + m_] + [g_[m_]]
+            _call(ci, len(ch), m_ + 1, kc)
             return new_, mx.concatenate(tps_) if len(tps_) > 1 else tps_[0]
 
     try:
@@ -547,7 +586,7 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
                             streak, skip_left = 0, skip[1]
                     path = 2
             else:                                      # the exact check (cf gate, the history rule, or theta None)
-                new, kt = exact(toks, d)
+                new, kt = exact(toks, d, w1_pick(cf[0] if cf else None))
                 st["exact"] += 1
                 path = 0
             st["checks"] += 1

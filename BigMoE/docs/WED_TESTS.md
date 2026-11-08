@@ -953,3 +953,60 @@ Exact E, agent/edit10 (1,565 tokens = 2 chunks of <= 1024), CAP 16, LOGHASH. scr
   levers that were believed exact: **the one-call OOO (REF2_OOO_1C + NAX_1CQ), which is run-to-run NONDETERMINISTIC** (the two runs
   diverge at different tokens), and **REF2_SMALL_NATIVE**. Neither speeds up chat (37.4 / 36.5 vs 37.0). M1-B's QOM needs the one-call on
   the NAX path, so OOO_1C stays in the lossy chat config; its exactness / determinism is a bug for Leap (owner).
+
+## Sun 8 Nov 07:13-07:42: CHS4, the CHAT150 lever A/Bs on M1-B + C4's coherent-read test + SB1 (data/chs/chs4_report.txt)
+
+12 IFEval prompts (N45's keys) at C 256, one process per arm under a quiet lock, snapshot 342f914. L = S5' (lossy), M1-B = L + QOM on
+the MTP head's chat drafts (R57_QOM_SETS += ifeval, multi; R57_QOM_MTP=2), E = exact. L's chat is run-to-run nondeterministic (whole
+decode moves about 4 %, kept about 0.1), so the per-check medians (scripts/chs_strat.py) are the steadier read. Percentages are against the
+mean of the two M1-B runs (49.9 tok/s) unless marked.
+
+| arm | config | whole decode tok/s | kept / check | check median ms | cycle median ms | 1-row check median ms | misses / check | == AR |
+|---|---|---|---|---|---|---|---|---|
+| y0 / y0b | L (two runs) | 43.8 / 44.5 | 2.54 / 2.54 | 43.3 / 43.1 | 50.4 / 50.2 | 42.0 / 42.7 | 93.6 / 90.4 | 3 / 12 |
+| yb / ybb | M1-B (two runs) | 49.3 / 50.5 (+13.0 % vs L) | 2.41 / 2.47 | 37.4 / 37.8 | 45.9 / 46.0 | 48.0 / 45.3 | 25.4 / 23.8 | 3 / 12 |
+| **ybs1** | M1-B + R57_SB1=1 (exact, schedule only) | **52.0 (+4.2 %)** | 2.42 | **35.4** | **42.9** | **35.4** | 25.3 | 2 / 12 |
+| yblg | M1-B + Leap's exact-safe bundle (K1M) + REF2_HC8_G=2 | 53.1 (+6.4 %) | 2.58 | 37.0 | 44.2 | 43.4 | 28.2 | 3 / 12 |
+| ybr | M1-B + R57_CHAT_RULE=R1 (73 relaxed accepts) | 52.9 (+6.0 %) | 2.61 | 37.7 | 45.6 | 46.7 | 28.4 | 2 / 12 |
+| ybrc | M1-B + rank cut 8 on IFEval (R57_RCUT_SETS=ifeval:8) | 52.2 (+4.6 %) | 2.49 | 36.4 | 44.7 | 45.6 | 25.1 | 2 / 12 |
+| ybl / ybn / ybln / yblf | M1-B + bundle / NW / bundle + NW / bundle + Leap's FAST low-row | 49.6 / 48.9 / 50.6 / 50.4 | 2.47-2.63 | (mean 40.8 / 41.8 / 39.2 / 40.1 vs 40.2) | | | 28-30 | 1-3 / 12 |
+| y0l | L + bundle | 44.8 (+1.5 % vs L) | 2.48 | (mean 46.5 vs 48.3) | | | 88.5 | 3 / 12 |
+| y0p4 | L + R57_MTP_P4 (D1 v1b, 4-bit MTP head) | 40.2 (-9.0 % vs L) | 2.57 | (draft 14.9 vs 8.8 ms) | | | 95.9 | 3 / 12 |
+| ycoc / ycoc2 | E + REF2_OOO_1C + NAX_1CQ (two runs) | 37.7 / 38.0 | 2.54 / 2.57 | | | | 91 | **3 / 12, 3 / 12** |
+| **ycoh / ycoh2** | the same + REF2_NAX_COH=1 (coherent pool reads) | 37.8 / 37.9 | 2.53 / 2.53 | 53.0 | 59.9 | 52.0 | 89.8 | **12 / 12, 12 / 12** |
+| yes1 | E + R57_SB1=1 | 38.3 | 2.53 | 53.0 | 60.3 | 45.7 | 89.8 | 12 / 12 |
+
+- **C4 SOLVED (Leap's hypothesis b, stale slot lines):** without COH the one-call diverges from AR at 9 of 12 prompts, and its two runs
+  diverge from each other at different tokens (first diffs 9,20,60,.. vs 9,62,46,..). With REF2_NAX_COH=1 both runs match AR on all 12 and
+  each other token for token, at no measurable cost (37.85 vs 37.85 tok/s). After this, L's chat non-exactness comes only from
+  SMALL_NATIVE (FAST by design) and the lossy HC8 / DN_KS.
+- **SB1 PASS** (NewIdeas' pre-registered 1ROW test): +4.2 % >= +3 %; 1-row check median 46.7 -> 35.4 ms (<= 40); yes1 == AR 12 / 12.
+  The GPU tail per check drops from 9.5-9.8 to 3.1 ms. Exact, so it can go into E as well (1-row median 45.7 vs 53.8 in CHS2).
+- Lossy candidates for the IFEval gate: R1 (+6.0 %, all from kept), rank cut 8 (+4.6 %; check median -3 %), bundle + HC8_G (+6.4 % whole
+  decode, but only -1.6 % on the check median; part of the gain is kept noise).
+- Washes on chat: NW, the bundle alone, Leap's FAST low-row. **D1 v1b KILL:** the 4-bit MTP head drafts slower (14.9 vs 8.8 ms per check).
+- The best arm is still about 53 tok/s, 2.8x short of 150. Next: CHS5 stacks M1-B + COH + SB1 + bundle/HC8_G + rank cut 8 (+- R1), with
+  repeat runs and a determinism check of M1-B + COH.
+
+## Sun 8 Nov 07:43-07:57: PFX, prefill by chunk size + PF-A layer-major on the 1.6K / 4.7K / 7.9K agent prompts (data/pfx/pfx_report.txt)
+
+Exact E at C 256 (CAP 64 decode tokens), quiet, snapshot 94a6f02. TTFT = prefill + setup + first token; tokens / logits hash compare
+with the 1024-chunk arm (pe1024, today's path). Prefill SSD = bytes read during the prefill.
+
+| arm | 1.6K edit10 | 4.7K write13 | 7.9K write11 | exact vs pe1024 | prefill SSD (1.6K / 4.7K / 7.9K) | lifetime peak |
+|---|---|---|---|---|---|---|
+| pe1024 (today) | 15.2 s = 103 tok/s | 37.3 s = 127 | 61.9 s = 128 | (reference) | 109 / 265 / 430 GB | 44.50 GB |
+| **plm1 (R57_PFLM=1: layer-major, full-E scratch, original ids)** | **8.0 s = 195 (x1.90)** | **12.9 s = 368 (x2.90)** | **18.0 s = 441 (x3.44)** | **tokens ==, logits hash 8/8, 28/28, 22/22** | **64 / 67 / 68 GB** | **45.10 GB** |
+| plm2 (compact copy) | 11.3 s = 138 | 21.1 s = 224 | 31.0 s = 256 | tokens ==, hash all == | 64 / 67 / 68 GB | 45.90 GB |
+| pe2048 / pe4096 / pe8192 (bigger chunks) | 161 / 161 / 159 | 171 / 225 / 312 | 201 / 290 / 389 | logits hash 0 / n; tokens differ at 4.7K-7.9K | 64 / 67 / 68 GB (8192) | 46.5 / 49.9 / 53.1 GB |
+| pl8192 (lossy L, chunk 8192) | 153 | 314 | 392 | (lossy) | | 53.80 GB |
+
+- **PF-A WORKS, EXACT:** layer-major prefill reads every expert once per prompt (68 GB at 7.9K vs 430 GB) and keeps the logits bitwise.
+  Prefill 103 / 127 / 128 -> 195 / 368 / 441 tok/s. The lifetime peak is 45.10 GB, 0.1 GB over the 45.0 line: trim before adopting
+  (a smaller C or dropping the scratch earlier).
+- **Bound:** at 1.6K plm1 reads 64 GB in 8.0 s (8 GB/s, near the SSD); at 4.7K / 7.9K, 5.2 / 3.8 GB/s, so compute bounds the long
+  prompts. That clears Leap's PF-B (faster prefill compute) and an SSD-compute overlap (PF-A double buffer) as the next steps toward 1000.
+- **PF-D price:** at the start of each prompt's prefill, 8.7-13.9K of the 24.6K base expert-layers are already resident (36-57 %).
+  Reusing them would cut the 1.6K prompt's 64 GB.
+- Bigger chunks alone (NewIdeas' pre-registered verdict: BETWEEN, x2.46 at 4.7K) break bitwise logits and peak at 46.5-53.8 GB:
+  superseded by PF-A.

@@ -1,0 +1,1 @@
+[Sun 07:21:36] chw12 armed: 6 clear minutes (1 with /Users/kamen/Fit12/data/scr/chw12/GO; held while /Users/kamen/Fit12/data/scr/chw12/WAIT exists), start by Sun 21:30

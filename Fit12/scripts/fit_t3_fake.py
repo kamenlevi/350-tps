@@ -15,7 +15,7 @@ class Ext:
 
 
 B = types.SimpleNamespace(CFG={}, V3F="fake")
-T3 = types.SimpleNamespace(_K2=[False], _K1U=[0], _M3=[False], _PF2=[0], PHLOG=[None], _TOPK=[0], CAL=[None])   # _TOPK / CAL: Thu 5 Nov fields (added Fri 6 Nov)
+T3 = types.SimpleNamespace(_K2=[False], _K1U=[0], _M3=[False], _PF2=[0], PHLOG=[None], _TOPK=[0], CAL=[None], CALLS=[None], W1=["4"], W1AW=[True])   # _TOPK / CAL: Thu 5 Nov fields (added Fri 6 Nov)
 
 
 def generate(B_, model, draft, DF, ids, cap, th, stop_ids=None, log=None, **kw):
@@ -35,6 +35,8 @@ def generate(B_, model, draft, DF, ids, cap, th, stop_ids=None, log=None, **kw):
             log.append([16, "p1", 8, 0.95])
         if ph is not None:
             ph.append(["p1", c, t0, 0, 0, 0, t1, 1, 1 << 20, 3])
+        if T3.CALLS[0] is not None:                # (Sun 8 Nov, T2) one fake exact call per check
+            T3.CALLS[0].append([c, 0, 1 + c % 4, 1, t0, 0, 0, 0, t1, 1, 1 << 20, 3])
         n += 1
     dec = time.perf_counter() - t_dec
     s = dict(lsha=("k1u" if k1u else "k2") + ("m3" if m3 else ""), checks=n, kept=8.0, pass2=0, exact=0, cfgate=0, skipped=0,

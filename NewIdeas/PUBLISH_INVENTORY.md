@@ -91,14 +91,26 @@ prompt orders.
 |---|---|---|---|---|---|
 | 45 GB | EXACT (E5 / N45 exact env) | 39.9 (36.4-39.9 across runs) [K] | ~43 GB | BigMoE N45 (Sat 23:5x), NewIdeas chat_rows.py | exact |
 | 45 GB | shipped lossy config (L) | 45.0 (42-45) [K] | ~43 GB | BigMoE N45 / CHS2 | CERT: lossy, same scores |
-| 45 GB | L + M1-B (QOM on the MTP head's chat drafts, bonus gated) | 49.0 [K, one pass, mean of 2] | 42.4 GB | BigMoE CHS2 87156ea, re-derived | IFEval + multi gate PENDING (EvalSuite runner 59, after chs4) |
+| 45 GB | L + M1-B (QOM on the MTP head's chat drafts, bonus gated) | 49.0 [K, one pass, mean of 2]; chs4 again 49.3 / 50.5 | 42.4 GB | BigMoE CHS2 87156ea + CHS4, re-derived | IFEval + multi gate PENDING (EvalSuite runner 59; chat_env.txt = M1-B) |
+| 45 GB | L + M1-B + R57_SB1 (1-row checks overlap their reads; schedule only) | 52.0 [K, one pass; +4.2 % vs M1-B's mean] | 42.3 GB | BigMoE CHS4 ybs1, re-derived (1-row checks 35.4 vs 48.0 / 45.3 ms) | E + SB1 == AR 12 / 12 (tokens; no logits hash yet). Same gate as M1-B if bit-exact; NOT adopted (BigMoE / Kamen) |
 | ~32 GB | - | not measured | - | - | - |
 | 24 GB | - | not measured (Breakthrough priced bytes only: EXACT 210 / 183 MB per kept token) | - | Breakthrough 2bb8413 | - |
 | 12 GB | VERIFIED GREEDY (ex, B12 + MTP) | 12.88 geo mean (pooled 12.76) [K, alone, quiet] | 10.96 GB | Fit12 chat12 (Sun 05:07-05:12), re-derived from chat12.txt | verified greedy |
 
 - 12 GB PREFILL [K] (same run, s_moe 4096, today's): 1.6K 190.6 tok/s (TTFT 8.5 s), 4.7K 377.7 (13.0 s), 7.9K 461.3
-  (17.5 s). Each prompt streams ~63-67 GB from the SSD, so prefill is SSD-bound. s_moe 8192 (one MoE call per prompt) is
-  x0.99-1.01: no gain. Tokens are equal.
+  (17.5 s). Each prompt streams ~63-67 GB from the SSD. s_moe 8192 (one MoE call per prompt) is x0.99-1.01: no gain.
+  Tokens are equal. CORRECTED Sun 08:0x: only SHORT prompts are SSD-bound (~7.5 GB/s at 1.6K). At 7.9K, ~67 GB in
+  17.5 s is ~3.8 GB/s, so long prompts look compute-bound [P].
+- 45 GB PREFILL, EXACT [K] (BigMoE PFX 07:57, snapshot 94a6f02; re-derived by NewIdeas from runs.json / tokens.json):
+  PF-A layer-major prefill (R57_PFLM=1).
+  - 1.6K 194.9 tok/s (TTFT 8.03 s), 4.7K 367.5 (12.87 s), 7.9K 440.5 (18.01 s).
+  - vs the 1024-chunk exact arm (102.8 / 126.9 / 128.2): x1.90 / x2.90 / x3.44.
+  - Logits-hash lists and tokens are identical to that arm's on all 3 prompts.
+  - SSD per prompt 64-68 GB (vs 109 / 265 / 430).
+  - Peak 45.10 GB: 0.1 over the 45.0 line, so a trim is needed before it ships. Not adopted yet (BigMoE).
+  - Same speed as the 12 GB line: both now read each expert once.
+  - Bigger chunks (R57_PFCHUNK 8192, lossy) reach x2.46 at 4.7K but change tokens and peak at 53.1 GB: BETWEEN on the
+    pre-registered line.
 
 Missing before a release table is complete:
 - 45 GB EXACT quiet tok/s per workload (HumanEval, MBPP, math, IFEval) on the certified kernel at the release C.

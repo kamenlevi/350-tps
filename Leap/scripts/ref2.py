@@ -222,7 +222,7 @@ CFG = {"dense_min_n": 1024, "experts": True, "experts_cfg_a": (4, 1), "experts_c
        "hc8_k1m": os.environ.get("REF2_HC8_K1M") == "1",   # CHAT-150 G1: HC8 reads with <= 4 rows: K1 reads the M-row h / pending (no pad launches), then k2b + k3c, or K3F with hc8_fold (hc8f; bitwise; default off)
        "hc8_g": int(os.environ.get("REF2_HC8_G", "0") or 0),   # CHAT-150 G1: HC8 reads with <= N (1-4) rows in GEMV form (hc8g; FAST: sums reordered, IFEval-gated; 0 off)
        "g2_rows": int(os.environ.get("REF2_G2_ROWS", "0") or 0),   # CHAT-150 G2: FAST-NAX one-calls with <= N rows run 3c-N's GEMV one-call (g2k, U3-capable; FAST, IFEval-gated; 0 off)
-       "nax_coh": os.environ.get("REF2_NAX_COH") == "1",   # COH-1CQ (test, default off): FAST-NAX one-call kernels read everything coherent(system) (coh1cq; bitwise == plain on static slots)
+       "nax_coh": os.environ.get("REF2_NAX_COH", "1") == "1",   # COH-1CQ, DEFAULT ON since Sun 2026-11-08 (CHS4: == AR 12/12 in two runs vs 3/12 plain, no cost; BigMoE OK 07:5x): FAST-NAX one-call kernels read the expert pools coherent(system) (coh1cq); REF2_NAX_COH=0 = the old plain reads (stale slot lines)
        "ngemv_rows": int(os.environ.get("REF2_NGEMV_ROWS", "0") or 0),   # CHAT-150 G1: native 4-bit dense calls with <= N (1-4) rows run NGEMV (ngemv.py; FAST, IFEval-gated; 0 off)
        "pad_in": os.environ.get("REF2_PAD_IN") == "1",   # CHAT-150 G1: native <= 16-row calls pad in the kernel (qmm26m; bitwise; default off)
        "hc8_v": int(os.environ.get("REF2_HC8_V", "4")),

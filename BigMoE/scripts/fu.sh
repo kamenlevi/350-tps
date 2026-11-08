@@ -55,7 +55,7 @@ done
 else
   say "part A skipped (superseded by CHS1 data/chs/chs1_report.txt + CHS3)"
 fi
-for a in "fb0:256:$L" "fb1:248:$L" "fb2:256:$L,R57_PFCHUNK=512" "fb3:256:$L,R57_CACHE_GB=2"; do
+for a in "fb0:256:$L" "fb1:248:$L" "fb2:256:$L,R57_PFCHUNK=512" "fb3:256:$L,R57_CACHE_GB=2" "fb4:256:$L,R57_PFLM=1" "fb5:256:$L,R57_PFLM=1,R57_CACHE_GB=2"; do   # fb4 / fb5 (Sun 08:0x): PF-A on L + the cache-limit trim (PFX plm1 peaked 45.10 GB on write11)
   t=${a%%:*}; r=${a#*:}; c=${r%%:*}; e=${r#*:}; rm -f data/r57/${t}_${c}_* $D/${t}_${c}.txt
   R57_KEYS=$KP C45_CAP=16 C45_ARMS="${t}_$c:$c:$e" $RUN
   say "$t rc=$?"
@@ -99,7 +99,7 @@ for t, nm in names.items():
             dif.append(f"{k.split('/')[-1]}@{next((i for i in range(m) if o[i] != r[i]), m)}")
     L.append(f"  {t} {nm:16s}: == AR {eq} / {len(tk)}; whole decode {g([r['tps'] for r in R.values()]):.1f} tok/s; first diffs {dif[:6]}")
 L.append("B. FLAG 2: agent prompts (CAP 16): lifetime peak, TTFT per prompt (s); then 12 HumanEval whole decode for the fixes")
-for t, c, nm in (("fb0", 256, "L at C 256"), ("fb1", 248, "L at C 248"), ("fb2", 256, "L + PFCHUNK 512"), ("fb3", 256, "L + CACHE_GB 2")):
+for t, c, nm in (("fb0", 256, "L at C 256"), ("fb1", 248, "L at C 248"), ("fb2", 256, "L + PFCHUNK 512"), ("fb3", 256, "L + CACHE_GB 2"), ("fb4", 256, "L + PF-A (R57_PFLM=1)"), ("fb5", 256, "L + PF-A + CACHE_GB 2")):
     R, _ = load(t, c)
     tt = {k.split("/")[-1]: round(r.get("pfs") or float("nan"), 1) for k, r in R.items()}
     L.append(f"  {t} {nm:16s}: lifetime peak {peak.get(f'{t}_{c}', float('nan')):.2f} GB (line 45.0); TTFT {tt}")
@@ -110,7 +110,7 @@ open("data/fu/fu_report.txt", "w").write("\n".join(L) + "\n"); print("\n".join(L
 EOF
 say "report rc=$? ($D/fu_report.txt)"
 git add $D $(for t in fa0 fa1 fa2 fa3 fa4 fa5 fa6; do echo data/r57/${t}_256_*; done) data/r57/fb0_256_* data/r57/fb1_248_* data/r57/fb2_256_* \
-  data/r57/fb3_256_* data/r57/fh0_256_* data/r57/fh1_248_* data/r57/fh3_256_* 2>/dev/null
+  data/r57/fb3_256_* data/r57/fb4_256_* data/r57/fb5_256_* data/r57/fh0_256_* data/r57/fh1_248_* data/r57/fh3_256_* 2>/dev/null
 > (a quote from the project owner, kept private)
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

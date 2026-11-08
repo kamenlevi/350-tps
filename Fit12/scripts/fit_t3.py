@@ -235,6 +235,7 @@ def run_prompt(ri, r):                                   # all arms of one promp
         kpn = KP.set_arm(**kp) if KP is not None else 0
         kc0 = KP.counts() if KP is not None else {}
         T3.PHLOG[0] = [] if os.environ.get("F12_PHLOG") == "1" else None   # (T3P) per-phase marks
+        T3.CALLS[0] = [] if os.environ.get("F12_PHLOG") == "1" else None   # (Sun 8 Nov, T2) per exact call
         T3.CAL[0] = [] if os.environ.get("F12_CAL") == "1" else None       # (Thu 5 Nov) certificate calibration records
         ca = ssd_c()
         dfs0 = _EXT.defer_stats()                        # [rows, waited, late reads, late ids forced to wait]
@@ -249,6 +250,7 @@ def run_prompt(ri, r):                                   # all arms of one promp
             if KP is not None:
                 KP.set_arm()                             # every port off between arms
             ph, T3.PHLOG[0] = T3.PHLOG[0], None
+            cl_, T3.CALLS[0] = T3.CALLS[0], None
             cal, T3.CAL[0] = T3.CAL[0], None
         if cal is not None:                              # one dict per check: path, d, cf, p1 / m1 / g1 (pass 1), new
             json.dump(cal, open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}_cal.json"), "w"))
@@ -258,6 +260,8 @@ def run_prompt(ri, r):                                   # all arms of one promp
                + f" ({kpn} drafter projections on NaxQL): " + ", ".join(f"{k_} {v_}" for k_, v_ in kc.items() if v_))
         json.dump(lg, open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}.json"), "w"))
         json.dump([int(t_) for t_ in toks], open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}_toks.json"), "w"))
+        if cl_ is not None:                              # (T2) check, call index, width, kept in the call, marks at start, at end
+            json.dump(cl_, open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}_calls.json"), "w"))
         if ph is not None:                               # name, check, (uptime s, gate seq, disk bytes, misses) at start, at end
             json.dump(ph, open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}_ph.json"), "w"))
             agg = {}

@@ -9578,3 +9578,23 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   - Bitwise == the plain kernels on static slots: 16 / 16 configs (odd repeats coherent, even plain; 1-6 rows, all
     resident and late pairs). BigMoE runs E + OOO_1C + NAX_1CQ +- REF2_NAX_COH=1, two runs each, after CERT: == AR and the
     same across runs means (b) is the cause.
+- **CHS4 [K] for Leap's levers (BigMoE, Sun 07:13-07:42, quiet, 12 IFEval, C 256, one pass per arm, snapshot 342f914,
+  ref2 11fa14ff; data/chs4/chs4_report.txt). COH CONFIRMED: stale slot lines caused the one-call's diffs.**
+  - **COH:** ycoc / ycoc2 (E + OOO_1C + NAX_1CQ) 37.7 / 38.0 tok/s, == AR 3 / 12 both, different first diffs, and the
+    two runs diverge from each other at 9 / 12 prompts. ycoh / ycoh2 (+ REF2_NAX_COH=1) 37.8 / 37.9, **== AR 12 / 12
+    both and token-identical to each other**, ck 57.4 / 57.2 vs 57.9 / 57.9 ms (no cost). Hypothesis (b) holds: inside
+    one command buffer the one-call's plain loads saw lines of a slot's previous expert (S7B-PROBE); coherent(system)
+    pool reads see the loader's fresh bytes. In E the one-call is now exact but not faster (yes1 = E + SB1 38.3 in the
+    same batch; x3e = E 37.0 in chs3), so E stays as it is.
+  - **L has the same bug:** s5p_env (= @L) carries REF2_OOO_1C=1 + R57_NAX=1 + REF2_NAX_1CQ=1, so every L / M1-B number
+    to date includes stale expert reads. ooo1cq uses one kernel pair A / B for every case (U3 sure rows and QOM drops are
+    -2 slots inside it) and coh1cq swaps both, so REF2_NAX_COH=1 covers all of L's one-call reads. Asked BigMoE (07:47)
+    to put it into L and chat_env.txt before EvalSuite's M1-B IFEval gate. The plain 3c-N one-call and G2 (g2k) read
+    slots plain too: G2 stays off.
+  - **Low-row levers on M1-B** (yb / ybb mean 49.9 tok/s, ck 40.15): bundle (ybl) 49.6, ck 40.8 = wash; bundle +
+    HC8_G=2 (yblg) 53.1 (+6.4 %), ck 39.4 (check median -1.6 %, 2-row median 33.0 -> 31.3 ms; part of the gain is kept,
+    2.58 vs 2.44); FAST low-row (yblf = yblg + NGEMV + G2 at <= 2 rows) 50.4, ck 40.1 = wash. On L: bundle (y0l) 44.8 vs
+    y0 / y0b 44.2, ck 46.5 vs 48.3.
+  - **Read:** a GPU win of 1-2 ms on 1-2-row checks is below one-pass whole-decode noise (same-config pairs y0 / y0b and
+    yb / ybb differ by 1.6 / 2.4 %). The 1-row checks were scheduler-bound (46.7 ms; NewIdeas' SB1 -> 35.4 ms), which hid
+    the 1-row kernels. CHS5 arm asked: the stack (with SB1) + REF2_NGEMV_ROWS=2, read on chs_strat's 1-2-row median.

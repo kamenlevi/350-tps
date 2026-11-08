@@ -5,3 +5,6 @@ ycoc|humaneval,mbpp|@E,REF2_OOO_1C=1,REF2_NAX_1CQ=1
 ycoh|humaneval,mbpp|@E,REF2_OOO_1C=1,REF2_NAX_1CQ=1,REF2_NAX_COH=1
 ycoc2|humaneval,mbpp|@E,REF2_OOO_1C=1,REF2_NAX_1CQ=1
 ycoh2|humaneval,mbpp|@E,REF2_OOO_1C=1,REF2_NAX_1CQ=1,REF2_NAX_COH=1
+# Sun 07:1x, NewIdeas 05:21 (QUEUE 1ROW, pre-registered): R57_SB1=1 (SB's mid-loop eval from 1 row; schedule only, exact). PASS = ybs1 >= +3 % vs mean(yb, ybb) AND 1-row median <= 40 ms AND yes1 == AR 12/12
+ybs1|humaneval,mbpp,ifeval,multi|@L,R57_QOM_MTP=2,R57_SB1=1
+yes1|humaneval,mbpp|@E,R57_SB1=1

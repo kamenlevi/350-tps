@@ -21,8 +21,14 @@ LOG="$HOME/BigMoE/data/turn45.log"
 say() { echo "$(date +%H:%M:%S) [$WHY] $*" >> "$LOG"; }
 avail_gb() { vm_stat | awk '/page size of/ {ps=$8} /^Pages (free|speculative|purgeable):/ || /^File-backed pages:/ {v=$NF; sub("[.]","",v); s+=v} END {printf "%d", s*ps/1e9}'; }   # NO-SWAP (the orchestrator 23:5x, RULES): free + speculative + purgeable + file-backed
 busy45() { peer ls 2>/dev/null | grep -E "benchmarking: quiet lock|waiting for a quiet" | grep -v "BigMoE" | grep -ciE "45 GB|S45|STACK|C 224|C 256|C 288|C 192|C 160|R-59|45-route"; }
-blocked() { [ -e "$Q/PAUSE" ] || ioreg -r -k AppleClamshellState -d 1 | grep -q '"AppleClamshellState" = Yes' \
-            || grep -q "Verdict: ACT" "$Q/HEALTH.md" 2>/dev/null || pgrep -f "quiet/soft_end.sh" >/dev/null; }
+why_blocked() { [ -e "$Q/PAUSE" ] && { echo "PAUSE"; return; }   # the first gate that holds, named (11-08: CHS4 hung 2 h silent)
+  ioreg -r -k AppleClamshellState -d 1 | grep -q '"AppleClamshellState" = Yes' && { echo "lid closed"; return; }
+  grep -q "Verdict: ACT" "$Q/HEALTH.md" 2>/dev/null && { echo "HEALTH ACT"; return; }
+  local p; p=$(pgrep -f "quiet/soft_end.sh" | head -1); [ -n "$p" ] && echo "soft_end pid $p: $(ps -o command= -p $p | cut -c1-100)"; }
+blocked() { [ -n "$(why_blocked)" ]; }
+lastg=; held=0                                          # hold GATE: log the gate when it changes, then every ~30 min
+hold() { if [ "$1" = "$lastg" ]; then held=$((held + 1)); else held=0; lastg=$1; fi
+         [ $((held % 30)) -eq 0 ] && say "waiting: $1 ($held min)"; sleep 60; }
 at_next() { local t; t=$(date -j -f "%Y-%m-%d %H:%M:%S" "$(date -r $2 +%Y-%m-%d) $1:00" +%s); [ $t -le $2 ] && t=$((t + 86400)); echo $t; }
 T0=$(date +%s); NA_E=; NB_E=                           # at_next HH:MM EPOCH: that clock time's first occurrence after EPOCH
 [ -n "$NOTAFTER" ] && NA_E=$(at_next $NOTAFTER $T0)
@@ -34,17 +40,17 @@ say "start: PEAK $PEAK GB, ticket $MIN min, window ${NB_E:+from $(date -r $NB_E 
 last=$(( $(date +%s) - 900 + ${GAP0:-900} ))           # a 15-min gap from now too (Leap's / Fit12's turns end unseen);
                                                         # GAP0=0 when the last 45 GB ticket is known to be over 15 min ago
 while :; do
-  n=$(busy45); now=$(date +%s)
+  n=0; [ -z "$NOWAIT45" ] && n=$(busy45); now=$(date +%s)
   # NIGHT (the orchestrator 01:4x): NOWAIT45=1 skips the wait for others' 45 GB tickets (the quiet queue itself is FIFO,
   # one ticket at a time), GAP=0 drops the 15-min gap
-  if [ -z "$NOWAIT45" ] && [ "${n:-0}" -gt 0 ]; then last=$now; sleep 60; continue; fi
-  [ $((now - last)) -lt ${GAP:-900} ] && { sleep 60; continue; }
-  blocked && { sleep 60; continue; }
-  [ -n "$NB_E" ] && [ "$now" -lt "$NB_E" ] && { sleep 60; continue; }
+  if [ -z "$NOWAIT45" ] && [ "${n:-0}" -gt 0 ]; then last=$now; hold "others' 45 GB tickets"; continue; fi
+  [ $((now - last)) -lt ${GAP:-900} ] && { hold "gap ${GAP:-900} s"; continue; }
+  g=$(why_blocked); [ -n "$g" ] && { hold "$g"; continue; }
+  [ -n "$NB_E" ] && [ "$now" -lt "$NB_E" ] && { hold "NOTBEFORE $NOTBEFORE"; continue; }
   # NOTAFTER=HH:MM (DAY9 11-02): no queueing from then on (a day turn that never found the memory: exit 3, the night takes it)
   [ -n "$NA_E" ] && [ "$now" -ge "$NA_E" ] && { say "past NOTAFTER $NOTAFTER: not queued"; exit 3; }
-  [ -n "$AFTER" ] && ! /bin/sh -c "$AFTER" >/dev/null 2>&1 && { sleep 60; continue; }
-  [ -n "$WAITMEM" ] && [ "$(avail_gb)" -lt "$WAITMEM" ] && { sleep 60; continue; }
+  [ -n "$AFTER" ] && ! /bin/sh -c "$AFTER" >/dev/null 2>&1 && { hold "AFTER"; continue; }
+  [ -n "$WAITMEM" ] && [ "$(avail_gb)" -lt "$WAITMEM" ] && { hold "WAITMEM $WAITMEM GB"; continue; }
   say "queue the quiet ticket (available $(avail_gb) GB)"
   PEER_QUEUE_TIMEOUT=21600 peer lock quiet --queue ${MIN}m "$WHY" >> "$LOG" 2>&1 || { say "queue failed: retry in 2 min"; sleep 120; continue; }
   sleep 30

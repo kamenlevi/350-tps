@@ -325,3 +325,31 @@ rule: tokens per check, time per check from the table above, and divergences vs 
     gain. It is 2-3.7x the 45 GB exact prefill (N45 98 / 118 / 124 tok/s), whose screen re-streams per 1,024-row call; BigMoE's
     PFX is this form. Effective SSD 7.7 / 5.3 / 3.9 GB/s: longer prompts turn compute-bound (Leap's PF-B lever).
   - Findings note: /Users/kamen/FableGod/findings/2026-11-08_0515_12gb-prefill-expert-once-chat.md. Lounge posts 05:1x.
+
+## T2 CHAT WIDTH (the 12 GB chat lever; pre-registered Sun 08 Nov 07:21, before any GPU run)
+> (a quote from the project owner, kept private)
+small tests under share locks. T1 = chat12 (12.88 tok/s, 556 MB per kept token) + the prefill A/B.
+- CPU audit [K] (/Users/kamen/Fit12/scripts/chatw_audit.py on chat12's own logs; 663 checks, check 0 dropped):
+  - One exact call costs 59.4 ms fixed + 81.7 ms per GB read (12.2 GB/s marginal; rms residual 2.5 ms).
+  - A chat check = 1.10 calls of 4 rows: 65.6 ms fixed + 103.8 ms of SSD (1.27 GB, 690 misses, 1.84 MB per miss) + 10.2 ms
+    draft. Kept per check 2.33: 39.5 % of checks keep 1 token, 27.0 % keep 2. 47 % of the rows read are wasted.
+  - The first draft's selector cf predicts short checks: cf0 < 0.5 (27 % of checks) keep 1 token 79 % of the time;
+    cf0 >= 0.97 (22 %) keep 3.80 on average.
+- Lever: the exact check's FIRST call reads w1 = 1-3 rows when cf0 is low (later calls 4 rows), so rejected rows' experts
+  are not read. Exact-preserving: the verify is chunking-invariant for calls of >= 2 rows (WV1 / WV2); a chosen 1-row call
+  runs with ALLWAIT (the verify rows' flags; without it the late rule makes 1-row bits depend on the pools).
+  - Price depends on the per-width fixed cost, not yet measured. If the 59 ms is per call at any width, narrow calls pay
+    only on cf0 < ~0.5: +3-8 % [P]. If it shrinks with width: up to ~+15 % [P]. Related: F3 adaptive MTP width (KILL,
+    10-23) changed how many drafts the MTP head made; this keeps DFlash2's 15 drafts and changes only the verify chunking.
+- Code: t3_twopass.py F12_W1 = 4 | rand | cf:C:W[:C2:W2] (+ F12_W1SEED, F12_W1AW) and a per-call log (<tag>_<key>_ex_calls.json:
+  check, call index, width, rows kept, marks at start / end); fit_t3.py dumps it. Backups *.bak_w1. FAKE dry test passed.
+- Test (/Users/kamen/Fit12/scripts/chw12.sh; one share lock, MEM 12 GB, ~10 min; reader chw12_read.py): chat12's 12 IFEval
+  prompts, CAP 128, arm ex, two processes: A = W1 4 (control), R = W1 rand (1-4 rows per check, seeded).
+  - A = chat12's tokens on the first 128, 12 / 12. Otherwise the harness change is not inert: stop.
+  - R = A in tokens AND kept-row logits hash (lsha), 12 / 12: exact-preserving. Otherwise name the widths that differ and
+    restrict the policy to the matching ones.
+  - Pricing: the best cf policy, priced on A's checks with R's per-width costs: >= +5 % whole decode [P] -> stage 2;
+    < +3 % -> KILL (the fixed per-call cost eats the bytes saved).
+  - Timings count only if no other GPU job ran (locks.txt, one line per minute). Bytes and tokens count either way.
+- Stage 2 (only after stage 1 passes): the chosen policy vs W1 4 in separate processes, idle-GPU share slot or quiet; PASS
+  whole decode geo >= +5 % with the same tokens; KILL < +2 %.
