@@ -4,35 +4,49 @@
 that generation of models and document absolutely everything real time ... set everything up for when qwen 4 releases".
 
 ## 0. Status and how to use it (one screen)
-- **Watcher: RUNNING** (session-only background loop, every 5 min; `qwen4/watch.py`, log `qwen4/watch.log`).
-  - On a release it writes `qwen4/FOUND.json`, shows a macOS notification, `peer say`s the orchestrator, and stops.
-  - Persistent install (survives session restarts) is written but NOT loaded: `qwen4/com.moonshots.qwen4watch.plist`.
-    It is a LaunchAgent, so it needs Kamen's OK (section 5).
+- **Watcher: RUNNING** (session-only background loop; `qwen4/watch.py`, log `qwen4/watch.log`). After every account
+  move or restart: `cd ~/MoonShots/qwen4 && ./watch_loop.sh` in the background.
+> (a quote from the project owner, kept private)
+    - **ANNOUNCED** (blog, Qwen Chat, GitHub, HF org page; section 1): `qwen4/ANNOUNCED.json`, a macOS notification and
+      a `peer say` to the orchestrator. It keeps watching, every 2 min instead of 5. Section 3's T-1d rows start.
+    - **WEIGHTS** (a new Qwen HF repo named or configured Qwen 4): `qwen4/FOUND.json`, notification, `peer say`, stop.
+  - No LaunchAgent for now (Kamen, Sun 8 Nov). The plist stays written and NOT loaded:
+    `qwen4/com.moonshots.qwen4watch.plist`.
 - **First command when it fires:** `python3 qwen4/port_check.py <hf repo id>`.
   - It reads config.json only and prints what changed vs today's model, by engine part.
   - It also prints the derived store sizes and slots per layer at 45 / 24 / 12 GB, and the download size and license (for
     Kamen's download OK).
 - **Day-0 blockers to clear BEFORE the release (section 5):**
-  - **Disk:** 88 GB free of 1.8 TB. Today's model folder is 225 GB; a Qwen 4 bf16 repo of today's size is 360 GB.
-  - **Download OK:** Kamen's.
+  - **Disk:** 88 GB free of 1.8 TB (Sat 7 Nov). Today's model folder is 225 GB; a Qwen 4 bf16 repo of today's size is
+    360 GB. Kamen decides storage later; at the latest in the day between announcement and weights.
+  - **Download OK:** standing, via the orchestrator (section 5).
   - **Owners' pre-work:** the converter, kernels and screen parametrised by config (section 2).
 - **Today's model is already the Qwen 4 architecture preview** (Qwen3.8-Flash-Next, `qwen4_exp_text`, "a preview of the
   architecture that will underpin Qwen4", arXiv 2608.30320). If Qwen 4 keeps the architecture, the port is mostly sizes,
   and port_check shows which.
 
 ## 1. Watch
-| source | what fires | class |
+| source | what fires | tier |
 |---|---|---|
-| Hugging Face, author Qwen (newest 40) | a new repo named Qwen 4 (not Qwen4-Exp), or any new Qwen repo whose config.json says model_type / architecture qwen4 | PRIMARY: stops the loop |
-| GitHub org QwenLM (newest 30 repos) | a new repo named Qwen 4 | PRIMARY |
-| Qwen blog RSS (qwenlm.github.io) | a new post titled Qwen 4 | PRIMARY |
-| huggingface/transformers, ml-explore/mlx-lm issues + PRs titled qwen4 (not Exp) | e.g. "Add Qwen4": the day-before signal | signal: notify, keep watching |
+| qwen.ai article list (`qwen.ai/api/v2/article/retrieval`, what qwen.ai/research loads; ~5 MB, every ~15 min) | a new post naming Qwen 4 (title or slug) | ANNOUNCE |
+| Qwen Chat model list (`chat.qwen.ai/api/models`, public) | a new model naming Qwen 4 (e.g. qwen4-max) | ANNOUNCE |
+| GitHub org QwenLM (newest 30 created + 30 pushed) | a new repo named Qwen 4, or a rename (Qwen3 -> Qwen4) | ANNOUNCE |
+| QwenLM/Qwen3 README; the Hugging Face Qwen org card | a new line naming Qwen 4 | ANNOUNCE |
+| Hugging Face Qwen collections (50) and Spaces (40) | a new one named Qwen 4 | ANNOUNCE |
+| Hugging Face, author Qwen (newest 40) | a new repo named Qwen 4 (not Qwen4-Exp), or any new Qwen repo whose config.json says model_type / architecture qwen4 | WEIGHTS: stops the loop |
+| huggingface/transformers, ml-explore/mlx-lm issues + PRs titled qwen4 (not Exp) | e.g. "Add Qwen4": can come days early | signal |
 | HF search "qwen4" by known converters (mlx-community, youssofal / MTPLX, lmstudio-community, unsloth) | a 4-bit MLX upload = the fastest day-0 download | signal |
 | github.com/youssofal/mtplx releases | any new release (our runtime base) | signal |
 
-- Not watched: ModelScope (no public JSON listing found; Qwen posts to HF the same day) and X / Weibo (needs accounts).
-  Check those by hand on release day.
-- Read-only: public metadata and config.json text only; downloads need Kamen's OK via the orchestrator.
+- Every tier notifies: macOS, plus a fixed-text `peer say` to the orchestrator. Third-party text stays in the local
+  JSON files.
+- A new source's first run only records a baseline. Checked Sun 8 Nov 08:53: nothing current matches the pattern.
+- Dead or not watched:
+  - the old blog RSS (qwenlm.github.io: last post Sep 2025; the blog moved to qwen.ai);
+  - X and Weibo (no read-only access without an account; X's embed endpoint answers 429; no sign-ups);
+  - ModelScope (no public JSON listing found).
+  An X-only teaser is missed until a blog post, a Qwen Chat model or a GitHub repo appears.
+- Read-only: public metadata and config.json text only; downloads go through the orchestrator (section 5).
 
 ## 2. Port map (every model-specific part of the engine; config-driven vs hard-coded)
 Read-only scan, Sat 7 Nov 23:5x: BigMoE, Leap, TrainLab, EvalSuite, the decision map, Breakthrough, plus MoonShots'
@@ -100,11 +114,19 @@ embeddings (REF2 finds PLE through the module's `.ple` attribute). Special token
    MTP head.
 10. **4-bit affine g64 throughout:** a bf16 upstream must be quantised first (the mtplx recipe: base 4-bit g64, mlp.gate +
     indexer 8-bit, hc mixers + PLE bf16).
+11. **MLX version (the orchestrator + Leap, Sun 8 Nov):** MLX's sorted gather_qmm is wrong past 32,767 rows when
+    M % 64 != 0 (MLX #4632; fixed upstream in 0.32.3+ per the orchestrator, 0.32.4 per Leap's note). We pin 0.32.2 with
+    the pad-to-64 fix, because 0.32.4 changes tokens vs our exact references. A Qwen 4 port on MLX must pad, or choose
+    its MLX version deliberately, and take its exact references from that same version.
 
-## 3. Runbook: hour by hour from "weights public" (T+0)
+## 3. Runbook: from the announcement (T-1d) to "weights public" (T+0) and on
 | T | step | who | ready now? |
 |---|---|---|---|
-| +0:00 | The watcher fires. Run `qwen4/port_check.py <repo>` and post its diff, sizes, license and download size to the orchestrator. The orchestrator asks Kamen for the download OK. | MoonShots, orchestrator | yes |
+| T-1d +0:00 | ANNOUNCED fires. Read the post and Qwen Chat entry as data: sizes, architecture changes, license, release date if given. Run `qwen4/port_check.py` on any public config (a transformers / mlx-lm PR, a GitHub repo). Tell the orchestrator the expected download size, the disk it needs, and which owners' rows change. | MoonShots | yes |
+| T-1d +0:30 | Storage: Kamen's decision (the orchestrator has the candidates), so T+0 does not wait. Free space for the expected download + our store + 20 GB swap. | orchestrator, Kamen | **needs Kamen** |
+| T-1d +1:00 | Owners re-check their section 2 rows against the announcement (shapes, experts, top-k, vocab, MTP layers) and fix the MLX version (hazard 11). Smoke-run the parametrised converter / kernels on today's model. | owners | due Tue eve |
+| T-1d | Drafts: the "what Qwen 4 is" note, the numbers table header, prior art refreshed for whatever the post claims (section 4). | MoonShots | templates ready |
+| +0:00 | WEIGHTS fires. Run `qwen4/port_check.py <repo>` and post its diff, sizes, license and download size to the orchestrator. The orchestrator asks Kamen for the download OK. | MoonShots, orchestrator | yes |
 | +0:05 | Pick the artifact: a 4-bit MLX upload (watch signal: MTPLX / mlx-community; today's model came from MTPLX's 4-bit at ~75 GB + n-gram tables) if it exists, else the bf16 repo plus our own conversion. Start the download. | orchestrator / BigMoE | needs disk + OK |
 | +0:10 | Freeze the facts: model card, license, architecture deltas, tokenizer + chat template diff (special token ids), MTP layers shipped? First finding note: "what Qwen 4 is" (TEMPLATE_finding.md). | MoonShots | template ready |
 | +0:30 | Baselines on the same Mac while our store builds: MTPLX / mlx-lm stock decode tok/s, plus prefill, on the 12-prompt sets. This is the honest comparison row for every later claim. | BigMoE | scripts exist for today's model |
@@ -158,19 +180,27 @@ Pre-write NOW (owners; MoonShots cannot edit their trees):
   measured ..." with the workload, the memory line, and exact vs lossy, never "first method".
 
 ## 5. Approvals and asks (open)
-Status (the orchestrator, Sun 8 Nov 00:0x):
+Status (the orchestrator, Sun 8 Nov 00:0x; Kamen's answers relayed 09:0x):
 > (a quote from the project owner, kept private)
   download goes through the orchestrator, which logs name / source / size and tells Kamen. MoonShots does not start
   downloads itself.
-- **Disk** is the real gate: Kamen and the orchestrator discuss storage on Sunday (a disk audit is running).
-- **LaunchAgent:** the orchestrator asks Kamen on Sunday. Until then the session watcher keeps running.
+- **Disk / storage:** Kamen decides later; the orchestrator holds the candidates. It is needed by the announcement at
+  the latest (section 3, T-1d +0:30).
+> (a quote from the project owner, kept private)
+> (a quote from the project owner, kept private)
 - **Owners' pre-work:** NewIdeas puts it in the QUEUE behind the CHAT-150 pieces, due Tue evening.
 
-1. **Kamen (via the orchestrator):** free disk for day 0. Need >= ~200 GB for a 4-bit MLX download (~75-130 GB) plus
-   our store (~72 GB scaled), or ~450 GB for the bf16 path. Today 88 GB is free; the candidates to delete or move are the
-   owners' to name.
 > (a quote from the project owner, kept private)
-   T+0 does not wait.
-3. **Kamen:** OK to install the watcher as a LaunchAgent (section 0).
+   download (~75-130 GB) plus our store (~72 GB scaled), or ~450 GB for the bf16 path. Sat 7 Nov: 88 GB free. The
+   announcement gives about a day to clear it.
+2. **Kamen: answered** (standing download OK, >= 20 GB left for swap, each download via the orchestrator).
+3. **Kamen: answered** (no LaunchAgent for now).
 4. **Owners:** the section 3 pre-writes, by Tue 10 Nov evening; MoonShots will message each owner with its rows of the port
    map.
+
+## 6. Publish (posting is Kamen's call)
+- **License: GPL-3** for the published engine package (Kamen confirmed, Sun 8 Nov). Bundled code keeps its own license:
+  MTPLX is Apache-2.0 (GPL-3 compatible), MLX is MIT. The weights keep the model's license (port_check prints it).
+- What goes out per result: a row in the live table (`qwen4/notes/TEMPLATE_numbers_table.md`), a finding note
+  (`qwen4/notes/TEMPLATE_finding.md`) with its prior-art tag (section 4), and the commit + exact command.
+- MLX version and pad fix stated with every exact number (hazard 11).

@@ -6,3 +6,6 @@ SIGNALS.json
 SIGNALS_TEST.json
 launchd.out
 launchd.err
+ANNOUNCED.json
+ANNOUNCED_TEST.json
+*.json.bad
