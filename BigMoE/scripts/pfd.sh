@@ -62,7 +62,9 @@ arm pde1k 16 "$KI" $QC "$E,R57_PFD=1,R57_PFD_CHECK=1"
 arm pdz0 256 "$KI" $QZ "$ZS"
 arm pdz1 256 "$KI" $QZ "$ZS,R57_PFD=1"
 A=$(avail_gb)
-if awk -v a="$A" 'BEGIN {exit !(a >= 47.2)}'; then
+if [ "${PFD_PARTS:-AB}" = A ]; then                     # PFD_PARTS=A (v2 re-run, 18:xx): part B settled in a6d5347
+  say "part B not requested (PFD_PARTS=A)"
+elif awk -v a="$A" 'BEGIN {exit !(a >= 47.2)}'; then
   P0="R57_PFCHUNK=1024,R57_PFNOLOG=1"
   arm pdpa1 64 "$KP" $QC "$E,$P0,R57_PFLM=1"
   arm pdb38s 64 "$KP" $QC "$E,$P0,R57_PFLM=3,R57_PFLM_TOK=8192"
@@ -70,9 +72,9 @@ if awk -v a="$A" 'BEGIN {exit !(a >= 47.2)}'; then
 else
   say "part B skipped: NO-SWAP $A GB < 47.2"
 fi
-"$PY" -I - "$SNAP" >> "$LOG" 2>&1 <<'EOF'
+"$PY" -I - "$SNAP" "$TAGS" >> "$LOG" 2>&1 <<'EOF'
 import json, re, sys, statistics as S
-snap = sys.argv[1]
+snap = sys.argv[1]; tags = sys.argv[2].split() if len(sys.argv) > 2 else []
 peak = {}
 for ln in open("data/pfd/c45.log"):
     m = re.search(r"done (\S+) rc=\d+:.*lifetime peak ([\d.]+) GB", ln)
@@ -128,7 +130,7 @@ part_a("pde1k", "pde0", "E + PF-D + CHECK (timing void), CAP 16")
 part_a("pdz0", "pdz0", "zs = M1-B + COH + SB1 (chat; control), CAP 256")
 part_a("pdz1", "pdz0", "zs + PF-D, CAP 256")
 R0, T0 = load("pdpa1")
-if R0:
+if R0 and "pdpa1" in tags:
     L.append("Part B (the 3 PFX agent prompts, E, CAP 64): prefill TTFT, x vs PF-A, tokens and logits hash vs PF-A")
     for t, nm in (("pdpa1", "PF-A (R57_PFLM=1, control)"), ("pdb38s", "PF-B TOK 8192 + seg per chunk"), ("pdb32s", "PF-B TOK 2048 + seg per chunk")):
         R, T = load(t)

@@ -22,7 +22,7 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
   - Pooled decode [K], re-derived by NewIdeas from the request rows (it equals REPORT.md's pooled column):
     - IFEval: A 28.0 / B 37.4 tok/s, TTFT median 0.86 / 0.97 s.
     - All 4 sets: A 26.1 / B 38.9 tok/s. Peak footprint 34.9 / 33.6 GB.
-    - Ours on the same 12 IFEval (BigMoE's reports): N45 EB exact 39.9, L 45.0 whole decode, at 41.7-42.4 GB.
+    - Ours on the same 12 IFEval, POOLED (NUMBER_CHECK 0a-2; the N45 report's 39.9 / 45.0 are geo means): exact 37.1 (N45) / 38.3 (CHS4 yes1), L 43.4 / 44.2, at 41.7-42.4 GB.
     - Strata runs IQ3_XXS, so its tokens differ from NAX6-N's (1 of 12 IFEval rows equal). INFORMATION for the table.
   - Told the orchestrator 15:23: relaunch with H2H_ATTEMPTS=10 (finished arm+passes are kept). A relaunch also puts
     Strata ahead of PFB again, because PFB's AFTER (DRIVER_DONE, or a last waiter.log line 'WAITER END') is met now.
@@ -31,7 +31,7 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     done 15:39. The exact arms C / D were next at 15:41.
   - FINAL 16:3x (re-derived; PUBLISH_INVENTORY 'STRATA HEAD-TO-HEAD, DONE'): 8 / 8 at 16:07, B and D again at a 33 GB
     arena 16:12-16:25, whose peak is 40.8 / 41.2 GB, so it pairs with our 45 GB line. Lossy: ours x1.24-1.29 (~41 GB)
-    and x1.37 (~32 GB). Exact: 0.98x and 0.94x (Strata's exact is exact only to its IQ3_XXS weights). TTFT: Strata
+    and x1.37 (~32 GB). Exact: 0.91-0.94x and 0.94x (pooled; corrected 17:16 from the geo 39.9) (Strata's exact is exact only to its IQ3_XXS weights). TTFT: Strata
     0.83-1.06 s vs ours 2.9-3.1 s, so end to end ours is behind (24.8 vs 29.7 at ~41 GB) until PF-D (CT1 below). PFB stays blocked until DRIVER_DONE (EvalSuite amendment 4: only
     DRIVER_DONE or 'WAITER END: DONE' releases its card reference).
   - MON 07:05 SLOT, CORRECTED 15:24 (the orchestrator): hard stop 15:00, not 09:00. Kamen's schedule (11-02): Mon-Fri
@@ -45,6 +45,8 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     - PF-D is GO for BigMoE (Kamen: Strata's code may be used, MIT notice kept). Its A/B gets the next 45 GB slot when
       BigMoE asks.
     - NOW: EvalSuite's card-reference chunk (started 16:43, C 192, 10 rows, <= 45 min).
+    - HELD 17:1x: Breakthrough's 2 approved chat map screens (ready, ~9 min, share MEM 18 GB): not armed when research
+      stopped, and no use before Wednesday. They go after the card reference only if the orchestrator OKs them.
     - NEXT: a low-memory Strata run (24 and 12 GB lines; results_low24 / results_low12; 35-50 min, quiet) in the gap
       after that chunk. EvalSuite holds until results_low12/DRIVER_DONE or 75 min.
     - THEN: EvalSuite's reference resumes. Sunday's GPU ends 22:45; F2a at 23:00. Monday 07:05-15:00: the card

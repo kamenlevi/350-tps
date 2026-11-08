@@ -89,8 +89,8 @@ prompt orders.
 ### CHAT per memory line (Kamen: the publish table leads with chat; 12 IFEval prompts, greedy, cap 256, whole decode)
 | line | mode | chat tok/s (whole decode) | peak | source | quality |
 |---|---|---|---|---|---|
-| 45 GB | EXACT (E5 / N45 exact env) | 39.9 (36.4-39.9 across runs) [K] | ~43 GB | BigMoE N45 (Sat 23:5x), NewIdeas chat_rows.py | exact |
-| 45 GB | shipped lossy config (L) | 45.0 (42-45) [K] | ~43 GB | BigMoE N45 / CHS2 | CERT: lossy, same scores (HE+, math, MBPP, IFEval). Multilingual: never gated. The MGSM gate is HELD for Kamen: its prompts are typed math, and the card lists no natural-language multilingual benchmark (known benchmarks only, Kamen 09:3x) |
+| 45 GB | EXACT (E5 / N45 exact env) | 37.1 pooled, 2 passes (N45; its report's 39.9 is a geo mean); 38.3 (CHS4 yes1, E + SB1) [K] | 41.7 GB | BigMoE N45 / CHS4 runs.json, NewIdeas NUMBER_CHECK 0a-2 | exact (24 / 24 == AR) |
+| 45 GB | shipped lossy config (L) | 43.4 pooled (N45; report geo 45.0); 44.2 (CHS4 y0 + y0b) [K] | 42.4 GB | BigMoE N45 / CHS4 runs.json, NUMBER_CHECK 0a-2 | CERT: lossy, same scores (HE+, math, MBPP, IFEval). Multilingual: never gated. The MGSM gate is HELD for Kamen: its prompts are typed math, and the card lists no natural-language multilingual benchmark (known benchmarks only, Kamen 09:3x) |
 | 45 GB | L + M1-B (QOM on the MTP head's chat drafts, bonus gated) | 49.0 [K, one pass, mean of 2]; chs4 again 49.3 / 50.5 | 42.4 GB | BigMoE CHS2 87156ea + CHS4, re-derived | IFEval same scores PASS both orders vs NAX6-N (-1.00 / -4.00 pt; EvalSuite RESULT_chat_m1b 70b5cf8). Multilingual: gate HELD for Kamen (MGSM is typed math, so QOM never runs on it; the options are English-only with a language switch, or MGSM as chat). The multi blunder line, 334 per 10K, is information |
 | 45 GB | L + M1-B + R57_SB1 (1-row checks overlap their reads; schedule only) | 52.0 [K, one pass; +4.2 % vs M1-B's mean] | 42.3 GB | BigMoE CHS4 ybs1, re-derived (1-row checks 35.4 vs 48.0 / 45.3 ms) | SB1 is BIT-EXACT: E vs E + SB1 logits hashes identical on 676 / 676 checks (CHS5). CHS5 repeat on identical tokens: 51.89 vs 49.67 / 49.94 (+4.2 %), so it shares M1-B's gate. NOT adopted (BigMoE / Kamen) |
 | 45 GB | L + M1-B + COH + SB1 + FAST bundle / HC8_G + rank cut 8 + R1 (best measured stack) | 56.05 [K, one pass] | 42.4 GB | BigMoE CHS5 zsgcr, re-derived | LOSSY, UNGATED (FAST kernels + the R1 rule): needs its own IFEval + MGSM gate (Kamen's rule); HELD behind M1-B's MGSM gate (it carries M1-B's QOM) |
@@ -109,7 +109,7 @@ prompt orders.
 
 | peak footprint | ours (config) | Strata (arm) | ratio |
 |---|---|---|---|
-| ~41-42 GB | lossy 51.9 (zs) / 53.8 (zsgcb), 42.4 GB; exact 39.9 (N45 EB) | lossy 41.8 (B, 33 GB arena, 40.8 GB); exact 40.6 (D, 41.2 GB) | lossy x1.24-1.29; exact 0.98x |
+| ~41-42 GB | lossy 51.9 (zs) / 53.8 (zsgcb), 42.4 GB; exact 38.3 (CHS4 yes1; N45 37.1 pooled) | lossy 41.8 (B, 33 GB arena, 40.8 GB); exact 40.6 (D, 41.2 GB) | lossy x1.24-1.29; exact 0.91-0.94x |
 | ~31-35 GB | lossy 51.3 (zs at C 160, 31.2 GB, UNGATED at 32 GB); exact 33.8 (E at C 160, 30.6 GB, 12 / 12 == AR) | lossy 37.4 / 37.1 (B1 / B2, default arena, 33.5-33.6 GB); exact 36.1 / 35.6 (D1 / D2, 33.5-34.0 GB) | lossy x1.37; exact 0.94x |
 
   - Strata without its MTP head: 28.0 / 25.6 (A1 / A2), exact 25.5 / 25.3 (C1 / C2) at the default arena.

@@ -1129,3 +1129,40 @@ Snapshot b5e0d1f (ref2 d05063fa), quiet lock, no heat pause during the run; E (e
   (< 50 %, >= 25 %): BETWEEN by its letter; the routed-resident share (65.5 % base) is the direct measure of what PF-D skips.
 **fb0r:** FU's fb0 (L at C 256; the orchestrator's publish job overlapped it) re-run: TTFT 16.7 / 66.6 / 40.9 s vs 16.5 / 68.1 / 41.4 s,
 peak 45.10 GB both: the overlap did not change fb0 beyond ~2 %; FU's numbers stand.
+
+## Sun 8 Nov 17:23-17:40: PFD = PF-D v1 (chat prefill serves pool-resident experts) + PF-B with Leap's seg fix (data/pfd/pfd_report.txt, a6d5347)
+Snapshot ba7dc54 (code 06ed3dd), quiet lock, swap flat (5.39-5.41 GB). Gate 0 passed first: scripts/pfd_unit.py, the GPU rebuild of 18 experts
+(layers 0 / 23 / 47) from their MSB-3 / LSB-1 parts == the ext's read_rebuilt_layout on all 9 pieces, 0 differing words.
+**PF-D v1 is EXACT but SLOWER (12 N45 IFEval prompts, C 256):**
+| arm | TTFT mean (median) | prefill SSD per prompt | rows A / B / C (12 prompts) | vs control | == AR | lifetime peak |
+|---|---|---|---|---|---|---|
+| pde0 E (control), CAP 64 | 3.06 s (2.94) | 20.4 GB | - | - | 12/12 | 41.80 GB |
+| pde1 E + PF-D | 7.91 s (7.85) | 7.2 GB | 27,632 / 39,274 / 21,006 | tokens 12/12, logits hash 256/256 | 12/12 | 46.20 GB |
+| pde1k E + PF-D + CHECK (timing void), CAP 16 | - | - | 63,835 rows compared | 0 differing (A 0 / B 0) | 12/12 | 48.90 GB |
+| pdz0 zs (M1-B + COH + SB1; control), CAP 256 | 3.20 s (3.11) | 20.4 GB | - | - | 2/12 | 42.40 GB |
+| pdz1 zs + PF-D | 8.15 s (8.32) | 7.5 GB | 25,965 / 39,880 / 22,002 | tokens 12/12, logits hash 721/721 | 2/12 | 46.90 GB |
+- Bitwise: every rebuilt row equals the ext's, and tokens + logits hashes equal the control in both configs. SSD bytes -64 % (better than
+  CT1's 45 % estimate: rows B read only the 0.72 MB side part).
+- Slower: the added time is linear in the rebuilt rows (A + B): ~0.85 ms per expert-row (ifeval/1220 +2.58 s for 3,087 rows; ifeval/374
+  +6.5 s for 7,599 rows), i.e. the MLX-op rebuild (~100 elementwise kernels per projection) runs at ~3.3 GB/s, slower than reading the
+  bytes. Its intermediates also add ~4.4 GB to the peak. Next: one fused Metal kernel (mx.fast.metal_kernel) per piece type.
+**PF-B + seg per chunk is EXACT (3 PFX agent prompts, E, CAP 64; vs PF-A pdpa1 189 / 358 / 433 tok/s, peak 45.10 GB):**
+- pdb38s (TOK 8192): 215 / 432 / **500 tok/s** (x1.14 / x1.21 / x1.16); tokens == and logits hash 8/8, 28/28, 22/22; peak 46.20 GB.
+- pdb32s (TOK 2048): 212 / 418 / 486 tok/s (x1.12 / x1.17 / x1.12); all ==; peak 45.80 GB.
+- Leap's find (6553fcb): the shared expert's q4 gate (N = 1) runs through qmm_splitk with split_k from M; per chunk slice it is bitwise.
+
+## Sun 8 Nov 17:47-17:57: PFD v2 = PF-D with the rebuild as two fused Metal kernels (data/pfd/pfd_report.txt, snapshot 06c8bf9, code 08c90e7)
+Unit test first (scripts/pfd_unit.py, no model): kernels == read_rebuilt_layout on 18 experts x 9 pieces; 0.050 ms per expert vs v1's MLX
+ops 0.901 ms (96 experts of layer 23; kernel == ops on all 96).
+| arm (12 N45 IFEval, C 256) | TTFT mean (median, min-max) | SSD per prompt | vs control | lifetime peak |
+|---|---|---|---|---|
+| pde0 E (control), CAP 64 | 3.01 s (2.89, 2.45-3.77) | 20.4 GB | == AR 12/12 | 41.80 GB |
+| pde1 E + PF-D v2 | 3.01 s (2.97, 2.41-3.68) | 7.2 GB | tokens 12/12, logits hash 256/256, == AR 12/12 | 44.30 GB |
+| pde1k + CHECK (timing void), CAP 16 | - | - | 63,835 rows compared, 0 differing | 47.20 GB |
+| pdz0 zs (control), CAP 256 | 3.12 s (3.01, 2.45-3.81) | 20.4 GB | - | 42.40 GB |
+| pdz1 zs + PF-D v2 | 3.30 s (3.11, 2.55-4.04) | 7.5 GB | tokens 12/12, logits hash 721/721 | 45.00 GB |
+- **Exact, -64 % SSD bytes, but no TTFT gain yet** (E: equal; zs: +6 %). Per-prompt stage timers (pde1, runs.json "pfd"): side-part reads
+  0.22 s, today's reads for absent bases 0.44 s (~11 GB/s on both), GPU rebuild + scatter 0.96 s (~20 ms per layer, ~3x the kernels
+  alone), the MoE call 0.21 s, everything else 1.19 s. The step that should cost ~0.3 s costs ~1 s: next, time its parts (gathers,
+  numpy -> MLX copies, scatter) on synthetic pools (scripts/pfd_bench.py), then fuse or overlap them.
+- Peak: +2.5 GB over the control (44.3 / 45.0 GB vs 41.8 / 42.4): the gathered inputs, kernel outputs and the scattered scratch copy.

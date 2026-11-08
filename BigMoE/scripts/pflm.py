@@ -280,7 +280,9 @@ def prefill_layer_major(model, ids, chunk, states, on_chunk=None, on_layer=None)
 import fcntl
 from concurrent.futures import ThreadPoolExecutor
 
-PFD = {"calls": 0, "A": 0, "B": 0, "C": 0, "ssd": 0, "checked": 0, "bad_A": 0, "bad_B": 0, "fallback": 0}
+import time
+PFD = {"calls": 0, "A": 0, "B": 0, "C": 0, "ssd": 0, "checked": 0, "bad_A": 0, "bad_B": 0, "fallback": 0,
+       "tB": 0.0, "tC": 0.0, "tG": 0.0, "tM": 0.0}           # s: side-part reads, today's reads, GPU rebuild + scatter, the call
 _and, _or, _shl, _shr = mx.bitwise_and, mx.bitwise_or, mx.left_shift, mx.right_shift
 
 
@@ -336,9 +338,88 @@ def _bf16(v):
     return v.astype(mx.uint16).view(mx.bfloat16)
 
 
+# PF-D v2 (17:4x; v1's MLX-op rebuild cost ~0.85 ms per expert, slower than the SSD read it saves): the same rebuild as two
+# fused Metal kernels, one pass each. W4: one thread per (expert, row, 64-weight group): 6 native w3 words + 2 l1 words -> 8
+# row-major 4-bit words (the ext's spread8 / rebuild_w4). P11: one thread per (expert, block, code): an 11-bit code -> its bf16
+# bits at the row-major (row, group) place, halved for the scales (unp11 + halve_bf16). R57_PFD_KERNEL=0 keeps v1's ops.
+_W4_HDR = """
+inline uint spread8(uint x, uint l) {
+  uint a = (x & 0xFFFu) | ((x & 0xFFF000u) << 4);
+  a = (a & 0x003F003Fu) | ((a & 0x0FC00FC0u) << 2);
+  a = (a & 0x07070707u) | ((a & 0x38383838u) << 1);
+  uint y = l & 0xFFu;
+  y = (y | (y << 12)) & 0x000F000Fu;
+  y = (y | (y << 6)) & 0x03030303u;
+  y = (y | (y << 3)) & 0x11111111u;
+  return (a << 1) | y;
+}
+"""
+_W4_SRC = """
+  uint gid = thread_position_in_grid.x;
+  uint per = O_ * KG_;
+  uint i = gid / per, rem = gid - i * per;
+  uint row = rem / KG_, g = rem - row * KG_;
+  uint cn = ((row >> 5) * KG_ + g) * 32u + (row & 31u);
+  const device uint* a3 = w3 + (size_t)i * per * 6u + (size_t)cn * 6u;
+  const device uint* a1 = l1 + (size_t)i * per * 2u + (size_t)cn * 2u;
+  device uint* o = out + (size_t)i * per * 8u + (size_t)rem * 8u;
+  for (uint h = 0; h < 2u; h++) {
+    uint a = a3[3u * h], b = a3[3u * h + 1u], c = a3[3u * h + 2u], l = a1[h];
+    o[4u * h + 0u] = spread8(a & 0xFFFFFFu, l);
+    o[4u * h + 1u] = spread8((a >> 24) | ((b & 0xFFFFu) << 8), l >> 8);
+    o[4u * h + 2u] = spread8((b >> 16) | ((c & 0xFFu) << 16), l >> 16);
+    o[4u * h + 3u] = spread8(c >> 8, l >> 24);
+  }
+"""
+_P11_SRC = """
+  uint gid = thread_position_in_grid.x;
+  uint per = NB_ * 32u;
+  uint i = gid / per, rem = gid - i * per;
+  uint b = rem >> 5, r = rem & 31u;
+  const device uint* w = wd + (size_t)i * WD_;
+  const device uint* q = w + (size_t)b * 11u;
+  uint bit = 11u * r, wi = bit >> 5, sh = bit & 31u;
+  uint c = q[wi] >> sh;
+  if (sh > 21u) c |= q[wi + 1u] << (32u - sh);
+  uint v = (((c & 0x400u) << 5) | ((c & 0x3FFu) + (w[11u * NB_] << 7))) & 0xFFFFu;
+  if (HALVE_) v = ((v & 0x7FFFu) == 0u) ? v : ((v - 0x80u) & 0xFFFFu);
+  out[(size_t)i * per + (b / KG_) * 32u * KG_ + (b % KG_) + r * KG_] = (uint16_t)v;
+"""
+_KER = {}
+
+
+def _kernels():
+    if not _KER:
+        _KER["w4"] = mx.fast.metal_kernel(name="pfd_w4", input_names=["w3", "l1"], output_names=["out"], source=_W4_SRC,
+                                          header=_W4_HDR)
+        _KER["p11"] = mx.fast.metal_kernel(name="pfd_p11", input_names=["wd"], output_names=["out"], source=_P11_SRC)
+    return _KER["w4"], _KER["p11"]
+
+
 def rebuild_parts(t, w3s, s3s, l1s, bs):
     """The 9 4-bit pieces (PIECES order) of n experts from their part pieces: per projection w3 (n, O, 6KG) and l1 (n, O, 2KG)
     in native order, s3 / b as (n, words) p11 pieces. Exactly the ext's read_expert on a native+p11 record."""
+    if os.environ.get("R57_PFD_KERNEL", "1") == "0":
+        return rebuild_parts_ops(t, w3s, s3s, l1s, bs)
+    kw4, kp11 = _kernels()
+    out = []
+    for p in range(3):
+        O, KG = int(t["rows3"][p]), int(t["shapes4"][3 * p][0][1]) // 8
+        n = int(w3s[p].shape[0])
+        W = kw4(inputs=[w3s[p], l1s[p]], template=[("O_", O), ("KG_", KG)], grid=(n * O * KG, 1, 1), threadgroup=(256, 1, 1),
+                output_shapes=[(n, O, 8 * KG)], output_dtypes=[mx.uint32])[0]
+        sb = []
+        for wd, hv in ((s3s[p], 1), (bs[p], 0)):
+            nb = O // 32 * KG
+            sb.append(kp11(inputs=[wd], template=[("NB_", nb), ("WD_", int(wd.shape[1])), ("KG_", KG), ("HALVE_", hv)],
+                           grid=(n * nb * 32, 1, 1), threadgroup=(256, 1, 1), output_shapes=[(n, O, KG)],
+                           output_dtypes=[mx.uint16])[0].view(mx.bfloat16))
+        out += [W, sb[0], sb[1]]
+    return out
+
+
+def rebuild_parts_ops(t, w3s, s3s, l1s, bs):
+    """v1: the same rebuild in MLX ops (exact, ~0.85 ms per expert)."""
     out = []
     for p in range(3):
         O, KG = int(t["rows3"][p]), int(t["shapes4"][3 * p][0][1]) // 8
@@ -423,12 +504,18 @@ def install_pfd(tier, check=False):
         rows = np.arange(len(uniq))
         A, B, C = rows[(sb >= 0) & (ss >= 0)], rows[(sb >= 0) & (ss < 0)], rows[sb < 0]
         msb, lsz = int(t["msb_sz"]), int(t["recsz"]) - int(t["msb_sz"])
+        t0_ = time.perf_counter()
         lsb = read_parts(t, uniq[B], msb, lsz) if len(B) else None
+        t1_ = time.perf_counter()
         tier._reuse_drop()
         scr = [mx.zeros((len(uniq), *sh), dt) for sh, dt in t["shapes4"]]
         mx.eval(*scr)
+        t2_ = time.perf_counter()
         if len(C):                                       # C: today's path, into those rows
             tier._read_rebuilt(t, uniq[C].astype(np.int32).tolist(), C.astype(np.int32).tolist(), scr)
+        t3_ = time.perf_counter()
+        PFD["tB"] += t1_ - t0_
+        PFD["tC"] += t3_ - t2_
         AB = np.concatenate([A, B])
         if len(AB):
             gi = mx.array(sb[AB].astype(np.int32))
@@ -453,6 +540,9 @@ def install_pfd(tier, check=False):
             for i in range(len(scr)):
                 scr[i][ix] = reb[i]
             del reb, w3s, s3s, l1s, bs
+            t4_ = time.perf_counter()
+            mx.eval(*scr)                                # the rebuild + scatter, timed apart from the call
+            PFD["tG"] += time.perf_counter() - t4_
         PFD["calls"] += 1
         PFD["A"] += len(A)
         PFD["B"] += len(B)
@@ -463,8 +553,10 @@ def install_pfd(tier, check=False):
         for (proj, field), arr in zip(PIECES, scr):
             setattr(getattr(self, proj), field, arr)
         try:
+            t5_ = time.perf_counter()
             y = cls.__call__(self, x, mx.array(compact).astype(indices.dtype), *a, **kw)
             mx.eval(y)
+            PFD["tM"] += time.perf_counter() - t5_
         finally:
             for (proj, field), arr in zip(PIECES, saved):
                 setattr(getattr(self, proj), field, arr)

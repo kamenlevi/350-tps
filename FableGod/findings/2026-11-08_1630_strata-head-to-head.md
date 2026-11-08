@@ -27,9 +27,9 @@
 - Break-even [derived from the decode and first-token numbers]: chat on the 49.9 config passes Strata's whole-request time at about 530 tokens of answer.
 - Equal memory, ours at the 32 GB line (BigMoE C32, 12 IFEval, C 160) vs Strata at its default ~34 GB:
   - Lossy 51.3 tok/s at 31.2 GB (M1-B + COH + SB1, NOT gated at 32 GB) vs 37.3. Exact 33.8 at 30.6 GB (12 / 12 identical to one-token decoding) vs 35.8.
-  - First token ~2.9 s vs 0.98 s. Whole request 22.5 / 19.8 vs 29.5 / 28.2.
+  - First token (medians) 2.99 s lossy / 2.83 s exact vs 0.98 / 1.06 s. Whole request 22.5 / 19.8 vs 29.5 / 28.2.
 - Strata's own levers: its MTP layer gives +53 % decode at default cache (no-MTP 25.3 -> 38.7 pooled, all sets; 87 % of drafted tokens accepted). The Q8_0 lossy read adds only
-  3-4 % over exact (B vs D 38.7 vs 37.7). Cache size matters: 25-28 -> 33 GB is +12 to +21 % decode (B).
+  2.7 % over exact (B vs D 38.7 vs 37.7 pooled; 1.3-4.9 % per set). Cache size matters: 25-28 -> 33 GB is +12 to +21 % decode (B).
 - Caveats:
   - Different files: Strata's 3-bit IQ3_XXS vs our Q4 store. Our lossy FAST config reads ~3.2 bits per weight on average (ranks 0-1 at 4 bits, 2-9 at 3; 2026-11-07_1730), and our exact mode (NAX6-N) uses the same tiers, so the comparison is close to like for like in weight size. It is not Strata's best case: on a 2.4-bit file, Splash's 1.4.0 README puts Strata near 73 tok/s and itself at 95 tok/s decode with prefill 1,312 tok/s at 32K on an M5 Pro 64 GB (self-reported, other prompts, not reproduced here). If those hold, they beat our exact code decode, all our chat decode and our prefill. Quality was not compared here, and at most 4 of 24 rows are token-identical to our exact reference.
   - Full-cache arms are one pass each. The default-cache passes repeat within 0.5-5.5 %.
