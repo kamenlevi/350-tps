@@ -92,11 +92,18 @@ prompt orders.
 | 45 GB | EXACT (E5 / N45 exact env) | 39.9 (36.4-39.9 across runs) [K] | ~43 GB | BigMoE N45 (Sat 23:5x), NewIdeas chat_rows.py | exact |
 | 45 GB | shipped lossy config (L) | 45.0 (42-45) [K] | ~43 GB | BigMoE N45 / CHS2 | CERT: lossy, same scores |
 | 45 GB | L + M1-B (QOM on the MTP head's chat drafts, bonus gated) | 49.0 [K, one pass, mean of 2]; chs4 again 49.3 / 50.5 | 42.4 GB | BigMoE CHS2 87156ea + CHS4, re-derived | IFEval + multi gate PENDING (EvalSuite runner 59; chat_env.txt = M1-B) |
-| 45 GB | L + M1-B + R57_SB1 (1-row checks overlap their reads; schedule only) | 52.0 [K, one pass; +4.2 % vs M1-B's mean] | 42.3 GB | BigMoE CHS4 ybs1, re-derived (1-row checks 35.4 vs 48.0 / 45.3 ms) | E + SB1 == AR 12 / 12 (tokens; no logits hash yet). Same gate as M1-B if bit-exact; NOT adopted (BigMoE / Kamen) |
+| 45 GB | L + M1-B + R57_SB1 (1-row checks overlap their reads; schedule only) | 52.0 [K, one pass; +4.2 % vs M1-B's mean] | 42.3 GB | BigMoE CHS4 ybs1, re-derived (1-row checks 35.4 vs 48.0 / 45.3 ms) | SB1 is BIT-EXACT: E vs E + SB1 logits hashes identical on 676 / 676 checks (CHS5). CHS5 repeat on identical tokens: 51.89 vs 49.67 / 49.94 (+4.2 %), so it shares M1-B's gate. NOT adopted (BigMoE / Kamen) |
+| 45 GB | L + M1-B + COH + SB1 + FAST bundle / HC8_G + rank cut 8 + R1 (best measured stack) | 56.05 [K, one pass] | 42.4 GB | BigMoE CHS5 zsgcr, re-derived | LOSSY, UNGATED (FAST kernels + the R1 rule): needs its own IFEval + multi gate |
 | ~32 GB | - | not measured | - | - | - |
 | 24 GB | - | not measured (Breakthrough priced bytes only: EXACT 210 / 183 MB per kept token) | - | Breakthrough 2bb8413 | - |
 | 12 GB | VERIFIED GREEDY (ex, B12 + MTP) | 12.88 geo mean (pooled 12.76) [K, alone, quiet] | 10.96 GB | Fit12 chat12 (Sun 05:07-05:12), re-derived from chat12.txt | verified greedy |
 
+- CHAT TTFT (time to the first token; the whole-decode chat column leaves it out), 12 IFEval prompts of 37-101
+  tokens [K]:
+  - 45 GB: 3.05 s mean (2.51-3.65), the same in exact and lossy configs (BigMoE CHS5 zs / yeh / zsgcr runs.json).
+  - 12 GB: 2.73 s mean prefill (2.07-3.25), reading 15-26 GB from the SSD per prompt (Fit12 chat12).
+  - So 45 GB's TTFT is 1.12x 12 GB's: its pools don't help the chat prefill yet (QUEUE CT1).
+  - At ~52 tok/s and ~145-token answers, TTFT is about half of each chat answer's wall time.
 - 12 GB PREFILL [K] (same run, s_moe 4096, today's): 1.6K 190.6 tok/s (TTFT 8.5 s), 4.7K 377.7 (13.0 s), 7.9K 461.3
   (17.5 s). Each prompt streams ~63-67 GB from the SSD. s_moe 8192 (one MoE call per prompt) is x0.99-1.01: no gain.
   Tokens are equal. CORRECTED Sun 08:0x: only SHORT prompts are SSD-bound (~7.5 GB/s at 1.6K). At 7.9K, ~67 GB in

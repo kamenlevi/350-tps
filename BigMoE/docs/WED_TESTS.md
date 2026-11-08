@@ -1010,3 +1010,28 @@ with the 1024-chunk arm (pe1024, today's path). Prefill SSD = bytes read during 
   Reusing them would cut the 1.6K prompt's 64 GB.
 - Bigger chunks alone (NewIdeas' pre-registered verdict: BETWEEN, x2.46 at 4.7K) break bitwise logits and peak at 46.5-53.8 GB:
   superseded by PF-A.
+
+## Sun 8 Nov 07:58-08:12: CHS5, the M1-B lever stack with coherent one-call reads (data/chs/chs5_report.txt)
+
+12 IFEval prompts at C 256, one process per arm under a quiet lock, snapshot 65cd673. Every M1-B arm carries REF2_NAX_COH=1. Each row adds
+one lever to the row above it.
+
+| arm | config | whole decode tok/s | kept / check | check median ms | cycle median ms | 1-row / 2-row check median ms | tokens |
+|---|---|---|---|---|---|---|---|
+| z0 / z0b | M1-B + COH (two runs) | 49.7 / 49.9 | 2.43 | 37.7 / 37.4 | 46.2 / 45.8 | 45.8 / 32.8 | **z0 == z0b on 12 / 12** |
+| zs | + R57_SB1=1 | 51.9 (+4.2 %) | 2.43 | 36.1 | 43.7 | 35.9 / 32.7 | == z0 on 12 / 12 (schedule only) |
+| zsg | + Leap's bundle (K1M) + REF2_HC8_G=2 | 54.7 (+9.8 %) | 2.52 | 34.7 | 41.8 | | new numerics |
+| zsgc / zsgcb | + rank cut 8 on IFEval (two runs) | 53.5 / 53.8 (+7.7 %) | 2.35 | 33.3 / 33.1 | 40.5 / 40.2 | 31.4 / 30.8 | **zsgc == zsgcb on 12 / 12** |
+| zsgcn | zsgc + REF2_NGEMV_ROWS=2 | 55.4 (+11.2 %) | 2.44 | 33.4 | 40.5 | 31.9 / 30.0 | differs from zsgc on 8 / 12 |
+| **zsgcr** | zsgc + R57_CHAT_RULE=R1 (83 relaxed accepts) | **56.0 (+12.4 %)** | 2.50 | 33.8 | 40.6 | | |
+| yeh / yesh | E +- SB1, with R57_LOGHASH=1 | 36.5 / 36.8 | 2.53 | 59.4 / 58.8 | | | == AR 12 / 12 both |
+
+- **M1-B + COH is DETERMINISTIC:** repeat runs give the same tokens on all 12 prompts (z0 / z0b, zsgc / zsgcb), and whole decode moves
+  0.4-0.6 %. Before COH, L and M1-B moved about 4 % run to run. Chat A/Bs now read cleanly on whole decode.
+- **SB1 is EXACT at the logits level:** E vs E + SB1 has the same verify-logits hash on all 676 checks (NewIdeas' hash clause: closed,
+  SB1 PASS in full). On M1-B it keeps every token and saves 2 ms per check (1-row checks 45.8 -> 35.9 ms).
+- The stack's check falls from 37.6 to 33.2 ms and its cycle from 46.0 to 40.4 ms (-12 %). rank cut 8 trims the check by 1.4 ms but
+  costs kept (2.52 -> 2.35). NGEMV_ROWS=2 gives no gain at 1 row and -0.7 ms at 2 rows; its +3.5 % whole decode is new tokens
+  (kept 2.44), not speed. R1 gets back kept (2.50) for the best arm, 56.0 tok/s: +27 % over L (44.2) but 2.7x short of 150.
+- **What 150 needs:** at the stack's ~40 ms cycle, 150 tok/s takes 6 tokens kept per check (today 2.4-2.5). At 2.5 kept it takes a 17 ms cycle.
+  The drafter's chat acceptance and the ~33 ms check are the two walls.
