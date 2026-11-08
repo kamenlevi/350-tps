@@ -197,3 +197,19 @@ Checked on the gate keys; the result is the same in scripts/r57_screen.py and th
     results/day61_ref_runner.lcname_1206.log.
   - Fix (fdab3dd): the line-check runs are ref2tnaxn.r<C>, and a line-check decode that fails with no row now stops the
     runner.
+
+## Amendment 3 (Sun 14:5x; the orchestrator 14:4x): the reference waits for Strata's end; scheduling only
+
+- **Why:** Kamen asked for the Strata comparison as soon as possible. Strata starts with Chrome open, and the reference's
+  decode (29 GB) was the one thing standing in the way of the Strata waiter's 47 GB gate.
+- **Stop, 14:46:44:** runner 61 and its children were stopped by pid (10437, 51276, 51277, 51290), then peer unlock.
+  - Rows are appended as they finish, so only the row in flight was lost. It is decoded again.
+  - Kept: 185 of 381 rows (IFBench 150/150, GPQA Diamond 35/100, LCB 0/131).
+- **Re-armed at 14:52 with `CARD_WAIT_STRATA=1`:** no chunk starts until Strata has ended (WAITER END or DRIVER_DONE),
+  whether Chrome runs or not.
+  - Then, as in amendment 2: the PFB waiter's pid (at most 60 min), 2 min, and no quiet lock.
+  - The swap guard's base is re-read when a yield ends. Swap that others added while the runner waited is not its own.
+  - Mock-tested: with the flag it waits even while Chrome runs; without it, it returns at once.
+- **Leftover:** rows not done by tonight's 22:45 cutoff run first in the Mon 07:05 slot, then the lcoh arm (the
+  orchestrator 14:5x). There is no night block: MTP Head's F2a has the GPU from 23:00 to about 07:30.
+- **Unchanged:** keys, row counts, settings and the verdict rules.

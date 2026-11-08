@@ -17,6 +17,9 @@
 #   if Google Chrome is not running (pgrep -x) and Strata has not ended, Strata is about to take the Mac: no new chunk
 #   until its WAITER END (or DRIVER_DONE), then the pids in CARD_AFTER_PIDS (BigMoE's PFB waiter; at most
 #   CARD_AFTER_MAXWAIT minutes, 60), then no quiet lock held. Also before each chunk: no quiet lock, swap <= start + 2 GB.
+# Amendment 3 (the orchestrator 14:4x): Strata starts with Chrome open. CARD_WAIT_STRATA=1: no chunk until Strata has ended,
+#   Chrome or not (then the pids and no quiet lock, as in amendment 2). The swap guard's base is re-read when a yield ends
+#   (swap others added while this runner waited is not its own).
 # Stop it by pid only, and its children too; then peer unlock.
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 cd "$HOME/EvalSuite" || exit 1
@@ -327,14 +330,19 @@ cutoff_or_stop() { [ "$(date +%s)" -lt "$CUTOFF" ] || { say "reference: $1 by th
 yield_check() { # amendment 2: Google Chrome closed while Strata has not ended = Strata is about to take the Mac
   local t_s
   strata_done && return 0
-  pgrep -x "Google Chrome" > /dev/null && return 0
-  say "reference: Google Chrome is not running: yielding to Strata ($(refcount) of $RNK rows); no new chunk until WAITER END, PFB, no quiet lock"
+  if [ "${CARD_WAIT_STRATA:-0}" = 1 ]; then   # amendment 3: Strata runs with Chrome open
+    say "reference: CARD_WAIT_STRATA=1: yielding to Strata ($(refcount) of $RNK rows); no new chunk until WAITER END, PFB, no quiet lock"
+  else
+    pgrep -x "Google Chrome" > /dev/null && return 0
+    say "reference: Google Chrome is not running: yielding to Strata ($(refcount) of $RNK rows); no new chunk until WAITER END, PFB, no quiet lock"
+  fi
   until strata_done; do waitlog "reference: yielding: waiting for Strata's WAITER END / DRIVER_DONE"; sleep 60; cutoff_or_stop "Strata not done"; done
   t_s=$(date +%s); say "reference: Strata ended; waiting for pids ${CARD_AFTER_PIDS:-none} (PFB; at most ${CARD_AFTER_MAXWAIT:-60} min)"
   until pids_gone || [ $(( $(date +%s) - t_s )) -ge $(( ${CARD_AFTER_MAXWAIT:-60} * 60 )) ]; do sleep 60; cutoff_or_stop "PFB not done"; done
   sleep 120     # a job that starts on the same signal takes its lock first
   while quiet_held; do waitlog "reference: a quiet lock is held: waiting"; sleep 60; cutoff_or_stop "a quiet lock still held"; done
-  say "reference: resuming after Strata$(pids_gone || echo " (pids ${CARD_AFTER_PIDS} still alive after the cap)")"
+  SWAP0=$(swapgb)
+  say "reference: resuming after Strata$(pids_gone || echo " (pids ${CARD_AFTER_PIDS} still alive after the cap)"); swap base now $SWAP0 GB"
 }
 refstage() {    # NAX6-N's AR on the gate keys -> results/$REFRUN (runner 60's stage 0); below C 192 only after its line check
   local est=2100 np=0 b t0 d rc fg c need
@@ -374,9 +382,10 @@ grep . "$KF" "$XF" -h > "$RKF"; RNK=$(sort -u "$RKF" | grep -c .)
 strata_done() { tail -1 "$HOME/StrataEval/h2h/logs/waiter.log" 2>/dev/null | grep -q "WAITER END" || [ -e "$HOME/StrataEval/h2h/results/DRIVER_DONE" ]; }
 pids_gone() { local p_; for p_ in ${CARD_AFTER_PIDS:-}; do kill -0 "$p_" 2>/dev/null && return 1; done; return 0; }
 if [ "$STAGE" = ref ]; then
-  [ "$DRY" = 1 ] && { say "DRY (reference stage): $RNK keys (extension: ${EXT:-none}); $REFRUN has $(refcount); Strata $(strata_done && echo done || echo 'not done'); pids ${CARD_AFTER_PIDS:-none} $(pids_gone && echo gone || echo alive); free $(freegb) GB; cutoff $(date -r "$CUTOFF" '+%m-%d %H:%M'); stops before the first GPU step"; exit 0; }
+  YW="Chrome closed"; [ "${CARD_WAIT_STRATA:-0}" = 1 ] && YW="waits for its end"
+  [ "$DRY" = 1 ] && { say "DRY (reference stage): $RNK keys (extension: ${EXT:-none}); $REFRUN has $(refcount); Strata $(strata_done && echo done || echo 'not done') (yield: $YW); pids ${CARD_AFTER_PIDS:-none} $(pids_gone && echo gone || echo alive); free $(freegb) GB; cutoff $(date -r "$CUTOFF" '+%m-%d %H:%M'); stops before the first GPU step"; exit 0; }
   echo $$ > results/q61r.pid; trap 'rm -f results/q61r.pid' EXIT
-  say "runner 61 (the card gate, reference stage) start (pid $$): NAX6-N on $RNK keys (extension: ${EXT:-none}) -> $REFRUN, ${CARD_CHUNK_ROWS:-10} rows per chunk; yields to Strata (Chrome closed), then pids ${CARD_AFTER_PIDS:-none}; swap at start $SWAP0 GB; cutoff $(date -r "$CUTOFF" '+%m-%d %H:%M')"
+  say "runner 61 (the card gate, reference stage) start (pid $$): NAX6-N on $RNK keys (extension: ${EXT:-none}) -> $REFRUN, ${CARD_CHUNK_ROWS:-10} rows per chunk; yields to Strata ($YW), then pids ${CARD_AFTER_PIDS:-none}; swap at start $SWAP0 GB; cutoff $(date -r "$CUTOFF" '+%m-%d %H:%M')"
   refstage
   say "runner 61 reference stage end: $(refcount) of $RNK rows"
   exit 0
