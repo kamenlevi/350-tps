@@ -15,9 +15,9 @@
 - Larger chunks alone (2,048-8,192 rows) are OUT. They change the logits (hash 0 / N), the decode tokens differ at
   4.7K / 7.9K, and peaks reach 46.5-53.8 GB. The pre-registered chunk-size verdict is BETWEEN.
 - CORRECTED 08:2x: this note first compared PF-A with the 12 GB engine's prefill (191 / 378 / 461 tok/s,
-  2026-11-08_0515). Its 4.7K / 7.9K figures are UNDER CHECK, LIKELY VALID (08:5x: the tier prefill already pads): an MLX 0.32.2 bug (Leap, a521e91) leaves expert rows
-  unwritten in sorted-gather calls over 32,767 rows that are not a multiple of 64. Fit12 says its engine already pads
-  per-group calls, and a GPU proof is queued. Its 1.6K figure (191) stands either way. PF-A is not hit:
+  2026-11-08_0515). Those figures are VALID (Fit12's GPU proof 09:54; re-measured 192 / 373 / 459 tok/s). An MLX 0.32.2 bug (Leap, a521e91) leaves expert rows
+  unwritten in sorted-gather calls over 32,767 rows that are not a multiple of 64. Fit12's engine has no such call:
+  its largest is 15,872 rows and every call is a multiple of 64. PF-A is not hit either:
   its 1,024-token calls are at most 10,240 rows, and its logits match bitwise. BigMoE's pe4096 / pe8192 arms were hit;
   pe2048 (20,480 rows) was not and still changes the logits, so the "larger chunks OUT" line stands.
 - Leap's PF-B, priced and exact with the pad-to-64 fix: one MoE call per layer is x1.9 on the prefill experts at 4.7K /

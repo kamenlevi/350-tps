@@ -10,7 +10,8 @@ sys.path.insert(0, HERE)
 from evalsuite import decode_report as dr
 import d4x, rows_text as rt
 
-N = {"humaneval": 60, "math": 50, "ifeval": 100, "mgsm": 80}
+N = {"humaneval": 60, "math": 50, "ifeval": 100, "mgsm": 80, "ifbench": 150, "gpqad": 100, "lcb6": 131}   # card sets:
+#   the gate keys of tools/card_keys.json (PREREG_card_gates_2026-11-08)
 
 
 def load(run):
@@ -28,8 +29,9 @@ def main(s, arm, ref, *info):
     for i, r in enumerate((ref,) + info):
         R = load(r)
         keys = sorted(k for k in its if k in A and k in R)
-        if len(keys) < N[s]:
-            print(f"{s}: {len(keys)} of {N[s]} rows in both {arm} and {r}")
+        need = int(os.environ.get("SET_D4_N") or N[s])   # SET_D4_N: an extended set's full size (PREREG_card_gates am. 1)
+        if len(keys) < need:
+            print(f"{s}: {len(keys)} of {need} rows in both {arm} and {r}")
             if i == 0:
                 return 2
             continue

@@ -3837,3 +3837,53 @@ lines ~/NewIdeas/QUEUE.md:1709-1724 (screen 6) and 1742-1791 (screen 7, 14:1x + 
        baseline.
     4. The ablation paths (reuse, nw, t3, masks) still hold 48 / 10 literals. Sweep them before any arm runs on a new
        model; the capture itself is covered.
+
+- Sun 11:3x: THE ORCHESTRATOR'S SLOT (GPU idle since 09:46; share lock, MEM 18 GB, done by 22:30): the Qwen 4 capture
+  reproduction + the 24 / 12 GB chat map gates pre-registered at 04:2x / 04:4x. Runner scripts/q4/q4_repro_slot.sh
+  (swap +2 GB guard, wall caps), check scripts/q4/q4_repro_check.py.
+  - The 147-slot gates need no new masks: NewIdeas' qom_0_live_c147 and qom_0_live_ball_c147 (the 4-bit twins of the
+    screen 4 / 6 t3 masks, built and checked Wed) were snapshotted into out/ni and registered with install_c3.sh (test
+    ALL OK: PERT, loader path, 36/36 byte-equal, rank 0 kept on every row).
+  - The 51-slot masks: built with my unchanged copy of NewIdeas' builder (scripts/m1/dm_oea_masks.py, sha256 a939c473,
+    NewIdeas 9b6451e), 45 s on one core. Self-check: my copy rebuilds qom_0_live_c147 = NewIdeas' masks, 36/36 windows
+    bit-equal. Experts kept per realized row-layer (code / IFEval / multi):
+    | arm | code | IFEval | multi |
+    |---|---|---|---|
+    | qom_0_live_c147 | 8.30 | 9.09 | 9.24 |
+    | qom_0_live_c51 | 6.35 | 7.22 | 7.85 |
+    | qom_0_live_ball_c51 | 5.93 | 6.48 | 6.96 |
+    At 51 slots the sure rows' rank 2-9 pairs kept fall to 56 / 62 % (IFEval / multi, ball) from 79 / 80 % at 147; load
+    miss rate 27.5 / 20.7 %. Expect more flips than at 147.
+  - RESULT, "today's capture reproduced" (Sun 11:35-11:40) [K]: PASS, bit-exact on every pre-registered comparison
+    (data/q4/q4_repro_check.out). Board item QWEN 4 DAY-0 "Breakthrough" DONE.
+    - capture, 36 windows (10,316 answer rows), C 51, 238 s, with the patched dm_common (log: "MoE layers 48 (0..47);
+      capture ranks 10"). capture.json is byte-equal to out/baseline.json (11-02 04:03) and out/capture.json (11-02
+      10:46). Routing ids / tokens / gen equal on 36/36 windows.
+    - xcapture --max 1 (HumanEval_10, ifeval_1005, multi_ar21; 949 rows): x / w / ids / a equal to out/xcap (11-03),
+      tk / lp equal to out/xcapture.json, its routing equal too.
+    - Two harness notes. run_map's closing report() reads <OUT>/baseline.json, so with a scratch DM_OUT it exits 1
+      after a complete capture; the runner now judges a step by its "[dm] <name> done in" lines. My check's first
+      version doubled ".npz" and could pass on zero windows; both fixed before the verdict (0 windows now = FAIL).
+    - So on day 0: DM_MODEL=<new store> DM_ARCH=<new module> run_map.py capture works as soon as the windows and the
+      ablation literals (hazards 1-4 above) are dealt with.
+  - RESULT, the 24 / 12 GB chat map gates (Sun 11:40-11:56, one process, 36 windows each, ~230 s each, 0 warnings)
+    [K] (data/m1/chat_gates_24_12.out; under Kamen's 11-08 rule these flip lines are information that picks EvalSuite
+    runs, not the gate). Lines: code 1.34 [0.87], IFEval 5.42 [2.22], multi 3.69 [1.63]; all-row % [non-tie].
+    | arm | pool | code | IFEval | multi | map verdict | MB per kept [P] (IFEval / multi) |
+    |---|---|---|---|---|---|---|
+    | qom_0.5_live_c147_bonus5g (the 24 GB chat route, Wed) | 147 | 0.71 [0.33] | 4.30 [0.93] | 2.73 [0.85] | PASS | ~82 / 77 |
+    | qom_0_live_c147 (QOM0, bonus row exact) | 147 | 0.74 [0.24] | 4.50 [1.26] | 3.26 [0.76] | PASS | 105 / 96 |
+    | qom_0_live_ball_c147 (QOM0 + every last row) | 147 | 0.92 [0.54] | 6.36 [2.96] | 4.11 [1.85] | FAIL chat | 49 / 35 |
+    | qom_0_live_c51 | 51 | 1.16 [0.54] | 8.80 [4.96] | 5.26 [2.66] | FAIL chat | 276 / 242 |
+    | qom_0_live_ball_c51 | 51 | 1.40 [0.93] | 10.57 [6.53] | 7.99 [5.02] | FAIL all | 113 / 83 |
+    - McNemar vs the route (all rows): qom_0_live_c147 IFEval z +0.62, multi z +2.06 (non-tie -0.60): the same class.
+      qom_0_live_ball_c147 IFEval z +5.00, multi +3.91: clearly worse. At 45 GB the same ball rule passed (qom_0_live_ball
+      4.03 / 3.26); with 147 resident slots instead of ~295, gating the last row drops more cold ranks 2-9.
+    - 24 GB: no screened rule beats the route on bytes and stays clean. QOM0 with the bonus row exact is clean but costs
+      more bytes than the route (105 vs 82). The cheap ball rule (49 / 35) fails both chat sets. So the 24 GB chat floor
+      on clean rules stays ~80 MB per kept [P].
+    - 12 GB: QOM at cf 0 fails chat even with the bonus row exact. A cf 0.5 rule (bytes 216 / 199 [P] with the bonus
+      gated) is the next screen; the 80 MB line is not in reach at 12 GB with any clean rule found so far.
+    - Next screens if NewIdeas wants them (~4 min GPU each, masks from my builder copy in seconds): qom_0_live_c147
+      with the bonus row gated at 0.5 (between 105 and 50 MB [P]; both of its parents are clean), and qom_0.5_live_c51
+      (+ bonus5g) for 12 GB.

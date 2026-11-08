@@ -2024,3 +2024,6 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 10:25:09 SCR chw14 chw14ha end (rc 0)
 10:30:16 SCR chw14 chw14h2 end (rc 0)
 10:30:16 SCR chw14 end (rc 0, 735 s, swap 5077 MB)
+12:02:13 SCR chw15 start: T2 fixed-cost profile (P2' + PR1 + tail + F12_GSTAT on 12 IFEval CAP 128), share lock (36 GB free, swap 4933 MB, GPU 0%)
+12:04:19 SCR chw15 chw15p end (rc 0)
+12:04:19 SCR chw15 end (rc 0, 126 s, swap 4933 MB)

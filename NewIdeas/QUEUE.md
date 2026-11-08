@@ -46,13 +46,39 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
       COH.
     - NAX6-N's 80 MGSM rows come from EvalSuite's AR decode stage at 14.2 tok/s (measured on mathx): ~45 min, not
       ~20. About 2 h in all with both arms in two orders (EvalSuite).
-  - QUEUE WITHOUT MGSM (the orchestrator 09:3x; `date` 09:30):
-    1. BigMoE FU (quiet lock to 10:04, running since 09:24).
-    2. BigMoE PFB (~12 min, with NewIdeas' CT1 arm).
-    3. Breakthrough's slot.
-    4. Strata.
-    5. Fit12's prefill proof (pf13).
-    6. Sun 23:00 F2a.
+> (a quote from the project owner, kept private)
+    asap so I know exactly how bad our 50tps on chat actually is".
+    1. Fit12 T2 FIXED COST PROFILE (~5 min, share MEM 12 GB, armed 12:02). Only if it starts before Strata's lock.
+    2. STRATA (quiet 120 min). It needs 47 GB available, so Chrome must close; the orchestrator is asking Kamen.
+    3. BigMoE PFB (~22 min, with CT1 + FU fb0), right behind Strata while the 47 GB is free.
+    4. Breakthrough's two chat map screens (~4 min each, MEM 18 GB): QOM0 + bonus gated 0.5 at 147 slots, and
+       qom_0.5_live at 51 slots. They can also go in any gap before Strata's lock.
+    5. EvalSuite's card reference: NAX6-N AR, 381 keys, ~5-6 h, MEM 27-36 GB, by day after a built-in 12-row line
+       check (PREREG_card_gates 9af1abb).
+       - CHUNKED (the orchestrator 12:0x, on NewIdeas' suggestion): 10-prompt chunks start right after Fit12's T2,
+         while Strata waits for 47 GB (~36 GB free with Chrome open).
+       - It yields at a chunk boundary once Chrome closes, and resumes after Strata's WAITER END and PFB.
+       - Ready for the arms (BigMoE 12:0x): card snapshot e057abf, env files d049eb3 (card_lcoh / card_m1b /
+         card_m1bs). PFB queues no later than 22:15; Sunday's GPU ends 22:45.
+    6. EVENING, ending 22:45: a card arm (~3.6 h each, MEM 47 GB) if the reference leaves room. Then Sun 23:00 F2a.
+    7. MON 07:05 (Strata's old slot, free; NewIdeas places it): the card-gate arm work left from tonight. It's
+       resumable; quiet lock, MEM 47 GB, hard stop at Kamen's day start.
+    - RULE (11:3x) stays: a job that fits in ~30 GB never waits behind a memory-gated one. One > 5 GB job at a time.
+  - BREAKTHROUGH 11:56 [K]:
+    - The Qwen 4 capture reproduction PASSES bit-exact (053b3b6), so the Qwen 4 board item is DONE.
+    - Chat map screens (c159451; map flips, INFORMATION / screens under Kamen's rule):
+      - At 147 slots (24 GB), qom_0_live is clean (4.50 / 3.26 %) but reads 105 / 96 MB per kept vs the route's
+        82 / 77. qom_0_live_ball fails the chat lines (6.36 / 4.11).
+      - At 51 slots (12 GB), both QOM0 arms fail (8.80 / 5.26; ball 10.57 / 7.99).
+      - So 24 GB chat stays ~80 MB per kept on clean rules, and 12 GB needs cf 0.5.
+  - NEW, placed 11:3x: the model card's public benchmarks, fast vs exact (EvalSuite preparing: IFBench, LiveCodeBench v6,
+    GPQA). This is Kamen's rule, quality on the model's known benchmarks.
+    - Their 45 GB arms are memory-gated, so evening only. ~4 h of 45 GB GPU per evening (~500-600K tokens at 38-45
+      tok/s) won't hold all three sets in two arms, so EvalSuite sizes the subsets.
+    - Exact arm by day if exact is line-independent. Cheap check: the 24 GB exact env on the 12 IFEval == ar_ref_tokens
+      (REFTOK). If it holds, the exact rows run by day at 24 GB and only the fast 45 GB arm needs the evening.
+    - NAX6-N's AR stage (14.2 tok/s) is ~2.6x slower than exact E (36-40 tok/s, == AR 12 / 12 at cap 256). E as the
+      reference is EvalSuite's call; it isn't proven on long outputs.
   - NEWIDEAS' GUESS [G], written before any row (it stands if the gate runs as registered): both pass decision 4 at n 80, where -5 pt is 4 problems, so power is
     low. M1-B 0-6 pt under NAX6-N; L within 3 pt. If M1-B passes, its multilingual misspellings stay information: MGSM
     scores the final number, not the text.

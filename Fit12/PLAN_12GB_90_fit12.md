@@ -480,3 +480,35 @@ small tests under share locks. T1 = chat12 (12.88 tok/s, 556 MB per kept token) 
 - ha = 18.68 tok/s matches 12E's 18.58 (HumanEval, no PR1): PR1 + the tail rule cost nothing on code either.
 - Verdict: both lines pass. P2' goes to EvalSuite as a FAST-track candidate (IFEval + HumanEval same-scores at 12 GB, its
   protocol); NewIdeas places it. It stays a rounding-level change of the verified-greedy loop (not bit-exact, like today's ex).
+
+## T2 FIXED COST PROFILE (pre-registered Sun 08 Nov 11:37, before any run): where an exact call's 42-59 ms fixed cost goes
+NewIdeas 11:3x (QUEUE 489db84 "GPU QUEUE, RE-ORDERED 11:3x"): Fit12's next piece runs right after Breakthrough's repro + map
+gates. After stage 2 the 12 GB chat check is ~1.1 exact calls at 42-59 ms fixed + 84 ms per GB + ~10 ms draft: the fixed
+part is ~1 / 3 of a chat check. Rule (memory "profile the live path per stage"): measure the stages before routing any
+fixed-cost bet. This is a measurement only: no setting changes.
+- Code: t3_twopass.py F12_GSTAT=1 (TS log, `<tag>_<key>_ex_ts.json`; sha cc191f320b67; backup .bak_gs). Per exact call it logs:
+  - uptime stamps: t0 start, t1 after forward() (graph built), t2 after mx.eval, t3 after tolist + compare, t4 after
+    commit, t5 after the lsha hash;
+  - the loader thread's own clocks (ext.stats: proc_s, io_s, cpu_wait_s, misses, stalled, uses) at t0, t1, t2.
+  - fit_t3.py dumps the log (sha 42266985905b; backup .bak_gs).
+  - Row layouts of the existing logs are unchanged.
+- Run chw15p: P2' (F12_W1 cf:0.9:2 + PR1 + the tail rule, the FAST-track candidate's env) on chat12's 12 IFEval, CAP 128,
+  F12_PHLOG=1 + F12_GSTAT=1. One process, share lock, idle GPU, ~5 min. Gate as chw14 (no other > 5 GB lock or quiet ticket
+  for 6 min, >= 20 GB free, no PAUSE / HOLD / ACT / ramp / closed lid). Stops on swap +1 GB or 20 min. Deadline Sun 18:00.
+- Per call width and call index, the reader (chw15_read.py) gives mean ms for:
+  - build (t1 - t0), eval (t2 - t1), host (t3 - t2), commit (t4 - t3), hash (t5 - t4);
+  - inside eval: the loader busy (proc), of which reads (io) and overhead (proc - io), and the loader idle (eval - proc,
+    the GPU side's critical path);
+  - fits of each part against the call's GB read (its intercept = that part's share of the fixed cost);
+  - per check: draft ms and the time outside draft + exact.
+- Sanity checks: tokens + lsha = chw14c2 (same env) on 12 / 12 expected, and whole decode within +-5 % of 13.89. A token
+  mismatch means run-to-run variation or a perturbing stamp: reported either way.
+- Routing lines (decided before the data):
+  - Any host stage (build, host, commit, hash) >= 8 ms per call on average (~15 % of the fixed cost): a lever in my harness /
+    copies; I price it [P], then pre-register a build.
+  - Loader overhead (proc - io) >= 8 ms per call: a loader question for Breakthrough / Leap, with the table.
+  - The loader-idle intercept (eval - proc at 0 GB) >= 25 ms per call: a GPU-side dispatch / kernel question for Leap, with
+    the table.
+  - None of the three: the fixed cost is spread thin; I close the fixed-cost lever on my side (KILL).
+  - The hash (t5 - t4) is harness-only: if >= 2 ms per call, my 12 GB whole-decode figures understate the shipped loop by
+    that much (information).

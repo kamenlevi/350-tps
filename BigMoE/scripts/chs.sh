@@ -35,7 +35,7 @@ BUN="BIGMOE_PAUSE_EVERY_MS=50,R57_S0CARRY=1,REF2_SB_FIRST=1,REF2_PLE_LATE=1,REF2
 E="R57_NAX=1,REF2_KEEP_CACHES=1,R57_WIRED=1,$BUN"
 QC="humaneval,mbpp"; QI="humaneval,mbpp,ifeval"
 ALL='R57_FASTTAX=1|R57_HC8=1|REF2_HC8_FAST=1|R57_SVH=1|R57_DSUB=1|REF2_DN_KS=1|R57_RELAX_SPAN=1|R57_RELAX_SPAN_RULE=R2:2:0.25'
-ARMS=${CHS_ARMS:-"c0|$QC|$L;q1|$QI|$L;r1|$QC|$L,R57_CHAT_RULE=R1;fa1|$QC|$(drop 'R57_FASTTAX=1');fa2|$QC|$(drop 'R57_HC8=1|REF2_HC8_FAST=1');fa3|$QC|$(drop 'R57_SVH=1|R57_DSUB=1');fa4|$QC|$(drop 'REF2_DN_KS=1');fa5|$QC|$(drop 'R57_RELAX_SPAN=1|R57_RELAX_SPAN_RULE=R2:2:0.25');fa6|$QC|$(drop "$ALL");e0|$QC|$E;c0b|$QC|$L;qr1|$QI|$L,R57_CHAT_RULE=R1"}
+ARMS=${CHS_ARMS:-"c0|$QC|$L;q1|$QI|$L;fa1|$QC|$(drop 'R57_FASTTAX=1');fa2|$QC|$(drop 'R57_HC8=1|REF2_HC8_FAST=1');fa3|$QC|$(drop 'R57_SVH=1|R57_DSUB=1');fa4|$QC|$(drop 'REF2_DN_KS=1');fa5|$QC|$(drop 'R57_RELAX_SPAN=1|R57_RELAX_SPAN_RULE=R2:2:0.25');fa6|$QC|$(drop "$ALL");e0|$QC|$E;c0b|$QC|$L;r1|$QC|$L,R57_CHAT_RULE=R1;qr1|$QI|$L,R57_CHAT_RULE=R1"}
 nk() { echo "$1" | tr ',' '\n' | grep -c =; }
 IFS=';' read -ra AL <<< "$ARMS"
 for a in "${AL[@]}"; do                                  # every bisect arm must drop something (s5p_env changed?)

@@ -119,7 +119,8 @@ PICK = (("humaneval", "humaneval/HumanEval/68"), ("math", "math500/test/prealgeb
 ARMS_ = tuple(os.environ.get("R57_ARMS", "slot,gate,gate+pf").split(","))
 PICK = PICK[:int(os.environ.get("R57_PROMPTS", "2"))]
 SETOF = {"humaneval": "humaneval", "math500": "math", "gsm8k": "math", "ifeval": "ifeval", "multi": "multi", "agent": "agent",
-         "agentlong": "agentlong", "mbpp": "mbpp", "humanevalt": "humanevalt", "humanevalx": "humanevalx", "mathx": "mathx", "mgsm": "mgsm"}   # Fri 08:2x-21:5x: EvalSuite dec_agentlong / mbpp / humanevalt / humanevalx / mathx (FAST there needs R57_QOM_SETS)
+         "agentlong": "agentlong", "mbpp": "mbpp", "humanevalt": "humanevalt", "humanevalx": "humanevalx", "mathx": "mathx", "mgsm": "mgsm",
+         "ifbench": "ifbench", "gpqad": "gpqad", "lcb6": "lcb6"}   # Fri 08:2x-21:5x: EvalSuite dec_agentlong / mbpp / humanevalt / humanevalx / mathx (FAST there needs R57_QOM_SETS); Sun 11:5x: the card sets IFBench / GPQA diamond / LCB v6
 if os.environ.get("R57_KEYS"):                           # an explicit prompt list ("set/key,..." or '+'-joined inside c45_runner's
     PICK = tuple((SETOF[k.split("/")[0]], k) for k in os.environ["R57_KEYS"].replace("+", ",").split(","))   # arm lists)
 TAG = os.environ.get("R57_TAG", "r57")
@@ -245,7 +246,9 @@ if FAST:
                        os.environ.get("R57_QOM_SETS", "humaneval,ifeval,multi").split(",")}   # check): agent sets run exact unless listed
     if os.environ.get("R57_CHAT_RULE"):                  # Sun 8 Nov (CHAT150 strike K1, NewIdeas 00:4x): arm E's chat rule R1
         assert os.environ["R57_CHAT_RULE"] == "R1" and FAST == "QOM", "R57_CHAT_RULE=R1 rides on R57_FAST=QOM (only R1 is wired)"
-        for s_ in ("ifeval", "multi"):                   # (relax_core: accept the draft while log p(d) >= log p1 - 0.5 nat) on the
+        for s_ in os.environ.get("R57_CHAT_RULE_SETS", "ifeval,multi").split(","):   # R57_CHAT_RULE_SETS (Sun 11:5x, EvalSuite's card gates:
+                                                         # + ifbench, gpqad); the default = the two chat sets as before
+                                                         # (relax_core: accept the draft while log p(d) >= log p1 - 0.5 nat) on the
             FASTARMS["QOM"][s_] = dict(FASTARMS["QOM"].get(s_) or _S(), rules=(RXC.R1,))   # chat sets; a set outside
                                                          # R57_QOM_SETS keeps exact expert reads (thr None: rules only, as arm E)
     if FAST == "QOM":

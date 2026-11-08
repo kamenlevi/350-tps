@@ -13,6 +13,10 @@ ARMS = ["qom_0.9_live", "qom_0.5_live", "qom_0_live", "qom_0.5_live_bonus5g", "q
         "qom_0_live_bq_t3", "qom_0_k1_live_t3", "top_k8", "q1u_0.9_live", "qom_0.5_live_c164", "hyb_0.9_u8_live_t3",
         "t3_top2_all"]
 REFS = ["qom_0.5_live", "qom_0_live_ball"]
+OUTF = "m1_quality.out"
+if os.environ.get("M1Q_ARMS"):   # Sun 11:5x: other arm sets (e.g. the 24 / 12 GB chat gates), refs and output name by env
+    ARMS = os.environ["M1Q_ARMS"].split(); REFS = os.environ.get("M1Q_REFS", " ".join(REFS)).split()
+    OUTF = os.environ.get("M1Q_OUTF", "m1_quality_env.out")
 base = json.load(open(os.path.join(OUT, "baseline.json")))
 cls = {}
 for r in json.load(open(os.path.expanduser("~/FableGod/floor_rows.json"))):
@@ -73,7 +77,7 @@ def main():
                 parts.append(f"{d} {b_} / {c_}, z {z:+.2f} [{bn} / {cn}, z {zn:+.2f}]")
             say(f"  {a}: " + "; ".join(parts))
     os.makedirs(DST, exist_ok=True)
-    open(os.path.join(DST, "m1_quality.out"), "w").write("\n".join(lines) + "\n")
+    open(os.path.join(DST, OUTF), "w").write("\n".join(lines) + "\n")
 
 
 if __name__ == "__main__":

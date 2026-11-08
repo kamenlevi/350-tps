@@ -142,6 +142,9 @@ def gq_install(pad=False):
 
 
 CALLS = [None]   # (T2) a list: one row per exact call (check, call index, width, rows kept in the call, then _mk() at start, at end)
+TS = [None]      # (T2 PROF, F12_GSTAT=1) a list: one row per exact call: (check, call index, width, kept) + uptime stamps at start,
+                 # after forward() (graph built), after mx.eval, after tolist + compare, after commit, at the end (after the
+                 # lsha hash) + the loader's (proc_s, io_s, cpu_wait_s, misses, stalled, uses) at start, after forward, after eval
 PHLOG = [None]   # (Tue 3 Nov, T3P) a list: one row per timed phase (name, check, then at start and at end: CLOCK_UPTIME_RAW s,
                  # the gate's pass seq, disk bytes read by this process, loader misses); None = off (no extra calls)
 CAL = [None]     # (Thu 5 Nov 20:0x, 12 GB plan lever 1, certificate calibration) a list: one dict per check (path, the draft d,
@@ -387,6 +390,12 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
     def _ph(name, k0):
         if _PL is not None:
             _PL.append((name, st["checks"]) + k0 + _mk())
+
+    _now = lambda: time.clock_gettime(time.CLOCK_UPTIME_RAW)
+
+    def _gs():                                         # (T2 PROF) the loader thread's own clocks and counts
+        s_ = _ext.stats()
+        return (s_["proc_s"], s_["io_s"], s_["cpu_wait_s"], s_["misses"], s_["stalled"], s_["uses"])
     reset_generation_state(model)
     B.STASH.clear(); B.PENDH.clear()
     ids = [int(t) for t in prompt_ids]
@@ -484,9 +493,11 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
             st["miss2"] += _miss() - _m
             _ph("exact", _k)
 
-    def _call(ci, w, kept, kc):                        # (T2) one exact call's row
+    def _call(ci, w, kept, kc, ts=None):               # (T2) one exact call's row
         if CALLS[0] is not None and kc is not None:
             CALLS[0].append((st["checks"], ci, w, kept) + kc + _mk())
+        if TS[0] is not None and ts is not None:       # (T2 PROF) stamps [t0, t1, t2, t3, t4] + gate stats [g0, g1, g2]
+            TS[0].append((st["checks"], ci, w, kept) + tuple(ts[:5]) + (_now(),) + tuple(ts[5]) + tuple(ts[6]) + tuple(ts[7]))
 
     def _exact_loop(toks_, d_, new_, tps_, pos, w1=4):
         ci, w_ = 0, w1
@@ -498,14 +509,20 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
                     w_ = w_ - 1 if w_ >= 3 else w_ + 1
             ch = toks_[pos:pos + w_]
             kc = _mk()
+            ts_ = None if TS[0] is None else [_now()]        # (T2 PROF) t0
+            gs_ = None if ts_ is None else [_gs()]           # (T2 PROF) g0
             aw = W1AW[0] and len(ch) == 1 and (wc == 1 or W1TAIL[0]) and not B.AW[0]   # a chosen 1-row call; with the
             # tail rule also the cap's last token (no drafts), whose late-rule bits would otherwise depend on the pools
             if aw:
                 B.AW[0] = True
             try:
                 lg_, tp_, sn_ = forward(ch, False)
+                if ts_ is not None:
+                    ts_.append(_now()); gs_.append(_gs())    # t1, g1: the graph is built (any syncs inside forward included)
                 g_ = mx.argmax(lg_, axis=-1)
                 mx.eval(g_, tp_)
+                if ts_ is not None:
+                    ts_.append(_now()); gs_.append(_gs())    # t2, g2: the GPU + loader work is done
             finally:
                 if aw:
                     B.AW[0] = False
@@ -516,20 +533,26 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
             m_ = 0
             while m_ < len(ch) and pos + m_ < len(d_) and d_[pos + m_] == g_[m_]:
                 m_ += 1
+            if ts_ is not None:
+                ts_.append(_now())                           # t3: tolist + compare done
             if m_ == len(ch) and pos + len(ch) <= len(d_) and pos + len(ch) < len(toks_):   # all matched: next chunk
                 rt_ = commit(ch, sn_, len(ch), False)
+                if ts_ is not None:
+                    ts_.append(_now()); ts_ += gs_           # t4: commit done
                 tps_.append(rt_ if rt_ is not None else tp_)
                 h.update(np.array(lg_.view(mx.uint32)).tobytes())
                 new_ += d_[pos:pos + len(ch)]
                 pos += len(ch)
-                _call(ci, len(ch), len(ch), kc)
+                _call(ci, len(ch), len(ch), kc, ts_)
                 ci, w_ = ci + 1, 4
                 continue
             rt_ = commit(ch, sn_, m_ + 1, False)
+            if ts_ is not None:
+                ts_.append(_now()); ts_ += gs_               # t4: commit done
             tps_.append((rt_ if rt_ is not None else tp_)[: m_ + 1])
             h.update(np.array(lg_[: m_ + 1].view(mx.uint32)).tobytes())
             new_ += d_[pos:pos + m_] + [g_[m_]]
-            _call(ci, len(ch), m_ + 1, kc)
+            _call(ci, len(ch), m_ + 1, kc, ts_)
             return new_, mx.concatenate(tps_) if len(tps_) > 1 else tps_[0]
 
     try:

@@ -10,6 +10,7 @@ import numpy as np
 from .report import MARGINS, mcnemar_p, paired_ci, RES, ANCHOR, FLOOR
 
 HESITATION = re.compile(r"\b(Wait|Hmm+|Actually|Alternatively|But wait|Let me re-?check|On second thought)\b")
+CARD = ("ifbench", "gpqad", "lcb6")   # the model card's benchmarks (tools/card_items.py; PREREG_card_gates)
 AGREE = ("multi", "agent")     # behaviour rows without gold: agreement with the reference, read against the floor's
 SCRIPT = {"ar": r"[؀-ۿ]", "bg": r"[Ѐ-ӿ]", "ru": r"[Ѐ-ӿ]", "ja": r"[぀-ヿ一-鿿]",
           "zh": r"[一-鿿]"}   # non-Latin prompt languages: share of the answer's letters in the language's script
@@ -23,7 +24,7 @@ def load(name, thinking=False):
 def items():
     from . import data as D
     out = {}
-    for s in ("math", "ifeval", "humaneval", "ruler", "mgsm") + AGREE:
+    for s in ("math", "ifeval", "humaneval", "ruler", "mgsm") + CARD + AGREE:
         try:
             for it in D.load("dec_" + s):
                 out[it["key"]] = it
@@ -129,8 +130,63 @@ def score_humaneval(rows, its):
     return out
 
 
+def _ifb_kw(it):
+    """a fresh copy without the None arguments: IFBench's run_eval.py grades strict first, which drops them in place, so
+    its loose pass (which would choke on them) sees them dropped"""
+    return [{a: v for a, v in kw.items() if v is not None} for kw in it["kwargs"]]
+
+
+def score_ifbench(rows, its):
+    """IFBench, the vendored official grader: prompt-level loose (the paper's metric; strict = score_ifbench_strict)"""
+    from .ifbench import evaluation_lib as ev
+    out = {}
+    for k, r in rows.items():
+        it = its.get(k)
+        if not it or it["set"] != "ifbench":
+            continue
+        inp = ev.InputExample(key=k, instruction_id_list=it["instruction_id_list"], prompt=it["prompt"], kwargs=_ifb_kw(it))
+        s = ev.test_instruction_following_loose(inp, {it["prompt"]: strip_think(r["text"])})
+        out[k] = (tuple(s.follow_instruction_list), float(s.follow_all_instructions))
+    return out
+
+
+def score_ifbench_strict(rows, its):
+    from .ifbench import evaluation_lib as ev
+    out = {}
+    for k, r in rows.items():
+        it = its.get(k)
+        if it and it["set"] == "ifbench":
+            inp = ev.InputExample(key=k, instruction_id_list=it["instruction_id_list"], prompt=it["prompt"], kwargs=_ifb_kw(it))
+            s = ev.test_instruction_following_strict(inp, {it["prompt"]: strip_think(r["text"])})
+            out[k] = (tuple(s.follow_instruction_list), float(s.follow_all_instructions))
+    return out
+
+
+GPQA_ANSWER = re.compile(r"(?i)Answer[ \t]*:[ \t]*\$?([A-D])\$?")     # simple-evals ANSWER_PATTERN_MULTICHOICE
+
+
+def score_gpqad(rows, its):
+    """GPQA Diamond, simple-evals' scoring: the first ANSWER_PATTERN_MULTICHOICE match == the gold letter"""
+    out = {}
+    for k, r in rows.items():
+        it = its.get(k)
+        if not it or it["set"] != "gpqad":
+            continue
+        m = GPQA_ANSWER.search(strip_think(r["text"]))
+        a = m.group(1) if m else None
+        out[k] = (a, float(a == it["gold"]))
+    return out
+
+
+def score_lcb6(rows, its):
+    """LiveCodeBench v6: LCB's run_test on the public + private tests (evalsuite/lcb/grade.py), pass@1 of the greedy row"""
+    from .lcb import grade
+    return grade.score({k: r["text"] for k, r in rows.items() if its.get(k, {}).get("set") == "lcb6"}, its)
+
+
 SCORERS = {"math": score_math, "ruler": score_ruler, "ifeval": score_ifeval, "humaneval": score_humaneval,
-           "mgsm": lambda rows, its: score_math(rows, its, "mgsm")}    # MGSM: dec_math's scoring (informational)
+           "mgsm": lambda rows, its: score_math(rows, its, "mgsm"),    # MGSM: dec_math's scoring (informational)
+           "ifbench": score_ifbench, "gpqad": score_gpqad, "lcb6": score_lcb6}
 
 
 def looped(ids, n=20, reps=3):

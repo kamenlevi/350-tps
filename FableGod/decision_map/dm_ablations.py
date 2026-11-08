@@ -363,3 +363,7 @@ def nw3_mask(path, thr=0.9, bits=3):
 ABLATIONS["qom_0_live_ball_c208_nw3"] = nw3_mask(_NWD + "qom_0_live_ball_c208_nw1")   # NW v3 at 208 slots (twin: qom_0_live_ball_c208_nw1)
 ABLATIONS["qom_0_live_ball_nw3"] = nw3_mask(_NWD + "qom_0_live_ball_nw1")             # NW v3 at the published pool (twin: qom_0_live_ball_nw1)
 ABLATIONS["qom_0_live_ball_c208_nw3c"] = nw3_mask(_NWD + "qom_0_live_ball_c208_nw1", bits=4)   # the control: the same rows and path at 4 bits
+ABLATIONS["qom_0_live_c147"] = q1_union("/Users/kamen/FableGod/decision_map/out/ni/qom_0_live_c147")   # snapshot of /Users/kamen/NewIdeas/data/dm_masks/qom_0_live_c147 (sha256 beside it), installed by install_c3.sh
+ABLATIONS["qom_0_live_ball_c147"] = q1_union("/Users/kamen/FableGod/decision_map/out/ni/qom_0_live_ball_c147")   # snapshot of /Users/kamen/NewIdeas/data/dm_masks/qom_0_live_ball_c147 (sha256 beside it), installed by install_c3.sh
+ABLATIONS["qom_0_live_c51"] = q1_union("/Users/kamen/FableGod/decision_map/out/bt/qom_0_live_c51")   # snapshot of /Users/kamen/Breakthrough/data/m1/masks/qom_0_live_c51 (sha256 beside it), installed by install_c3.sh
+ABLATIONS["qom_0_live_ball_c51"] = q1_union("/Users/kamen/FableGod/decision_map/out/bt/qom_0_live_ball_c51")   # snapshot of /Users/kamen/Breakthrough/data/m1/masks/qom_0_live_ball_c51 (sha256 beside it), installed by install_c3.sh

@@ -10,6 +10,7 @@ from . import env
 from . import model as M, data as D
 
 SETS = ("math", "ifeval", "humaneval", "ruler", "mgsm", "multi", "agent")   # multi / agent: no gold (decode_report.AGREE)
+CARD = ("ifbench", "gpqad", "lcb6")   # the card benchmarks: decoded only when --sets names them
 THINK_CAP = {"math": 6144, "ifeval": 4096, "humaneval": 4096, "ruler": 2048}
 
 
@@ -127,7 +128,7 @@ def fast_decode_gate(rt, v, out, sampler, log):
     if not rows or not M.STATE.fast_decode:
         return
     r = min(rows, key=lambda r: len(r["completion_ids"]))
-    ids = next(it for s in SETS for it in D.load("dec_" + s) if it["key"] == r["key"])["prompt_ids"]
+    ids = next(it for s in SETS + CARD for it in D.load("dec_" + s) if it["key"] == r["key"])["prompt_ids"]
     t = time.time()
     toks, _ = _gen(rt, ids, len(r["completion_ids"]), sampler, 0)
     same = toks == r["completion_ids"]
