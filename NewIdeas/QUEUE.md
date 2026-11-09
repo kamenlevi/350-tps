@@ -39,6 +39,10 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     - Order: card-reference leftover (0.5-2.5 h), then lcoh (~3.6 h), then whichever next arm fits.
     - The last chunk or arm must END by 15:00.
     - Fit12's 12 GB IFBench arm (~3 h, MEM ~12-16 GB) goes after 15:00, by day.
+  - MON 17:25 (`date`) PUBLISH NUMBER CHECK DONE: the FINAL build 17:23 passes end to end (five papers, site,
+    complete.pdf 84 pp). The last catch, MAIN section 11's OPT line (K 266 / 147 mis-paired), was fixed by the editor at
+    17:23. Ledger: NUMBER_CHECK.md sections 15-19.
+    - Tonight: BigMoE W24, NOTBEFORE 00:30 (PEAK 24 GB, quiet 60 min). NewIdeas checks its start.
   - MON 16:35 (`date`) DONE TODAY + PUBLISH CHECK:
     - Leap store conversion PASS 16:07-16:19:50: 48 layers in 9.5 min, byte-identical to records3.
     - Fit12 chw19 ran 16:20-16:30: C2c chat x1.053 = MARGINAL, code x0.881 = KILL; nothing adopted. The GPU is free.

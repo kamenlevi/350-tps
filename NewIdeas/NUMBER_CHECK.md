@@ -502,3 +502,80 @@ All six inside the rule (delta > -5, p >= 0.05): the card gate PASSES (EvalSuite
   table cells (same words). Cover + contents add only 3 / 33 / 46 / 58 / 75 (= the part ranges), "64 GB" (title) and the date.
 - MAIN after the editor's 17:05:49 write (title / labels, Kamen's word): numbers equal the 16:53 build's public.md (only the
   date line differs). Re-check after the editor's 17:30 changes.
+
+## 17. MAIN section 11 draft "The path to more speed" (~/Papers/PATH_DRAFT.md, 17:08), checked Mon 17:08-17:11 (`date`)
+- Multiplication: no gain is multiplied across runs; the draft says so (11.3: never-wait "never run with L, so we do not
+  multiply"; 12 GB bets "not multiplied"; chat 150 tok/s = a joint requirement 3.75 kept / 25 ms [P], "neither wall broken").
+- Re-derived from raw tonight: chw19c 14.46 / 10.39, 449 MB per kept token; chw19p 13.73 / 9.97, 491; chw19h 16.48 (Fit12's
+  per-prompt lines + phase logs) -> x1.053, 449-491 MB, x0.881 vs chw14ha 18.69. Map: qom_0.5_live_c147 PASS x3 (147 slots).
+- Every other number = my verified values (sections 1-16): today's rows; L +6.0 / +4.7 %; 56.0 / +12.8 % / 44.1 ms; zs32
+  51.33 vs 33.81; PF-D 2.91 -> 2.26 / 1.83 / ~1.6 [P] / 19-31 %; 1.9-3.4x / 0.1 GB; PF-B 12-21 % / 45.8-46.2 (0.8-1.2 GB
+  over); x1.09 [P]; 81.7 vs 210.2 = -61 %; 2.906 s / 21,986 MB / 7.6 -> ~1.8 s; ~51 / ~40 ms, 15-20 ms, 75-85 %; 232.6 ->
+  117.3; 48.5 -> 44.1; 83 / 41; +24.5 %; ~105-115 [P]; 0.10M = 8 % of ~1.3M, x1.014 vs the x1.03 line; 87 %; 18.5 ms; ~4 ms;
+  -17.2 / +8.3 / ~-20 %; OPT 38-55 % (386.8 vs 621.6); 31-40 ms; 41.7-43.7, 1.3 GB, +0.1 %; 65.5 %; 3.8-5.2 GB/s; 0.54-1.01
+  s; 28.8 vs 50.7; 87 / 89 / 84 / 90; 44.34; 41.07 / 37.43; 18.34; 12.76; 13.97; 171 (Splash, self-reported).
+- DIFF (sent; small): (1) 11.2 first-token row: "chat as shipped 2.26 s: 37-101-token prompts read 20.4 GB" mixes PF-D on
+  and off: as shipped (PF-D) a chat prompt reads 9.6 GB; the 20.4 GB (65.5 % resident) is without PF-D. (2) 11.2 kept row
+  "math 6.6" -> 6.5 (pooled; MAIN 4.3). (3) 11.3 32 GB chat: zs32 is "not gated" (no card gate ran), not "gate pending";
+  and the shipped lossy-32 (L + COH at C 160) chat row is 39.0. (4) 11.1 never-wait key: s1b_report prints +5.8 %; the pooled
+  +6.2 % is BM:data/r57/s1b{b,n}{1,2}_256_runs.json (as MAIN 10.0b). Optional: (5) the ledger counts: TRIED.md's own section
+  totals (one wall per line) are fixed-cost 315, SSD 303, bytes 168 (471 together), drafter 218, memory 101, prefill 41,
+  quality 74, exactness 74, no "kept" section; state which rule the text uses. (6) "x0.881 on code" is against A' of an
+  earlier run (chw14ha).
+- 17:12 (`date`): PATH_DRAFT 014dc69d has fixes (1)-(6) (9.6 GB with PF-D vs 20.4 without; math 6.5; lossy-32 39.0 not gated,
+  zs32 not gated; s1b runs.json key; ledger totals 315 / 303 / 168 / 471; chw14ha earlier run). One label left (sent): 11.3
+  l50 / l53 "Measured, gate pending" for L by itself and the chat stack -> "not gated" (no gate runs; 11.1 says so).
+- 17:13 (`date`): PATH_DRAFT bb35b712: no "gate pending" / "gate open" left; L, the chat stack and zs32 read "Measured, not
+  gated". The section 11 draft is NUMBER-CLEAN. Next: the merged MAIN and the final build.
+
+## 18. FINAL build 17:14 (editor's FINAL GO) and the merged MAIN section 11 (Mon 17:14-17:15 `date`)
+- Merged section 11 (MAIN l906-971) = the checked draft bb35b712 + the editor's stated edits (24 GB rows out; zs32 51.3 / 33.8
+  from c32_report; kept per check 2.5 / 6.5 / 10.7 from 4.3; F12L key). Outside section 11, MAIN's numbers are those of 17:05
+  apart from MLX issue #3830 and its date in the new section 8 citation.
+- DIFF (sent 17:14, needs a MAIN rebuild): the added "(at 45 GB, OPT misses 55.3 % / 19.3 % fewer than LRU at K 266 / 147;
+  section 10.10)" mis-pairs far_ceiling.txt: K 266 (45 GB) OPT = 55.3 % fewer misses and 19.3 % fewer stalled layers; K 147
+  (24 GB) = 43.6 % / 4.7 %.
+- Build 17:14: all five public.md = source minus dropped + the date line; each PDF's remaining count differences = its
+  unplaced page numbers (MAIN 4, 9, 12, 13, 19, 27; KERNELS 10, 11; DRAFTER 9, 12-14; EVALUATION 6-8; RELEASE 1, 2);
+  complete.pdf (84 pp, parts 3-34 / 35-47 / 48-59 / 60-76 / 77-84) = the five PDFs number for number (3,092 / 1,187 / 992 /
+  1,206 / 578). PASS, except MAIN's one content DIFF above (in the .md itself).
+
+> (a quote from the project owner, kept private)
+- MAIN section 11 OPT line now = far_ceiling.txt ("55.3 % fewer misses and 19.3 % fewer stalled layers than LRU at K 266,
+  45 GB"). MAIN's numbers vs 17:05: only section 11 (= the checked draft + the stated edits), MLX issue #3830 and its date,
+  and two "64 GB Mac" where "laptop" stood (the machine's 64 GB). "laptop": 0 occurrences.
+- Five papers: public.md = source minus the manifest's dropped sections + the date line; PDF digits = public.md (remaining
+  counts = unplaced page numbers: MAIN 4, 9, 12, 13, 19, 27; KERNELS 10, 11; DRAFTER 9, 12-14; EVALUATION 7, 8; RELEASE 1, 2);
+  site pages carry every abstract number (extras: title numbers and the date).
+- complete.pdf, 84 pp: parts 3-34 / 35-47 / 48-59 / 60-76 / 77-84 = the five PDFs number for number (3,093 / 1,189 / 995 /
+  1,208 / 580); cover + contents add only the start pages (3 / 35 / 48 / 60 / 77), "64 GB" and the date.
+- Re-GO builds 17:33 / 17:34 (MAIN only; checked 17:35 `date`): MAIN's changes are citation details (MLX PR #1773 with "18 Jan
+  2025" replaces issue #3830) and App. F.5's provenance note (69 us / 230 us unchanged, "from runs that were not saved").
+  public.md = source minus dropped + the date line; the PDF's remaining counts = its unplaced page numbers (4, 9, 12, 13, 19,
+  27); complete.pdf (84 pp) parts = the five PDFs; contents 3 / 35 / 48 / 60 / 77. PASS. Hand-off to Leap 17:46: clear.
+
+## 20. Pre-check for MAIN section 12 "What is new in this work" (orchestrator 17:5x; due 18:25), Mon 17:51 (`date`)
+The sweep's seven "new" rows (EvalSuite, ~/Papers/NEW_FINDINGS_SWEEP.md), against their raw sources:
+- Row 1 SSD wake (MoonShots data/ssdwake.txt): burst 896 / 900 / 910 us at 0.25 / 0.5 / 1 ms vs ~847 base = +49-63 us
+  ("+50-65"); 965 at 20 ms = +118 ("+100-120"); 270 us / +44 us / 400 us half / -3 ms per check = M-28 / M-29 entries (sec. 1).
+- Row 4 constant address space: R32 = BM pdz4a_256.txt (3175ef3) error lines; 12 / 12 tokens, 721 / 721 hashes = pdz4a vs pdz0.
+- Row 14 QUEUEMIX (data/ssdmicro3.txt): +165.2 us per mixed forecast record; throttle +3.1 us; ~51 us wake saved; throttled
+  reads end ~2.2-2.5 ms later.
+- Row 17 P-frame reuse (decision_map NIGHT1 / NIGHT2): 0.14 / 0.10 vs 22.7 / 18.9 %; 12-35 at once 1.03 %; chained 8.11 %;
+  attention 29.0 %, GDN 88.5 %.
+- Row 30 FAR: section 12 above. Row 34 matrix-unit order (Leap nax_order_probe.txt): 1,024 tests x 512 outputs; 45.0 / 38.8 /
+  13.9 / 2.4 %; relaxed precision identical; integer mode 524,288 / 524,288 bitwise in every order.
+- Row 40 union law (findings 2026-11-05_1715): 276 / 218 / 163, 258 / 202 / 151, 226 / 177 / 133; B4 x0.55, B8 x0.35;
+  |cos| median 0.086-0.090 vs chance 0.09. Note: per doubling the drop is 21-25 % (log2 slopes -0.34 / -0.42), so "~25 %"
+  is the upper end and "union ~ k^0.67" the lower slope; a [P] on [K] routing (36 map windows), not an engine measurement.
+- MAIN section 12 (l976-1182, in MAIN 17:54:13), checked 17:54-17:55 (`date`): all 160 numbers occur in the verified MAIN
+  or the pre-checked sweep rows (12.x section numbers aside); read in context: 12.1 (ssdmicro.txt: 0.10 ms -6.1 / +7.8 us =
+  no penalty, 0.25 ms +48.9 / +55.3), 12.2-12.4, 12.5 (+ MoonShots FINDINGS item 3: OPT 37-49 %, 1-2-pass 7-13 %, online
+  <= ~6 %; "a fifth of the stalled layers (OPT, 19.3 %)" = K 266), 12.6, 12.7 (+ item 4: k^0.67, 32 tokens 3.1x). Every
+  explanation is marked [G]. PASS, no number or source errors. Optional wording: 12.7 "about 25 % per doubling" is the top of
+  21-25 % (k^0.67 gives ~20 %).
+- Section 12 revised 17:55:36 (QUEUEMIX dropped as not new; 12.1-12.6; "about 21-25 %"; two refs; intro "six findings ...
+  (12.3)"): no number outside the verified sources. FINAL build 17:55:46-17:56:02 (checked 17:56 `date`): five public.md =
+  source minus dropped + the date line; PDF digits = public.md (unplaced page numbers only: MAIN 12, 13, 19, 30; KERNELS 10,
+  11; DRAFTER 9, 12-14; EVALUATION 7, 8; RELEASE 1, 2); complete.pdf 87 pp, parts 3-37 / 38-50 / 51-62 / 63-79 / 80-87 = the
+  five PDFs; contents 3 / 38 / 51 / 63 / 80. PASS. Reported to the orchestrator, Breakthrough and the editor.

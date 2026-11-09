@@ -64,3 +64,20 @@ result, convert_full.txt; no [[...]] marker; no SMALL_RAM link; the owner's line
   rebuilt pinned to 98c6072d (06b452f; vs tested 242553d: the same docs + notices only), pushed: github main 9be6c98
   (diff vs 061f4f1: README.md +1 line, MANIFEST.json). 16:34: push_pkg.sh's private names moved to the gitignored file
   (7a3c16f; it had blocked the 16:32 public refresh).
+- 17:2x: 'laptop' out of the package (the owner's wording via the orchestrator): README 'on a 64 GB Mac', MAIN's entry = its new
+  title 'What It Takes to Run a 125B LLM Fast on a 64 GB Mac, and How to Go Faster', CITATION.cff abstract; draft release
+  notes and repo description had none. Rebuilt pinned (46e991e), pushed: main 4c1162e.
+- 17:46 DOCS: Breakthrough's FINAL (build 17:34:44-17:34:55; lint 0; NewIdeas' number check PASS 17:35): release/push_pkg.sh
+  docs -> one commit, 13 files (index.html, complete / main / kernels / evaluation / drafter / release .html, pdf/ x6);
+  SHA-256 prefixes = Breakthrough's list for all six PDFs (complete aa27a147e775, drafter c366a6c3ccdb, evaluation
+  1bb865aa20a8, kernels 1ca4a022f72f, main cb59dd6f8094, release 6b2ffcb2b7c5); checks: no small-ram file, no local path,
+  no private name; pushed fast-forward: github main 16f3885 (remote == local). diff -r docs/ vs the site: equal. No
+  'laptop' / 'small-ram' in README, CITATION.cff or docs/. main.html's title == the README's MAIN entry.
+FINAL STATE (17:46): kamenlevi/exactstream PRIVATE; main 16f3885 = package (code byte-identical to the 12:13 clean-clone PASS)
++ docs/; draft release v1.0.0 (7 assets, API digests == local); Pages off (API 404). Making it public, publishing the
+release and enabling Pages are the orchestrator's, on the owner's word.
+- 17:56 DOCS AGAIN (MAIN's new section 12, on the owner's word): Breakthrough's FINAL build 17:55:46-17:56:02; 13 files;
+  SHA-256 prefixes = its list (complete 5f13112f4a4f, drafter 1fe29053a426, evaluation b6052600d7b3, kernels 1205dc1105f9,
+  main 933605513df4, release e5df6e9ad933); main.html's title unchanged (= README's MAIN entry); push_pkg.sh docs replaced
+  docs/ (9 files changed) and pushed fast-forward: github main b3c1bcc; diff -r docs/ vs the site: equal; no small-ram /
+  laptop; repo PRIVATE, release DRAFT, Pages off.

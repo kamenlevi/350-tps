@@ -9795,6 +9795,8 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   - [K] FINAL PACKAGE PUSH Mon 16:2x: github kamenlevi/exactstream (PRIVATE) main 061f4f1 = rel1 package with the final
     README, harness pinned to the tested EvalSuite 98c6072d (make_release.py --es-commit; HEAD's cli.py had changed); vs the
     tested 242553d only docs + notices; draft release v1.0.0 with the drafter files (data/release/github_dryrun.txt).
+  - [K] FINAL PUSH Mon 17:46: github main 16f3885 = the package (no 'laptop'; MAIN's new title; complete report listed)
+    + docs/ = Breakthrough's final site (13 files, SHA-256 == its list); repo PRIVATE, release DRAFT, Pages OFF.
 
 - **KERNELS v1.0 numbers derived from raw records (Leap, Sun 2026-11-08 19:5x; no GPU):**
   - [K] NATIVE-FRI RUN 2 pooled (scripts/natfri_pooled.py -> data/natfri/natfri_pooled.txt): over the 13 prompts kept in
