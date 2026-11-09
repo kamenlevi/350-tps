@@ -771,3 +771,68 @@ fixed-cost bet. This is a measurement only: no setting changes.
     overflow C_m 47 in 68 % of live checks.
 - **Armed** Mon 21:13 (task be69wq8hc), held on WAIT for NewIdeas' GO. Gate per its board: >= 23:00, Kamen idle, NO-SWAP
   >= 20 GB, no quiet ticket / big lock, idle GPU. Start-by Tue 00:58, hard stop 01:15.
+
+> (a quote from the project owner, kept private)
+- **How it ran.** /Users/kamen/Fit12/scripts/s1u_now.sh: the pre-registered screen, with s1u.sh's 23:00 / idle / queue /
+  GPU-idle gates dropped on Kamen's word.
+  - Beside his apps (Chrome, Spotify; nothing closed). NO-SWAP 23 GB, swap 8.6 GB flat, one share lock, 15-min hard stop.
+  - S1u (s1uh) ran 22:37:30-22:40:01, rc 0, at GPU 87 % (locks.txt), with no PAUSE inside (16 / 16 "PAUSE 0.0 s").
+  - The A' reference (s1ue) was cut by the hard stop: 8 prompts read, 7 counted, one VOID on a 40.4 s PAUSE. A quiet
+    PAUSE file has existed since 22:44.
+  - Its tokens = chw14ha on 7 / 8 (lsha 8 / 8).
+  - CORRECTED 22:5x (NewIdeas' number check): the first read-out's "x3.235 pooled" mixed unpaired sets (16 vs 8) and kept
+    the VOID prompt. On the 7 prompts both arms counted [K]: S1u 42.64 vs A' 17.87 tok/s pooled = x2.386 (x2.422 geo).
+    The reference ran x0.956 of chw14ha there. S1u's tokens = A''s on 4 / 7 (HumanEval/156, /91 and /79 differ).
+    The reader now pairs prompts; the first read-out is kept as s1u_read_v1.txt.
+  - The "= ex tokens True" field of a single-arm process compared the arm with itself (vacuous). This affects every
+    single-arm line from fit_t3.py too. fit_onecall.py now prints n/a there.
+- **S1u [K]** (/Users/kamen/Fit12/data/scr/s1u: s1u_read.txt, s1u_rows.txt; raw s1uh.txt + s1uh_*_u01b_ph.json):
+
+  | | value |
+  |---|---|
+  | whole decode tok/s pooled (geo) | 41.22 (41.79) |
+  | whole request pooled (geo) | 23.21 (22.71) |
+  | first token s median (min-max) | 4.18 (3.87-5.49) |
+  | lifetime peak | 11.335 GB |
+  | prompts / tokens / checks | 16 / 3353 / 325 (2 short checks took the exact path) |
+  | kept per check | 10.32 |
+  | MB per kept token | 138 |
+  | ms per check | 250.3 = draft 11.6 + wide call 217.8 + commit 15.6 + exact 0.7 + rest 4.6 |
+  | the check's read / non-read [P: GB x the chw16 fit's 83.7 ms per GB] | 119.5 (1.427 GB) / 130.8 |
+  | the wide call | 323 calls, 219.1 ms [K], 1.326 GB [K]; 108.2 ms outside reads [P, same fit] |
+  | experts computed per row-layer | 5.161 of 10 (4.674-5.535 by prompt; 245,136 row-layers) |
+
+- **Lines (pre-registered):** outside reads <= 90 ms FAIL (108.2 [P]). MB per kept token <= 150 PASS (138). So the
+  one-call route is re-priced before S2.
+  - The outside-reads number is the pre-registered fit split (s1u_read.py's docstring, written before the run), not a
+    measured stall.
+  - It is fit-sensitive. At T3R2's measured exposed rate (~9.6 GB/s, this plan's first table), the call's reads would take
+    ~138 ms and its non-read ~81 ms, under the line.
+  - So this FAIL is marginal. The wide call's real split needs the loader's io / idle clocks on pass-1 calls; today only
+    exact calls have them (F12_GSTAT).
+- **Against the price.** Bytes held: 1.326 GB per wide call vs Breakthrough's LRU price of 1.29 for QOM0's misses at
+  51 + 32. The non-read part did not: 108 ms [P, fit split] vs the ~50-90 assumed (~81 at a 9.6 GB/s read rate).
+  - Context [K]: x2.21 the verified loop's 18.69 (chw14ha, Sun, share lock); x0.93 the two-pass mode's 44.34 (c1u16, Sat,
+    quiet), which failed its gate. Saturday's narrower wide call (P1-K1): 127.9 ms at 0.486 GB, 87.2 outside reads.
+- **Re-price [P, from these numbers]:**
+  - The call still computes all 10 tier_glu columns, with weight 0 on the ~4.8 dropped ranks. Compaction and less Python
+    are the first non-read cut (target ~60 ms).
+  - Additive, at ~60 ms: 11.6 + 60 + 111 + 15.6 + 5 = 203 ms, ~51 tok/s.
+  - Reads hidden behind compute (S2): ~143 ms, ~72.
+  - Plus an eviction policy near Breakthrough's OPT bound (0.74 GB per check): ~94 ms, ~110. Additive at that byte count: ~67.
+  - So 90 needs the non-read cut, the overlap and better eviction together, or kept 12+.
+- **Quality: untested.** Breakthrough's q1u_0_live map arm runs after 23:00, then the gate if it passes. Nothing is adopted.
+
+## S1p: S1u's split, measured (pre-registered Mon 09 Nov 23:1x, before any run; NewIdeas 22:55: S1u's 108.2 ms is a fit split [P])
+- **Build (CPU only; checked by py_compile, the pinned-source patch check and a synthetic row file):**
+  - t3_onecall.py 652eedf7d804 adds TS1 under F12_GSTAT=1. Per wide pass-1 call it logs stamps t0 / t1 / t2 / t3, the
+    loader's proc / io clocks at t0 / t1 / t2, the main thread's CPU and the process's disk bytes.
+  - fit_onecall.py 4079a8a1259f writes the rows as <tag>_<key>_<arm>_p1ts.json.
+  - Reader /Users/kamen/Fit12/scripts/s1u_prof.py bec67fb27b03. Runner /Users/kamen/Fit12/scripts/s1p.sh bdd45f4ca3b1:
+    one process (arm u01b, 16 HumanEval, CAP 256), ~4 min, <= 12 GB, share lock, held for NewIdeas' GO.
+- **What it decides:** the S1u line "outside reads <= 90 ms", read on the measured loader-idle time of the wide call
+  (wall t0..t2 minus the loader's busy time; chw16's 'nl' convention, a lower bound of the non-read work).
+  - It also gives the call's real read rate (GB over the loader's io time) and a busy-vs-GB fit, to replace the 83.7 ms
+    per GB in the re-price.
+  - Loader-idle <= 90 ms: the S1u line passes, and the re-price uses the measured split.
+  - Loader-idle > 90 ms: the non-read cut (compaction, Python) comes before S2's overlap.

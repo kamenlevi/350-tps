@@ -48,6 +48,13 @@ armenv() { case $1 in   # base slots, sidecar slots, rows
   w12t) echo "120 34 12 BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25";;   # W24b: w12 + the prefill-peak trim
   w13t) echo "130 26 13 BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25";;   # W24b: +10 base slots and 13 rows, paid by the trim
   w16u) echo "120 34 12 R57_FAST=U3W,R57_GATEREQ=1";;   # U3 at thr 0 on the code sets, 16 rows on the gate (742758e); chat capped
+  # W24c (Mon 9 Nov 22:5x): the drafter diet. R57_D7B=all loads ONLY the 4-bit DFlash2 drafter; with the gated =code the
+  # bf16 one (l120_ft, 1.14 GB) stays resident for math / agent prompts only (code already drafts on the 4-bit one). Its
+  # GB pays for a 14th row (+10 base, +2 sidecar slots = +1.06 GB) or 11 more base slots. Env only: snapshot w24 as gated.
+  w13c|w13d) echo "130 26 13 BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25";;   # W24c: w13t again, as gated (control, first + last)
+  w13a) echo "130 26 13 BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all";;   # W24c: w13t + the diet alone (its GB)
+  w14a|w14b) echo "140 28 14 BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all";;   # W24c: 14 rows paid by the diet (x2)
+  w13b) echo "141 26 13 BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all";;   # W24c: the diet's GB as 11 base slots
   *) return 1;; esac; }
 ARMS=${W24_ARMS:-w12 w16u w12pf w10 w8}
 for a in $ARMS; do

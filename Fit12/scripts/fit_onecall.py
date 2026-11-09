@@ -254,6 +254,7 @@ def run_prompt(ri, r):                                   # all arms of one promp
         T3.CALLS[0] = [] if os.environ.get("F12_PHLOG") == "1" else None   # (Sun 8 Nov, T2) per exact call
         if hasattr(T3, "TS"):                            # (Sun 8 Nov, T2 PROF) per exact call: stamps + the loader's clocks
             T3.TS[0] = [] if os.environ.get("F12_GSTAT") == "1" else None
+        T3.TS1[0] = [] if os.environ.get("F12_GSTAT") == "1" else None   # (Mon 9 Nov, S1u profile) per wide pass-1 call
         if os.environ.get("F12_GQAUDIT") == "1" and hasattr(T3, "gq_install"):   # (Sun 8 Nov) MLX sorted-gather audit / pad
             T3.gq_install(os.environ.get("F12_GQPAD") == "1")
         T3.CAL[0] = [] if os.environ.get("F12_CAL") == "1" else None       # (Thu 5 Nov) certificate calibration records
@@ -275,6 +276,7 @@ def run_prompt(ri, r):                                   # all arms of one promp
             ts_l = None
             if hasattr(T3, "TS"):
                 ts_l, T3.TS[0] = T3.TS[0], None
+            ts1_l, T3.TS1[0] = T3.TS1[0], None           # (S1u profile)
             cal, T3.CAL[0] = T3.CAL[0], None
         if cal is not None:                              # one dict per check: path, d, cf, p1 / m1 / g1 (pass 1), new
             json.dump(cal, open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}_cal.json"), "w"))
@@ -286,6 +288,8 @@ def run_prompt(ri, r):                                   # all arms of one promp
         json.dump([int(t_) for t_ in toks], open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}_toks.json"), "w"))
         if ts_l is not None:                             # (T2 PROF) see t3_twopass.TS for the row layout
             json.dump(ts_l, open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}_ts.json"), "w"))
+        if ts1_l is not None:                            # (S1u profile) see t3_onecall.TS1 for the row layout
+            json.dump(ts1_l, open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}_p1ts.json"), "w"))
         if cl_ is not None:                              # (T2) check, call index, width, kept in the call, marks at start, at end
             json.dump(cl_, open(os.path.join(OUTD, f"{TAG}_{r['key'].replace('/', '_')}_{arm}_calls.json"), "w"))
         if ph is not None:                               # name, check, (uptime s, gate seq, disk bytes, misses) at start, at end
@@ -298,10 +302,12 @@ def run_prompt(ri, r):                                   # all arms of one promp
                 f"{k}: {v[0]} runs, {1e3 * v[1] / v[0]:.1f} ms, {v[2] / v[0] / 1e6:.0f} MB, {v[3] / v[0]:.0f} misses, "
                 f"{v[4] / v[0]:.2f} passes per run, {v[2] / max(1e-9, v[1]) / 1e9:.2f} GB/s" for k, v in agg.items()), flush=True)
         res[arm] = (toks, s)
-        ex = res["ex"][0] if "ex" in res else toks
-        div = next((i for i, (a, b) in enumerate(zip(toks, ex)) if a != b), None if len(toks) == len(ex) else min(len(toks), len(ex)))
+        ex = res["ex"][0] if "ex" in res else None     # (Mon 22:5x, NewIdeas' number check) no ex arm in this process: 'n/a'
+        div = None if ex is None else next((i for i, (a, b) in enumerate(zip(toks, ex)) if a != b),
+                                           None if len(toks) == len(ex) else min(len(toks), len(ex)))
+        exq = "n/a" if ex is None else toks == ex
         print(f"[{TAG}] {r['key']} {arm} theta {th} {kw or ''} | tok {len(toks)} sha {hashlib.sha1(str(toks).encode()).hexdigest()[:10]} "
-              f"| lsha {s['lsha']} | = ex tokens {toks == ex} (first divergence {div}) | checks {s['checks']}, kept {s['kept']:.2f} "
+              f"| lsha {s['lsha']} | = ex tokens {exq} (first divergence {'n/a' if ex is None else div}) | checks {s['checks']}, kept {s['kept']:.2f} "
               f"| pass2 {s['pass2']} exact {s['exact']} cfgate {s['cfgate']} skipped {s['skipped']} | rows pass 1 {s['rows1']} / pass 2 "
               f"{s['rows2']} in {s['calls2']} calls, refused {s['refused']} | prefill {s['pf_s']:.2f} s, decode {s['dec_s']:.2f} s, "
               f"{s['tok_s']:.2f} tok/s | lifetime {life_gb():.3f} GB | per check ms: draft {1e3 * s['t_draft'] / max(1, s['checks']):.1f} "

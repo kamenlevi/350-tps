@@ -609,3 +609,30 @@ could be improved"), checked Mon 18:08-18:09 (`date`) against the 18:04 snapshot
   start; 'paused' empty): w13tm MBPP 29.55 = 11 prompts 72-117 + mbpp/319 at 4.8 tok/s (43 s) -> 90.5 without it; w12rh HE
   14.20 = HumanEval/63 at 1.6 tok/s (164 s) -> 110.4 without it. Do not quote w13t's MBPP without a re-run. Sent to BigMoE
   and EvalSuite. Machine at 21:02: Kamen's chat (Python 20 GB, 100 % CPU), swap 31 GB.
+- CORRECTION 22:39 (`date`; BigMoE 22:37, verified): the screen DID flag both rows. Their runs.json 'bad' field reads 'PAUSED (161.7 s
+  waited, 0 gaps)' (w12rh, HumanEval/63) and 'PAUSED (40.2 s waited, 0 gaps)' (w13tm, mbpp/319): PAUSE-file waits (heat), not
+  engine stalls. The W24b report counts them as heat-freeze rows; its 'without them' 110.4 / 90.5 match my re-derivation.
+  Never quote 29.6 / 14.2.
+
+## 23. Fit12's S1u (12 GB one-call check, union-only cut; Kamen's go 22:3x), number check Mon 22:56 (`date`)
+Source: ~/Fit12/data/scr/s1u (s1uh.txt, s1ue.txt, s1u_read.txt, s1u_rows.txt); script scripts/numcheck/s1u_check.py.
+- CONFIRMED from the per-prompt lines (16 / 16, no PAUSE inside, rc 124 = the 15-min stop during the reference arm):
+  whole decode 41.23 pooled (41.79 geo; the read-out's 41.22 is rounding), whole request 23.21, kept 10.32 per check
+  (3353 tokens / 325 checks), check 250.3 ms (81.33 s / 325), 138 MB per kept token, peak 11.335 GB. It ran under a share
+  lock beside Kamen's apps, so it is a rough run.
+- [P], not timed: the split into SSD read 119.5 / non-read 130.8 ms, and the wide call's 108.2 ms outside reads, are
+  GB x 83.7 ms/GB (the chw16 fit's marginal read cost; s1u_read.py l.49 says [P]).
+- DIFF: "x3.235 pooled / x2.788 geo" (s1u_read.txt) and "S1u is x3.2" (BT:docs/PRICE_12GB_90_CODE.md l.201) use all 8
+  reference prompts, including HumanEval/6 (VOID: a 40.4 s PAUSE inside), and unpaired sets (16 vs 8). Paired on the
+  7 common prompts: S1u 42.65 vs exact 17.87 = x2.39 pooled (x2.42 geo). The reference over its 7 counted prompts: 17.87.
+- DIFF: s1uh.txt's "= ex tokens True (first divergence None)" is vacuous. fit_onecall.py:301 compares an arm to itself
+  when no ex arm ran in the same process. Real token equality vs tonight's exact arm: 4 / 7 (HumanEval/156, /91, /79
+  differ), as expected for a lossy cut.
+- First token 4.18 s median follows paper_rows.py's definition (prefill + check 0); prefill alone: median 3.87 s (3.56-5.16).
+- Told the orchestrator, Fit12 and Breakthrough at 22:55. Verdict unchanged: outside reads FAIL (> 90), bytes PASS
+  (<= 150), so re-price before S2.
+- APPLIED 22:58 (`date`): Breakthrough 2b82985 (PRICE doc: x2.39 / x2.42 paired, marked CORRECTED; the split labelled [P]);
+  Fit12 23:0x (s1u_read.py pairs PAIR-ok prompts: 42.64 vs 17.87 = x2.386 / x2.422, tokens 4 / 7; v1 kept as s1u_read_v1.txt;
+  fit_onecall.py prints 'n/a' without an ex arm; [P] marked in its read-out, PLAN, TRIED, findings). 42.64 (sum n / sum
+  decode s) is the precise figure; my 42.65 came from per-prompt tok/s rounded to 2 decimals. Fit12 notes the same vacuous
+  field in fit_t3.py's single-arm lines (chw19c / h, ex16); its verdicts used chw13_read's cross-run comparisons.

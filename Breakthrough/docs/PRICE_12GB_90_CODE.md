@@ -192,3 +192,26 @@ Pre-registered before any data (Mon 21:3x), for the map arm q1u_0_live (= S1u):
 - IFEval and multi are information only: the 12 GB code rule applies on code sets alone, as R57_QOM_SETS does.
 - PASS sends S1u to Fit12's S1 engine run. The known-benchmark gate (HumanEval+ / MBPP at 12 GB) decides adoption.
 - Otherwise S1 needs QOM0 with a lookup-only residency probe (qom_0_live_c51 PASSES).
+
+## S1u in the engine (Fit12, Mon 22:37-22:52, beside Kamen's apps) [K, Fit12:data/scr/s1u/s1u_read.txt and s1u_rows.txt]
+Fit12's s1u_now.sh ran 16 HumanEval at CAP 256 under one share lock with a 15-minute hard stop. The exact reference got 8
+prompts in before the stop.
+- S1u (arm u01b, one 16-row call per check), timed [K]: whole decode 41.22 tok/s pooled (41.79 geo), kept 10.32, 138 MB
+  per kept token, peak 11.335 GB; whole check 250.3 ms; the wide call 219.1 ms reading 1.326 GB (1.427 GB per check in all).
+- The read / non-read split is priced, not timed [P, at 83.7 ms per GB, Fit12's chw16 fit]: check 250.3 ms = SSD read
+  119.5 + non-read 130.8; the wide call spends 108.2 ms outside reads.
+- Against the same-lock exact reference (A'), paired on the 7 prompts both ran [K, recomputed from s1uh.txt / s1ue.txt]:
+  S1u 42.6 vs exact 17.87 tok/s pooled = x2.39 (x2.42 geo). CORRECTED 22:5x (NewIdeas): this paragraph first said "12.74
+  tok/s: S1u is x3.2 pooled", copied from s1u_read.txt's unpaired line, which set 16 prompts against 8 and kept
+  HumanEval/6, VOID by its 40.4 s PAUSE inside.
+- Fit12's lines: outside reads FAIL (108.2 > 90), bytes PASS (138 <= 150), so re-price before S2. Not a 90 event.
+- My replay's byte price held: the wide call read 1.326 GB per check against code12_union.py's QOM0 LRU price of 1.29 GB
+  (x1.03). S1u ran C_m 47 + C_l 32 on 16 HumanEval; the replay ran 51 + 32 on the map's 12 code windows. The eviction
+  prices above and tonight's policy replay (code12_policy.py) rest on a replay the engine confirms.
+- [P] What 90 needs at kept 10.32: <= 114.7 ms per check.
+  - Hiding every read leaves non-read 130.8 ms = 78.9 tok/s, so non-read must drop by >= 16.1 ms.
+  - The reads must also hide behind the rest: <= 1.37 GB per check if overlap were perfect (today 1.427; the OPT bound's
+    -43 % gives ~0.81 GB = 68 ms).
+  - Fit12's order: compaction first, then overlap, then eviction. Compaction: the call still runs all 10 tier_glu columns,
+    with weight 0 on the dropped ranks, while ~5.0-5.5 of 10 experts per row-layer are needed.
+- S1u's quality is still the map arm's to say (q1u_0_live, from 23:00 while Kamen is idle).

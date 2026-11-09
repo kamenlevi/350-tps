@@ -2038,3 +2038,9 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 16:25:21 SCR chw19 chw19p end (rc 0)
 16:30:48 SCR chw19 chw19h end (rc 0)
 16:30:48 SCR chw19 end (rc 0, 604 s, swap 5531 MB)
+22:28:18 SCR s1u GO set by hand (NewIdeas 22:28: S1u first tonight, no Leap wait)
+22:37:30 SCR s1u NOW start (Kamen's go; beside his apps): u01b + A' ref, 16 HumanEval, share lock, hard stop 22:52:30
+22:40:01 SCR s1u s1uh end (rc 0)
+22:52:36 SCR s1u s1ue end (rc 143)
+22:52:36 SCR s1u NOW end (rc 124, 906 s, swap 8632 MB)
+23:00:02 SCR s1u marker s1u.done touched at >= 23:00 (S1u ended 22:52:36; the orchestrator: nothing early)

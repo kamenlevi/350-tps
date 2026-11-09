@@ -15,7 +15,8 @@ Policies (each pool per layer; an expert the current check needs is never evicte
 - PIN: bytes10_core's PIN, half the base pool pinned to the domain's most popular experts (IN-SAMPLE popularity over all 12
   code windows: optimistic), LRU for the rest and for the sidecar.
 - OPT: Belady (bytes10_core), the bound.
-Output: ~/Breakthrough/data/m1/code12_policy.out and .json.
+Output: ~/Breakthrough/data/m1/code12_policy.out and .json, rewritten after each rule (QOM0 first: tonight the replay runs
+beside the map arm and is stopped when the arm ends, so a stop keeps the rules done; a partial file says so).
 Usage: nice -n 15 ~/BigMoE/.venv/bin/python -I -B code12_policy.py
 """
 import json, os, sys, time
@@ -29,7 +30,7 @@ B.RULES.update({
     "QOM0": (0.0, 2, 10, False, None, False, None),
     "QOM0+ball": (0.0, 2, 10, False, None, False, "all"),
 })
-RULES = ["QOM0", "EXACT", "QOM0+ball"]
+RULES = ["QOM0", "QOM0+ball", "EXACT"]   # S1u's / QOM0's rows first
 POLICIES = ["LRU", "LIP", "LRU2", "LFUd0.5", "LFUd0.8", "LFUd0.9", "PIN", "OPT"]
 
 
@@ -93,6 +94,11 @@ def simulate(seqs, Cm, Cl, policy):
 def main():
     t0 = time.time(); lines = []; res = {}
     def say(s=""): print(s, flush=True); lines.append(s)
+    def save(final):
+        os.makedirs(DST, exist_ok=True)
+        tail = [] if final else [f"(partial: {len(res) // len(POLICIES)} of {len(RULES)} rules so far, {time.time() - t0:.0f} s)"]
+        open(os.path.join(DST, "code12_policy.out"), "w").write("\n".join(lines + tail) + "\n")
+        json.dump(res, open(os.path.join(DST, "code12_policy.json"), "w"), indent=0)
     W = B.windows(); Wc = W["code"]
     Cm0, Cl0 = B.POOLS["12"]
     pop = B.popularity({"code": Wc}, "code", None)
@@ -116,11 +122,10 @@ def main():
             cells.append(f"{mbk:.1f} ({gbc:.2f}) {mbk / base - 1:+.0%}")
             print(f"  ({rule} {pol}: {time.time() - t0:.0f} s)", flush=True)
         say(f"| {rule} | " + " | ".join(cells) + " |")
+        save(False)
     say("check: LRU here vs bytes10_core.simulate LRU (code12_replay.out): QOM0 162.5, EXACT 636.8, QOM0+ball 101.8")
     say(f"done in {time.time() - t0:.0f} s")
-    os.makedirs(DST, exist_ok=True)
-    open(os.path.join(DST, "code12_policy.out"), "w").write("\n".join(lines) + "\n")
-    json.dump(res, open(os.path.join(DST, "code12_policy.json"), "w"), indent=0)
+    save(True)
 
 
 if __name__ == "__main__":

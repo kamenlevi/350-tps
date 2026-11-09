@@ -155,7 +155,11 @@ def gq_install(pad=False):
 
 
 CALLS = [None]   # (T2) a list: one row per exact call (check, call index, width, rows kept in the call, then _mk() at start, at end)
-TS = [None]      # (T2 PROF, F12_GSTAT=1) a list: one row per exact call: (check, call index, width, kept) + uptime stamps at start,
+TS1 = [None]     # (Mon 9 Nov 23:0x, S1u profile, F12_GSTAT=1) one row per wide pass-1 call: (check, -1, rows, kept) + uptime
+                 # stamps t0 (start), t1 (after forward: graph built), t2 (after eval), t3 (after the commit) + the loader's
+                 # (proc_s, io_s, cpu_wait_s, misses, stalled, uses) at t0, t1, t2 + the main thread's CPU at t0, t1, t2 + the
+                 # process's disk bytes at t0, t2. Measures the call's loader-busy vs loader-idle wall time ([K], not the fit).
+TS = [None]      # (T2 PROF, F12_GSTAT=1) a list: one row per exact call: (check, call index, width, kept) + uptimestamps at start,
                  # after forward() (graph built), after mx.eval, after tolist + compare, after commit, at the end (after the
                  # lsha hash) + the loader's (proc_s, io_s, cpu_wait_s, misses, stalled, uses) at start, after forward, after eval
 PHLOG = [None]   # (Tue 3 Nov, T3P) a list: one row per timed phase (name, check, then at start and at end: CLOCK_UPTIME_RAW s,
@@ -622,12 +626,15 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
             if use_p1:
                 _t, _m = time.perf_counter(), _miss()
                 _k = _mk()
+                _p1 = None if TS1[0] is None else dict(t=[_now()], g=[_gs()], c=[time.thread_time()], b=[_diskread()])   # (S1u prof)
                 if _PF2[0]:                            # P2-PREFETCH: the rows whose draft the drafter is unsure of
                     PF2_ROWS[0] = mx.array([c_ < PF2_CF for c_ in cf[:len(d)]] + [False])
                 try:
                     lg1, tp1, sn1 = forward(toks, True)
                 finally:
                     PF2_ROWS[0] = None                 # the pass-1 graph already holds the mask
+                if _p1 is not None:                    # t1: the graph is built (any syncs inside forward included)
+                    _p1["t"].append(_now()); _p1["g"].append(_gs()); _p1["c"].append(time.thread_time())
                 p1 = mx.max(mx.softmax(lg1, axis=-1), axis=-1)
                 g1 = mx.argmax(lg1, axis=-1)
                 extra = []                             # P1-K1 / P2-PREFETCH counters ride on pass 1's own eval
@@ -639,6 +646,9 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
                 if PF2_ACC:
                     extra.append(mx.stack(PF2_ACC).sum().reshape(1))
                 mx.eval(p1, g1, tp1, *extra, *cal_t2)
+                if _p1 is not None:                    # t2: the GPU + loader work of the call is done
+                    _p1["t"].append(_now()); _p1["g"].append(_gs()); _p1["c"].append(time.thread_time())
+                    _p1["b"].append(_diskread())
                 if K1U_ACC:
                     ka = extra[0].tolist()
                     st["k1u_kept"] += ka[0]; st["k1u_over"] += ka[1]; st["k1u_rl"] += sum(s_ for _, s_ in K1U_ACC)
@@ -665,6 +675,10 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
                     rt = commit(toks, sn1, n + 1, True)
                     st["t_commit"] += time.perf_counter() - _t
                     _ph("commit", _k)
+                    if _p1 is not None:                # t3: the commit is done; one TS1 row per wide call
+                        _p1["t"].append(_now())
+                        TS1[0].append((st["checks"], -1, S, n + 1) + tuple(_p1["t"]) + tuple(_p1["g"][0]) + tuple(_p1["g"][1])
+                                      + tuple(_p1["g"][2]) + tuple(_p1["c"]) + tuple(_p1["b"]))
                     kt = (rt if rt is not None else tp1)[: n + 1]
                     h.update(np.array(lg1[: n + 1].view(mx.uint32)).tobytes())
                     if skip is not None:

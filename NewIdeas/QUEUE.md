@@ -39,6 +39,65 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     - Order: card-reference leftover (0.5-2.5 h), then lcoh (~3.6 h), then whichever next arm fits.
     - The last chunk or arm must END by 15:00.
     - Fit12's 12 GB IFBench arm (~3 h, MEM ~12-16 GB) goes after 15:00, by day.
+  - MON 23:08 (`date`) GATE-SWITCH RULE (orchestrator 23:1x; told BigMoE + EvalSuite): the 01:25 gate switches from w13t to W24c's
+    config only if ALL hold by 01:20: (a) W24c >= 120 tok/s whole decode on HumanEval with a lifetime peak under 24 GB; (b)
+    NewIdeas' number check passes from its runs.json; (c) EvalSuite's dry run of the new env passes. Else w13t runs as
+    committed, and a 120 config gets its own gate Tuesday night.
+    - NewIdeas' check, fixed BEFORE the result (scripts/numcheck/w24c_check.py; reproduces W24b's w13t 116.45 / 23.915 GB):
+      1. The 14-row config's HE whole decode, pooled over all 12 prompts and both repeats (w14a + w14b): >= 120.0.
+      2. No HE row has a non-empty 'bad' field. A PAUSED row is unclean: no switch tonight, re-run Tuesday.
+      3. Lifetime peak, max mem[-1] in 10^9 bytes: < 24.000 in every repeat.
+      4. The controls w13c / w13d agree within 2 %; otherwise drift is FLAGGED (not a fail).
+    - A watcher wakes NewIdeas when w13dh_100_runs.json lands (the 4th HE arm) and runs the check at once.
+    - Leap's tests: after the gate (agreed). Fit12's stray second S1p (pid 14901, a heredoc slip) is stopped; it never ran.
+  - MON 23:06 (`date`) FINAL ORDER TONIGHT (orchestrator 23:0x, by Kamen's priorities; he is on the Mac until ~23:50):
+    1. BigMoE's W24c first (~00:00 once Kamen is idle; ~25 min, quiet, PEAK 25; no start after 00:50). Its AFTER opens at
+       00:00 via the s1u.done + 60 min fallback. NewIdeas number-checks any 120 claim at once.
+    2. Breakthrough's q1u_0_live: masks (held during W24c's quiet window, ~20 min), then the map arm, start by 01:00.
+    3. Fit12's S1p after W24c's end line, in the mask-build gap (~4 min, <= 12 GB, share, start by 01:00).
+    4. Leap's drafter and prefill tests can't finish by 01:15. They move to after the gate, in practice Tuesday evening:
+       the 32 GB pair needs 39 GB NO-SWAP, and by day only ~36 GB is free. Leap is told; it has no runner armed.
+    5. 01:25: EvalSuite's gate alone (~8 h). After it: BigMoE's lever arms first, then the 12 GB re-pricing work (S1p's
+       Tuesday GO if it doesn't run tonight).
+    - Live at 23:05: W24c turn45 pid 5436, Breakthrough runner pid 8447, Fit12 s1p.sh + s1p_go.sh. Asked Fit12 about a second
+      s1p.sh (start-by Tue 18:00, pid 14901).
+    - PROBLEM: NO-SWAP is 22.9 GB at 23:05 (Chrome ~17 GB). W24c needs 29, the gate 28, the map arm 25, S1p 20. The
+      orchestrator is asking Kamen.
+    - OPEN: does W24c's result switch the 01:25 gate's config? BigMoE says no (w13t stays; a 120 config gets its own gate
+      Tue). If yes, the 120 claim needs NewIdeas' number check and EvalSuite's env dry run first.
+  - MON 23:04 (`date`) S1u DONE (checked, NUMBER_CHECK 23) + S1p PLACED:
+    - S1u 22:37-22:52 on Kamen's word: 41.23 tok/s pooled, 11.335 GB, x2.39 vs exact paired (not x3.2). The read split is [P].
+    - Since 23:00 Kamen has been on the Mac (idle < 600 s, his apps 25 GB, GPU 52 %, NO-SWAP 22.9 GB at 23:03), so the
+> (a quote from the project owner, kept private)
+    - S1p (Fit12, pre-registered in its PLAN): S1u's loader clocks per wide call (F12_GSTAT=1), measuring the read split
+      the [P] estimate approximates. ~4 min, <= 12 GB, share, 10-min stop.
+      - GO given for tonight, last: after a W24c end line in BM:data/turn45.log, start by 01:00, Fit12's usual gate.
+      - Else Tuesday's first gap after the w24 gate. NewIdeas gives that GO; BigMoE's ~30-min slot goes first if ready.
+> (a quote from the project owner, kept private)
+    more tan 15 min. and dont close spotify"):
+    - S1u runs now as a shared run (MEM 12, hard stop 15 min, until ~22:57). Only S1u moved.
+> (a quote from the project owner, kept private)
+      - Breakthrough: its runner sleeps to 23:00:00 first (s1u_map_night.sh l.116).
+      - BigMoE: turn45 NOTBEFORE 23:00.
+      - Leap: no runner file to read; asked to require the clock, Kamen idle and q1u_0_live.done.
+    - #4 is BigMoE's W24c (BM da35564 + 13cd1cd): the diet drops the bf16 drafter (1.14 GB), which buys 14 rows. Six HE arms,
+      then MBPP + IFEval on two; ~25 min, quiet, PEAK 25 (expect <= 24); queue by 00:40, last arm start 00:55, ends <= 01:15.
+      It starts on Leap's drafter_1109.done + prefill_1109.done (Leap asked to touch both), with fallbacks q1u_0_live.done + 40
+      / s1u.done + 60 min (~23:57). A config that reaches 120 needs its own gate (Tue after w13t's, or Tue night).
+    - Load question answered (BigMoE 22:31): w13t's tokens are independent of load within a process; across an R57_HARD
+      1200 s cut, the rerun starts with a cold pool, so they can differ. Scores stay a valid sample. A <= 12 GB job beside the
+      gate is fine for the verdict if memory holds and EvalSuite's chunks keep margin under 1200 s (EvalSuite to say). By day
+      the one-big-job rule still holds.
+> (a quote from the project owner, kept private)
+    1. Fit12's S1u from 23:00 while Kamen is idle (~12 min, ~11.4 GB, share, start-by 00:58). Its hold on Leap's done-file
+       is released. Done-file ~/Fit12/logs/s1u.done. Fit12 SendMessages the orchestrator the numbers as soon as it ends:
+       whole decode tok/s, check ms (SSD read / non-read), MB per kept token, kept per check, peak GB. NewIdeas checks them.
+    2. Breakthrough's q1u_0_live right after (runner scripts/m1/s1u_map_night.sh, 9bea46d; masks built from 23:00 beside S1u
+       on one background core; bit-check first). Done-file ~/Breakthrough/data/m1/q1u_0_live.done.
+    3. Leap's drafter test and prefill test (the prefill test replaces the chat replay), on Breakthrough's done-file. Fallback:
+       20 min after s1u.done with no map or s1u process left.
+    4. A BigMoE lever arm only if one is ready (no answer yet).
+    - Unchanged: everything is done by 01:15 and the 01:25 gate is untouched. The 21:16 chain's order below is superseded.
   - MON 21:16 (`date`) TONIGHT'S CHAIN (each job starts when the one before it leaves its done-file; all gated on Kamen idle):
     1. Leap's drafter test from 23:00: 4 runs (dfl / mtp x 32 / 45 GB), share, ~12-15 min. MLX peaks ~31 / ~44 GB need
        NO-SWAP >= 39 / 52 (43.6 at 21:15, so the 45 GB pair may be skipped). Done-file ~/Leap/data/drafter_1109.done.
