@@ -39,6 +39,58 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     - Order: card-reference leftover (0.5-2.5 h), then lcoh (~3.6 h), then whichever next arm fits.
     - The last chunk or arm must END by 15:00.
     - Fit12's 12 GB IFBench arm (~3 h, MEM ~12-16 GB) goes after 15:00, by day.
+  - MON 23:30 (`date`) CHAIN LIVE (Kamen handed over 23:2x; Chrome closed; NO-SWAP 41.2 GB, swap 5.6 GB at 23:30):
+    1. W24c (turn45; start by 01:15; decision arms start by 01:30; diagnostics only if they can start by 00:40). EvalSuite's
+       dry run of card_w24c_env.txt PASSED (blob 5d2b765e). Relay: NewIdeas tells EvalSuite by 02:05, PASS only if BigMoE's
+       verdict says PASS (its full rule) AND NewIdeas' 4 checks pass. Else w13t.
+    2. Breakthrough runner v3 (dc0bfd5): waits for W24c's turn45 to end (until 01:15); masks by 01:25; arm start by 01:30,
+       stop 01:45. S1p in the gap after W24c's end line (start by 01:30).
+    3. Leap runner pid 74101: on q1u_0_live.done (fallback 01:35); NO-SWAP >= 39; share 'MEM 38 GB' to 02:05. Jobs: 32 dfl / 32
+       mtp, then prefill 10k / 30k x default / pfa / pfb. No start after 01:58; all capped at 02:04.
+    4. Gate 02:10 (w13t unless the switch passes). Suggested to EvalSuite: start at max(01:25, prefill_1109.done + 5 min).
+       Its slowest pricing (14:04) passes 13:30 even with no neighbour.
+    - BESIDE THE GATE (EvalSuite CONFIRMED margin for one <= 12 GB neighbour; amendment 12b: the gate yields only to a shared
+      MEM run > 12 GB, or to two > 5 GB; it stops itself at swap +2 GB; ETA file ~/EvalSuite/results/w24_gate_eta.txt,
+      first update ~02:35):
+      a. Breakthrough's flip-only arms (qom_0_live_c47, q1u_0_live if not run), each <= 12.0 GB measured, from 'neighbour
+         may start: yes'. Then ~/Breakthrough/data/m1/beside_gate.done (03:00 at the latest).
+      b. Fit12's 12 GB IFBench arm in Fit12's own session and lock, EvalSuite scoring afterwards, if Fit12 builds the guards
+         and passes the format check. EvalSuite REFUSED a second instance of runner 61. Else EvalSuite runs it alone after
+         the gate.
+      - Guards for both: NO-SWAP >= peak + 8; stop on swap +0.5 GB, footprint > 12.0 GB, or ETA 'passes 13:30: yes'.
+        Short lock reasons starting 'MEM n GB'.
+  - MON 23:14 (`date`) BESIDE-THE-GATE CANDIDATES:
+    1. Breakthrough's flip-only map arms, if any run at <= 12 GB (asked; q1u_0_live peaks ~17). Short; they go first.
+    2. Fit12's 12 GB IFBench arm (quality): P2' chat, EvalSuite's runner, harness Fit12/snap/chw1108, env
+       Fit12/data/gate/card12_chw_env.txt, one order. Peak 10.9-11.0 GB [K] at CAP 128; at max_tokens 1536 <= ~11.5 [G].
+       ~5 h alone, 7-10 h beside the gate. It gates SMALL_RAM's 12 GB chat row before Wednesday.
+       - Guards: start at NO-SWAP >= 20; the first chunk measures the peak; stop if footprint > 12.0 GB or swap +0.5 GB.
+       - If it runs past the gate's end, it continues alone as the day's one big job, yielding to BigMoE's quiet arms.
+       - Pending EvalSuite: can its runner run it beside the gate, and does the gate keep margin under 1,200 s?
+    - Not beside the gate: S1p (needs clean loader clocks) and S0 WV16 (not built; low value, dropped).
+  - MON 23:13 (`date`) BESIDE THE GATE (Kamen's idea, cleared by the orchestrator 23:2x): 12 GB work may run beside the w24 gate.
+    - Rules: one job at a time, <= 12 GB measured peak; flip-only map arms / quality jobs first; speed screens labelled
+      rough; memory must hold (gate + job + his apps; NO-SWAP >= peak + 8 at start, stop on swap growth > 0.5 GB); the
+      neighbours stop if the gate's projected finish passes 13:30; no 32 GB work beside it (Leap's tests stay before 02:10).
+    - Precondition: EvalSuite confirms its chunks keep margin under R57_HARD 1,200 s with one <= 12 GB neighbour (asked). Also
+      asked for an ETA file the neighbours can read (~/EvalSuite/results/w24_gate_eta.txt, proposed).
+    - Candidates asked from Fit12 and Breakthrough, with measured peaks. Guesses: Fit12's S0 WV16 (bitwise, timing-free) fits;
+      Breakthrough's map arms fit only if they run at <= 12 GB (q1u_0_live peaks ~17). S1p does NOT go beside it: its point is
+      clean loader clocks.
+    - S1p re-armed with start-by 01:30 (runner pid 30324, helper pid 30387; ends by 01:40).
+  - MON 23:12 (`date`) GATE MOVED TO 02:10 (Kamen's yes via the orchestrator 23:2x); the 32 GB tests run tonight; the switch
+    deadline is 02:05. Order once Kamen is idle (everything needs Chrome's ~17 GB freed first):
+    1. W24c (BigMoE re-armed 23:10: Kamen idle 10 min + no chat > 2 GB, WAITMEM 29; start-by 00:50, may move to 01:15).
+       Decision passes first: HE w13c w14a w14b w13d (~8 min), then w14a MBPP + IFEval. Candidate env
+       data/stack/card_w24c_env.txt (CM 140, CL 28, ROWCAP 14, D7B all); EvalSuite can dry-run it now.
+    2. Breakthrough's q1u_0_live: masks once W24c's quiet window ends, by 01:25; map arm start by 01:30, stop 01:45 (asked).
+       Fit12's S1p goes in the mask gap after W24c's end line, start by 01:30 (asked), ends by 01:40.
+    3. Leap's 32 GB drafter pair + prefill test, on q1u_0_live.done (fallback 01:35), NO-SWAP >= 39, each done by 02:05.
+       The 45 GB pair stays out. Leap was asked to arm a runner (it had none).
+    4. 02:10: EvalSuite's gate (re-arming), w13t unless the switch rule passes by 02:05.
+    - Kamen asked whether 12 GB work can run beside the gate. Answer sent: yes for the verdict (BigMoE 22:31), if memory holds
+      and EvalSuite's chunks keep margin under 1,200 s. Speed screens beside it give rough timings only; map arms are
+      unaffected.
   - MON 23:08 (`date`) GATE-SWITCH RULE (orchestrator 23:1x; told BigMoE + EvalSuite): the 01:25 gate switches from w13t to W24c's
     config only if ALL hold by 01:20: (a) W24c >= 120 tok/s whole decode on HumanEval with a lifetime peak under 24 GB; (b)
     NewIdeas' number check passes from its runs.json; (c) EvalSuite's dry run of the new env passes. Else w13t runs as

@@ -8,8 +8,31 @@ gates see this process as a map process. Start it with cwd ~/Breakthrough (never
 fanwatch's heat freeze recognise research jobs by working folder or command line.
 Usage (BigMoE venv): cd ~/Breakthrough && python -I -B scripts/m1/q1u0_run_map.py
 """
-import os, sys
+import atexit, ctypes, os, signal, sys, time
 sys.dont_write_bytecode = True
+T0 = time.time()
+
+
+class _RU(ctypes.Structure):   # rusage_info_v4: uuid, then 64-bit counters (as Fit12's bt_b12.py reads it; u28 = lifetime max)
+    _fields_ = [("uuid", ctypes.c_uint8 * 16)] + [(f"u{i}", ctypes.c_uint64) for i in range(40)]
+
+
+def _peak_line():
+    """23:2x: the measured peak NewIdeas asked for (a 12 GB slot beside the w24 gate needs <= 12 GB MEASURED): lifetime max
+    phys_footprint (the 12 GB lines' metric), MLX peak active, wall time. Printed at any exit, a TERM included."""
+    ru = _RU()
+    ok = ctypes.CDLL(None).proc_pid_rusage(os.getpid(), 4, ctypes.byref(ru)) == 0
+    try:
+        import mlx.core as mx
+        mlxp = f"{mx.get_peak_memory() / 1e9:.2f}"
+    except Exception:
+        mlxp = "n/a"
+    print(f"[q1u0] PEAK FOOTPRINT {(ru.u28 / 1e9) if ok else float('nan'):.3f} GB (lifetime max phys_footprint), "
+          f"MLX peak active {mlxp} GB, wall {time.time() - T0:.0f} s", flush=True)
+
+
+atexit.register(_peak_line)
+signal.signal(signal.SIGTERM, lambda *a: sys.exit(143))   # a stop runs atexit too (KILL 20 s later still frees memory)
 DM = os.path.expanduser("~/FableGod/decision_map")
 MASKS = os.path.expanduser("~/Breakthrough/data/dm_masks/q1u_0_live")
 ARM = "q1u_0_live"

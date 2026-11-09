@@ -60,3 +60,44 @@
 11-09 19:59:47 w12pfm_100 rc=0
 11-09 19:59:47 report rc=0 (data/w24/w24b_report.txt)
 11-09 19:59:47 W24 end
+11-09 22:35:10 dry: w13c = base 130, sidecar 26, rows 13, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25, pools 13.78 GB
+11-09 22:35:10 dry: w14a = base 140, sidecar 28, rows 14, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all, pools 14.84 GB
+11-09 22:35:10 dry: w13a = base 130, sidecar 26, rows 13, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all, pools 13.78 GB
+11-09 22:35:10 dry: w13b = base 141, sidecar 26, rows 13, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all, pools 14.87 GB
+11-09 22:35:10 dry: w14b = base 140, sidecar 28, rows 14, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all, pools 14.84 GB
+11-09 22:35:10 dry: w13d = base 130, sidecar 26, rows 13, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25, pools 13.78 GB
+11-09 22:35:10 dry run: snapshot w24 (016cb7f), L + COH line 33 K=V, live kernel files == frozen_rel1's
+11-09 23:34:13 W24 start (pid 61512, NO-SWAP 41.7 GB, snapshot w24 = 016cb7f, arms w13c w14a w14b w13d)
+11-09 23:35:38 w13ch_100 rc=0
+11-09 23:36:58 w14ah_100 rc=0
+11-09 23:38:19 w14bh_100 rc=0
+11-09 23:39:59 w13dh_100 rc=0
+11-09 23:39:59 report rc=0 (data/w24/w24c_report.txt)
+11-09 23:39:59 W24 end
+11-09 23:39:59 W24 start (pid 66824, NO-SWAP 40.4 GB, snapshot w24 = 016cb7f, arms w14a)
+11-09 23:41:30 w14am_100 rc=0
+11-09 23:43:20 w14ai_100 rc=0
+11-09 23:43:20 report rc=0 (data/w24/w24c2_report.txt)
+11-09 23:43:20 W24 end
+11-09 23:43:20 W24c decision passes done: data/w24/w24c_verdict.txt
+11-09 23:43:20 W24 start (pid 68417, NO-SWAP 40.5 GB, snapshot w24 = 016cb7f, arms w13a w13b)
+11-09 23:44:41 w13ah_100 rc=0
+11-09 23:46:01 w13bh_100 rc=0
+11-09 23:46:01 report rc=0 (data/w24/w24c3_report.txt)
+11-09 23:46:01 W24 end
+11-09 23:46:01 W24 start (pid 69912, NO-SWAP 40.6 GB, snapshot w24 = 016cb7f, arms w13c)
+11-09 23:47:22 w13cm_100 rc=0
+11-09 23:49:17 w13ci_100 rc=0
+11-09 23:49:17 report rc=0 (data/w24/w24c4_report.txt)
+11-09 23:49:17 W24 end
+11-09 23:50:27 dry: w14c = base 140, sidecar 28, rows 14, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all, pools 14.84 GB
+11-09 23:50:27 dry: w13e = base 141, sidecar 26, rows 13, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all, pools 14.87 GB
+11-09 23:50:27 dry: w13f = base 141, sidecar 26, rows 13, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all, pools 14.87 GB
+11-09 23:50:27 dry: w14d = base 140, sidecar 28, rows 14, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all, pools 14.84 GB
+11-09 23:50:27 dry run: snapshot w24 (016cb7f), L + COH line 33 K=V, live kernel files == frozen_rel1's
+11-09 23:51:23 W24 start (pid 74344, NO-SWAP 41.3 GB, snapshot w24 = 016cb7f, arms w14c w13e w13f w14d)
+11-09 23:52:43 w14ch_100 rc=0
+11-09 23:54:03 w13eh_100 rc=0
+11-09 23:55:24 w13fh_100 rc=0
+11-09 23:56:44 w14dh_100 rc=0
+11-09 23:56:44 report rc=0 (data/w24/w24d_report.txt)

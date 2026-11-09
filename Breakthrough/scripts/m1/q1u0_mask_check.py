@@ -34,7 +34,10 @@ for f in fa:
         shapes = False; print(f"  shape {f}: {a.shape} vs {r.shape}"); continue
     if (a & ~r).any():
         sub = False; print(f"  not a subset: {f}: {int((a & ~r).sum())} keeps")
-    p0 = int(base[f]["a"]) if f in base else None
+    # rows before the walk: row a - 1 (the last prompt row) is the first check's anchor A, whose logits verify the first
+    # answer token (dm_q1u_masks: checks are rows A .. A + m), so it is masked like any check row. FIX Mon 23:5x: p0 was
+    # a, which failed every window, NewIdeas' scored q1u_0.9_live masks included.
+    p0 = int(base[f]["a"]) - 1 if f in base else None
     if p0 is None:
         prompt = False; print(f"  no baseline row for {f}"); continue
     if not (a[:p0].all() and r[:p0].all()):

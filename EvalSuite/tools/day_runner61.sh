@@ -75,8 +75,10 @@ L = json.load(open(sys.argv[1]))["layers"]
 sys.exit(0 if len(L) == 48 and all("layout" in v for v in L.values()) else 1)' "$R3IDX"
 }
 store_ok() { local i; for i in 1 2 3 4; do full_converted && return 0; sleep 60; done; return 1; }
-mem_busy() {    # another session's shared run with MEM > 5 GB (our own reasons start "evalsuite: MEM")
-  peer ls 2>/dev/null | grep "shared run" | grep -v "evalsuite: MEM" | grep -oE "MEM [0-9]+ GB" | awk '$2 > 5 {f = 1} END {exit !f}'
+mem_busy() {    # another session's shared run with MEM > 5 GB (our own reasons start "evalsuite: MEM"); amendment 12b:
+  # with CARD_YIELD_GB=12 (the w24 arm) only a run above 12 GB or a second run above 5 GB (one <= 12 GB neighbour may run)
+  peer ls 2>/dev/null | grep "shared run" | grep -v "evalsuite: MEM" | grep -oE "MEM [0-9]+ GB" \
+    | awk -v y="${CARD_YIELD_GB:-5}" '$2 > 5 {n++} $2 > y {f = 1} END {exit !(f || n > 1)}'
 }
 freegb() { .venv/bin/python -c "import sys; sys.path.insert(0, '.'); from evalsuite.cli import free_gb; print(int(free_gb()))"; }
 swapgb() { sysctl -n vm.swapusage | awk '{gsub("M", "", $6); print int($6 / 1024 + 0.5)}'; }
@@ -463,6 +465,8 @@ HARDS=$(printf '%s\n' "${STACKENV[@]}" | grep '^R57_HARD=' | tail -1); HARDS=${H
 case "$HARDS" in *[!0-9]*) say "R57_HARD '$HARDS' is not whole seconds: runner stops"; exit 2;; esac
 STEP=$((HARDS + 300))
 say "R57_HARD $HARDS s: each process is priced $STEP s before the cutoff; shared lock lease $((STEP / 30)) min"
+case "${CARD_YIELD_GB:-5}" in ''|*[!0-9]*) say "CARD_YIELD_GB '${CARD_YIELD_GB}' is not whole GB: runner stops"; exit 2;; esac
+say "each process start yields to another session's shared MEM run above ${CARD_YIELD_GB:-5} GB, or to two above 5 GB"
 KEYS=$(LC_ALL=C sort "$KF" | paste -sd, -)
 RKEYS=$(echo "$KEYS" | tr ',' '\n' | tail -r | paste -sd, -)
 [ "$DRY" = 1 ] && { say "DRY: QOM sets ${QS:-unset}; $(echo "$KEYS" | tr ',' '\n' | grep -c .) keys per order; pin $PIN0; bm_pin $(bm_pin && echo OK || echo FAILS); stops before the first GPU step"; exit 0; }

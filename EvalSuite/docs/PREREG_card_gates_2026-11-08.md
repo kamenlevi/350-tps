@@ -430,3 +430,122 @@ Checked on the gate keys; the result is the same in scripts/r57_screen.py and th
   which assumed ~7 long rows per 600 s; most rows are short (IFBench averages 384 tokens).
 - **Unchanged:** the keys, the reference, the decision rule, both orders, PERPROC 20, the slot (from 01:25, latest start
   05:00) and the 15:00 cutoff. From a 01:25 start the central case ends near 09:30 if memory is free.
+
+## Amendment 12b (Mon 9 Nov 23:2x, before any w24 row and before any W24c data): a 02:10 start, a pinned env, a switch rule fixed in advance, one neighbour; operations only
+- **Start (the orchestrator 23:2x, with Kamen's approval):** the arm starts at 02:10:00 Tue, not 01:25, so Leap's 32 GB
+  tests fit before it. The latest start (05:00:00) and the 15:00 cutoff are unchanged. Times now carry seconds: BSD
+  `date -j -f` without them keeps the current seconds, so the old start could fall up to 59 s late. From 02:10 the priced
+  lengths of amendment 12a end at 10:17 (central), 12:04 (slow) and 14:04 (slowest), all before 15:00 if memory is free.
+- **The env is pinned (tools/card_w24_start.sh):** the launcher starts runner 61 only when the env file is committed in
+  BigMoE and its blob (`git hash-object --no-filters`) is one that was dry-run. Tonight that is only w13t's 757b768c
+  (card_w24_env.txt, BigMoE 8f76fc3). Any other content makes it wait; it says so once and starts nothing by 05:00.
+  Runner 61 reads a frozen copy, results/card_w24_env_run.txt (cp -p, the same blob), so a later edit of BigMoE's file
+  cannot reach the running arm. Tests:
+  - the w13t env starts to the second;
+  - the W24c env with only w13t's blob allowed waits, then starts nothing (rc 3);
+  - with its own blob allowed it starts;
+  - runner 61's dry run on the frozen copy passes.
+
+  The launcher was stopped before the edit and re-armed at 23:20:43 (pid 65794).
+- **The switch rule, fixed before W24c's data:** sources are the orchestrator (23:1x via NewIdeas 23:07, and 23:2x) and
+  BigMoE's docs/W24_DECISION.md, section W24c (ddc90f5, with its 23:2x amendment). The arm runs W24c's 14-row config
+  instead of w13t only if NewIdeas tells EvalSuite by 02:05 that W24c passed:
+  - HumanEval whole decode >= 120.0 tok/s, pooled over both 14-row repeats;
+  - no bad rows, and every lifetime peak below 24.000 GB;
+  - BigMoE's other conditions;
+  - NewIdeas' number check (~/NewIdeas/scripts/numcheck/w24c_check.py, fixed before the result).
+
+  On that word EvalSuite re-arms the launcher on card_w24c_env.txt (BigMoE 8aecd3c, blob 5d2b765e), with that blob alone.
+  Nothing is copied over card_w24_env.txt. Otherwise w13t runs as committed.
+  - **The candidate:** it differs from w13t in exactly 4 keys:
+    - BIGMOE_TIER_CM 130 -> 140;
+    - BIGMOE_TIER_CL 26 -> 28;
+    - R57_ROWCAP 13 -> 14;
+    - R57_D7B code -> all: only the 4-bit DFlash2 drafter, so GPQA and IFBench prompts typed math or agent draft on it too.
+      The screen accepts "all" (line 149) and then loads only that drafter (line 862).
+  - **Its dry run (23:13) passes:**
+    - 42 keys, none repeated;
+    - C 100 and MEM 24;
+    - the same snapshot, screen (6ea91764f855), .so (ff69fa24a745) and code pin (27ac500bd0e0) as w13t;
+    - 1,500 s per process and 381 keys per order.
+
+  The choice depends only on W24c's own HumanEval speed and memory, never on card-gate rows. The decision rule is
+  unchanged. The RESULT names the config that ran, from the launcher's "env ready" line and the frozen copy.
+- **One neighbour (Kamen via the orchestrator 23:2x; NewIdeas' rules 23:13):** one job of at most 12 GB may run beside
+  the arm.
+  - **The yield:** at each process start, runner 61 yields to another session's shared MEM run (the day rule: any run
+    above 5 GB). The threshold is now CARD_YIELD_GB, and the w24 launcher passes 12: the arm yields only to a run above
+    12 GB, or to two runs above 5 GB. Other arms keep the default of 5. Tests: a unit test (11 cases); card_m1b_env.txt's
+    dry run is unchanged; a value that is not whole GB stops the runner.
+  - **The arm's own guards are unchanged:** 28 GB NO-SWAP free before each process, a stop if swap is more than 2 GB
+    above its base, and the code pins.
+  - **Tokens:** within a process the arm's tokens do not depend on load (BigMoE 22:31: w12 vs w12r 24/24, w12t 24/24). A
+    slowed process is cut sooner, and the cut row restarts cold in the next process, as in any run.
+- **Margin with a neighbour [P]:** the budget sim of amendment 12a, at central rates, with every row and load slowed by a
+  factor s. The neighbour's real slowdown is not measured.
+
+  | s | Processes per order | Both orders |
+  |---|---|---|
+  | x1.25 | 20 | 10.2 h |
+  | x1.5 | 22 | 12.5 h |
+  | x2 | 26 | 17.4 h |
+  | x2.5 | 31 (past the stop at 30) | - |
+
+  The longest row (256 s at central rates) stays under the 1,240 s cut up to about x4.8. The clock binds first: from
+  02:10 the central case passes 13:30 at a sustained x1.37, and the slow case at x1.14. A watcher, not the runner, writes
+  results/w24_gate_eta.txt after each process. The neighbours stop if its projected finish passes 13:30 (NewIdeas' rule).
+- **Unchanged:** the keys, the reference, the decision rule, both orders, PERPROC 20 and the 15:00 cutoff.
+
+## Amendment 12c (Mon 9 Nov 23:3x, before any w24 row): an earlier start once Leap's tests are done and the config is settled; scheduling only
+- **Why (NewIdeas 23:30, the queue owner):** Kamen handed the Mac over at 23:2x and closed Chrome (NO-SWAP 41 GB at
+  23:30), so tonight's chain (W24c, then q1u_0_live with S1p, then Leap's tests) may end well before 02:10. 02:10 was
+  chosen so that Leap's tests fit first (the orchestrator 23:2x). At the slowest pricing a 02:10 start ends at 14:04, past
+  the neighbours' 13:30 line even with no neighbour.
+- **The rule (tools/card_w24_start.sh):** the arm still starts at 02:10:00 at the latest. It may start earlier, but not
+  before 01:25:00, once all three hold:
+  - both of Leap's done files (~/Leap/data/drafter_1109.done and prefill_1109.done) are newer than 23:30:00 and 300 s
+    old;
+  - results/w24c_verdict.txt exists. EvalSuite writes it when NewIdeas' W24c verdict arrives, either way, so the config
+    (amendment 12b) is settled before the first row.
+
+  With no verdict, 02:10 stands. Leap's tests still run first, and the 5 min after its files lets them exit. A test runs
+  the launcher in dry mode on fake files (7 cases, all as intended): the path off; a missing verdict file; files and the
+  verdict present; one file missing; a file older than 23:30; the floor in the future; a 15 s delay. The launcher was
+  stopped before the edit and re-armed at 23:34:37 (pid 61821).
+- **Unchanged:** the config rule, the env pin, the neighbour rule, the keys, the reference, the decision rule, both
+  orders, the latest start (05:00) and the 15:00 cutoff. From 01:25 the priced lengths end at 09:31 (central), 11:19
+  (slow) and 13:19 (slowest).
+
+## Amendment 12d (Mon 9 Nov 23:5x, before any w24 row): W24c's outcome, a second candidate (W24d), one final word before the start; operations only
+- **W24c's outcome [K] (BigMoE docs/W24_DECISION.md, bd719b4, written after the data):**
+  - BigMoE's conditions 1-3 passed: HumanEval whole decode pooled over the two 14-row repeats 126.11 tok/s; 0 bad rows;
+    peak 23.808 GB.
+  - Condition 4 failed: the 14-row config was +4.1 % over the same-run w13t controls, against a bar of > +4.6 %.
+  - The orchestrator overrode condition 4 and chose the 14-row config for the gate, subject to NewIdeas' number check
+    and relayed by NewIdeas. Its stated reasons, both measured in that run:
+    - w13t peaked once at 24.006 GB (w13d, HumanEval/68) with tokens identical to w13c (23.916 GB);
+    - the run's repeats agree within 0.4 %.
+  - The card gate's own rule is untouched: the config choice used only W24c's HumanEval speed and memory, never
+    card-gate rows. Until NewIdeas' word arrives, the launcher stays on w13t.
+- **A second candidate (BigMoE 87dd1a3; the orchestrator's "option B"; W24_DECISION.md section W24d, 498691a):**
+  data/stack/card_w24d_env.txt (blob e06f495e) is w13b: 141 base + 26 sidecar slots, 13 rows, R57_D7B=all.
+  - **When it replaces the 14-row config:** only under section W24d. That section runs a same-run ABBA on HumanEval and
+    requires all of:
+    - more than 1 % faster, pooled;
+    - every w13b peak below 24.000 GB;
+    - no bad or cut rows;
+    - everything landed by 01:30.
+  - **Key differences:** 3 keys from card_w24c_env.txt (CM 140 -> 141, CL 28 -> 26, ROWCAP 14 -> 13) and 2 from w13t
+    (CM 130 -> 141, D7B code -> all).
+  - **Its dry run (23:51) passes:**
+    - 42 keys, none repeated;
+    - C 100 and MEM 24;
+    - the same snapshot, screen 6ea91764f855, .so ff69fa24a745 and code pin 27ac500bd0e0;
+    - bm_pin OK at 87dd1a3;
+    - 1,500 s per process and 381 keys per order;
+    - the launcher's dry run on a frozen copy with its blob.
+- **One final word:** the arm runs the config that NewIdeas names in its final word: w13t, the 14-row config
+  (card_w24c_env.txt, 5d2b765e) or w13b (card_w24d_env.txt, e06f495e). EvalSuite re-arms the launcher on that file with
+  that blob alone. Only then does it write results/w24c_verdict.txt, amendment 12c's early-start condition; a partial
+  word never writes it. With no final word by 02:05, w13t runs at 02:10. The RESULT names the config and reports every
+  lifetime peak against the 24.0 GB line.

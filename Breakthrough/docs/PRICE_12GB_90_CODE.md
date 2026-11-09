@@ -215,3 +215,59 @@ prompts in before the stop.
   - Fit12's order: compaction first, then overlap, then eviction. Compaction: the call still runs all 10 tier_glu columns,
     with weight 0 on the dropped ranks, while ~5.0-5.5 of 10 experts per row-layer are needed.
 - S1u's quality is still the map arm's to say (q1u_0_live, from 23:00 while Kamen is idle).
+
+## qom_0_live_c47: QOM0 at Fit12's call pool, pre-registered before any data (Mon 23:4x)
+Planned beside EvalSuite's w24 gate (NewIdeas 23:30: EvalSuite confirmed margin for one <= 12 GB neighbour; my flip-only
+arms go first). Masks: NewIdeas' builder, arm qom_0_live_c47 = QOM at theta 0 (drafted rows' ranks 0-1, the check's union,
+and rank 2-9 experts resident in a 47-slot LRU base pool per layer = Fit12's C_m 47), built into data/m1/masks; then
+c47_mask_check.py (same windows and shapes as qom_0_live_c51; q1u_0_live inside c47 by construction; prompt rows kept).
+- Why: if S1u (q1u_0_live) fails the code line, S1's fallback is QOM0 with a lookup-only residency probe. Its map line so far
+  is at 51 slots (qom_0_live_c51 1.16 % [0.54] PASS); the engine's call pool is 47.
+- Read-out: `dm_screen_read.py qom_0_live_c47 qom_0_live_c51 --also q1u_0_live`, SCREEN_OUT = data/m1.
+- Code PASS = VERDICT2: all-row flips <= 1.34 % AND non-tie flips <= 0.87 %. IFEval and multi are information only.
+- Expectation: between q1u_0_live (union only) and qom_0_live_c51; four fewer slots should move flips little.
+- PASS: the QOM0 fallback holds at the engine's own pool; the known-benchmark gate decides adoption. FAIL: the probe needs
+  a larger pool (51 passed) or S1u must pass.
+- Run: scripts/m1/beside_gate.sh with bg_run_map.py (in-memory registration; DM_C from tonight's measured peak; a
+  self-guard ends the arm above 11.9 GB lifetime footprint, so it measures <= 12.0 GB).
+
+## q1u_0_live (S1u's cut) on the map: code FAIL (Tue 00:01) [K, map arm; data/m1/SCREEN_read_q1u_0_live.txt]
+Pre-registered above (480001c) before any data. Masks: NewIdeas' builder, data/dm_masks/q1u_0_live; bit-check PASS after the
+23:5x fix of the check itself (answer-row kept share 0.4994, vs q1u_0.9_live's 0.7651). Run: scripts/m1/s1u_map_night.sh ->
+q1u0_run_map.py at DM_C 51; result ~/FableGod/decision_map/out/q1u_0_live.json.
+
+| arm | code all-row | code non-tie | IFEval all-row | multi all-row |
+|---|---|---|---|---|
+| q1u_0_live (S1u: union only, theta 0) | 1.96 % (66/3366) | 1.36 % (45/3316) | 15.72 % | 11.15 % |
+| qom_0_live_c51 (QOM0: union + residents, 51 slots) | 1.16 % (39/3366) | 0.54 % (18/3316) | 8.80 % | 5.26 % |
+| q1u_0.9_live (union only, theta 0.9) | 1.25 % | 0.69 % | 6.45 % | 3.77 % |
+| line (VERDICT2; IFEval / multi information only) | <= 1.34 % | <= 0.87 % | 5.42 % | 3.69 % |
+
+- VERDICT2 FAIL on code: all-row BETWEEN, non-tie OVER. IFEval and multi KILL. McNemar: worse than qom_0_live_c51 (code
+  39 / 12 only-flips, z +3.78; non-tie 30 / 3, z +4.70) and than q1u_0.9_live (40 / 16, z +3.21).
+- Decision (pre-registered): S1u is not adoptable. Fit12's S1 needs QOM0 with a lookup-only residency probe (c51 PASSES).
+  qom_0_live_c47, QOM0 at the engine's call pool C_m 47, is pre-registered (8a5a382); its masks are built and checked
+  (kept share 0.702 vs c51's 0.715). It needs a slot.
+- At theta 0 every drafted row keeps only ranks 0-1 plus the union. Keeping the resident experts too (QOM) cuts the code
+  flips from 66 to 39.
+- A map arm's measured peak: 15.96 GB lifetime footprint (MLX active 15.33 GB) at DM_C 51, wall 224 s including the load.
+  The expert cache is ~5.3 GB of it (0.104 GB per slot), so a <= 12 GB map arm needs DM_C ~10 (heavy SSD streaming). Map
+  arms therefore do not fit the 12 GB neighbour slot beside the w24 gate: data/m1/beside_gate.done, 00:03.
+
+## Eviction policies at the 12 GB pools [P, CPU replay] (Tue 00:0x; scripts/m1/code12_policy.py -> data/m1/code12_policy.out)
+MB per kept token (GB per check) on the map's 12 code windows, live checks, 51 + 32 slots per layer. The current check's
+experts are pinned, as in the engine's call. PIN uses in-sample popularity (optimistic).
+
+| rule | LRU | LIP | LRU-2 | LFU decayed 0.5 | 0.8 | 0.9 | PIN | OPT (bound) |
+|---|---|---|---|---|---|---|---|---|
+| QOM0 | 152.1 (1.20) | -2 % | -5 % | -1 % | -5 % | -6 % | +3 % | 93.2 (0.74) -39 % |
+| QOM0+ball | 95.9 (0.76) | 0 % | -5 % | -1 % | -4 % | -6 % | +5 % | 54.2 (0.43) -43 % |
+| EXACT | 589.5 (4.66) | -24 % | -1 % | 0 % | -1 % | -1 % | -8 % | 351.2 (2.78) -40 % |
+
+- Simple policies win back 5-6 % of QOM0's bytes. OPT's -39 % needs knowledge of future use, such as a prefetch hint
+  from the drafter's next checks. LIP helps only EXACT, whose rank 2-9 loads pollute the pool.
+- This replay's LRU sits 6-7 % below bytes10_core's (162.5 / 636.8 / 101.8): it pins the whole current check's set,
+  while the core's LRU can evict an expert the same check touches later. The engine measured 1.326 GB per check at
+  C_m 47 (S1u): x1.10 over this LRU at 51, x1.03 over the core's.
+- For 90: eviction is a margin lever (about -6 % of reads), not a route. Compaction (non-read) and overlap (hide the
+  reads) stay first.

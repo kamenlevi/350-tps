@@ -1310,3 +1310,58 @@ Same snapshot as W24 (016cb7f); one pass per set; quiet lock; fan cap 5000. Like
 - **Gate pick** (docs/W24_DECISION.md, highest HE): w13t -> data/stack/card_w24_env.txt (8f76fc3) for EvalSuite's card gate from
   Tue 01:25 (~10 h). Its peak is 0.08 GB under 24.0; QOM drops 28.8 / 26.6 % of optional uses (w12: 30.7 / 27.7).
 - Bookkeeping: the run's own data commit failed (bash 3.2 has no ${RUN^^}); committed by hand (8f76fc3), script fixed (ebaa58f).
+
+## Mon 9 Nov 23:34-23:43: W24c = the drafter diet buys a 14th row: 126 tok/s on HumanEval under 24 GB (data/w24/w24c_report.txt, w24c2_report.txt, w24c_verdict.txt; data 71d239b, e7c6eb0)
+Same snapshot as W24 (016cb7f), env only; quiet lock; Kamen off the Mac (apps closed). The gated w13t holds two DFlash2 drafters
+(bf16 for math / agent-typed prompts, 4-bit for code); R57_D7B=all keeps only the 4-bit one (code drafts are unchanged), and the
+freed ~1.1 GB pays for 140 base + 28 sidecar slots and 14 rows. ABBA on HumanEval; all 12 prompts clean in every arm (no pause,
+no bad row). Whole decode tok/s:
+
+| arm | config | HumanEval | whole request | first token | kept per check | lifetime peak |
+|---|---|---|---|---|---|---|
+| w13c | w13t as gated (130 / 26 slots, 13 rows, both drafters) | 120.9 | 39.7 | 3.50 s | 9.97 | 23.92 GB |
+| w14a | 140 / 28 slots, 14 rows, R57_D7B=all | **125.8** | 40.2 | 3.58 s | 10.33 | 23.81 GB |
+| w14b | w14a again | **126.4** | 40.4 | 3.56 s | 10.33 | 23.77 GB |
+| w13d | w13t as gated, again | 121.4 | 39.0 | 3.62 s | 9.97 | **24.01 GB (over the line)** |
+
+- **14 rows under 24 GB: 126.1 tok/s pooled** (w14a + w14b, all 12 prompts each), +4.1 % over the same-run controls (121.1). The
+  controls agree within 0.4 %, the repeats within 0.4 %, and tokens are identical within each pair (12 / 12). w14a on MBPP:
+  87.9 tok/s, 23.69 GB; on IFEval: 29.8 tok/s, 23.64 GB. Checks over 300 ms: 0 on the code sets; 3-4 of 633 on IFEval, all the
+  first or last check of a prompt.
+- **w13t is not reliably under 24 GB:** w13d peaked 24.006 GB (HumanEval/68) with the same tokens as w13c (23.916): the
+  footprint moves ~0.1 GB between identical runs. The 14-row config peaks 0.19-0.37 GB under the line on all three sets.
+- w13t itself reaches 121 on a quiet machine (W24b, with Kamen on the Mac: 116.5).
+- **Gate rule** (docs/W24_DECISION.md 'W24c', pre-registered): conditions 1-3 PASS (126.11 >= 120.0; 0 bad rows; 23.808 <
+  24.000), condition 4 FAILS (+4.1 % vs the > +4.6 % bar, the noise between two separate runs), so as written w13t stays. The
+  orchestrator was asked at 23:4x whether to switch anyway (w13t's 24.006 breach; 0.4 % noise inside this run).
+  **Decision (the orchestrator 23:4x): it overrode the +4.6 % bar and switched the 02:10 card gate to the 14-row config
+  (data/stack/card_w24c_env.txt, EvalSuite's dry run passed), subject to NewIdeas' number check** (docs/W24_DECISION.md
+  override note, bd719b4). Published numbers come from this same-run pair: 125.8 / 126.4 tok/s (pooled 126.1), peak 23.81 GB.
+- **Diagnostics** (same run, after the decision passes, single samples; data/w24/w24c3_report.txt, w24c4_report.txt):
+  - w13a = w13t + R57_D7B=all: 122.7 tok/s, lifetime peak **22.71 GB**: the drafter diet alone frees 1.2 GB.
+  - w13b = the freed GB as 11 more base slots (141 / 26, 13 rows, R57_D7B=all): **129.9 tok/s at 23.84 GB**, the best arm:
+    cycle 77.4 ms (14-row 80.5), SSD 24.2 MB per kept token (25.0), QOM drops 26.7 % (27.0; w13t 28.8), 0 slow checks.
+    One sample after the ABBA block, so W24d re-tests it against the 14-row config in an ABBA (the orchestrator's option B).
+  - **The 14-row gain is HumanEval-only:** w13t on MBPP 92.7 tok/s / IFEval 30.2 vs the 14-row 87.9 / 29.8 (-5.2 % / -1.5 %).
+    MBPP keeps ~6.3 tokens per check, so a 14th row costs more misses than it returns.
+  - Slow checks on IFEval: w13t 5, the 14-row 4 (of ~633), all a prompt's first or last check: normal for the chat path.
+
+## Mon 9 Nov 23:51-23:56: W24d = w13b vs the 14-row config, same-run ABBA on HumanEval: w13b 130.3 tok/s under 24 GB (data/w24/w24d_report.txt, w24d_verdict.txt; data 86f0d13)
+The orchestrator's option B: W24c's diagnostic w13b re-tested against the 14-row config, rule pre-registered (docs/W24_DECISION.md
+'W24d', 498691a). Same snapshot (016cb7f), env only, quiet lock. All 12 prompts clean in every arm. Whole decode tok/s:
+
+| arm | config | HumanEval | whole request | first token | kept per check | cycle | SSD MB / kept token | QOM drops | lifetime peak |
+|---|---|---|---|---|---|---|---|---|---|
+| w14c | 14-row: 140 base + 28 sidecar, 14 rows, R57_D7B=all | 126.4 | 40.1 | 3.53 s | 10.33 | 80.5 ms | 24.9 | 27.0 % | 23.83 GB |
+| w13e | w13b: 141 base + 26 sidecar, 13 rows, R57_D7B=all | **130.2** | 40.7 | 3.54 s | 10.15 | 77.6 ms | 24.2 | 26.7 % | 23.82 GB |
+| w13f | w13b again | **130.5** | 40.9 | 3.53 s | 10.15 | 78.1 ms | 24.2 | 26.7 % | 23.78 GB |
+| w14d | 14-row again | 125.5 | 40.5 | 3.54 s | 10.33 | 78.9 ms | 24.9 | 27.0 % | 23.78 GB |
+
+- **w13b: 130.3 tok/s pooled, +3.5 % over the 14-row config (125.9) in the same run**; peaks 23.82 / 23.78 GB; 0 bad rows.
+  The rule's three measured conditions pass (> +1 %; w13b peaks < 24.000 GB; zero bad rows); EvalSuite's dry run of
+  data/stack/card_w24d_env.txt passed (blob e06f495e). The switch to w13b waits only for NewIdeas' number check (by 01:30).
+- Reproducible: tokens identical 12 / 12 within each pair and across runs (w13e == W24c's w13b; w14c == W24c's w14a); speeds
+  repeat (w13b 129.9 -> 130.3; 14-row 126.1 -> 125.9). For reference, w13t as gated: 120.9 / 121.4, peak 23.92 / 24.01 GB.
+- Why w13b beats a 14th row: with 141 slots for at most 130 ids per check, 11 slots keep experts resident across checks, so
+  the cycle is ~3 ms shorter and the SSD reads ~3 % fewer; the 14th row gains kept tokens on HumanEval only.
+- Not measured yet: w13b on MBPP and IFEval (the 14-row config was 5.2 % slower than w13t on MBPP).

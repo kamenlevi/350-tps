@@ -1,7 +1,10 @@
 #!/bin/bash
 # Tonight's 12 GB -> 90 jobs for Breakthrough (Mon 9 Nov 2026 21:4x; v2 22:3x for NewIdeas' 22:28 order): my CPU jobs, then
 # the chain's step 2 (NewIdeas QUEUE.md "MON 22:28 CHAIN REORDERED": Fit12's S1u -> this map arm -> Leap's tests, which start
-# on this runner's done-file). Run ATTACHED (Bash run_in_background) from ~/Breakthrough:  bash scripts/m1/s1u_map_night.sh
+# on this runner's done-file). v3 (23:1x, NewIdeas 23:12, Kamen's yes via the orchestrator): the w24 gate moved to 02:10;
+# W24c goes first, then this arm (and Fit12's S1p), then Leap's 32 GB tests, all freed by 02:05; clock limits moved:
+# CPU jobs by 01:25 (was 00:55), arm start by 01:30 (was 01:00), hard stop 01:45 (was 01:13).
+# Run ATTACHED (Bash run_in_background) from ~/Breakthrough:  bash scripts/m1/s1u_map_night.sh
 # DRY=1: print every gate once and exit (no job, no lock, no done-file).
 # A (from 23:00:00; CPU, one core, taskpolicy -b): while Kamen is idle (HIDIdleTime >= 600 s and no python chat.py above
 #   2 GB) and no other session holds or waits for a quiet window: build the q1u_0_live masks with NewIdeas' builder,
@@ -12,16 +15,16 @@
 #   uses >= 80 % CPU).
 # B (the map arm; never before 23:00, as it follows A): after ~/Fit12/logs/s1u.done (or s1u.sh's own end file
 #   ~/Fit12/data/scr/s1u/DONE) and a PASSed mask check, in a clear gap (3 checks 10 s apart: Kamen idle,
-#   no python run_map.py or fit_onecall.py process, no other session's big shared run (MEM > 5 GB in its reason or
-#   >= 50 % GPU), no quiet window held / waited for by others, lid open, no PAUSE,
-#   NO-SWAP >= 25 GB = peak 17 + 8), start by 01:00:00 Tue; share lock with 'MEM 17 GB' first in the reason; run
+#   no python run_map.py or fit_onecall.py process, W24c's turn45 runner gone (W24c first; this wait ends at 01:15),
+#   no other session's big shared run (MEM > 5 GB in its reason or >= 50 % GPU), no quiet window held / waited for by
+#   others, lid open, no PAUSE, NO-SWAP >= 25 GB = peak 17 + 8), start by 01:30:00 Tue; share lock with 'MEM 17 GB' first in the reason; run
 #   q1u0_run_map.py (the arm registered in memory; result ~/FableGod/decision_map/out/q1u_0_live.json, written at the arm's
-#   end). Guards every 15 s: hard stop 01:13:00 (memory freed by 01:15; EvalSuite's gate starts 01:25), swap +2 GB, a quiet
+#   end). Guards every 15 s: hard stop 01:45:00 (memory freed by 01:46; all freed by 02:05, the gate at 02:10), swap +2 GB, a quiet
 #   window of others (3 strikes), lid closed, PAUSE over 5 min, a chat process of Kamen's above 2 GB. A stop is TERM then
 #   KILL after 20 s (a heat-frozen process frees its memory only on KILL; this script never sends CONT). Then unlock.
 # DONE-FILE (NewIdeas 22:28; Leap's tests start on it): ~/Breakthrough/data/m1/q1u_0_live.done, written once, with the
-#   reason, when the arm ends (any rc, any stop, the 01:13 hard stop) or is skipped (mask check FAIL, no s1u.done or no clear
-#   gap by 01:00, 4 tries used). A skip before s1u.done waits for s1u.done (or 01:00) first, so Leap never starts beside
+#   reason, when the arm ends (any rc, any stop, the 01:45 hard stop) or is skipped (mask check FAIL, no s1u.done or no clear
+#   gap by 01:30, 4 tries used). A skip before s1u.done waits for s1u.done (or 01:30) first, so Leap never starts beside
 #   S1u. The read-out (dm_screen_read.py, SCREEN_OUT = data/m1; seconds, one core) runs after it. An EXIT trap writes it if
 #   the runner ends any other way, a TERM included: stopping this runner releases Leap.
 # Every job starts with cwd ~/Breakthrough (never inside ~/FableGod).
@@ -31,9 +34,11 @@ POLOG=~/Breakthrough/data/m1/code12_policy.log; LOG=~/Breakthrough/data/m1/s1u_m
 MK=~/Breakthrough/data/m1/q1u_0_live.done
 S1U_DONE2=~/Fit12/data/scr/s1u/DONE   # s1u.sh's own end file (s1u_go.sh turns it into s1u.done)
 A_AT=$(date -j -f "%Y-%m-%d %H:%M:%S" "2026-11-09 23:00:00" +%s)
-A_LAST=$(date -j -f "%Y-%m-%d %H:%M:%S" "2026-11-10 00:55:00" +%s)
-B_LAST=$(date -j -f "%Y-%m-%d %H:%M:%S" "2026-11-10 01:00:00" +%s)
-B_STOP=$(date -j -f "%Y-%m-%d %H:%M:%S" "2026-11-10 01:13:00" +%s)
+A_LAST=$(date -j -f "%Y-%m-%d %H:%M:%S" "2026-11-10 01:25:00" +%s)
+B_LAST=$(date -j -f "%Y-%m-%d %H:%M:%S" "2026-11-10 01:30:00" +%s)
+B_STOP=$(date -j -f "%Y-%m-%d %H:%M:%S" "2026-11-10 01:45:00" +%s)
+W24C_UNTIL=$(date -j -f "%Y-%m-%d %H:%M:%S" "2026-11-10 01:15:00" +%s)   # wait for W24c (first tonight) at most until then
+LA=01:25; LB=01:30; LS=01:45                                              # labels of A_LAST, B_LAST, B_STOP
 say() { echo "[night] $* ($(date '+%a %H:%M:%S'))" | tee -a $LOG; }
 swap_mb() { sysctl -n vm.swapusage | sed -E 's/.*used = ([0-9.]+)M.*/\1/' | cut -d. -f1; }
 noswap() { vm_stat | awk '/page size of/ {ps=$8} /^Pages (free|speculative|purgeable):/ || /^File-backed pages:/ {v=$NF; sub("[.]","",v); s+=v} END {printf "%d", s*ps/1e9}'; }
@@ -41,6 +46,9 @@ idle_s() { ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {print int($NF / 1000000000
 chat_big() { ps -axo rss=,comm=,args= | awk '$2 ~ /[Pp]ython/ && /chat\.py/ && $1 > 2097152 {n++} END {print n + 0}'; }
 map_procs() { ps -axo comm=,args= | awk '$1 ~ /[Pp]ython/ && /run_map\.py/ {n++} END {print n + 0}'; }
 s1u_procs() { ps -axo comm=,args= | awk '$1 ~ /[Pp]ython/ && /fit_onecall\.py/ {n++} END {print n + 0}'; }
+w24c_first() {   # W24c goes first tonight: its turn45 runner (BigMoE) is alive and it is before 01:15
+  [ $(date +%s) -lt $W24C_UNTIL ] && ps -axo command= | grep -qE '^bash scripts/turn45\.sh [0-9]+ [0-9]+ BigMoE W24c'
+}
 s1u_seen() { [ -e $DONE_S1U ] || [ -e $S1U_DONE2 ]; }   # S1u ended (or gave up): either marker
 big_others() {   # other sessions' big shared runs: MEM > 5 GB in the reason, or >= 50 % GPU (peer ls cuts long reasons)
   peer ls 2>/dev/null | grep "^- " | grep -oE "· shared run \(others may work\)[^·]*" | awk '{ big = 0
@@ -65,6 +73,7 @@ map_why_not() {
   local k; k=$(cpu_why_not); [ -n "$k" ] && { echo "$k"; return; }
   [ "$(map_procs)" -gt 0 ] && { echo "a map process is running"; return; }
   [ "$(s1u_procs)" -gt 0 ] && { echo "an S1u process is running"; return; }
+  w24c_first && { echo "W24c goes first (its turn45 runner is alive; this wait ends at 01:15)"; return; }
   [ "$(big_others)" -gt 0 ] && { echo "another session's big shared run (MEM > 5 GB or >= 50 % GPU)"; return; }
   [ "$(noswap)" -lt 25 ] && echo "NO-SWAP $(noswap) GB < 25"
 }
@@ -78,7 +87,7 @@ mark() {   # the done-file Leap's tests start on: written once, with the reason
   echo "$1 ($(date '+%a %H:%M:%S'))" > $MK; say "done-file $MK written: $1"
 }
 if [ -n "$DRY" ]; then
-  echo "DRY $(date '+%H:%M:%S'): idle $(idle_s) s; chat.py > 2 GB: $(chat_big); map processes: $(map_procs); S1u processes: $(s1u_procs); big others: $(big_others);" \
+  echo "DRY $(date '+%H:%M:%S'): idle $(idle_s) s; chat.py > 2 GB: $(chat_big); map processes: $(map_procs); S1u processes: $(s1u_procs); W24c first: $(w24c_first && echo yes || echo no); big others: $(big_others);" \
        "NO-SWAP $(noswap) GB; swap $(swap_mb) MB; quiet others: $(quiet_others && echo yes || echo no); lid closed: $(lid_closed && echo yes || echo no);" \
        "PAUSE: $([ -e $Q/PAUSE ] && echo yes || echo no); s1u ended (s1u.done or DONE): $(s1u_seen && echo yes || echo no); done-file: $([ -e $MK ] && echo yes || echo no);" \
        "cpu_why_not: '$(cpu_why_not)'; map_why_not: '$(map_why_not)'"
@@ -87,12 +96,12 @@ if [ -n "$DRY" ]; then
 fi
 
 # run_cpu <name> <command...>: one CPU job, restarted while the gate is closed, until it exits; returns its rc, 9 when not
-# done by 00:55, 8 when $PREEMPT (a test, e.g. s1u_seen) turns true: the job is stopped or not started ($PREEMPT_WHY)
+# done by $LA (01:25), 8 when $PREEMPT (a test, e.g. s1u_seen) turns true: the job is stopped or not started ($PREEMPT_WHY)
 PREEMPT=; PREEMPT_WHY=
 run_cpu() {
   local name=$1; shift; local last= w rc
   while :; do
-    [ $(date +%s) -ge $A_LAST ] && { say "$name: not done by 00:55; given up"; return 9; }
+    [ $(date +%s) -ge $A_LAST ] && { say "$name: not done by $LA; given up"; return 9; }
     [ -n "$PREEMPT" ] && $PREEMPT && { say "$name: not started: $PREEMPT_WHY"; return 8; }
     w=$(cpu_why_not)
     if [ -n "$w" ]; then [ "$w" != "$last" ] && say "$name waits: $w"; last=$w; sleep 20; continue; fi
@@ -123,7 +132,7 @@ trap on_exit EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
 rm -f $MK
-say "armed v2 (NewIdeas 22:28 order: S1u -> this arm -> Leap on $MK): A (masks, check, policy replay) from 23:00; B (map arm q1u_0_live) after s1u.done, start by 01:00, stop 01:13"
+say "armed v3 (NewIdeas 23:12 order: W24c -> this arm (+ Fit12 S1p) -> Leap on $MK): A (masks, check, policy replay) from 23:00 until $LA; B (map arm q1u_0_live) after S1u's end and W24c, start by $LB, stop $LS"
 while [ $(date +%s) -lt $A_AT ]; do sleep 30; done
 MASK_OK=0
 if [ "$(ls $MASKS/q1u_0_live/*.npz 2>/dev/null | wc -l | tr -d ' ')" = 36 ]; then say "masks already built (36 files)"
@@ -139,12 +148,12 @@ PREEMPT=
 
 if [ $MASK_OK != 1 ]; then
   while ! s1u_seen && [ $(date +%s) -lt $B_LAST ]; do sleep 20; done
-  mark "skipped: mask check FAIL or not run (s1u.done $(s1u_seen && echo seen || echo 'not seen by 01:00'))"
+  mark "skipped: mask check FAIL or not run (s1u.done $(s1u_seen && echo seen || echo "not seen by $LB"))"
   say "done (no map arm: masks not checked)"; exit 1
 fi
 last=
 while ! s1u_seen; do
-  [ $(date +%s) -ge $B_LAST ] && { mark "skipped: no s1u.done by 01:00"; say "no s1u.done by 01:00: the map arm does not start tonight"; exit 0; }
+  [ $(date +%s) -ge $B_LAST ] && { mark "skipped: no s1u.done by $LB"; say "no s1u.done by $LB: the map arm does not start tonight"; exit 0; }
   [ "$last" != s1u ] && say "B waits for $DONE_S1U"; last=s1u; sleep 20
 done
 say "B: s1u.done seen"
@@ -153,7 +162,7 @@ while :; do
   tries=$((tries + 1)); [ $tries -gt 4 ] && { endwhy="4 tries used"; say "4 tries used; stopping"; break; }
   ok=0; last=
   while :; do
-    [ $(date +%s) -ge $B_LAST ] && { endwhy="no clear gap by 01:00 (try $tries)"; say "no clear gap by 01:00: the map arm does not start tonight"; break 2; }
+    [ $(date +%s) -ge $B_LAST ] && { endwhy="no clear gap by $LB (try $tries)"; say "no clear gap by $LB: the map arm does not start tonight"; break 2; }
     w=$(map_why_not)
     if [ -n "$w" ]; then ok=0; [ "$w" != "$last" ] && say "B waits: $w"; last=$w; sleep 10; continue; fi
     ok=$((ok + 1)); last=; [ $ok -ge 3 ] && break; sleep 10
@@ -170,7 +179,7 @@ while :; do
   bad=0; pz=0; why=
   while kill -0 $P 2>/dev/null; do
     sleep 15; w=
-    [ $(date +%s) -ge $B_STOP ] && { why="01:13 hard stop"; say "stopping: $why"; stop_tree $P; break; }
+    [ $(date +%s) -ge $B_STOP ] && { why="$LS hard stop"; say "stopping: $why"; stop_tree $P; break; }
     [ $(( $(swap_mb) - S0 )) -gt 2048 ] && { why="swap grew > 2 GB"; say "stopping: $why"; stop_tree $P; break; }
 > (a quote from the project owner, kept private)
     if [ -e "$Q/PAUSE" ]; then pz=$((pz + 1)); else pz=0; fi
@@ -189,7 +198,7 @@ while :; do
   endwhy="run ended rc $rc${why:+, stopped: $why} (try $tries)"
   say "B run ended (rc $rc${why:+, stopped: $why}); unlocked; free memory: NO-SWAP $(noswap) GB"
   [ -f $DM/out/q1u_0_live.json ] && break
-  [ -n "$why" ] && [ "$why" = "01:13 hard stop" ] && break
+  [ -n "$why" ] && [ "$why" = "$LS hard stop" ] && break
 done
 mark "arm $([ -f $DM/out/q1u_0_live.json ] && echo 'result written' || echo 'no result'): $endwhy"
 if [ -f $DM/out/q1u_0_live.json ]; then
