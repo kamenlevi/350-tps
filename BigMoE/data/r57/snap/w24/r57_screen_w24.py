@@ -158,8 +158,14 @@ ROWCAP = int(os.environ.get("R57_ROWCAP", "0"))
 assert ROWCAP == 0 or 2 <= ROWCAP <= 16, ROWCAP
 assert not ROWCAP or int(os.environ.get("R57_WARMSPLIT", "0") or 0) == 0, "R57_ROWCAP: a warm-split sample checks 16 rows"
 assert not ROWCAP or os.environ.get("R57_ROWS", "16") == "16", "R57_ROWCAP needs R57_ROWS=16"
-def _maxd(typ):                                          # drafts per check: R57_CHATROWS (chat) and R57_ROWCAP (all), the tighter
-    m = [x - 1 for x in ((CHATROWS if typ == "chat" else 0), ROWCAP) if x]
+GATEREQ = os.environ.get("R57_GATEREQ") == "1"          # W24 U3-16: U3 calls pass their distinct-id bound to bigmoe/stream.py
+def _maxd(typ, fset=None):                               # drafts per check: R57_CHATROWS (chat) and R57_ROWCAP (all), the tighter;
+    rc = ROWCAP                                          # R57_GATEREQ: sets on a U3 rule without optional uses keep 16 rows
+    if rc and GATEREQ and FAST:
+        fz_ = FASTARMS[FAST].get(fset) or {}
+        if fz_.get("q1u") and not fz_.get("qom") and not fz_.get("cold"):
+            rc = 0
+    m = [x - 1 for x in ((CHATROWS if typ == "chat" else 0), rc) if x]
     return min(m) if m else 0
 # R57_CHATTRUNC=t (NewIdeas 11-02 23:31: Fable B's B5 per-row cut and MoonShots' M-21b both point at t ~0.4 on chat): the
 # type rule's chat prompts cut their drafts at running confidence t (the MTP chain's early exit, or DFlash2's L1-14 cut);
@@ -237,6 +243,12 @@ if FAST:
     _U3T = float(os.environ.get("R57_U3_THR", "0.9"))  # R57_U3_THR=2 + R57_U3_FORCE=1 = the null control: no sure rows,
     U3FORCE = os.environ.get("R57_U3_FORCE") == "1"       # yet the copied OOO path runs: tokens must equal REF2-T's
     FASTARMS["U3"] = dict(humaneval=_S(thr=_U3T, q1u=True, t3=True))
+    # U3W (BigMoE Mon 9 Nov 19:xx, W24: 24 GB at 120 tok/s on HumanEval): U3 at thr 0 on the code sets (every drafted row sure:
+    # ranks 0-1 at 3 bits + the ranks whose expert is in the check's union; the bonus row exact), NO optional uses, so a
+    # 16-row check carries <= 10 x unsure + 2 x sure distinct ids; R57_GATEREQ=1 lets the sync-free gate take it at a base
+    # pool below 160 slots. A NEW lossy config: never gated.
+    FASTARMS["U3W"] = {s_: _S(thr=0.0, q1u=True, t3=True) for s_ in   # R57_U3W_SETS: the code sets (the card gate's LCB v6
+                       os.environ.get("R57_U3W_SETS", "humaneval,mbpp,lcb6").split(",")}   # included, as QOM_SETS there)
     FASTARMS["U3A"] = dict(humaneval=_S(thr=_U3T, q1u=True, t3=True), math=_S(thr=_U3T, q1u=True, t3=True),
                            agent=_S(thr=_U3T, q1u=True, t3=True))
     # U3C (Breakthrough's P1, ~/Breakthrough/WED_PLAN.md b800a4b; ~/FableGod/decision_map/dm_cold_masks.py hyb_cold4_pmtc_t3,
@@ -318,7 +330,8 @@ assert not STALL or os.environ.get("BIGMOE_TRACE"), "R57_STALL needs BIGMOE_TRAC
 S10B_DIR = os.environ.get("R57_S10B_DIR")               # with BIGMOE_S10B=1 (R-57b data for Fit12): per run the gated calls'
 if S10B_DIR:                                            # ids + MoE inputs (bigmoe/s10b.py) -> <dir>/<prompt>_<arm>_<n>.npz
     os.makedirs(S10B_DIR, exist_ok=True)        # arm gate+t: drafts cut where the running confidence < TRUNC              # runs per arm per prompt: 2 = ABBA order, 1 = one each
-HARD = 600                                               # s of running time: no new check after this (job stop at 660)
+HARD = int(os.environ.get("R57_HARD", "600") or 600)    # s of running time: no new check after this (job stop at HARD + 60);
+                                                         # R57_HARD (W24, Mon 19:xx): the 24 GB card gate runs 1200 (fewer restarts)
 ACT = [0.0]                                              # running time without SIGSTOP freezes (Leap's ticker)
 def _tick():
     last = time.time()
@@ -614,6 +627,9 @@ if FAST:                                                 # EvalSuite's install_g
                     self._bm["tier"]["qom"] = (opt, sr, FG.get("qcf"))   # _ooo_call_t3 flags ONLY its base post's copy (bit 21) and
                     km = None                                # applies Breakthrough's rule after the spin; the graph's ids
                                                              # stay clean (15:29: flagged ids in the graph -> a bad id at L5)
+                elif GATEREQ:                                # R57_GATEREQ (W24): dropped ranks read the row's rank-0 id (below), so
+                    ns_ = int(np.asarray(FG["sure_np"]).sum())   # this call's distinct ids <= 10 x unsure + 2 x sure rows;
+                    self._bm["gate_req"] = 2 * ns_ + K_ * (ids2.shape[0] - ns_)   # bigmoe/stream.py admits it when <= C_m
             if FG["t3"]:
                 self._bm["tier"]["nolsb"] = (sr, FG["sure_np"])   # _ooo_call_t3: those rows' ranks 0-1 at 3 bits
         if FG["rc"] and indices.ndim >= 2 and indices.shape[-1] > FG["rc"]:   # R57_RCUT_SETS: ranks >= R of every row
@@ -629,6 +645,7 @@ if FAST:                                                 # EvalSuite's install_g
         finally:
             self._bm["tier"].pop("nolsb", None)
             self._bm["tier"].pop("qom", None)
+            self._bm.pop("gate_req", None)
     _SWC.__call__ = _fast_call
     if any(v.get("t3") for v in FASTARMS[FAST].values()):   # U3's 3-bit sure rows: LP1's kernel test (a pair at a 4-bit
         import bigmoe.tier as _BT3                        # rank whose LSB slot is < 0 runs at tier 3; unchanged for slots
@@ -1681,7 +1698,7 @@ for n_p, (s, key) in enumerate(PICK):
             say(f"  time budget: stopped before {key} [{arm}]")
             break
         r = run(ids, arm, f"{key.replace('/', '_').replace('.json', '')}_{arm}_{len(TOK.get(key, {}).get(arm, []))}", drafter,
-                cpy, _maxd(typ), s, CHATTRUNC if CHATTRUNC and typ == "chat" else None)
+                cpy, _maxd(typ, s), s, CHATTRUNC if CHATTRUNC and typ == "chat" else None)
         PC.append(dict(key=key, arm=arm, paused="PAUSED" in r["bad"], **r["pc"]))
         if r["stall"]:
             STL.append(dict(key=key, arm=arm, paused="PAUSED" in r["bad"], **r["stall"]))

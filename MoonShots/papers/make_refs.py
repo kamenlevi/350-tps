@@ -14,8 +14,8 @@ AX = re.compile(r"(?<![\d.])(2\d)(0[1-9]|1[0-2])\.(\d{5})(?![\d])")
 TAG = re.compile(r"\[(MAIN|SMALL-RAM|KERNELS|EVAL|DRAFTER|RELEASE)\]")
 URL = re.compile(r"(?:github\.com|huggingface\.co)/[A-Za-z0-9_.\-]+/[A-Za-z0-9_.\-]+")
 AI_HEAD, REF_HEAD = "## Use of AI tools", "## References"
-AI_TEXT = ("The code, the experiments and the text of this paper were produced with substantial help from AI coding agents\n"
-           "(Claude, by Anthropic). The author directed the work and is responsible for its content. The numbers were\n"
+AI_TEXT = ("The code, the experiments and the text of this paper were produced with substantial help from AI coding agents.\n"
+           "The author directed the work and is responsible for its content. The numbers were\n"
            "re-derived from the raw run records named beside them, and the references were opened by hand or by script.")
 
 

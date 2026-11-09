@@ -81,3 +81,59 @@ release and enabling Pages are the orchestrator's, on the owner's word.
   main 933605513df4, release e5df6e9ad933); main.html's title unchanged (= README's MAIN entry); push_pkg.sh docs replaced
   docs/ (9 files changed) and pushed fast-forward: github main b3c1bcc; diff -r docs/ vs the site: equal; no small-ram /
   laptop; repo PRIVATE, release DRAFT, Pages off.
+- 18:14 BARE-MINIMUM README + DOCS (the owner's 18:1x ask via the orchestrator: README to the minimum, no tables, details in
+  separate files; one commit with Breakthrough's next final): README 42 lines of plain prose, 0 table rows (what it is, the
+  papers line with complete.pdf first, the 12 / 24 GB line verbatim, requirements, install + run, one sentence linking the
+  detail files incl. 'measured on one M5 Pro Mac' -> LIMITS.md, the credits the licences require, GPL-3, copyright Kamen
+  Levi). Moved out unchanged in substance: WEIGHTS.md, INSTALL.md (requirements, install, run options, install check),
+  CONFIGS.md, RESULTS.md, CONVERSION.md, LIMITS.md. No package text had an AI-use statement (nothing to reword).
+  Rebuilt pinned (b9213a5; vs tested 242553d: docs + notices + the six .md only). push_pkg.sh got AMEND=1 (fold docs/ into
+  the re-parented package commit). Breakthrough's 3rd FINAL (build 18:12:04-18:12:20; SHA-256 complete 8ede9605b798,
+  drafter 4c2e45962dce, evaluation 5b6e0b8641e9, kernels b11e28789491, main 0d87b79c8a2b, release 0974d65cf411: all equal).
+  One commit pushed fast-forward: github main c0cdb27 (17 files vs b3c1bcc); docs/ == the site; no laptop / small-ram /
+  Claude / Anthropic in the docs files; repo PRIVATE, release DRAFT, Pages off. Orchestrator + Breakthrough told.
+- 18:16 MINIMAL README (the owner: 'too long and too complicated... no tables'; exact text from the orchestrator 18:1x):
+  README.md = that text, 13 lines (commands checked against install.sh / run.py; MTPLX's NOTICE wants the attribution
+  in-product, which run.py's banner shows, so no README change was required). What it cut: INSTALL.md (disk about 174 GB
+  + 20 GB swap), CONFIGS.md (summary), THIRD_PARTY.md (Qwen licence line, DFlash2 / z-lab, how to cite), notices -> WEIGHTS.md.
+  Rebuilt pinned (7f0b99b; vs tested 242553d only .md files + notices changed), pushed: github main a6def5d (docs/ kept).
+  Draft release: NOTICE-d22_b5 / NOTICE-l120_ft re-uploaded (--clobber; API digests == local). Repo PRIVATE, DRAFT, Pages off.
+- 18:18 COMMENT FIX (the orchestrator 18:1x: no person's or product's name in public files): make_release.py step 4b applies
+  4 exact rewordings from the gitignored private file to the package copies (drafters/mtp125.py l2, l14, l263;
+  harness/evalsuite/data.py l301: 'coding-agent turns', 'the agent's real continuation'); each old text must occur once and
+  a .py file's AST without docstrings must stay equal (passed). Source repos untouched. Rebuilt pinned (1c865f6), pushed:
+  github main 84d116a (diff vs a6def5d: the 2 files + MANIFEST). vs the tested 242553d: 220 / 225 files byte-identical; the
+  5 others are README, THIRD_PARTY, NOTICE-l120_ft and the 2 docstring-only .py files. No 'Claude' left in the package.
+  make_release.py leak simulation: 0 hits. Repo PRIVATE, release DRAFT, Pages off.
+- 18:21 README = the owner's 18:2x text ("three or four" paragraphs, no tables), fact-checked against RESULTS.md / RELEASE
+  section 2, INSTALL.md, run.py (--config exact|lossy|chat, --mem 45|32) and docs/pdf (6 files; complete.html's title).
+  Two minimal fixes: the 7.45 GB reclaimable cache beside "under 45 GB of memory"; licence texts are in third_party/
+  (listed in THIRD_PARTY.md). Rebuilt pinned (8b4b50d), pushed: github main d5f92f7 (README + MANIFEST). PRIVATE / DRAFT /
+  Pages off.
+- 18:24 MACBOOK PRO WORDING + 4th DOCS, one commit: 'MacBook Pro' where the package text names the exact test machine
+  (README, RESULTS, LIMITS x3, INSTALL, CONVERSION; general 'Mac' kept); Breakthrough's 4th FINAL (build 18:23:26-18:23:42;
+  SHA-256 complete 9c26aa95e585, drafter e75821d2be04, evaluation 0d208a6b3e16, kernels ba1501673e5c, main 0ad3a0bd2495,
+  release b997a7467c1e: all equal). Rebuilt pinned (7dc835d), DRY pkg + AMEND docs: github main f978615 (14 files vs
+  d5f92f7); docs/ == the site; vs tested: README, THIRD_PARTY, NOTICE-l120_ft + the 2 docstring-only .py changed.
+  PRIVATE / DRAFT / Pages off.
+- 18:31 PRECISION PARAGRAPH (the owner: say the model runs at its Q4 precision): README gains "The model is the 4-bit (Q4)
+  version, and its routed experts take 68.5 GB on the SSD. At run time each token's two strongest experts use all 4 bits and
+  the other eight use 3, about 3.2 bits per expert weight on average." (checked: RELEASE l25 / l93, MAIN l60 / l166, STYLE
+  l26; 'per expert weight' instead of the suggested 'per weight'); Run: "`exact` gives the same tokens as decoding one
+  token at a time with these same weights". Rebuilt pinned (aff8cf6), pushed: github main c8f0582 (README + MANIFEST).
+- 18:32 MACHINE VARIANT (the owner: 18/20-core, 2 TB): system_profiler: MacBook Pro, Apple M5 Pro, 18-core CPU (6 Super +
+  12 Performance), 20-core GPU, 64 GB, APPLE SSD AP2048Z 2.0 TB. README speeds sentence, LIMITS.md first line and
+  INSTALL.md "Tested:" carry it. Rebuilt pinned (f5e8bbd), pushed: github main 9a929bc (README, LIMITS, INSTALL, MANIFEST).
+  docs/ refresh follows with Breakthrough's next final.
+- 18:33 5th DOCS: Breakthrough's FINAL (build 18:32:52-18:33:07; papers' first machine mention 'MacBook Pro (M5 Pro, 18-core
+  CPU, 20-core GPU, 64 GB, 2 TB SSD)'); SHA-256 complete 637bf582c2a9, drafter 9f206078d339, evaluation 8ae67ebd34d1,
+  kernels 0274193d5c2a, main 1496907d644c, release 2732ffc27569: all equal. push_pkg.sh docs: github main 43ace24 (docs/
+  only, 11 files); docs/ == the site. PRIVATE / DRAFT / Pages off.
+- 18:35 PUBLISHED by the orchestrator on the owner's go (repo public, release v1.0.0 published, Pages on).
+- 18:43 README speed-range sentence (the owner: 'say 190 tps on prompts'; the repo is public): checked BM:data/r57/
+  rlh_256_runs.json: 12 prompts at 129.8-198.3 tok/s whole decode, two above 190 (192.6, 198.3). Fact fix: 'from a single
+  run' holds for the lossy / chat numbers only (exact IFEval / math pool two N45 passes, RELEASE section 8), and the range is
+  the lossy setting's -> "These are averages over 12 prompts per set, from a single run for the lossy and chat settings,
+  and speed depends on the prompt: on the lossy setting the 12 HumanEval prompts ranged from 130 to 198 tokens per second,
+  and the fastest ran above 190." push_pkg.sh now needs PUBLIC_OK=1 for a public repo (set for this owner-requested
+  change). Rebuilt pinned (7ae8c40), pushed: github main 5a07228 (README + MANIFEST).

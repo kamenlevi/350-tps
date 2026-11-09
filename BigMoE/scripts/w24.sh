@@ -41,28 +41,31 @@ for k in "$KH:humaneval" "$KM:mbpp" "$KI:ifeval"; do
   [ "$(echo "$l" | tr ',' '\n' | grep -c "^$s/")" = 12 ] || { say "the $s keys are not 12 $s keys: not run"; exit 2; }
 done
 armenv() { case $1 in   # base slots, sidecar slots, rows
-  w12) echo "120 34 12";; w10) echo "104 76 10";; w8) echo "100 90 8";; w12s) echo "120 26 12";; *) return 1;; esac; }   # w12s: -0.28 GB (opt-in)
-ARMS=${W24_ARMS:-w12 w10 w8}
+  w12) echo "120 34 12";; w10) echo "104 76 10";; w8) echo "100 90 8";; w12s) echo "120 26 12";;   # w12s: -0.28 GB (opt-in)
+  w12pf) echo "120 34 12 R57_ARMS=gate+t+pf";;   # + the ranked L+1 look-ahead prefetch (Mon 18:5x: 24 GB = top priority)
+  w16u) echo "120 34 12 R57_FAST=U3W,R57_GATEREQ=1";;   # U3 at thr 0 on the code sets, 16 rows on the gate (742758e); chat capped
+  *) return 1;; esac; }
+ARMS=${W24_ARMS:-w12 w16u w12pf w10 w8}
 for a in $ARMS; do
-  read -r cm cl rw <<< "$(armenv $a)" || { say "unknown arm $a: not run"; exit 2; }
+  read -r cm cl rw ex <<< "$(armenv $a)" || { say "unknown arm $a: not run"; exit 2; }
   [ $((rw * 10)) -le $cm ] && [ $((rw * 2)) -le $cl ] || { say "$a: rows $rw do not fit $cm / $cl: not run"; exit 2; }
 done
 if [ -n "$W24_DRY" ]; then
-  for a in $ARMS; do read -r cm cl rw <<< "$(armenv $a)"
-    say "dry: $a = base $cm, sidecar $cl, rows $rw, pools $(awk -v m=$cm -v l=$cl 'BEGIN {printf "%.2f", m * 0.0991 + l * 0.0346}') GB"; done
+  for a in $ARMS; do read -r cm cl rw ex <<< "$(armenv $a)"
+    say "dry: $a = base $cm, sidecar $cl, rows $rw${ex:+, $ex}, pools $(awk -v m=$cm -v l=$cl 'BEGIN {printf "%.2f", m * 0.0991 + l * 0.0346}') GB"; done
   say "dry run: snapshot w24 ($SNAPC), L + COH line $(echo "$LC" | tr ',' '\n' | grep -c =) K=V, live kernel files == frozen_rel1's"
   exit 0
 fi
 A=$(avail_gb)
 awk -v a="$A" 'BEGIN {exit !(a >= 28.0)}' || { say "NO-SWAP $A GB < 28.0: not run"; exit 0; }
 export C45_OUT="$PWD/$D" C45_SWAP0=$(sysctl -n vm.swapusage | awk '{gsub("M","",$6); print $6 / 1024}') C45_ALARM=2400 \
-  MG=4 C45_DEADLINE=$(date -v+80M +%H%M) C45_SCREEN="$SCR" C45_REFTOK= R57_MODMAN=1
+  MG=4 C45_DEADLINE=$(date -v+75M +%H%M) C45_SCREEN="$SCR" C45_REFTOK= R57_MODMAN=1
 rm -f $D/DONE
 say "W24 start (pid $$, NO-SWAP $A GB, snapshot w24 = $SNAPC, arms $ARMS)"
 TAGS=""
 for a in $ARMS; do
-  read -r cm cl rw <<< "$(armenv $a)"
-  X="R57_VTIER=,BIGMOE_TIER_CM=$cm,BIGMOE_TIER_CL=$cl,R57_ROWCAP=$rw,REF2_TIER_CHUNK=1"
+  read -r cm cl rw ex <<< "$(armenv $a)"
+  X="R57_VTIER=,BIGMOE_TIER_CM=$cm,BIGMOE_TIER_CL=$cl,R57_ROWCAP=$rw,REF2_TIER_CHUNK=1${ex:+,$ex}"
   for s in "h:$KH" "m:$KM" "i:$KI"; do
     t=${a}${s%%:*}_100; k=${s#*:}
     rm -f data/r57/${t}_* $D/${t}.txt
@@ -93,11 +96,12 @@ for t in tags:
     fast = C.get("tier_calls", 0) == 0 and C.get("tier_chunk", 0) == 0
     qs = sum((r.get("pf") or {}).get("qom_skip", 0) for r in R); qo = sum((r.get("pf") or {}).get("qom_opt", 0) for r in R)
     qd = f"QOM drops {100 * qs / qo:.1f} % of optional uses (C 256 REL ROWS: HE 11.4, MBPP 12.2)" if qo else "no QOM uses"
+    hz = sum(1 for r in R if "PAUSED" in str(r.get("bad") or ""))   # heat freezes (fanwatch SIGSTOP) inside a row
     L.append(f"  {t}: prompts {len(R)}, tokens {n}, WHOLE DECODE {n / dec:.1f}, whole request {n / (dec + sum(pf)):.1f} tok/s, first "
              f"token median {S.median(pf):.2f} s, lifetime peak {peak:.2f} GB{' (OVER 24.0)' if peak > 24.0 else ''}; kept per check "
              f"{S.mean(kept) if kept else float('nan'):.2f}, cycle median {S.median(cyc) if cyc else float('nan'):.1f} ms, SSD MB per kept "
              f"token {S.mean(mb) if mb else float('nan'):.1f}; path: ooo_1c {C.get('ooo_1c', 0)}, tier_calls {C.get('tier_calls', 0)}, "
-             f"tier_chunk {C.get('tier_chunk', 0)} -> {'FAST PATH' if fast else 'NOT all fast'}; {qd}; aborts {ab}; cut rows {cuts}"
+             f"tier_chunk {C.get('tier_chunk', 0)} -> {'FAST PATH' if fast else 'NOT all fast'}; {qd}; rows with a heat freeze {hz}; aborts {ab}; cut rows {cuts}"
              f"{' (DO NOT QUOTE)' if cuts or ab else ''}")
 open("data/w24/w24_report.txt", "w").write("\n".join(L) + "\n"); print("\n".join(L))
 EOF

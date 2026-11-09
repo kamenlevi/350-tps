@@ -699,3 +699,28 @@ fixed-cost bet. This is a measurement only: no setting changes.
   lossy and need its own gate, and adopting it is Kamen's call.
 - **Left open [G]:** P2'c (C2c only when cf0 < 0.9, else 4-row calls) re-priced with today's measured call costs. That is a
   CPU replay; no GPU run without a new line.
+
+> (a quote from the project owner, kept private)
+- **Measured on code [K]**, A' (chw14ha, 16 HumanEval, CAP 256; /Users/kamen/Fit12/data/scr/chw14):
+  - 342 checks, 972 exact calls (2.84 per check, almost all 4 rows), 3452 tokens (10.09 kept per check);
+  - 441 MB per kept token, 540 ms per check: calls 528 (first w4 175.9 ms, later w4 192.2), draft 11.0, rest 1.2.
+- **Fit [K]:** one call costs a[w] + 83.7 ms per GB, with a[1-4] = 42.4 / 43.9 / 52.5 / 59.4 ms (chat calls,
+  /Users/kamen/Fit12/data/scr/chw16/chw16_prof.txt l21). It reproduces code's w4 calls: about 1.57 GB per call gives
+  190 ms vs 176-192 measured.
+- **Price [P]:** at zero SSD bytes, the exact check would still take 2.84 x 59.4 + 11.0 + 1.2 = 181 ms, which is 10.09 /
+  0.181 = 56 tok/s.
+  - So the exact <= 4-row call structure cannot reach 90 on code at any byte count.
+  - 90 at ~10 kept per check means a 111 ms check. That needs both of these, and both are lossy (not batch-invariant or
+    fewer experts), so both need the gate:
+    - (a) ~40-60 ms per check outside reads;
+    - (b) <= ~60-85 MB per kept token.
+  - Breakthrough's first pricing agrees (/Users/kamen/Breakthrough/docs/PRICE_12GB_90_CODE.md, b69de76).
+- **BigMoE's fast path at 12 GB [K, from its W24 header]:** a base slot costs 0.0991 GB and a sidecar slot 0.0346 GB. The rest
+  of the lifetime peak is ~10.1-10.6 GB (F24k: 13.19 GB pools, 23.7 GB peak).
+  - This build's rest is ~5.1 GB (11.145 GB peak, 6.03 GB pools).
+  - So that engine fits 12 GB only if ~5 GB of its non-pool memory goes. Check on CPU first: what the 10.3 GB holds.
+- **Split** (Breakthrough 19:0x): Breakthrough prices the levers tonight on CPU (a code-window byte replay at 12 GB). Fit12
+  runs the engine screens and the gate.
+  - Screens S1 (one wide call per check with a sure-row rank cut that fits C_m 47), S2 (BigMoE's fast path at 12 GB, if
+    it fits) and S3 (byte-cut arms) wait for the ranking.
+  - NewIdeas gets their GPU minutes, peak and lock type by Tue 08:00. No GPU tonight: W24 has the machine.

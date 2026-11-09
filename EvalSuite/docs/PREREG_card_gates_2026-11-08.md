@@ -376,3 +376,24 @@ Checked on the gate keys; the result is the same in scripts/r57_screen.py and th
 - **Unchanged:** the decision rule, the keys, the code pin (8ecc1604bd56), the config, and zs32's 15:30 cutoff.
 - **Correction (13:1x):** the longest process so far took 12.7 min (m1b forward process 20, 12:47-13:00; lcoh's longest
   was 11.7), so a process that starts at 16:05 ends by about 16:18. The runner's 15-min start gate still covers it.
+
+## Amendment 12 (Mon 9 Nov 19:0x, before any W24 env file or row): a card-gate arm for the 24 GB config (w24)
+- **Why:** the queue owner (NewIdeas, 18:56) puts one gate first: a same-scores gate on the model card's benchmarks for
+  BigMoE's 24 GB config (W24: L + COH below a 24.0 GB lifetime peak on the fast path, BigMoE scripts/w24.sh), done before
+  the Wednesday publish.
+- **The arm:** tag w24; the config BigMoE names in data/stack/card_w24_env.txt, written and committed in BigMoE after this
+  amendment (its comment names w24, the arm's C, its MEM and the screen data/r57/snap/w24/r57_screen_w24.py; its env line
+  is the chosen W24 arm's keys with R57_QOM_SETS including lcb6, as in card_lcoh_env.txt).
+- **Unchanged from the other arms:** the 381 gate keys, caps 1,536 / 2,048 / 2,048, non-thinking greedy, the reference
+  NAX6-N (results/ref2tnaxn.r6), the decision rule (decision 4 per benchmark and order; a benchmark passes in both orders;
+  the gate passes when all three do), both orders, PERPROC 20, amendment 9's cut-run rule, the engagement and module
+  checks, resumes under CARD_RESUME=1.
+- **What differs, by design:** C and MEM come from the env comment (W24 runs at C 100 with its own base / sidecar slots;
+  runner 61 now accepts C 100, tested by a dry run on a mock env); the screen is W24's snapshot (rel1's screen + the
+  R57_ROWCAP row cap), so the code pin differs from 8ecc1604bd56; the per-process time budget is whatever HARD that
+  snapshot holds when the arm starts (600 s today; BigMoE may set 1,200 s before the first row, never after).
+- **Slot and cutoff (queue owner 18:59):** start Tue 10 Nov ~01:30 if the env file is committed by then, with CARD_CUTOFF
+  2026-11-10 15:00; otherwise the Tue-night slot. An arm stopped at a cutoff resumes in the next slot (CARD_RESUME=1).
+- **Priced length [P]:** ~9-12 h for both orders (central ~10 h): lcoh kept 867,659 tokens in 5.8 h at 45 GB; at 24 GB
+  the card rows' rate is assumed x0.5-0.7, and the 600 s budget fits ~7 long rows per process (~80 processes). Re-priced
+  from W24's own IFEval rate and the arm's first process.

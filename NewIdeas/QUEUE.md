@@ -39,6 +39,34 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     - Order: card-reference leftover (0.5-2.5 h), then lcoh (~3.6 h), then whichever next arm fits.
     - The last chunk or arm must END by 15:00.
     - Fit12's 12 GB IFBench arm (~3 h, MEM ~12-16 GB) goes after 15:00, by day.
+> (a quote from the project owner, kept private)
+    then we publish by wednesday. and as soon as we reach 90tps on 12gb, we publish about it"). Published 18:35 (exactstream
+    v1.0.0); the post-publish number check PASSED (18:55).
+    1. FIRST: 24 GB -> 120 tok/s whole decode on HumanEval, lifetime peak < 24 GB, lossy with a same-scores gate on the known
+       benchmarks.
+       - BigMoE's W24 leads: 3 arms, row cap 12 / 10 / 8, ~45 min, PEAK 24 GB, queued NOTBEFORE 00:30.
+       - Then BigMoE iterates; the GPU goes to its arms before anything else.
+       - The gate: EvalSuite card arm on the config BigMoE names. Reference rows ref2tnaxn.r6 exist; one arm took 5.8 h at
+         45 GB and will be slower at 24 GB. It must end before the Wednesday publish.
+       - Slots, in order:
+         a. Tue right after W24, if a config is named by ~01:30: the gate ends ~10:00-12:00, inside the 00:30-15:00 window.
+         b. Otherwise Tue night 00:30 -> Wed morning.
+    2. NEXT: 12 GB -> 90 tok/s (Fit12, Breakthrough). Published on its own once reached and gated. Its GPU screens run in
+       the gaps the 24 GB work leaves.
+    3. Everything else yields. The new-findings list (EvalSuite) stays due Tue 12:00, CPU only. Account lines: sub2 85 %,
+       sub1 60 % by Tue 20:00.
+    - Asked of the orchestrator (18:56): may W24 start this evening instead of 00:30? Kamen's call. BigMoE asked to start
+      now (18:55); not granted. At 18:59, 54 GB of 64 was in use and Claude was the front app, and WAITMEM would hold it
+      anyway.
+    - Gate arm (EvalSuite 19:0x):
+      - ~10 h (9-12) at 24 GB; a 01:30 start ends ~11:00-14:00.
+      - It needs BigMoE's committed card_w24_env.txt. EvalSuite extends runner 61 to C 100 tonight on CPU.
+      - Option (BigMoE's code, set before the first row): HARD 600 -> ~1,200 s, about -1 h.
+    - 12 GB -> 90 envelope (Fit12 + Breakthrough, CPU pricing tonight):
+      - 90 needs a check of ~40-70 ms outside reads AND <= ~50-85 MB read per kept token (today 439-441). Both lossy, both
+        gated.
+      - Fit12 S1 (wide call) / S2 (BigMoE's fast path at 12 GB, if it fits) / S3 (byte cuts): MEM <= 12 GB, share lock,
+        ~15-20 min each. The concrete list comes by Tue 08:00 and runs in the gate's gaps.
   - MON 17:25 (`date`) PUBLISH NUMBER CHECK DONE: the FINAL build 17:23 passes end to end (five papers, site,
     complete.pdf 84 pp). The last catch, MAIN section 11's OPT line (K 266 / 147 mis-paired), was fixed by the editor at
     17:23. Ledger: NUMBER_CHECK.md sections 15-19.

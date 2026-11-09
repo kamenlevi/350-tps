@@ -246,6 +246,34 @@ for p in placed:
         unsafe += [f"{p}:{i + 1}" for i, line in enumerate(L) if QUOTE.search(line)]
     open(fp, "w", encoding="utf-8").write("\n".join(L))
 
+# ---- 4b. comment rewording (11-09, the owner's rule via the orchestrator: no person's or product's name in public files) --
+# Exact (path, old, new) replacements from release/private_patterns.json "comment_subs" (gitignored: the old wording is
+# private). Each old text must occur exactly once in the placed copy; a .py file's AST with docstrings removed must stay
+# equal, so only comments and docstrings change (the source repos are not touched).
+import ast
+
+
+def _ast_nodoc(src):
+    tree = ast.parse(src)
+    for n in ast.walk(tree):
+        b = getattr(n, "body", None)
+        if isinstance(b, list) and b and isinstance(b[0], ast.Expr) and isinstance(getattr(b[0], "value", None), ast.Constant) \
+                and isinstance(b[0].value.value, str):
+            n.body = b[1:] or [ast.Pass()]
+    return ast.dump(tree)
+
+
+ncs = 0
+for rel, old, new in PRIV.get("comment_subs", []):
+    fp = f"{OUT}/{rel}"
+    t0 = open(fp, encoding="utf-8").read()
+    assert t0.count(old) == 1, f"comment_subs: {rel}: the old text occurs {t0.count(old)} times"
+    t = t0.replace(old, new)
+    if rel.endswith(".py"):
+        assert _ast_nodoc(t0) == _ast_nodoc(t), f"comment_subs: {rel}: the change reaches code, not only comments / docstrings"
+    open(fp, "w", encoding="utf-8").write(t); ncs += 1
+print(f"  comment rewording: {ncs} lines (comments / docstrings only, AST without docstrings unchanged)")
+
 # ---- 5. checks: leak patterns, live paths, compile ----
 LEAK = re.compile(PRIV["leak"] + r"|BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|ghp_[A-Za-z0-9]{20,}|hf_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|"
                   r"claude\.ai/code/session|" + re.escape(HOME), re.I)

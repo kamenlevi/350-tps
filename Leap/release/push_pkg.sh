@@ -13,7 +13,10 @@ URL=https://github.com/kamenlevi/exactstream.git
 SITE=${SITE_DIR:-/Users/kamen/Papers/public/site}
 g() { git -C "$P" -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
         -c user.name=kamenlevi -c user.email=kamenlevi@users.noreply.github.com "$@"; }
-[ "$(gh repo view kamenlevi/exactstream --json visibility --jq .visibility)" = PRIVATE ] || { echo "STOP: the repo is not PRIVATE"; exit 2; }
+VIS=$(gh repo view kamenlevi/exactstream --json visibility --jq .visibility)
+# Since 18:35 (the owner's go, via the orchestrator) the repo is public: a push needs PUBLIC_OK=1, set only for a change
+# the owner asked for, so nothing reaches the public repo by accident.
+[ "$VIS" = PRIVATE ] || [ "${PUBLIC_OK:-0}" = 1 ] || { echo "STOP: the repo is $VIS (set PUBLIC_OK=1 only for an owner-requested change)"; exit 2; }
 g fetch -q "$URL" main || { echo "STOP: fetch failed"; exit 2; }
 REMOTE=$(g rev-parse FETCH_HEAD)
 if [ "$MODE" = pkg ]; then
@@ -26,7 +29,11 @@ if [ "$MODE" = pkg ]; then
     g commit -q -m "$MSG" || { echo "STOP: commit failed"; exit 2; }
   fi
 elif [ "$MODE" = docs ]; then
-  [ "$(g rev-parse HEAD)" = "$REMOTE" ] || { echo "STOP: local HEAD $(g rev-parse --short HEAD) is not the remote main $(g rev-parse --short "$REMOTE"): push pkg first"; exit 2; }
+  if [ "${AMEND:-0}" = 1 ]; then   # fold docs/ into a package commit made by `DRY=1 push_pkg.sh pkg` (one commit for both)
+    [ "$(g rev-parse HEAD^)" = "$REMOTE" ] || { echo "STOP: AMEND needs HEAD's parent = the remote main"; exit 2; }
+  else
+    [ "$(g rev-parse HEAD)" = "$REMOTE" ] || { echo "STOP: local HEAD $(g rev-parse --short HEAD) is not the remote main $(g rev-parse --short "$REMOTE"): push pkg first"; exit 2; }
+  fi
   [ -f "$SITE/index.html" ] || { echo "STOP: no $SITE/index.html"; exit 2; }
   bad=$(find "$SITE" -iname '*small-ram*' -o -iname '*small_ram*' | head -3)
   [ -z "$bad" ] || { echo "STOP: small-ram files in the site: $bad"; exit 2; }
@@ -43,9 +50,13 @@ elif [ "$MODE" = docs ]; then
   done
   rm -rf "$P/docs"; mkdir -p "$P/docs"; cp -R "$SITE"/. "$P/docs/"
   g add -A docs
-  g diff --cached --quiet && { echo "NO CHANGE in docs/"; exit 0; }
-  g commit -q -m "docs: the papers (PDF) and their index page, from the final public build ($(date -r "$SITE/index.html" '+%d %b %H:%M'))" \
-    || { echo "STOP: commit failed"; exit 2; }
+  DMSG="docs: the papers (PDF) and their index page, from the final public build ($(date -r "$SITE/index.html" '+%d %b %H:%M'))"
+  if [ "${AMEND:-0}" = 1 ]; then
+    g commit -q --amend -m "$(g log -1 --format=%s HEAD); $DMSG" || { echo "STOP: amend failed"; exit 2; }
+  else
+    g diff --cached --quiet && { echo "NO CHANGE in docs/"; exit 0; }
+    g commit -q -m "$DMSG" || { echo "STOP: commit failed"; exit 2; }
+  fi
 else echo "usage: push_pkg.sh pkg|docs"; exit 2; fi
 echo "diff vs the remote main $(g rev-parse --short "$REMOTE"):"; g diff --stat "$REMOTE" HEAD | tail -12
 if [ "${DRY:-0}" = 1 ]; then echo "DRY: not pushed ($(g rev-parse --short HEAD))"; exit 0; fi

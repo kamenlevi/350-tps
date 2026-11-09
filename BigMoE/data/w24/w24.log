@@ -1,0 +1,40 @@
+11-09 15:17:36 dry: w12 = base 120, sidecar 34, rows 12, pools 13.07 GB
+11-09 15:17:36 dry: w10 = base 104, sidecar 76, rows 10, pools 12.94 GB
+11-09 15:17:36 dry: w8 = base 100, sidecar 90, rows 8, pools 13.02 GB
+11-09 15:17:36 dry run: snapshot w24 (f3caa26), L + COH line 33 K=V, live kernel files == frozen_rel1's
+11-09 15:35:50 dry: w12 = base 120, sidecar 34, rows 12, pools 13.07 GB
+11-09 15:35:50 dry: w12s = base 120, sidecar 26, rows 12, pools 12.79 GB
+11-09 15:35:50 dry run: snapshot w24 (f3caa26), L + COH line 33 K=V, live kernel files == frozen_rel1's
+11-09 18:56:10 dry: w12 = base 120, sidecar 34, rows 12, pools 13.07 GB
+11-09 18:56:10 dry: w12pf = base 120, sidecar 34, rows 12, R57_ARMS=gate+t+pf, pools 13.07 GB
+11-09 18:56:10 dry: w10 = base 104, sidecar 76, rows 10, pools 12.94 GB
+11-09 18:56:10 dry: w8 = base 100, sidecar 90, rows 8, pools 13.02 GB
+11-09 18:56:10 dry run: snapshot w24 (f3caa26), L + COH line 33 K=V, live kernel files == frozen_rel1's
+11-09 18:59:53 dry: w12 = base 120, sidecar 34, rows 12, pools 13.07 GB
+11-09 18:59:53 dry: w12pf = base 120, sidecar 34, rows 12, R57_ARMS=gate+t+pf, pools 13.07 GB
+11-09 18:59:53 dry: w10 = base 104, sidecar 76, rows 10, pools 12.94 GB
+11-09 18:59:53 dry: w8 = base 100, sidecar 90, rows 8, pools 13.02 GB
+11-09 18:59:53 dry run: snapshot w24 (016cb7f), L + COH line 33 K=V, live kernel files == frozen_rel1's
+11-09 19:00:06 dry: w12 = base 120, sidecar 34, rows 12, pools 13.07 GB
+11-09 19:00:06 dry: w16u = base 120, sidecar 34, rows 12, R57_FAST=U3W,R57_GATEREQ=1, pools 13.07 GB
+11-09 19:00:06 dry: w12pf = base 120, sidecar 34, rows 12, R57_ARMS=gate+t+pf, pools 13.07 GB
+11-09 19:00:06 dry: w10 = base 104, sidecar 76, rows 10, pools 12.94 GB
+11-09 19:00:06 dry: w8 = base 100, sidecar 90, rows 8, pools 13.02 GB
+11-09 19:00:06 dry run: snapshot w24 (016cb7f), L + COH line 33 K=V, live kernel files == frozen_rel1's
+11-09 19:07:03 W24 start (pid 44621, NO-SWAP 31.4 GB, snapshot w24 = 016cb7f, arms w12 w16u w12pf w10 w8)
+11-09 19:08:44 w12h_100 rc=0
+11-09 19:10:14 w12m_100 rc=0
+11-09 19:12:14 w12i_100 rc=0
+11-09 19:14:40 w16uh_100 rc=0
+11-09 19:16:35 w16um_100 rc=0
+11-09 19:19:31 w16ui_100 rc=0
+11-09 19:19:46 w12pfh_100 rc=0
+11-09 19:19:51 w12pfm_100 rc=0
+11-09 19:19:56 w12pfi_100 rc=0
+11-09 19:21:42 w10h_100 rc=0
+11-09 19:25:40 w10m_100 rc=0
+11-09 19:27:35 w10i_100 rc=0
+11-09 19:29:36 w8h_100 rc=0
+11-09 19:31:51 w8m_100 rc=0
+11-09 19:34:32 w8i_100 rc=0
+11-09 19:34:32 report rc=0 (data/w24/w24_report.txt)

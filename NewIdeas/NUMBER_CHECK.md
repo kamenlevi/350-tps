@@ -579,3 +579,25 @@ The sweep's seven "new" rows (EvalSuite, ~/Papers/NEW_FINDINGS_SWEEP.md), agains
   source minus dropped + the date line; PDF digits = public.md (unplaced page numbers only: MAIN 12, 13, 19, 30; KERNELS 10,
   11; DRAFTER 9, 12-14; EVALUATION 7, 8; RELEASE 1, 2); complete.pdf 87 pp, parts 3-37 / 38-50 / 51-62 / 63-79 / 80-87 = the
   five PDFs; contents 3 / 38 / 51 / 63 / 80. PASS. Reported to the orchestrator, Breakthrough and the editor.
+
+> (a quote from the project owner, kept private)
+could be improved"), checked Mon 18:08-18:09 (`date`) against the 18:04 snapshot
+- Credits (scripts/numcheck/credit_check.py, sections 4 and 8): 0 credit tokens lost (names, arXiv ids, PR / issue numbers,
+  URLs of the old rows all present in the new tables or the References).
+- Numbers: the added ones are all verified values (12.1 44 of 283 us [M-28], 97.5 % / 87-94 % [M-29], +12.1 %; 12.2 12 / 12,
+  721 / 721, 2.91 -> 2.26 s, BM:scripts/pfd_unit.py l147 = the placeholder test; 12.3 x0.91, 8.11 %; 12.4 +6.2 %, 44.74 vs
+  42.12); the removed ones belong to the findings that left section 12 (FAR, the union law) and two references. EVALUATION:
+  one date removed. Intro "one of the four ... (12.3)" consistent.
+- FIX (sent): 12.3 "The per-block form flips only 0.10-0.14 % in layers 12-35" -> per block (12-23 0.14 %, 24-35 0.10 %);
+  both together 1.03 % (NIGHT2). Optional: 12.2 "rules out polling" rests on an unsaved run + [G].
+- FINAL build 18:12:04-18:12:20 (checked 18:12 `date`): the 12.3 fix in word for word, 12.2 "argues against"; five public.md =
+  source minus dropped + the date line; PDF digits = public.md (unplaced page numbers only: MAIN 9, 12, 13, 19, 29; KERNELS
+  10, 11; DRAFTER 9, 12-14; EVALUATION 7, 8; RELEASE 1, 2); complete.pdf 86 pp = its parts; contents 3 / 37 / 50 / 62 / 79.
+  PASS. Reported to the orchestrator, Breakthrough and the editor.
+- Open for MAIN v2 (BigMoE 18:11, agreed not tonight): the sync-free gate's "+35 %" (4.4, section 7) is the steady metric;
+  whole decode +41.5 % (mean of 6, BM:data/r57/r55l_summary.txt) to re-derive pooled. F.5 "about 20-23 us": one raw run's
+  median is 27.4 (LP:data/w1_pickup_P.txt).
+- POST-PUBLISH check of the published build 18:32:52-18:33:07 (public 18:35), Mon 18:55 (`date`): the 18:23 / 18:33 re-GOs
+  added only wording and the machine line "MacBook Pro (M5 Pro, 18-core CPU, 20-core GPU, 64 GB, 2 TB SSD)", verified on the
+  machine (hw.ncpu 18; system_profiler: Apple M5 Pro, 20 GPU cores; 64 GiB; disk0 2.0 TB). Five public.md = source minus
+  dropped + the date line; PDF digits = public.md (unplaced page numbers only). PASS.
