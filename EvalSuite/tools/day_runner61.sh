@@ -61,8 +61,9 @@ lid_shut() {
 }
 LASTWAIT=0
 waitlog() { [ $(( $(date +%s) - LASTWAIT )) -ge 600 ] && { say "$*"; LASTWAIT=$(date +%s); }; }
+QPAUSE=${CARD_PAUSE_FILE:-$HOME/.local/share/quiet/PAUSE}   # CARD_PAUSE_FILE: tests only
 calm() {
-  while pgrep -f '^/bin/zsh [^ ]*soft_end\.sh' >/dev/null || [ -e "$HOME/.local/share/quiet/PAUSE" ] || lid_shut; do
+  while pgrep -f '^/bin/zsh [^ ]*soft_end\.sh' >/dev/null || [ -e "$QPAUSE" ] || lid_shut; do
     waitlog "waiting: soft_end.sh, PAUSE or a closed lid"
     sleep 30
   done
@@ -80,6 +81,9 @@ mem_busy() {    # another session's shared run with MEM > 5 GB (our own reasons 
 freegb() { .venv/bin/python -c "import sys; sys.path.insert(0, '.'); from evalsuite.cli import free_gb; print(int(free_gb()))"; }
 swapgb() { sysctl -n vm.swapusage | awk '{gsub("M", "", $6); print int($6 / 1024 + 0.5)}'; }
 SWAP0=$(swapgb)
+rebase_swap() { # after waiting for another session (our process had ended): swap grown meanwhile is theirs (RISK 1, 11-09)
+  local s; s=$(swapgb); [ "$s" = "$SWAP0" ] || say "swap base $SWAP0 -> $s GB (re-read after $1)"; SWAP0=$s
+}
 alive() { [ -f "results/q$1.pid" ] && kill -0 "$(cat "results/q$1.pid")" 2>/dev/null; }
 fz_ok() {       # every file of the freeze still has the sha FREEZE.json records
   python3 - "$FZ" <<'FZ'
@@ -182,6 +186,7 @@ gate() {        # label, MEM GB, seconds the step is estimated / measured to tak
     [ $((w % 10)) = 0 ] && say "$1: another session's MEM job holds a shared lock: waiting (day rule)"
     w=$((w + 1)); sleep 60; calm
   done
+  [ "$w" -gt 0 ] && rebase_swap "a wait for another session's MEM job"
   [ "$(pin)" = "$PIN0" ] || { say "code changed: pin $PIN0 -> $(pin): runner stops"; exit 7; }
   [ "${BMPIN:-0}" = 1 ] && ! bm_pin && { say "BigMoE's code is not $BMC / the freeze ($MODE): runner stops"; exit 7; }
   [ "${BMPIN:-0}" = 1 ] && ! ext_pin && { say "a module the stack loads changed vs $REFMAN: runner stops"; exit 7; }
@@ -198,7 +203,13 @@ gate() {        # label, MEM GB, seconds the step is estimated / measured to tak
 share_lock() {  # reason, lease minutes, resources (default the stack's): retry while a quiet lock runs
   local r w=0
   while :; do
-    r=$(peer lock share "${2}m" ${3:---cpu 300 --gpu 60} "$1" 2>&1); [ $? = 0 ] && { say "shared lock: $1"; return 0; }
+    r=$(peer lock share "${2}m" ${3:---cpu 300 --gpu 60} "$1" 2>&1)
+    if [ $? = 0 ]; then
+      if [ -e "$QPAUSE" ]; then   # a PAUSE that began as we asked (amendment 6): release, wait it out, ask again
+        peer unlock > /dev/null 2>&1; say "PAUSE right after the shared lock: released it"; calm; continue
+      fi
+      say "shared lock: $1"; [ "$w" -gt 0 ] && rebase_swap "a yield"; return 0
+    fi
     echo "$r" | grep -q "quiet" || { say "share lock refused: $(echo "$r" | tail -1)"; }
     [ $((w % 10)) = 0 ] && say "share lock refused (a quiet lock runs?): waiting"
     w=$((w + 1)); sleep 60; calm

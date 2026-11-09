@@ -38,6 +38,8 @@ OTHER = [
  ("ktrans", 'Hongtao Chen et al. "KTransformers: Unleashing the Full Potential of CPU/GPU Hybrid Inference for MoE Models." In Proceedings of the ACM SIGOPS 31st Symposium on Operating Systems Principles (SOSP \'25), pp. 1014-1029, 2025. doi:10.1145/3731569.3764843.', r"KTransformers"),
  ("inco_blog", 'Inco AI. "DFlash 2: Keep Drafting Parallel." Blog, Aug 2026. https://inco.ai/blog/dflash2', r"DFlash ?2\b|inco\.ai/blog"),
  ("dflash2_ckpt", "Inco AI. Qwen3.8-Flash-Next-DFlash2 (drafter checkpoint, revision a22a174, 19 Oct 2026; Apache-2.0). https://huggingface.co/incoai/Qwen3.8-Flash-Next-DFlash2", r"DFlash ?2\b"),
+ ("ms_nvme_power", 'Microsoft. "NVMe" (power management for storage hardware devices: the StorNVMe driver\'s power states, entry and exit latencies, idle timeouts). Windows hardware design guidance, Microsoft Learn. https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/power-management-for-storage-hardware-devices-nvme', r"StorNVMe|NVMe power-management guidance"),
+ ("torpid", "YorkshireDev. Project Torpid: a disk drive sleep prevention utility (software; GPL-3.0). https://github.com/YorkshireDev/Torpid", r"\bTorpid\b"),
  ("mtplx", "Youssof Altoukhi. MTPLX (software, v2.12.2, commit 9882703f; Apache-2.0). https://github.com/youssofal/mtplx", r"MTPLX|mtplx"),
  ("gsq_gguf", "ISTA-DASLab. Qwen3.8-Flash-Next-GSQ-RCO-GGUF (model files in GGUF format; Apache-2.0). Hugging Face. https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF", r"GSQ-RCO-GGUF"),
  ("mtplx_pack", "Youssofal. Qwen3.8-Flash-Next-MTPLX-Bare-Speed (4-bit weights; Qwen Community License 1.0). https://huggingface.co/Youssofal/Qwen3.8-Flash-Next-MTPLX-Bare-Speed", r"MTPLX-Bare-Speed|Hugging Face: Youssofal"),
@@ -61,6 +63,8 @@ OTHER = [
  ("dietterich", 'Thomas G. Dietterich. "Approximate Statistical Tests for Comparing Supervised Classification Learning Algorithms." Neural Computation 10(7): 1895-1923, 1998. doi:10.1162/089976698300017197.', r"Dietterich"),
  ("schuirmann", 'Donald J. Schuirmann. "A comparison of the two one-sided tests procedure and the power approach for assessing the equivalence of average bioavailability." Journal of Pharmacokinetics and Biopharmaceutics 15(6): 657-680, 1987. doi:10.1007/BF01068419.', r"Schuirmann|\bTOST\b"),
 ]
+# Companions not published with tonight's set (Kamen, Mon 9 Nov 15:08): cited as forthcoming.
+FORTHCOMING = {"SMALL-RAM": "by 11 November 2026"}
 COMPANIONS = {"MAIN": "MAIN", "SMALL-RAM": "SMALL_RAM", "KERNELS": "KERNELS", "EVAL": "EVALUATION",
               "DRAFTER": "DRAFTER", "RELEASE": "RELEASE"}
 

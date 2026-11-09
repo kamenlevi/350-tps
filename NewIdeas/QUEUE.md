@@ -39,6 +39,20 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     - Order: card-reference leftover (0.5-2.5 h), then lcoh (~3.6 h), then whichever next arm fits.
     - The last chunk or arm must END by 15:00.
     - Fit12's 12 GB IFBench arm (~3 h, MEM ~12-16 GB) goes after 15:00, by day.
+  - MON 16:35 (`date`) DONE TODAY + PUBLISH CHECK:
+    - Leap store conversion PASS 16:07-16:19:50: 48 layers in 9.5 min, byte-identical to records3.
+    - Fit12 chw19 ran 16:20-16:30: C2c chat x1.053 = MARGINAL, code x0.881 = KILL; nothing adopted. The GPU is free.
+    - W24 is queued NOTBEFORE 00:30 (BigMoE 66ccdd9).
+    - Public build 16:11 (5 papers; SMALL_RAM to Wed):
+      - MAIN, KERNELS and EVALUATION pass the digit check end to end.
+      - DRAFTER.md and RELEASE.md changed after the build; rebuild asked of Breakthrough.
+  - MON 16:09 (`date`) QUEUE + GATES:
+    - m1b card gate PASS: six lines at 16:06; my independent re-grade of GPQA and LCB (both orders) is identical.
+    - zs32 not gated (amendment 11). Kamen 15:08: publish tonight, all done by 18:00.
+    - Order now: Leap's store conversion (after m1b's lock is gone; hard stop 16:58; writes convert_full.done), then Fit12
+      chw19 (gated on that file; fallback 17:00; start-by 17:30).
+    - BigMoE W24 (Kamen's <24 GB at 120+; 3 arms, PEAK 24 GB, ~45 min) at 00:30 tonight (NOTBEFORE 00:30), not in the
+      publish hour.
   - MON 12:47 (`date`) QUEUE:
     - Leap FINAL clean-clone PASS 12:13 (rel1 242553d; 12 / 12 tokens; re-checked from out/). The 17:00 package milestone
       is met, so the reserve 16:00-16:45 is not needed.

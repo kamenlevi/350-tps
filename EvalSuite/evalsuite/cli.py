@@ -17,6 +17,7 @@ GPU_PY = os.path.expanduser("~/BigMoE/.venv/bin/python")
 RESULTS = os.path.join(ROOT, "results")
 CACHE = os.path.join(ROOT, "cache", "ref")
 LOG = os.path.join(ROOT, "results", "gpu.log")
+PAUSE = os.environ.get("EVALSUITE_PAUSE_FILE") or os.path.expanduser("~/.local/share/quiet/PAUSE")   # env: tests only
 
 
 def say(*a):
@@ -185,6 +186,15 @@ def research_waits():
     return any("waiting for a quiet window" in l and "[low]" not in l for l in r.splitlines())
 
 
+def wait_pause(why):
+    """wait while the quiet window's PAUSE file exists (a heat pause or the day hold): no stage starts inside one"""
+    t0 = time.time()
+    while os.path.exists(PAUSE):
+        if int(time.time() - t0) % 600 < 30:
+            say(f"PAUSE: waiting ({why})")
+        time.sleep(30)
+
+
 def gpu(args, why, need_gb, timeout_s):
     """run `python -m evalsuite.stages args` under a queued quiet lock with a memory gate and keepalive. If this
     session already holds a quiet lock (a ticket taken with `peer lock quiet --queue`), the stage runs inside it: a
@@ -202,8 +212,13 @@ def gpu(args, why, need_gb, timeout_s):
     elif SHARE:
         lease, t_ask = int(min(180, timeout_s / 60 + 15)), time.time()
         while True:                                      # exit 3 = a quiet lock runs: wait, then ask again
+            wait_pause(why)
             r = subprocess.run(["peer", "lock", "share", f"{lease}m", "--cpu", "300", "--gpu", "60", f"evalsuite: MEM {need_gb} GB: {why}"],
                                capture_output=True, text=True)
+            if r.returncode == 0 and os.path.exists(PAUSE):  # a PAUSE that began while we waited (11-08 18:32): release
+                subprocess.run(["peer", "unlock"], capture_output=True, text=True)   # and wait (no ticket is queued here)
+                say(f"PAUSE right after the shared lock: released it ({why})")
+                continue
             if r.returncode == 0:
                 say(f"shared lock: {why} (lease {lease} min): {(r.stdout + r.stderr).strip().splitlines()[-1:]}")
                 break

@@ -8,3 +8,4 @@ logs/
 release/out/
 release/cleanclone/
 release/private_patterns.json
+data/release/convert_full.done

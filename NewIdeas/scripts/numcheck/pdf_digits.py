@@ -47,12 +47,13 @@ def md_text(p):
 def pdf_text(p):
     raw = subprocess.run(["pdftotext", "-enc", "UTF-8", p, "-"], capture_output=True, text=True, check=True).stdout
     pages = []
-    for pg in raw.split("\f"):                                # drop each page's footer line if it is a bare page number
+    for pno, pg in enumerate(raw.split("\f"), 1):             # drop the page's own number: a line equal to it near the end
         ls = pg.rstrip("\n").split("\n")
-        while ls and not ls[-1].strip():
-            ls.pop()
-        if ls and re.fullmatch(r"\s*\d{1,3}\s*", ls[-1]):
-            ls.pop()
+        idx = [i for i, l in enumerate(ls) if l.strip()]
+        for i in reversed(idx[-4:]):
+            if ls[i].strip() == str(pno):
+                del ls[i]
+                break
         pages.append("\n".join(ls))
     t = "\n".join(pages)
     t = re.sub(r"([/_=])[ \t]*\n[ \t]*", r"\1", t)            # the build breaks lines only after / _ = : re-join them

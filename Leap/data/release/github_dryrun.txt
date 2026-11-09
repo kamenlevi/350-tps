@@ -48,3 +48,19 @@ published), target main. RELEASE ASSETS, size and the API's sha256 digest = the 
   weight files' sha256): all digests equal. No download was made (the digests come from the API).
 GITHUB PAGES: off (GET repos/kamenlevi/exactstream/pages -> 404, 13:39); stays off until the owner's word (a Pages site is
 public even for a private repo). docs/ is added only from Breakthrough's final build (~16:50), in one commit.
+
+FINAL PACKAGE PUSH (16:2x): the README's last items (chat-45 label after the m1b card gate's PASS at 16:06, RELEASE rows
+29-30; the 7.45 GB volatile tier sentence, RELEASE l26-29; the multilingual limit, RELEASE section 5; the full conversion's
+result, convert_full.txt; no [[...]] marker; no SMALL_RAM link; the owner's line on the 12 / 24 GB paper, verbatim).
+- A first rebuild took EvalSuite's HEAD (41b1a34), whose evalsuite/cli.py had changed since the tested 98c6072d (95f91a0:
+  a PAUSE recheck in its lock handling, +15 lines): not pushed. make_release.py got --es-commit (default HEAD) and the
+  package was rebuilt pinned to 98c6072d: 0d0ad3f.
+- vs the tested 242553d: CITATION.cff, third_party/LICENSE-qwen, third_party/NOTICE-d22_b5 added; README.md,
+  THIRD_PARTY.md, MANIFEST.json changed; MANIFEST: sha256 changed only for README.md and THIRD_PARTY.md, top-level only
+  leap_commit (evalsuite_commit 98c6072d as tested). Every code and harness file is byte-identical to the tested package.
+- release/push_pkg.sh pkg: fetched main (e759a63), re-parented, diff = MANIFEST.json + README.md, pushed fast-forward:
+  github main = 061f4f1 (remote == local). docs/ follows from Breakthrough's final build.
+- 16:5x: README lists the complete report docs/pdf/complete.pdf first (Breakthrough's combined PDF, the owner's 16:49 ask);
+  rebuilt pinned to 98c6072d (06b452f; vs tested 242553d: the same docs + notices only), pushed: github main 9be6c98
+  (diff vs 061f4f1: README.md +1 line, MANIFEST.json). 16:34: push_pkg.sh's private names moved to the gitignored file
+  (7a3c16f; it had blocked the 16:32 public refresh).

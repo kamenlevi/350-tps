@@ -65,7 +65,9 @@ def build(name):
     entries = [t for _, t in sorted(keyed, key=lambda kt: (kt[0].lower(), kt[1].lower()))]
     own = [k for k, v in refs.COMPANIONS.items() if v == name][0]
     comps = sorted({m.group(1) for m in TAG.finditer(body)} - {own})
-    comp_entries = [f"[{c}] {AUTH}. {end(title_of(refs.COMPANIONS[c]))} 2026. A companion paper of this set." for c in comps]
+    comp_entries = [f"[{c}] {AUTH}. {end(title_of(refs.COMPANIONS[c]))} "
+                    + (f"Forthcoming ({refs.FORTHCOMING[c]})." if c in getattr(refs, "FORTHCOMING", {}) else "2026. A companion paper of this set.")
+                    for c in comps]
     alltext = " ".join(entries).lower()
     uncovered = sorted({u for u in URL.findall(body) if u.lower().rstrip(".") not in alltext})
     tail = (f"\n{AI_HEAD}\n\n{AI_TEXT}\n\n{REF_HEAD}\n\n" + "\n".join("- " + e for e in entries)

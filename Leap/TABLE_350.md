@@ -9789,6 +9789,12 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   - [K] TRIAL README-ONLY REBUILD Mon 12:2x (CPU, scratch out dir): with the drafted README (de0b1c9), vs the tested 242553d
     only README.md + MANIFEST.json differ (MANIFEST: README's sha256 + the leap / evalsuite commit ids; evalsuite/ unchanged
     since 98c6072d) -> the post-16:00 README rebuild keeps every tested file byte-identical (data/release/readme_rebuild_try.txt).
+  - [K] FULL STORE CONVERSION Mon 16:07-16:20 (share lock, after m1b): the tested package's convert_store.sh rebuilt all 48
+    layers from the safetensors in 571 s (11-14 s per layer; repack 1-2, split + verify 4-6, p11 6-7 s) into a temp folder;
+    cmp: 48/48 layer files + index.json byte-identical to records3; swap flat; temp deleted (data/release/convert_full.txt).
+  - [K] FINAL PACKAGE PUSH Mon 16:2x: github kamenlevi/exactstream (PRIVATE) main 061f4f1 = rel1 package with the final
+    README, harness pinned to the tested EvalSuite 98c6072d (make_release.py --es-commit; HEAD's cli.py had changed); vs the
+    tested 242553d only docs + notices; draft release v1.0.0 with the drafter files (data/release/github_dryrun.txt).
 
 - **KERNELS v1.0 numbers derived from raw records (Leap, Sun 2026-11-08 19:5x; no GPU):**
   - [K] NATIVE-FRI RUN 2 pooled (scripts/natfri_pooled.py -> data/natfri/natfri_pooled.txt): over the 13 prompts kept in

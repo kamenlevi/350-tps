@@ -661,3 +661,41 @@ fixed-cost bet. This is a measurement only: no setting changes.
     - +2..+6 %: MARGINAL (reported).
     - < +2 %: KILL.
   - Code: chw19h vs chw14ha >= -2 %. Else C2c is chat-only, e.g. P2'c (cf0 < 0.9 -> C2c, else 4-row calls; 15.26 on chat [P]).
+
+## T2 C2c RESULT (chw19, Mon 09 Nov 16:20:44-16:30:48; share lock, MEM 12 GB, GPU idle before start, rc 0): chat MARGINAL, code FAIL
+- **Ran as registered.** /Users/kamen/Fit12/scripts/chw19.sh, three processes in one share lock, ex + PR1 + tail. 12 / 12 and
+  16 / 16 prompts counted (PAIR ok). No other session's lock in /Users/kamen/Fit12/data/scr/chw19/locks.txt.
+  - Gate: GO at 16:19:56 after Leap's full store conversion wrote its done file (NewIdeas 12:51).
+  - Widths (chw19_widths.txt): C2c's later calls really ran at 2 rows (chat 255 later-w2, 1 w3; code 1454 later-w2, 4 w3).
+  - Reference repeat: chw19p (P2') = chw14c2 on tokens 12 / 12 and kept-row logits hash 12 / 12 (chw19_rep.txt). Speed
+    x0.983 run-to-run (13.73 vs 13.97 pooled).
+- **Chat, C2c (chw19c) vs P2' (chw19p), the same lock** [K] (chw19_rows.txt, chw19_chat.txt):
+
+  | run | whole decode tok/s pooled (geo) | whole request pooled (geo) | first token s median (min-max) | lifetime peak GB | MB per kept token |
+  |---|---|---|---|---|---|
+  | chw19c C2c | 14.46 (14.23) | 10.39 (9.39) | 2.87 (2.28-3.64) | 10.972 | 449 |
+  | chw19p P2' | 13.73 (13.64) | 9.97 (9.04) | 3.07 (2.25-3.72) | 10.980 | 491 |
+
+  - x1.053 pooled whole decode (x1.043 geo): inside the MARGINAL band (+2..+6 %), under the +6 % PASS line.
+  - C2c changes tokens: = P2' on 4 / 12, logits hash 0 / 12. It is lossy at rounding level, like P2'.
+- **Code, C2c (chw19h) vs A' (chw14ha, Sun 8 Nov, another lock)** [K] (chw19_code.txt; chw14ha from
+  /Users/kamen/Fit12/data/paper/small_ram_12gb_rows.txt):
+  - Whole decode 16.48 vs 18.69 pooled: x0.881. That is far under the -2 % line, so C2c is not a code mode. (x0.892 vs P2',
+    chw14h2's 18.47.)
+  - Whole request 12.70 vs 14.11 pooled. First token 4.64 s (4.16-6.00) vs 4.48 (4.22-5.64). Peak 11.169 vs 11.145 GB.
+  - Tokens = A' on 12 / 16, logits hash 0 / 16.
+- **Why the price [P] (+10-15 % chat, x1.006-1.02 code) missed.** A 2-row call costs more than the replay assumed.
+  - Measured per call [K] (calls logs, t1 - t0):
+    - chat: first w2 98.6 ms (n 486), later w2 107.3 ms (n 255);
+    - code: first w2 108.6 ms (n 339), later w2 115.3 ms (n 1454).
+  - The replay used about 93.5 ms, chw14c2's first w2. Later w2 calls were too rare in Sunday's logs to measure.
+  - Per row, a 2-row call costs 54-58 ms against 46-48 ms for a 4-row call (chat later w4 182.3, code 192.2 ms).
+  - Chat saves rows: 1493 vs 1816 verified rows, 449 vs 491 MB per kept token, and calls take 75.9 vs 81.2 s in all. But it
+    pays the per-call fixed cost on 746 calls instead of 629.
+  - Code keeps 10.1 tokens per check, so C2c needs 1800 calls (3605 rows) instead of 972 (3871 rows), and pays that cost
+    on every one: calls take 205.4 vs 180.5 s.
+  - Drafts (10.5 ms) and the per-check rest (< 2 ms) did not change.
+- **Verdict (pre-registered lines):** chat MARGINAL (+5.3 %), code FAIL (-11.9 %). Nothing is adopted. A chat mode would be
+  lossy and need its own gate, and adopting it is Kamen's call.
+- **Left open [G]:** P2'c (C2c only when cf0 < 0.9, else 4-row calls) re-priced with today's measured call costs. That is a
+  CPU replay; no GPU run without a new line.

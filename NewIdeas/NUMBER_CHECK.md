@@ -455,3 +455,50 @@ Still to do on the final build (~16:40): the same, plus public.md == source minu
   its own guard: fanwatch PAUSE set 14:35 (heat); deferred until after m1b.
 - RELEASE abstract (l11-21): exact 37.1-101.4 tok/s, shipped lossy 45.2-164.0, peaks 41.7-43.2 GB, Strata 0.5-1.0 s vs ours
   2.7-4.6 s (2.26 s chat as shipped), six configs: all = section 2 and the records. OK.
+
+## 13. m1b card gate (M1-B + COH), verdict lines 16:06, re-graded Mon 16:06-16:07 (`date`)
+| line | EvalSuite d4 | my re-grade |
+|---|---|---|
+| GPQA Diamond fwd | 42.0 vs 44.0 %, -2.00, p 0.7539 (4 / 6) | identical (gpqa_recount.py) |
+| GPQA Diamond rev | 42.0 vs 44.0 %, -2.00, p 0.7905 (6 / 8) | identical |
+| LCB v6 fwd | 29.0 vs 32.1 %, -3.05, p 0.3877 (4 / 8) | identical (lcb_recount.py, 0 cache misses) |
+| LCB v6 rev | 32.1 vs 32.1 %, +0.00, p 1.0 (3 / 3) | identical |
+| IFBench fwd | 44.0 vs 44.0 %, +0.00, p 1.0 (9 / 9) | p recomputed from the counts: 1.0 |
+| IFBench rev | 41.3 vs 44.0 %, -2.67, p 0.5034 (8 / 12) | p recomputed: 0.5034 |
+All six inside the rule (delta > -5, p >= 0.05): the card gate PASSES (EvalSuite's RESULT doc not yet written at 16:07).
+
+## 14. MAIN methods-first (editor 15:1x-15:3x), checked Mon 16:07-16:09 (`date`) before the 17:15 freeze
+- Rule check (scripts/numcheck/newtext_nums.py): every number in the new subtitle, abstract, 1.2-1.6, section 7 and section 9
+  occurs in the 10:36 MAIN, except 7.45 GB (the volatile tier), which = the run logs' "R57_VTIER: 64 / 32 slots ... = 7.45 GB"
+  (3,072 x 2,162,688 B + 1,536 x 524,288 B = 7.449 GB).
+- Moved sections: old 7 -> App G, old 8 -> App H, old 9 -> 8, old 12 -> App I: numbers equal except renumbered headings,
+  re-dated words and one citation (MTPLX "v2.11.2 per its CITATION.cff" -> "v2.12.2 at commit 9882703f, the version we ran":
+  = the package's requirements.txt and the venv's direct_url.json).
+- New text read against the verified values: abstract (96 / 96, 24 / 24, 24 / 24; 101.4 / 70.4 / 77.9 / 37.1 at 41.7-42.5;
+  164.0 / 112.7 / 78.9 / 45.2 at 42.4-43.2; 2.7-4.6 s; 0.54-1.01 s; 2.5-3.5x), 1.2-1.6 (120.8B; 2.7-7.0x), section 7 (x0.75;
+  2.5-10.7 kept; +19 %, +24.5 % on 19 chat prompts; -17.2 % / +8.3 %; ~-20 %; 232.6 -> 117.3; +13-18.7 %; 171-175 / 111-114;
+  -7.2 to -8.0 ms; +25.1 %; +6.2 %; +3.7 / +2.9 %; 3 / 12 -> 12 / 12; +1 / +4.2 %; 2.91 -> 2.26 s; 1.9-3.4x; 10-16 ms + 0.15-0.17
+  ms; 10.7 / 6.0-6.1 / 6.5 / 2.5; ~51 ms; 87 / 89 / 84 / 90 = EVALUATION Table 2's HC8 / RELAX / ship8 vs REF2-T), section 9
+  (40.6-47.1; 40.8-41.2 GB; x2.5-3.5 / x1.7 / x1.08; x1.6-2.2 / x1.7; 2.7-7.0x; 245-260; ~340). OK.
+- DIFF (sent): 1.5 "Our decode leads only on code and math" contradicts section 9 / App G (lossy chat x1.08, 45.2 vs 41.8).
+
+## 15. Final-candidate public build 16:11 (Mon 16:33-16:35 `date`)
+- Since the 16:09 copy: MAIN / EVALUATION carry m1b's PASS (EVALUATION's m1b row = my re-grade: IFBench 44.0 / 41.3 (p 1.0 /
+  0.50), GPQA 42.0 / 42.0 (p 0.75 / 0.79), LCB 29.0 / 32.1 (p 0.39 / 1.0)); MAIN 11.4 "L by itself +6.0 % HumanEval, +4.7 %
+  MBPP over CERT" = 181.29 / 170.96 and 119.83 / 114.45; RELEASE's conversion paragraph = LP:data/release/convert_full.txt
+  (16:07:42-16:19:50; 48 layers in 571 s = 9.5 min; 11-14 s per layer, median 12; 48 layer byte compares + index.json).
+- Digits, .md -> public.md -> PDF (pdf_digits.py; page-number filter now drops only a line equal to the page's own number,
+  after it had dropped a real table cell "463" at a page end): MAIN, KERNELS, EVALUATION PASS end to end (public.md = source
+  minus the manifest's dropped sections + the date line; the PDF's remaining +1s are page numbers above the last lines).
+- DRAFTER and RELEASE: the PDFs equal their public.md, but DRAFTER.md (16:17:47) and RELEASE.md (16:20:27) changed after the
+  16:11:4x build: rebuild asked of Breakthrough.
+
+## 16. Build 16:53 (five papers + complete.pdf): digits PASS (Mon 17:04-17:05 `date`)
+- All five: public.md = source minus the manifest's dropped sections + the date line ("9 November 2026"); each PDF's
+  remaining count differences are exactly its page numbers that sit above the page's last lines (MAIN 4, 9, 20, 24; KERNELS
+  10, 11; DRAFTER 9, 12-14; EVALUATION 6-8; RELEASE 1, 2). DRAFTER (16:17:47) and RELEASE (16:20:27) now match their sources.
+- complete.pdf (82 pp): each part's numbers = its single PDF's, exactly (MAIN pp 3-32 2,906; KERNELS 33-45 1,188; EVALUATION
+  46-57 993; DRAFTER 58-74 1,207; RELEASE 75-82 579); the pages that differ in text differ only in the order pdftotext reads
+  table cells (same words). Cover + contents add only 3 / 33 / 46 / 58 / 75 (= the part ranges), "64 GB" (title) and the date.
+- MAIN after the editor's 17:05:49 write (title / labels, Kamen's word): numbers equal the 16:53 build's public.md (only the
+  date line differs). Re-check after the editor's 17:30 changes.

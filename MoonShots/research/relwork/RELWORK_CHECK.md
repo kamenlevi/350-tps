@@ -188,3 +188,26 @@ the session scratchpad). Ids and titles: `check_1109_pass2e.txt`.
   - Pass 2d's two fixes are applied at 11:5x by the editor. SlotStream line: a user's 16 GB Mac mini M2 with base
     storage (issue #5). Palm-Infra line: Qwen3.5-122B-A10B, W4, 1 GiB cache, exactness not stated.
 - **Community posts:** none cited in the six drafts (grep at 11:5x).
+
+## 11. Pass 2f (Mon 9 Nov 2026, 17:0x): MAIN section 8 novelty, SSD wake penalty and keepalive (Kamen via the orchestrator)
+Web searches (Claude Code WebSearch; 9 Nov 2026), with what they returned:
+- "NVMe autonomous power state transition exit latency first read after idle measured microseconds SSD": NVMe power
+  states with entry / exit latency are documented (Microsoft Learn, "NVMe": StorNVMe picks the deepest state whose
+  ENLAT + EXLAT fits a latency tolerance after an idle timeout of 50-200 ms; example EXLAT 5 us to 10 ms; opened). Also the
+  Linux APST patch (openwall, 29 Aug 2016) and a Netdata ASPM / APST latency guide. No measured first-read-after-idle data.
+- "keepalive periodic reads keep SSD out of low power state reduce read latency": patents on wake penalties (DEVSLP,
+  self-refresh) and NVMe-oF keep-alive messages; no source evaluates periodic reads to keep an SSD awake for latency.
+- "Apple silicon Mac internal SSD read latency after idle power state measurement" (extended): none. Eclectic Light's M1
+  storage tests give regression latencies only; AnandTech notes Apple's non-standard power handling for an older drive.
+- "LLM inference streaming weights from SSD ... idle power state wake latency keep drive awake MoE experts" (extended):
+  SSD offloading energy (arXiv 2508.06978), SSD-LLaMA (2609.18110), HBF paths (2608.14333), llama.cpp MoE streaming
+  (discussion 27149, PR 25294), HOBBIT, DALI. None addresses SSD power-state wake or keepalive.
+- "utility keeps external hard drive awake by writing periodically": NoSleepHD, KeepAliveHD, Prevent Disk Sleep, Project
+  Torpid (github.com/YorkshireDev/Torpid, GPL-3.0; writes an empty file every 2.5 s by default; opened). Keeping drives
+  awake with periodic I/O is published practice (for HDD spin-down).
+- "GPU kernel spin-wait polling flag written by CPU in host-mapped or unified memory": NVIDIA developer forum threads
+  (2007 on), Stack Overflow persistent-kernel answers, Modular's CompletionFlag docs. Polling a host-written flag is
+  common practice; no first publication identified.
+Verdict for MAIN 8.1: not new: NVMe idle states and exit latencies; keeping drives awake with periodic I/O; waking ahead of
+predicted I/O (HotOS '15, already cited). New (no prior publication found): the penalty's size on Apple silicon's internal
+SSD at sub-millisecond gaps, that SSD-streamed MoE per-layer bursts pay it, and the read spacing that removes it.

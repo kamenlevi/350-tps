@@ -24,6 +24,8 @@ ap.add_argument("--commit", help="BigMoE commit holding the snapshot (default: t
 ap.add_argument("--out", default=f"{LEAP}/release/out/pkg")
 ap.add_argument("--no-commit", action="store_true")
 ap.add_argument("--refs", help="JSON {config: tokens.json path} for verify/ (default: the PF-D-era reference files)")
+ap.add_argument("--es-commit", default="HEAD", help="EvalSuite commit for harness/evalsuite (default HEAD); a docs-only "
+                "rebuild pins the commit the clean-clone run tested, so the harness stays byte-identical")
 a = ap.parse_args()
 S = a.snap
 
@@ -39,7 +41,7 @@ def sha(p):
 C = a.commit or sh("git", "-C", BM, "log", "-1", "--format=%H", "--", f"data/r57/snap/frozen_{S}")
 assert C, f"no BigMoE commit holds data/r57/snap/frozen_{S}"
 C = sh("git", "-C", BM, "rev-parse", C)
-EC = sh("git", "-C", ES, "rev-parse", "HEAD")
+EC = sh("git", "-C", ES, "rev-parse", a.es_commit)
 OUT = os.path.abspath(a.out)
 STAGE = OUT + ".stage"
 for d in (OUT, STAGE):
