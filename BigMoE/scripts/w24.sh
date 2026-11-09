@@ -18,6 +18,7 @@
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:$PATH"
 cd "$HOME/BigMoE" || exit 1
 D=data/w24; mkdir -p $D
+RUN=${W24_RUN:-w24}                                    # W24b: W24_RUN=w24b -> data/w24/w24b_report.txt
 LOG="$PWD/$D/w24.log"
 say() { echo "$(date '+%m-%d %H:%M:%S') $*" >> "$LOG"; [ -z "$W24_DRY" ] || echo "$*"; }
 PY=$HOME/BigMoE/.venv/bin/python
@@ -42,7 +43,10 @@ for k in "$KH:humaneval" "$KM:mbpp" "$KI:ifeval"; do
 done
 armenv() { case $1 in   # base slots, sidecar slots, rows
   w12) echo "120 34 12";; w10) echo "104 76 10";; w8) echo "100 90 8";; w12s) echo "120 26 12";;   # w12s: -0.28 GB (opt-in)
-  w12pf) echo "120 34 12 R57_ARMS=gate+t+pf";;   # + the ranked L+1 look-ahead prefetch (Mon 18:5x: 24 GB = top priority)
+  w12pf) echo "120 34 12 R57_ARMS=gate+t+pf,BIGMOE_PRED_LINES=4";;   # + the ranked L+1 look-ahead (PF_B 96 needs 4 prediction lines)
+  w12r) echo "120 34 12";;   # W24b: w12 again (noise)
+  w12t) echo "120 34 12 BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25";;   # W24b: w12 + the prefill-peak trim
+  w13t) echo "130 26 13 BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25";;   # W24b: +10 base slots and 13 rows, paid by the trim
   w16u) echo "120 34 12 R57_FAST=U3W,R57_GATEREQ=1";;   # U3 at thr 0 on the code sets, 16 rows on the gate (742758e); chat capped
   *) return 1;; esac; }
 ARMS=${W24_ARMS:-w12 w16u w12pf w10 w8}
@@ -59,7 +63,7 @@ fi
 A=$(avail_gb)
 awk -v a="$A" 'BEGIN {exit !(a >= 28.0)}' || { say "NO-SWAP $A GB < 28.0: not run"; exit 0; }
 export C45_OUT="$PWD/$D" C45_SWAP0=$(sysctl -n vm.swapusage | awk '{gsub("M","",$6); print $6 / 1024}') C45_ALARM=2400 \
-  MG=4 C45_DEADLINE=$(date -v+75M +%H%M) C45_SCREEN="$SCR" C45_REFTOK= R57_MODMAN=1
+  MG=4 C45_DEADLINE=${W24_DEADLINE:-$(date -v+75M +%H%M)} C45_SCREEN="$SCR" C45_REFTOK= R57_MODMAN=1
 rm -f $D/DONE
 say "W24 start (pid $$, NO-SWAP $A GB, snapshot w24 = $SNAPC, arms $ARMS)"
 TAGS=""
@@ -67,16 +71,17 @@ for a in $ARMS; do
   read -r cm cl rw ex <<< "$(armenv $a)"
   X="R57_VTIER=,BIGMOE_TIER_CM=$cm,BIGMOE_TIER_CL=$cl,R57_ROWCAP=$rw,REF2_TIER_CHUNK=1${ex:+,$ex}"
   for s in "h:$KH" "m:$KM" "i:$KI"; do
+    case " ${W24_SETS:-h m i} " in *" ${s%%:*} "*) ;; *) continue;; esac   # W24_SETS: a subset of h m i (W24b: h m)
     t=${a}${s%%:*}_100; k=${s#*:}
     rm -f data/r57/${t}_* $D/${t}.txt
     R57_KEYS=$k C45_CAP=256 R57_LOGHASH=1 R57_QOM_SETS=humaneval,mbpp C45_ARMS="$t:100:$LC,$X" /bin/bash "$RS"
     say "$t rc=$?"; TAGS="$TAGS $t"
   done
 done
-"$PY" -I - "$SNAPC" $TAGS > $D/w24_report.txt <<'EOF'
+"$PY" -I - "$SNAPC" "$RUN" $TAGS > $D/${RUN}_report.txt <<'EOF'
 import json, re, statistics as S, sys
-snap, tags = sys.argv[1], sys.argv[2:]
-L = [f"W24 (data/w24; snapshot w24 = {snap}; quiet): L + COH (data/stack/lcoh_env.txt) + R57_VTIER off + base / sidecar slots + "
+snap, run, tags = sys.argv[1], sys.argv[2], sys.argv[3:]
+L = [f"{run.upper()} (data/w24; snapshot w24 = {snap}; quiet): L + COH (data/stack/lcoh_env.txt) + R57_VTIER off + base / sidecar slots + "
      f"R57_ROWCAP rows, CAP 256, one pass. Pooled as the number check does: whole decode (sum n / sum n / tps), whole request "
      f"(sum n / (decode + first token time)), first token median (pfs), lifetime peak (line 24.0). FAST PATH = tier_calls 0 and "
      f"tier_chunk 0 (every check on the sync-free gate)."]
@@ -97,22 +102,32 @@ for t in tags:
     qs = sum((r.get("pf") or {}).get("qom_skip", 0) for r in R); qo = sum((r.get("pf") or {}).get("qom_opt", 0) for r in R)
     qd = f"QOM drops {100 * qs / qo:.1f} % of optional uses (C 256 REL ROWS: HE 11.4, MBPP 12.2)" if qo else "no QOM uses"
     hz = sum(1 for r in R if "PAUSED" in str(r.get("bad") or ""))   # heat freezes (fanwatch SIGSTOP) inside a row
+    pk_ = {r["key"] for r in R if "PAUSED" in str(r.get("bad") or "")}
+    try:                                                 # W24b: the fast path judged on the MEASURED checks (the process
+        CK = json.load(open(f"data/r57/{t}_checks.json"))   # counters include warm-ups): checks over 300 ms in unpaused runs
+        slow = sum(1 for c in CK if c["key"] not in pk_ for b, w in zip(c["bld"], c["wt"]) if b + w > 300)
+        nck = sum(len(c["bld"]) for c in CK if c["key"] not in pk_)
+    except (OSError, ValueError, KeyError):
+        slow, nck = -1, 0
+    Rn = [r for r in R if r["key"] not in pk_]
+    wn = f"{sum(r['n'] for r in Rn) / sum(r['n'] / r['tps'] for r in Rn):.1f}" if Rn and pk_ else "-"
     L.append(f"  {t}: prompts {len(R)}, tokens {n}, WHOLE DECODE {n / dec:.1f}, whole request {n / (dec + sum(pf)):.1f} tok/s, first "
              f"token median {S.median(pf):.2f} s, lifetime peak {peak:.2f} GB{' (OVER 24.0)' if peak > 24.0 else ''}; kept per check "
              f"{S.mean(kept) if kept else float('nan'):.2f}, cycle median {S.median(cyc) if cyc else float('nan'):.1f} ms, SSD MB per kept "
              f"token {S.mean(mb) if mb else float('nan'):.1f}; path: ooo_1c {C.get('ooo_1c', 0)}, tier_calls {C.get('tier_calls', 0)}, "
-             f"tier_chunk {C.get('tier_chunk', 0)} -> {'FAST PATH' if fast else 'NOT all fast'}; {qd}; rows with a heat freeze {hz}; aborts {ab}; cut rows {cuts}"
+             f"tier_chunk {C.get('tier_chunk', 0)} (process, incl. warm-ups); measured checks over 300 ms {slow} of {nck}; {qd}; rows with a heat "
+             f"freeze {hz} (whole decode without them {wn}); aborts {ab}; cut rows {cuts}"
              f"{' (DO NOT QUOTE)' if cuts or ab else ''}")
-open("data/w24/w24_report.txt", "w").write("\n".join(L) + "\n"); print("\n".join(L))
+open(f"data/w24/{run}_report.txt", "w").write("\n".join(L) + "\n"); print("\n".join(L))
 EOF
-say "report rc=$? ($D/w24_report.txt)"
-if ms_same; then echo "  live kernel files == frozen_rel1's copies before and after" >> $D/w24_report.txt
-else echo "  WARNING: the live planes_engine kernel files changed during the run" >> $D/w24_report.txt; fi
+say "report rc=$? ($D/${RUN}_report.txt)"
+if ms_same; then echo "  live kernel files == frozen_rel1's copies before and after" >> $D/${RUN}_report.txt
+else echo "  WARNING: the live planes_engine kernel files changed during the run" >> $D/${RUN}_report.txt; fi
 touch $D/DONE
 git add $D $(for t in $TAGS; do ls data/r57/${t}_* 2>/dev/null; done) 2>/dev/null
 > (a quote from the project owner, kept private)
 
-$(cat $D/w24_report.txt)
+$(cat $D/${RUN}_report.txt)
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_011DvdV6eUB4NgBbVkyVFPrT" || say "data commit failed"

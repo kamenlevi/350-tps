@@ -1259,3 +1259,54 @@ EvalSuite's lcoh process boundary (NewIdeas' slot), NO-SWAP 54.7 GB at the start
   pooled 181.3 / 36.6 / 4.51 s and 119.8 / 25.3 / 3.76 s) L + COH is HumanEval -9.5 %, MBPP -5.9 %, math -9.2 %, IFEval +4.1 % whole
   decode: still not an A/B (different days, one pass against two, tokens differ, so acceptance differs), cause not measured. RELEASE row
   28 now holds L's rows, with CERT's two rows and the certificate in its label.
+
+## Mon 9 Nov 19:07-19:34: W24 = the shipped lossy config L + COH below 24 GB on the fast path (data/w24/w24_report.txt; snapshot w24 = 016cb7f; data 85ed4d3)
+Kamen 14:5x / 18:5x via the orchestrator: 120 tok/s whole decode on HumanEval under 24 GB, gated before Wednesday's publish. A check
+takes the sync-free gate only if rows x top-10 <= base slots (bigmoe/stream.py:76): F24k (Sat; 94 base slots, 16-row checks) ran on
+the slow sync path at 27.7 tok/s. W24 moves the same ~13 GB of pools into the base pool and caps checks so they fit; R57_VTIER off
+(no volatile tier beside the footprint). One pass per set, 12 prompts, CAP 256, quiet lock, fan cap 5000 (Kamen on the Mac).
+Whole decode / whole request (tok/s) / first token median / lifetime peak:
+
+| arm | slots (base / sidecar), rows | HumanEval | MBPP | IFEval (chat) |
+|---|---|---|---|---|
+| **w12** | 120 / 34, 12 | **116.5 / 33.3 / 4.51 s, 23.67 GB** | 84.1 / 24.8 / 3.86 s, 23.33 | 28.4 / 17.3 / 3.04 s, 23.16 |
+| w16u (U3 rule, 16-row code checks) | 120 / 34, 16 on code | 39.7 (1 heat-paused row) | 68.6 | 17.1 (1 paused) |
+| w10 | 104 / 76, 10 | 102.6 | 11.7 (1 paused: 117.9 s) | 28.3 |
+| w8 | 100 / 90, 8 | 98.2 | 28.6 (1 paused) | 16.8 (1 paused) |
+| w12pf (+ look-ahead prefetch) | 120 / 34, 12 | did not start: assert PF_B 96 <= 30 + 31 x PRED_LINES (1); needs BIGMOE_PRED_LINES=4 | | |
+
+- **w12 = the pick** (pre-registered rule, docs/W24_DECISION.md): highest HumanEval whole decode; its sets had no paused rows.
+  HumanEval kept 9.34 per check at a 79.9 ms median cycle (mean 80.2 ms: no slow checks), 29.1 MB SSD per kept token. **3 % short
+  of 120.**
+- **Quality risk:** QOM drops 30.7 % (HE) / 27.7 % (MBPP) of optional expert uses at 120 base slots, against 11.4 / 12.2 % at C 256:
+  the C 256 card gate does not carry. The 24 GB config needs its own card gate (EvalSuite runner 61, ~10 h).
+- **Heat pauses:** four rows in other arms waited 37-118 s on fanwatch's PAUSE (fan cap 5000); whole decode counts that wait, so those
+  sets read low (e.g. w10 MBPP 11.7 with a 99.6 tok/s steady state on the paused prompt). w12's numbers are unaffected.
+- **The report's 'NOT all fast'** comes from 241 sync-path tier calls per PROCESS, the same on every set (warm-up runs, not measured
+  checks): to be fixed in the report (W24b).
+- **w16u (U3, 16 rows on the gate via R57_GATEREQ, 742758e) is slower**, not faster: 2x the SSD bytes per kept token (57.5 MB) and long
+  tails; dropped.
+- **Next (W24b):** w13t = 130 base / 24 sidecar, rows 13, with the prefill transient trimmed (BIGMOE_TIER_PF_GROUP=64,
+  R57_CACHE_GB=0.25; the lifetime peak is set in prefill: MLX peak prefill 22.2-22.7 vs decode 21.5-21.7 GB), a w12 repeat (noise),
+  and w12pf with BIGMOE_PRED_LINES=4.
+
+## Mon 9 Nov 19:40-19:59: W24b = arms toward 120 at 24 GB, HumanEval + MBPP (data/w24/w24b_report.txt; data 8f76fc3)
+Same snapshot as W24 (016cb7f); one pass per set; quiet lock; fan cap 5000. Like for like on the prompts that no heat pause touched
+(11 per set; HE/63 and MBPP/319 paused in one arm each), whole decode tok/s:
+
+| arm | change from w12 | HumanEval | MBPP | first token median HE / MBPP | lifetime peak HE |
+|---|---|---|---|---|---|
+| w13t | 130 base / 26 sidecar, 13 rows, prefill trim | **115.4** (pooled 12: 116.5) | **90.5** | 3.66 / 3.37 s | 23.92 GB |
+| w12r | none (w12 again) | 110.4 | 87.8 | 4.88 / 3.86 s | 23.67 GB |
+| w12t | prefill trim (BIGMOE_TIER_PF_GROUP=64, R57_CACHE_GB=0.25) | 113.7 | 86.9 | 3.62 / 3.28 s | 23.20 GB |
+| w12pf | + look-ahead prefetch (gate+t+pf, BIGMOE_PRED_LINES=4) | 109.3 | 87.2 | 4.38 / 3.67 s | 23.67 GB |
+| (W24's w12, another run) | | 115.7 | 86.1 | 4.54 / 3.88 s | 23.67 GB |
+
+- **No arm reaches 120.** w13t vs the same-run w12r: +4.5 % HE, +3.1 % MBPP; but w12 and w12r give the same tokens (12 / 12 on both
+  sets) and differ by 4.6 % on HE, so the run-to-run noise is as large as the gain: not a demonstrated gain.
+- **The prefill trim is token-exact** (w12t == w12r, 12 / 12 on both sets) and, in the same run, cuts the first token by ~25 % (HE
+  4.88 -> 3.62 s, MBPP 3.86 -> 3.28 s) and the lifetime peak by 0.47 GB. A first-token lever to try at 32 and 45 GB too.
+- **The look-ahead prefetch does not help at 24 GB** (109.3 vs 110.4 same run), as at 45 GB.
+- **Gate pick** (docs/W24_DECISION.md, highest HE): w13t -> data/stack/card_w24_env.txt (8f76fc3) for EvalSuite's card gate from
+  Tue 01:25 (~10 h). Its peak is 0.08 GB under 24.0; QOM drops 28.8 / 26.6 % of optional uses (w12: 30.7 / 27.7).
+- Bookkeeping: the run's own data commit failed (bash 3.2 has no ${RUN^^}); committed by hand (8f76fc3), script fixed (ebaa58f).
