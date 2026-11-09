@@ -55,7 +55,8 @@ while :; do
   [ -n "$AFTER" ] && ! /bin/sh -c "$AFTER" >/dev/null 2>&1 && { hold "AFTER"; continue; }
   [ -n "$WAITMEM" ] && [ "$(avail_gb)" -lt "$WAITMEM" ] && { hold "WAITMEM $WAITMEM GB"; continue; }
   say "queue the quiet ticket (available $(avail_gb) GB)"
-  PEER_QUEUE_TIMEOUT=21600 peer lock quiet --queue ${MIN}m "$WHY" >> "$LOG" 2>&1 || { say "queue failed: retry in 2 min"; sleep 120; continue; }
+  # QTIMEOUT=s (Mon 07:2x, NewIdeas: "queue at 09:40 with a 60 min queue"): how long the ticket may wait; default 6 h
+  PEER_QUEUE_TIMEOUT=${QTIMEOUT:-21600} peer lock quiet --queue ${MIN}m "$WHY" >> "$LOG" 2>&1 || { say "queue failed: retry in 2 min"; sleep 120; continue; }
   sleep 30
   a=$(avail_gb)
   if [ "$a" -lt $((PEAK + MARGIN)) ]; then

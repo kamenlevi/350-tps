@@ -512,7 +512,7 @@ if PFD_ON:                                               # call's pool-resident 
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # slots (side read if absent), absent bases as today;
     import pflm as PFLMM                                 # the same scratch and call: bitwise by construction (R57_PFD_CHECK=1
     import bigmoe.tier as _BTD                           # compares every rebuilt row with the ext's)
-    PFLMM.install_pfd(_BTD, check=os.environ.get("R57_PFD_CHECK") == "1")
+    PFLMM.install_pfd(_BTD, check=os.environ.get("R57_PFD_CHECK") == "1", layers=lay)   # layers: R57_PFD_AHEAD's router
 PFT = {"on": False, "t": {}}                             # Sun 08:5x (R57_PFSTAT=1, NewIdeas CT1): per layer, the experts the prefill routes to
 if os.environ.get("R57_PFSTAT") == "1" and TIER:         # (tier.prefill_call already reads the ids on the CPU: no extra sync)
     import bigmoe.tier as _BTT

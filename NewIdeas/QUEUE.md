@@ -39,6 +39,121 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     - Order: card-reference leftover (0.5-2.5 h), then lcoh (~3.6 h), then whichever next arm fits.
     - The last chunk or arm must END by 15:00.
     - Fit12's 12 GB IFBench arm (~3 h, MEM ~12-16 GB) goes after 15:00, by day.
+  - MON 12:47 (`date`) QUEUE:
+    - Leap FINAL clean-clone PASS 12:13 (rel1 242553d; 12 / 12 tokens; re-checked from out/). The 17:00 package milestone
+      is met, so the reserve 16:00-16:45 is not needed.
+    - m1b runs at lcoh's pace, decode end ~15:57 +-10 min.
+      - The orchestrator lets it run to 16:20. EvalSuite amendment 11 (ac88d3a): cutoff 16:20, last start 16:05, ends by
+        ~16:17. Verdict or "not gated" to the editor by 16:30.
+      - zs32 is not gated.
+    - ORDER after m1b (NewIdeas 12:51): Leap's full store conversion first (the orchestrator's 12:44 ask; >= ~16:17, hard stop
+      16:58; writes a done file), then Fit12 chw19 (share lock, MEM 12 GB, gated on that file + its own gate; ~16:35-17:00;
+      start-by 17:30; fallback GO at 17:00 if no done file).
+    - NewIdeas re-grades m1b's GPQA / LCB (forward order after ~13:00, reverse at ~16:20) before the 16:30 label call.
+  - MON 10:37 (`date`) QUEUE + NUMBER CHECK:
+    - Done:
+      - BigMoE REL ROWS ran 09:47-09:56 at the lcoh boundary: L + COH rows, repeat 12 / 12. Re-derived.
+      - EvalSuite lcoh card gate PASS 10:07 (6 / 6 lines). I re-graded GPQA and LCB independently: identical.
+    - Running / queued:
+      - m1b running since 10:07, ETA ~15:10-15:30.
+      - If m1b's 15:30 cutoff stops it, EvalSuite's tools/card_extend_cutoff.sh resumes it at CUTOFF 15:45 (amendment 10;
+        my 07:22 OK).
+      - Leap FINAL 12:05 (rel1 package 242553d; ~5 min quiet, MEM 47 GB; RESERVE 16:00-16:45 only if it fails).
+    - Number check:
+      - Authors applied the DIFFs; the 10:3x drafts re-checked OK.
+      - Open with the editor: MAIN calls the N45 / CHS4 "L" rows "certified", but L = CERT + the 6-key bundle (s5p_env).
+      - Next re-check at 12:00, against the 10:36 snapshot.
+  - MON 07:55 (`date`) NUMBER CHECK, FIRST PASS DONE on all six drafts (07:22-07:55; ledger NUMBER_CHECK.md sections 1-6):
+    - DIFFs sent: MAIN 22 (to the editor), RELEASE 4, DRAFTER 3, SMALL_RAM 3 + 1 (TBD-33 closed), KERNELS 5, EVALUATION 2.
+      RELEASE, DRAFTER and SMALL_RAM have already applied theirs. No headline claim changes.
+    - Pattern behind most DIFFs: old run reports print geometric means (or the steady metric), and drafts quoted them as
+      whole decode. Examples: E24 41.3 -> 41.1 pooled, E24m 38.4 -> 37.4, the wired limit +27.4 -> +25.1 %, cache keep
+      x1.10 -> x1.06.
+    - Cross-paper: MAIN still calls PF-B "not exact"; since the seg-per-chunk fix it is exact (KERNELS R20, RELEASE).
+    - Next: re-derive BigMoE's REL ROWS (RELEASE TBD-16) after ~10:15. At 12:00, scripts/numcheck/diffnums.py against the
+      07:49 snapshot lists only the changed numbers to re-check.
+  - MON 07:22 (`date`) QUEUE CHECK:
+    - Leap's SMOKE 07:01 on 63f41fa: FAIL (7). The exact-45 and exact-32 tokens PASS. Lossy / chat crashed: tierglu was
+      loaded live from ~/MoonShots, outside BigMoE's module manifests. The closure check also flagged the weight links.
+      Both fixed in pkg 0a20f26 (CPU-checked). Re-runs at EvalSuite boundaries 07:13 and 07:28: SMOKE PASS 07:32 (3rd run,
+      221 s, rel0 dbe5ea6). FINAL 12:05 on rel1 (frozen 07:19), ~4-5 min quiet, MEM 44 GB.
+    - EvalSuite: lcoh VOIDED 06:37. The screen's 600 s budget cut runs mid-row, and r57rows kept them as rows (PREREG
+      am. 9, d613a8c). lcoh resumed 06:43 (the 10 keys, then rev). New ETA: lcoh verdict ~09:50-10:00; m1b ~10:00 ->
+      ~15:20-16:00. The 06:44 audit found no earlier verdict that used a cut row.
+    - NewIdeas picked (07:22):
+      - BigMoE's rel1 goes at the lcoh -> m1b seam. It is the L + COH rows run, ~15 min quiet; it IS the 10:30 slot,
+        not a second one. BigMoE queues at 09:40.
+      - m1b may resume with CUTOFF 15:45 (last start 15:30, verdict by ~15:55). Yes from the queue: nothing is booked
+        15:30-16:00.
+      - zs32 cannot be gated by 16:00 in this order, so the 32 GB lossy chat row stays "not gated".
+    - pacer 07:21: GO (9 % vs the 57 % line). The number check can start on the drafts that exist.
+  - MON 05:34 (`date`): the card reference is DONE 03:42 (381 / 381, EvalSuite 7479a1f); lcoh running since 03:42 (~2.5 h
+    ahead of the worst case). Expected: lcoh ~07:30 (with Leap's SMOKE at 07:00), m1b ~11:35 (with BigMoE's rel1 at
+    10:30), zs32 from ~11:35 with Leap's FINAL at 12:05 inside, maybe whole by the 15:30 cut. EvalSuite pins its code
+    by sha until 16:00: no edits under ~/MoonShots/patches/planes_engine, BigMoE bigmoe/ + ext .so + data/r57/snap/
+    {card,frozen_card}, or the venv (an edit stops the chain, rc 7).
+    - NewIdeas lifts pacer's SLEEP (37 % weekly vs the 31 % line) only for the release times (the orchestrator
+      19:2x): queue checks ~07:15, ~12:10, ~16:00; the number check on the drafts from ~10:45 to 16:00.
+  - 23:50 UPDATE: F2a stage 1 ENDED 23:48 (its swap guard stopped capture at 23:29, +2 GB swap at C 128); lock released
+    23:48:18, STAGE1_DONE + closing line written. VERDICT KILL by the pre-registered line (MTP Head): 0.10M tokens (8 % of
+    the ring), held-out kept x1.014 (IFEval 2.301 -> 2.334, multi 2.507 -> 2.540), on-policy x1.002. Nothing ships; a
+    data-rich run (~4.6 h capture, swap-safe pool) moves after the release.
+    - BigMoE's PF-D arms hold the quiet lock 23:48:54 to ~00:04. EvalSuite's chain started 23:48:35 (step ref, 261 / 381)
+      and waits behind it: the reference resumes ~00:05, ~3.5 h early.
+    - Leap's FINAL goes BACK to 12:05 (inside, ~12 min; reserve 16:00-16:45). m1b ~12:25-13:05; zs32 likely partial.
+    - 23:56 CHECKED: BigMoE's PF-D arms ran 23:48:54-23:55:19 (6.5 min); EvalSuite's reference started 23:55:36 (no gap,
+      54 GB free, share lock to ~01:10 per chunk).
+  - ACTUAL ORDER 23:05: F2a holds the quiet lock since 23:01 (capture 23:01:58, NO-SWAP 45 GB -> frac 0.25). BigMoE's
+    23:00:00 ticket was granted at 23:00:33 but released (NO-SWAP 43 < 47 while the apps were still closing), and it
+    re-queued at 23:02:33: queued #1 behind F2a, so its PF-D arms run ~03:30-03:42. EvalSuite's chain then queues behind
+    BigMoE (~03:45; m1b worst case ~15:54). F2a is NOT stopped: its exit trap writes STAGE1_DONE and would fire the
+    chain. Lesson: when two jobs share a start time, the second should key on the first one's 'granted ... run' line, not
+    on a clock time.
+    - Fit12 22:32: SMALL_RAM is safe; chw19 held (WAIT, start-by Mon 17:30): NewIdeas sends GO at ~16:15 or after 17:00.
+  - RE-PLAN 22:26 (the gates' budget): EvalSuite's reference stopped at its 22:11 cutoff, 261 / 381 rows (IFBench + GPQA
+    done, LCB 11 / 131; c6dc794). The 120 LCB rows left take ~4.5 h from the chain start. Pre-flight OK: chain pid 53863,
+    STAGE1_DONE trigger, LATEST 03:55, REFCUT 16:00, ARMCUT 15:30.
+    - Inside the chain now only: Leap's SMOKE at 07:00 (~12 min, during the reference) and BigMoE's rel1 at 10:30
+      (<= 15 min; 6 shipped configs x 12 IFEval, CAP 64).
+    - Moved out: Leap's FINAL to 16:00 (reserve to 16:45), Fit12's chw19 to ~16:15-16:30 or after 17:00 (MEM 12 GB, by day).
+    - Worst case: reference ~08:12, lcoh ~12:03, m1b ~15:39; zs32 likely does not fit ('not run').
+> (a quote from the project owner, kept private)
+    close as many apps as you need. But start at 23 not now"). Apps close 23:00, reopen Mon 17:00; nothing new before 23:00.
+    1. To 22:45: EvalSuite's card reference. 2. 23:00 to ~23:15: BigMoE's PF-D arms (ticket at 23:00:00).
+    3. ~23:15 to ~03:30: F2a stage 1, queued behind BigMoE. CONFIRMED 19:52 (MTP Head 045787c): lock request 23:01 with
+       --queue; capture 02:15, train 03:15, eval 03:30; STAGE1_DONE + closing line unchanged, none written now.
+    4. ~03:30 to 16:00: EvalSuite's chain (REFCUT 16:00, ARMCUT 15:30; backstop ~03:55; trigger: STAGE1_DONE newer than the
+       chain's start, or a new anchored DONE line). Inside it, at boundaries: Leap SMOKE 07:00; BigMoE's last prefill
+       arms + Fit12's chw19 before 11:40; Leap FINAL 12:05. 5. 16:00-16:30: reserve for Leap's clean-clone re-run.
+       The package passes by 17:00.
+  - MONDAY RELEASE ORDER, 19:19 (the orchestrator 19:2x; ~/Papers/MONDAY.md replaces BRIEF's dates). Kamen asked to
+    publish all papers + the 45 / 32 GB engine by Monday evening. Release only on Kamen's word. NewIdeas: queue, number
+    check Mon 12:00-16:00 on the drafts, first contact for machine questions.
+    1. Now to 22:45: EvalSuite's card reference (running again since 19:01, 191 / 381 rows).
+    2. 22:45-23:00: BigMoE's PF-D diagnostic + prefill arms (end by 23:00).
+    3. 23:00 to ~03:15: MTP Head's F2a, STAGE 1 ONLY (stage 2 after the release; asked to re-arm without stage 2).
+    4. ~03:15 to 15:00: EvalSuite's chain: reference leftover -> lcoh -> m1b -> a 32 GB chat arm (C 160) if it fits.
+       CHAINED on F2a's last log line (tail -1 ~/TrainLab/data/f2a/night.log == 'F2a night DONE', written after its
+       unlock), fallback 03:40. Hard stop 15:00 (the last chunk or arm ENDS by 15:00); not gated by then = 'not gated'.
+    5. Before 12:00, at one chunk boundary, <= 15 min: BigMoE's last prefill arms; Fit12's chw19 (10 min) beside them
+       once SMALL_RAM is safe (chw19's Sunday start-by lapses).
+    - Held: Breakthrough's 2 chat screens (research stop). Fit12's 12 GB IFBench arm: after the release (no slot by 15:00).
+    - 19:3x CONFIRMED: MTP Head's runner v3 (bbc2667) is stage 1 only and writes BOTH triggers on every exit after 23:00:
+      the night.log DONE line and ~/TrainLab/data/f2a/STAGE1_DONE. Stage 2 runs only if data/f2a/FULL_NIGHT exists.
+      EvalSuite's chain is armed (DONE line or 03:40 -> ref -> lcoh -> m1b -> zs32). Fit12's chw19 is held, start-by 11:40.
+    - FIXED-TRIGGER ALERT 19:3x: F2a v3's ARMED line (19:23:35, the current last line of night.log) contains the
+      words 'F2a night DONE', so any `tail -1 night.log | grep 'F2a night DONE'` is true NOW. My watcher fired on
+      it, and EvalSuite's card_chain.sh f2a_done() uses the same test, which would start the chain at ~22:45 (when
+      tonight's runner ends), before F2a's 23:00 line. Told EvalSuite to test the file ~/TrainLab/data/f2a/STAGE1_DONE
+      instead (absent until stage 1 ends) or an anchored regex. CLOSED 19:29: MTP Head re-armed (23c28f2); the armed line
+      no longer has the phrase (tail -1 count 0), only finish() writes it; card_chain.sh had not started.
+    - LEAP'S PACKAGE SLOTS (placed 19:3x): (a) SMOKE, queue at 07:00, ~12 min, MEM 47 quiet; (b) FINAL on BigMoE's
+      release snapshot, queue at 12:05, ~12 min, ends by 14:45. One boundary before 11:40: BigMoE's last prefill arms
+      (<= 15 min) + Fit12's chw19 (10 min). Worst case the chain plus these ~49 min ends ~14:46; m1b's last process
+      starts by 14:30 (ARMCUT), so a late m1b may be cut and labelled 'not gated'.
+    - RISK, asked of the orchestrator / Kamen 19:3x: lcoh / m1b gate at 47 + 4 = 51 GB NO-SWAP. NO-SWAP was 44 GB at 19:01
+      with Chrome + Spotify open, so they would wait to ~14:30. M1-B's measured lifetime peak is 42.2-42.4 GB (BigMoE
+      es_chm1b_fwd10-13 runs.json), so measured + 4 ~= 47 GB (EvalSuite's call). Closing Chrome + Spotify frees ~5 GB.
   - PAPERS + QUEUE, 16:48 (the orchestrator 16:4x; brief ~/Papers/BRIEF.md): Kamen says write the papers and publish
     (ready by Wed 11 Nov). NewIdeas owns the NUMBER CHECK: every headline in every paper re-derived from raw rows by
     Tue 12:00. New research stops, except what is already armed and PF-D. No new screens to fill paper sections.

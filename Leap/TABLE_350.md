@@ -9687,3 +9687,120 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
     8,192 tokens vs ~0.2 GB at 1,024).
   - Next (BigMoE builds): pb38 + the gate per chunk vs pa1 (expect logits hash == everywhere), and a TOK 2,048 arm
     for the 45.0 line.
+
+- **ENGINE PACKAGE v0 (Leap, Sun 2026-11-08 19:4x; orchestrator 19:2x, ~/Papers/MONDAY.md + RELEASE section 4 TBD-9):**
+  builder `release/make_release.py <snap>` (8763fcb) -> a fresh git repo: BigMoE's frozen snapshot taken read-only (git
+  archive of the commit holding it), the 43-module union of all 174 R57_MODMAN manifests + bigmoe/, ext/, evalsuite/,
+  copygate / relax_core, renamed roots (engine/ kernels/ third_party/ drafters/ keepset/ harness/), paths -> @ROOT@,
+  comment-safe scrub (public-snapshot rules; 3 quotes redacted, all in comments / docstrings), leak check, syntax check;
+  `run.py` = thin CLI (text prompt -> a harness item via evalsuite.data.chat; c45_runner's base env + the config line;
+  the decode loop run unchanged via runpy in a child process; prints whole decode / whole request / first token /
+  lifetime peak from runs.json); 6 configs: exact / lossy (L + COH) / chat (zs) x 45 (C 256) / 32 (C 160), lines
+  parse-checked == BigMoE's (chat_env + SB1 == pfd ZS == chat32; lcoh == s5p + COH).
+  - [K] package from snapshot pfd (BigMoE ba7dc548): 218 files, 6.2 MB; leaks 0, syntax errors 0, live research paths 0.
+  - [K] clean-clone PREP (data/release/pfd_prep_report.txt): clone -> install.sh --offline (venv from wheels rebuilt from the
+    research venv's installed files, release/wheelhouse.py: no network; mtplx's 321 .py == the venv's) -> extension build
+    -> store + weights linked: rc 0 in 5-7 s; dry runs of all 6 configs OK. Import smoke with HOME = an empty dir: 51 / 51
+    modules import from the clone, 0 from outside it.
+  - [K] CONVERSION TEST (data/release/pfd_convert_report.txt): the three store steps (repack_records -> make_records3
+    (MoonShots b660ce9, verifier: 0 mismatches) -> convert_records_p11 --pad) on layers 0 and 47 from the safetensors:
+    L00.bin and L47.bin == models/bare/records3 BYTE FOR BYTE (1,426,063,360 B each), index entries ==; per layer 1-2 s
+    repack, 4-7 s split + verify, 12-31 s p11. Full store [P]: 48 x ~20-40 s = ~16-32 min, ~4.4 GB extra disk at a time.
+  - Next: SMOKE run Mon 07:00 (NewIdeas' slot): all 6 configs x 2 IFEval keys x CAP 64 with HOME empty, tokens vs
+    verify/ (exact: AR prefix), module + open-file closure; FINAL on BigMoE's rel1 at 12:05.
+  - [K] REBUILT from BigMoE's provisional release snapshot rel0 (aa1ca3b, FROZEN 358; Mon 00:12): 220 files, 6.3 MB, leaks
+    0, syntax errors 0, live paths 0; 43-module union, 0 missing; EvalSuite 754b7e98 (evalsuite/ == 54bc8398's). chat-45
+    turns PF-D on with BigMoE's default (R57_PFD=1,R57_PFD_V=4,R57_PFD_AHEAD=1: tokens bitwise equal to zs without it,
+    BigMoE WED_TESTS Mon 00:09); exact-45, lossy-45 and the three 32 GB configs: off (BigMoE: not measured with it). Smoke
+    clone re-prepped (data/release/rel0_prep_report.txt): install rc 0 in 7 s, 6/6 dry runs; chat-45's env has the three
+    PF-D keys, the other five none. The 07:00 SMOKE runs this clone.
+  - [K] DFLASH2 PIN + LICENCE (BigMoE's packaging items, Mon 00:2x-00:3x): every config loads the block drafter's base
+    incoai/Qwen3.8-Flash-Next-DFlash2 (Inco AI, Apache-2.0 per its model card) via snapshot_download = the cache's default
+    branch. run.py's engine process now pins revision a22a1744 (local files only; e532d27); install.sh checks the cache;
+    run.py stops with the fetch command if missing. CPU test PASS (data/release/drafter_pin_test.txt): a snapshots-only
+    cache resolves through run.py, the unpinned control fails, the real cache == the measured snapshot; v1 (revision
+    only) FAILED offline (huggingface_hub 1.33 asks the Hub for a commit's file listing). third_party/LICENSE-dflash2 +
+    NOTICE-l120_ft (our fine-tune's notice of changes); README / THIRD_PARTY credit Inco AI. Package 63f41fa (222 files,
+    leaks 0); smoke clone re-prepped 00:32 (rc 0, 6/6 dry runs).
+  - [K] SMOKE Mon 07:01 on 63f41fa (HOME empty; 2 IFEval prompts, cap 64): **FAIL (7)**. exact-45 / exact-32 tokens 2/2
+    prefix-equal vs verify/; lossy-45/32 + chat-45/32 + the text prompt crashed: `No module named 'tierglu'`. Cause: the
+    QOM arm's 3-bit sure rows make the loop call bigmoe.tier._tier_glu(), which imports tierglu from
+    ~/MoonShots/patches/planes_engine; BigMoE's module manifests record only Leap / TrainLab / Breakthrough / snapshot
+    files, so the build (which uses them) never saw it. The package's kernels/ms_gdn/tierglu.py is byte-identical (md5
+    dc81729b in MoonShots @2aeb5ad, clean; same for gdn_exact / gdn_exact_patch). Also the closure check flagged the
+    weight links (it resolves links but did not allow the weights: a check bug). FIX: make_release rewrites that path to
+    @ROOT@/kernels/ms_gdn (tier.py 102, loader.py 45) + lists the other 43 ~/ paths in MANIFEST; the closure check allows
+    the files clone/weights/* resolve to. Package 0a20f26 (4 files differ from 63f41fa); CPU checks PASS (_tier_glu with
+    HOME empty loads the clone's copy; the fixed check passes the 07:01 exact records 0/0, the no-links control fails).
+    Re-smoke armed 07:11. Data: data/release/smoke_0700.txt + smoke_0700_runner.log.
+  - [K] RE-SMOKE Mon 07:13 on 0a20f26 (cap 64): **FAIL (2)**: the crash and the closure flags are gone (closure 0 / 0 on all
+    six configs; the text prompt runs), exact-45 / exact-32 2/2, lossy information only (no reference yet), chat-45 / chat-32
+    prompt 1 == but prompt 2 differs (token 4 / token 60). The chat references ran prompt 1 to 192 / 184 tokens (12 prompts,
+    cap 256) before prompt 2; the smoke cut it at 64, and the chat configs' relaxed acceptance over the drafter's proposals
+    can depend on what the process decoded before (hypothesis; re-smoke 2 tests it). TEST FIX (dbe5ea6): the test's default
+    cap is 256 (the references' cap) and check_tokens.py --history checks a lossy / chat prompt only after the reference's
+    earlier prompts matched in full (CPU tests: 6/6 cases as designed). make_release also refuses a live research path now.
+    Re-smoke 2 armed 07:21. Data: data/release/smoke_0700.txt (RE-RUN 1) + smoke2_0713/.
+  - [K] RE-SMOKE 2 Mon 07:28 on dbe5ea6 (cap 256): **CLEAN-CLONE PASS** (221 s). exact-45 / exact-32 2/2; chat-45 / chat-32
+    2/2 with the reference's history, both prompts to the reference's full length (192 + 235 / 184 + 256 tokens), which
+    confirms the history dependence; lossy information only (references from BigMoE's REL ROWS on rel1, ~10:00); closure
+    0 / 0 on all six; the text prompt gives a complete answer; chat-45's runs show PF-D active (48 calls, 0 fallbacks).
+    Data: data/release/smoke_0700.txt (RE-RUN 2) + smoke3_0728/.
+  - [K] PACKAGE TOOLS Mon 07:3x (CPU; tested, in src for the rel1 build): (1) build gate: make_release refuses to commit with
+    a live research path (negative copy: 2 paths listed, NOT COMMITTED; data/release/build_gate_test.txt); (2) the clean-clone
+    test reports *.info.json references and never fails on them (for L + COH if BigMoE's REPEAT arm rlr_256 vs rli_256 is
+    below 12/12; stub test); (3) convert/convert_store.sh builds the store layer by layer: L0 + L47 byte-identical to the
+    existing store, index merged, resume skips, a failing step stops it (rc 1); v1 failed (its report inside the store folder
+    made the p11 step refuse) -> report in <out>.work (data/release/convert_store_test.txt). Full store ~15-31 min [P].
+  - [K] LOSSY LABEL + REL1 BUILD Mon 09:5x-10:0x (CPU): BigMoE's REL ROWS on rel1 (09:47-09:57, quiet, BM 53dfff5): REPEAT
+    rli_256 == rlr_256 12/12 token-identical, IFEval C 256 == C 160 12/12 (rli_256 / rli_160 / rlr_256 tokens md5-equal
+    f6076f09). By the rule set before the run, both lossy references ship as HARD checks (refs_rel1.json:
+    lossy-45_rli256, lossy-32_rli160). Pre-check: the 07:28 smoke's lossy tokens (rel0, same code) == the references 2/2
+    at full length (154 + 139) at 45 and 32 GB, --history (data/release/lossy_precheck.txt). rel1 build 242553d: 225
+    files, 6.3 MB, leaks 0, unsafe 0, live 0, syntax 0; vs the smoke-tested rel0 package: snapshot name, convert_store.sh,
+    README, the .info branch of the test, the two lossy refs (data/release/rel1_build.txt). Clone cleanclone/final
+    prepped 09:58 (share lock; install rc 0 in 10 s; six dry runs). FINAL runner armed 09:59 (task, attached): quiet
+    ticket at 12:05, last start 14:30.
+  - [K] KERNELS v1.2 number check Mon 10:0x (NewIdeas NUMBER_CHECK section 5 + editor note 17; each re-read from raw):
+    (1) Strata vs ours first token 2.7-4.6 s (MAIN Table 7.1 2.73-4.56); (2) PF-B peaks 46.23 / 45.09 / 45.81 GB from
+    BM data/r57/pd{b38s,pa1,b32s}_256_runs.json mem (the report rounds to 0.1); (3) DN-KS -7.74 ms = five kinds incl.
+    shared down 16.7 -> 9.1 us (four = 7.38); (4) 6.4 table: stepb's KB are KiB of all bytes (att q 17,744 KiB = 18.17
+    MB incl. in/out), so its GB/s (243-247) were right and the MB column was KiB/1000: now 24.2 / 18.2 / 9.1 / 2.0 / 0.84
+    / 0.22 MB; dnks_bench's 236 GB/s counts weights only (17.69 MB); (5) S 16: replica 295-296 GB/s, NAX6-N 74 %, FAST
+    79-81 %, NAX6 58-59 % (k90_arm012 QUIET); R13: both probe runs (barrier 16/20 and 20/20; B5 0/20) + rough cost
+    (+0.7 / +1.5 %, 3c-N +26.3 % one run; coh_check.txt); 180.3 = 142.77 whole decode pooled over s1n1-2 (geo 142.1);
+    dispatch 1,000-4,000 x 1.24-1.56 us = 1-6 ms.
+  - [K] LOSSY = CARD-GATED CONFIG Mon 10:3x (CPU, read-only git archive; after EvalSuite's card lcoh PASS 10:07): card
+    snapshot (BM e057abf) vs rel1 (0b4df8c), snapshot names normalised: bigmoe/ + ext/ identical; the decode loop differs
+    only by the PF-D block (R57_PFD, off in lossy) + its record field; pflm.py (PF-A / PF-D only) + converter + 4 extra
+    scripts are imported by no lossy run (smoke3 modules.json 848 entries, rli_256 33). Env: the package's lossy line ==
+    card_lcoh_env.txt except the card's lcb6 in R57_QOM_SETS; run.py names --kind code 'humaneval' (QOM on) and chat
+    'multi' (off), as the card. -> the card PASS applies to the shipped lossy-45 (C 256; the card did not run C 160).
+    RELEASE section 4 says so (data/release/lossy_card_equiv.txt).
+  - [K] FINAL CLEAN-CLONE PASS Mon 12:10-12:14 (quiet, granted 12:10:13 at EvalSuite m1b's process boundary; 216 s; swap
+    6.56 -> 5.44 GB): rel1 package 242553d, clone prepped 09:58, HOME empty, offline, 2 IFEval prompts x cap 256 per config.
+    exact-45 / exact-32 2/2 prefix-equal vs ar_ref (153 + 256); lossy-45 / lossy-32 2/2 vs rli_256 / rli_160 (154 + 139, full
+    length; hard checks); chat-45 / chat-32 2/2 vs pdz4a / zs32 (192 + 235, 184 + 256, full length); closure 0 / 0 outside
+    on all six (834-849 modules, 3,268-3,353 files); text prompt 87 tokens, the same answer as smoke3. CPU cross-checks: 12/12
+    tokens == the refs read directly and == smoke3 (rel0); lossy / chat prompts took the engine runs' checks and kept per
+    check exactly, at x0.996-1.020 whole decode, x0.996-1.012 whole request, median first token within 0.11 s (CORRECTED
+    12:5x from "0.1 s", NewIdeas; 2 prompts each,
+    information). RELEASE TBD-9 filled + a one-Mac limit bullet (data/release/final_1210.txt; archive final_1210/).
+  - [K] TRIAL README-ONLY REBUILD Mon 12:2x (CPU, scratch out dir): with the drafted README (de0b1c9), vs the tested 242553d
+    only README.md + MANIFEST.json differ (MANIFEST: README's sha256 + the leap / evalsuite commit ids; evalsuite/ unchanged
+    since 98c6072d) -> the post-16:00 README rebuild keeps every tested file byte-identical (data/release/readme_rebuild_try.txt).
+
+- **KERNELS v1.0 numbers derived from raw records (Leap, Sun 2026-11-08 19:5x; no GPU):**
+  - [K] NATIVE-FRI RUN 2 pooled (scripts/natfri_pooled.py -> data/natfri/natfri_pooled.txt): over the 13 prompts kept in
+    all four arms, whole decode NAX6-N 44.74 vs 3c-N 42.12 tok/s = x1.0622 (the report's steady tpsw ratio x1.0665 is
+    information only); lifetime peak 38.11 vs 38.10 GB; that screen has no pfs, so whole request / first token cannot be
+    derived.
+  - [K] CHS4 coherent one-call pooled from BigMoE data/r57/y{coh,coh2,coc,coc2}_256_runs.json: coherent 37.8 / 37.9 tok/s
+    whole decode, 21.1 / 21.3 whole request, first token 2.83 (2.23-3.79) / 2.80 (2.17-3.73) s; plain 37.7 / 38.0 and
+    20.0 / 20.1 tok/s, 2.77 / 2.79 s; peak 41.69-41.70 GB.
+  - PF-B EXACTNESS CONFIRMED IN THE ENGINE (BigMoE pfd part B, report at commit a6d5347, snapshot ba7dc54): PF-B TOK 8192
+    + seg per chunk: tokens == PF-A and logits hash 8/8, 28/28, 22/22; 215 / 432 / 500 vs 189 / 358 / 433 tok/s
+    (x1.14 / 1.21 / 1.16); peak 46.20 vs 45.10 GB; TOK 2048: 212 / 418 / 486 tok/s, 45.80 GB (still over 45.0).
+  - MLX issue #4632 (opened 5 Oct 2026 by another user, closed 6 Oct; not reproducible on 0.32.3; fix attributed to PR
+    #3922) predates our BUG1 (PrefillKernels N3, 10-18): ours is an independent finding. Root cause line verified in the
+    installed 0.32.2 header: quantized_nax.h:1547, `min(SM, short(max(0, (M - (y_row + tm)))))`.

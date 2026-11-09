@@ -1,5 +1,13 @@
 # Publish inventory (DRAFT, NewIdeas, Fri 6 Nov 2026 20:4x; final by Sat ~12:00)
 
+NOTE Mon 07:55 (NUMBER CHECK): the speed cells in this file's older tables quote the run reports' aggregates. Those are
+mostly geometric means over prompts, or the steady metric (tpsw). STYLE section 3 and the papers use pooled whole decode.
+Examples:
+- S5 MBPP: 118.3 here is geo; pooled it is 111.1.
+- The wired-limit gain: +27.4 % here is geo; pooled it is +25.1 %.
+- E24 / E24m: 41.3 / 38.4 here are geo; pooled they are 41.1 / 37.4.
+Quote the papers or ~/NewIdeas/NUMBER_CHECK.md, never these cells.
+
 PREPARATION ONLY. Nothing gets published until Kamen confirms the date, scope and venue; the orchestrator has asked him.
 The deadline (a replacement model is expected within ~1-2 weeks) outranks the 250-330 / 90-130 trigger: the release
 carries the best measured, quality-gated numbers at the freeze. Tags: [K] measured, [P] priced or modelled.

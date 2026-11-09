@@ -283,7 +283,9 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 PFD = {"calls": 0, "A": 0, "B": 0, "C": 0, "ssd": 0, "checked": 0, "bad_A": 0, "bad_B": 0, "fallback": 0,
        "tB": 0.0, "tC": 0.0, "tG": 0.0, "tM": 0.0,           # s: side-part reads, today's reads, GPU rebuild (+ scatter), the call
-       "tZ": 0.0, "tP": 0.0, "bad_C": 0}                      # scratch zeros; the whole wrapped call; v3 CHECK of copied C rows
+       "tZ": 0.0, "tP": 0.0, "bad_C": 0,                      # scratch zeros; the whole wrapped call; v3 CHECK of copied C rows
+       "k4": 0, "k5": 0,
+       "pB": 0, "pC": 0, "hB": 0, "hC": 0, "mB": 0, "mC": 0, "tPred": 0.0}   # read-ahead: predicted / hit / read on demand                                      # FAST rows at 3 bits: base pooled (4) / base read (5)
 _and, _or, _shl, _shr = mx.bitwise_and, mx.bitwise_or, mx.left_shift, mx.right_shift
 
 
@@ -452,6 +454,115 @@ def _kernels_v3():
     return _KER["aw4"], _KER["ap11"]
 
 
+> (a quote from the project owner, kept private)
+#   3 = C read raw: the full record (staged words rr, stride RW) rebuilt on the GPU (exact; no CPU rebuild, no zeroed scratch,
+#       and every read GIL-free, so reads can run beside the GPU);
+#   4 = FAST base only: base pool slot i1 at 3 bits (q = 2m, s = s3 / 2, b = b3: the base-only approximation, no side read);
+#   5 = FAST base read: the MSB part only (staged words rm5, stride MW) at 3 bits.
+_AW4V4_SRC = """
+  uint gid = thread_position_in_grid.x;
+  uint per = O_ * KG_;
+  uint row = gid / per, rem = gid - row * per;
+  int kind = rowmap[3u * row], i1 = rowmap[3u * row + 1u], i2 = rowmap[3u * row + 2u];
+  device uint* o = out + (size_t)row * per * 8u + (size_t)rem * 8u;
+  if (kind == 2) {
+    const device uint* s = cw + (size_t)i1 * per * 8u + (size_t)rem * 8u;
+    for (uint k = 0; k < 8u; k++) o[k] = s[k];
+    return;
+  }
+  uint orow = rem / KG_, g = rem - orow * KG_;
+  size_t cn = ((size_t)(orow >> 5) * KG_ + g) * 32u + (orow & 31u);
+  const device uint* a3;
+  const device uint* a1 = bw3;                          // placeholder; hasl says whether it is read
+  bool hasl = true;
+  if (kind == 0) { a3 = bw3 + (size_t)i1 * per * 6u + cn * 6u; a1 = sl1 + (size_t)i2 * per * 2u + cn * 2u; }
+  else if (kind == 1) { a3 = bw3 + (size_t)i1 * per * 6u + cn * 6u; a1 = rl + (size_t)i2 * LW_ + OL1L_ + cn * 2u; }
+  else if (kind == 3) { const device uint* rec = rr + (size_t)i1 * RW_; a3 = rec + OW3_ + cn * 6u; a1 = rec + OL1_ + cn * 2u; }
+  else if (kind == 4) { a3 = bw3 + (size_t)i1 * per * 6u + cn * 6u; hasl = false; }
+  else { a3 = rm5 + (size_t)i1 * MW_ + OW3_ + cn * 6u; hasl = false; }
+  for (uint h = 0; h < 2u; h++) {
+    uint a = a3[3u * h], b = a3[3u * h + 1u], c = a3[3u * h + 2u], l = hasl ? a1[h] : 0u;
+    o[4u * h + 0u] = spread8(a & 0xFFFFFFu, l);
+    o[4u * h + 1u] = spread8((a >> 24) | ((b & 0xFFFFu) << 8), l >> 8);
+    o[4u * h + 2u] = spread8((b >> 16) | ((c & 0xFFu) << 16), l >> 16);
+    o[4u * h + 3u] = spread8(c >> 8, l >> 24);
+  }
+"""
+_AP11V4_SRC = """
+  uint gid = thread_position_in_grid.x;
+  uint per = NB_ * 32u;
+  uint row = gid / per, rem = gid - row * per;
+  uint b = rem >> 5, r = rem & 31u;
+  int kind = rowmap[3u * row], i1 = rowmap[3u * row + 1u], i2 = rowmap[3u * row + 2u];
+  size_t at = (b / KG_) * 32u * KG_ + (b % KG_) + r * KG_;
+  if (kind == 2) {
+    os[(size_t)row * per + at] = cs[(size_t)i1 * per + at];
+    ob[(size_t)row * per + at] = cb[(size_t)i1 * per + at];
+    return;
+  }
+  const device uint* s3w;
+  const device uint* bw;
+  if (kind == 0) { s3w = bs3 + (size_t)i1 * WS_; bw = sb + (size_t)i2 * WB_; }
+  else if (kind == 1) { s3w = bs3 + (size_t)i1 * WS_; bw = rl + (size_t)i2 * LW_ + OBL_; }
+  else if (kind == 3) { s3w = rr + (size_t)i1 * RW_ + OS3_; bw = rr + (size_t)i1 * RW_ + OB_; }
+  else if (kind == 4) { s3w = bs3 + (size_t)i1 * WS_; bw = bb3 + (size_t)i1 * WS_; }
+  else { s3w = rm5 + (size_t)i1 * MW_ + OS3_; bw = rm5 + (size_t)i1 * MW_ + OB3_; }
+  os[(size_t)row * per + at] = (uint16_t)p11code(s3w, NB_, b, r, 1u);
+  ob[(size_t)row * per + at] = (uint16_t)p11code(bw, NB_, b, r, 0u);
+"""
+
+
+def _kernels_v4():
+    if "aw4v4" not in _KER:
+        _KER["aw4v4"] = mx.fast.metal_kernel(name="pfd_aw4v4", input_names=["bw3", "sl1", "rl", "cw", "rr", "rm5", "rowmap"],
+                                             output_names=["out"], source=_AW4V4_SRC, header=_W4_HDR)
+        _KER["ap11v4"] = mx.fast.metal_kernel(name="pfd_ap11v4",
+                                              input_names=["bs3", "bb3", "sb", "rl", "cs", "cb", "rr", "rm5", "rowmap"],
+                                              output_names=["os", "ob"], source=_AP11V4_SRC, header=_P11_HDR)
+    return _KER["aw4v4"], _KER["ap11v4"]
+
+
+_V4PH = []
+
+
+def v4_placeholder():
+    """An unused v4 input (no rows of its kind). MLX passes a custom kernel's inputs of fewer than 8 elements in the
+    'constant' address space and the v4 kernels assign inputs to 'device' pointers, so a placeholder must be larger:
+    Sun 8 Nov 23:5x, the in-run v4 / FAST arms died compiling with a one-element placeholder (the unit test's inputs were
+    all real arrays). 1,024 words, never read."""
+    if not _V4PH:
+        _V4PH.append(mx.zeros((1, 1024), mx.uint32))
+    return _V4PH[0]
+
+
+def assemble_v4(t, rm, base, side, rl, scrC, rr, rm5):
+    """v4: assemble with kinds 0-5 (see above). rl (n1, lsb bytes / 4): staged raw LSB parts (kind 1); rr (n3, recsz / 4) /
+    rm5 (n5, msb_sz / 4) uint32: staged raw records / MSB parts; one-row placeholders when unused; scrC: kind 2's rows."""
+    kw, kp = _kernels_v4()
+    N = int(rm.shape[0])
+    rmx = mx.array(rm.astype(np.int32))
+    RW, MW, LW, msbw = int(rr.shape[1]), int(rm5.shape[1]), int(rl.shape[1]), int(t["msb_sz"]) // 4
+    out = []
+    for p, p_ in enumerate(("gate_proj", "up_proj", "down_proj")):
+        O, KG = int(t["rows3"][p]), int(t["shapes4"][3 * p][0][1]) // 8
+        nb = O // 32 * KG
+        o = [int(t["offs"][i]) // 4 for i in (3 * p, 3 * p + 1, 3 * p + 2, 9 + 2 * p, 10 + 2 * p)]   # w3, s3, b3, l1, b words
+        W = kw(inputs=[base[p_]["w3"], side[p_]["l1"], rl, scrC[3 * p], rr, rm5, rmx],
+               template=[("O_", O), ("KG_", KG), ("RW_", RW), ("MW_", MW), ("LW_", LW), ("OW3_", o[0]), ("OL1_", o[3]),
+                         ("OL1L_", o[3] - msbw)],
+               grid=(N * O * KG, 1, 1), threadgroup=(256, 1, 1), output_shapes=[(N, O, 8 * KG)], output_dtypes=[mx.uint32])[0]
+        WS = int(base[p_]["s3"].shape[1])
+        assert int(base[p_]["b3"].shape[1]) == WS, "PF-D v4: base s3 / b3 pieces of different widths"
+        S, B_ = kp(inputs=[base[p_]["s3"], base[p_]["b3"], side[p_]["b"], rl, scrC[3 * p + 1].view(mx.uint16),
+                           scrC[3 * p + 2].view(mx.uint16), rr, rm5, rmx],
+                   template=[("NB_", nb), ("KG_", KG), ("WS_", WS), ("WB_", int(side[p_]["b"].shape[1])), ("RW_", RW),
+                             ("MW_", MW), ("LW_", LW), ("OS3_", o[1]), ("OB3_", o[2]), ("OB_", o[4]), ("OBL_", o[4] - msbw)],
+                   grid=(N * nb * 32, 1, 1), threadgroup=(256, 1, 1), output_shapes=[(N, O, KG), (N, O, KG)],
+                   output_dtypes=[mx.uint16, mx.uint16])
+        out += [W, S.view(mx.bfloat16), B_.view(mx.bfloat16)]
+    return out
+
+
 def assemble(t, rm, base, side, bl1s, bbs, scrC):
     """v3: the call's whole 4-bit scratch (9 pieces, PIECES order) from rowmap rm (N, 3) int32: A rows from the pools in place,
     B rows from the base pool + read side parts (bl1s / bbs per projection), C rows copied from scrC (the ext's rebuild)."""
@@ -567,7 +678,7 @@ def read_parts(t, ids, off, size):
     return buf
 
 
-def install_pfd(tier, check=False):
+def install_pfd(tier, check=False, layers=None):
     """Wrap tier.prefill_call (after PF-A's install, before the screen's PFSTAT wrapper). Falls back to the wrapped call
     for PF-A's layer-major prefill (LMC on), the grouped prefill, a layer without a sidecar, or a layout other than 2."""
     if getattr(tier, "_pfd_installed", False):
@@ -575,8 +686,152 @@ def install_pfd(tier, check=False):
     orig = tier.prefill_call
     from bigmoe.stream import PIECES
     V3 = os.environ.get("R57_PFD_V", "3") == "3"         # R57_PFD_V=2: v2 (gathers + fused rebuild + scatter)
+    V4 = os.environ.get("R57_PFD_V") == "4"              # v4 exact: absent bases read raw, rebuilt in the assemble pass
+    FASTP = os.environ.get("R57_PFD_FAST") == "1"        # FAST (lossy, gated): side-absent experts at 3 bits, MSB-only reads
     CC = os.environ.get("R57_PFD_CC", "1") != "0"        # =0: keep MLX's buffer cache across layer calls (no re-faulting)
     IDLE = os.environ.get("R57_PFD_IDLE") == "1"         # =1: installed but inactive (decode-slowdown diagnostic)
+    AHEAD = os.environ.get("R57_PFD_AHEAD") == "1"       # v4 / FAST: read the next layer's predicted misses during this layer
+    LAYERS = list(layers or [])
+    if AHEAD:
+        assert LAYERS and all(hasattr(l_.mlp, "gate") for l_ in LAYERS), "R57_PFD_AHEAD needs install_pfd(layers=...) with mlp.gate"
+    STAGE, GRAVE, LAST = {}, [], [-1]                    # per layer: {"B" / "C": staging}; arrays with reads still landing
+
+    def pread_into(t_, e, off, size, dst):
+        fd = _PFD_FD.get(t_["path"])
+        if fd is None:
+            fd = _PFD_FD[t_["path"]] = os.open(t_["path"], os.O_RDONLY)
+            fcntl.fcntl(fd, fcntl.F_NOCACHE, 1)
+        mv, base, got = memoryview(dst), int(e) * int(t_["recsz"]) + off, 0
+        while got < size:
+            n_ = os.preadv(fd, [mv[got:]], base + got)
+            if n_ <= 0:
+                raise OSError(f"PF-D: short read of record {int(e)} at {base + got}")
+            got += n_
+
+    def pool_():
+        if not _PFD_POOL:
+            _PFD_POOL.append(ThreadPoolExecutor(max_workers=int(os.environ.get("R57_PFD_THREADS", "12"))))
+        return _PFD_POOL[0]
+
+    def stage_reads(t_, ids, off, size, spare):
+        """an MLX staging array (len(ids) + spare rows of size / 4 words); the preads land in its buffer (zero-copy)."""
+        n = len(ids)
+        arr = mx.zeros((n + spare, size // 4), mx.uint32)
+        mx.eval(arr)
+        view = np.asarray(memoryview(arr)).view(np.uint8).reshape(n + spare, size)
+        futs = {e: pool_().submit(pread_into, t_, e, off, size, view[k]) for k, e in enumerate(ids)}
+        return [arr, {e: k for k, e in enumerate(ids)}, futs, view, n]
+
+    def gather(stage, t_, ids, off, size, tag):
+        """rows of ids in one staging array: prefetched ones + the rest read now into its spare rows (or a second array,
+        concatenated). Waits only for the needed reads; arrays with unneeded reads in flight stay referenced in GRAVE."""
+        ids = [int(e) for e in ids]
+        if stage is None:
+            arr, emap, futs, view, free = stage_reads(t_, ids, off, size, 0)
+            PFD["m" + tag] += len(ids)
+        else:
+            arr, emap, futs, view, free = stage
+            miss = [e for e in ids if e not in emap]
+            PFD["h" + tag] += len(ids) - len(miss)
+            PFD["m" + tag] += len(miss)
+            if miss and free + len(miss) <= arr.shape[0]:
+                for e in miss:
+                    emap[e] = free
+                    futs[e] = pool_().submit(pread_into, t_, e, off, size, view[free])
+                    free += 1
+            elif miss:
+                a2 = stage_reads(t_, miss, off, size, 0)
+                for e in ids:
+                    f_ = futs.get(e) or a2[2].get(e)
+                    if f_ is not None:
+                        f_.result()
+                GRAVE.append((arr, [f_ for e_, f_ in futs.items() if e_ not in ids]))
+                n0 = int(arr.shape[0])
+                arr = mx.concatenate([arr, a2[0]], axis=0)
+                for e in miss:
+                    emap[e] = n0 + a2[1][e]
+                futs = {}
+        for e in ids:
+            f_ = futs.get(e)
+            if f_ is not None:
+                f_.result()
+        rest = [f_ for e_, f_ in futs.items() if e_ not in set(ids)]
+        if rest:
+            GRAVE.append((arr, rest))
+        return arr, np.array([emap[e] for e in ids], np.int32)
+
+    def predict(L1, x, k):
+        """the next layer's router on this layer's MoE input (R-57's forecast): its predicted misses start reading now."""
+        lay_ = LAYERS[L1]
+        t1 = (getattr(lay_.mlp.switch_mlp, "_bm", None) or {}).get("tier")
+        if t1 is None or t1.get("side") is None or t1.get("layout") != 2:
+            return
+        top = mx.argpartition(-lay_.mlp.gate(x), kth=k - 1, axis=-1)[..., :k]
+        pred = np.unique(np.array(top))
+        u = pred.astype(np.int32).tolist()
+        sb1 = np.array(t1["ext"].lookup(L1, u), np.int64)
+        ss1 = np.array(t1["ext"].lookup(t1["side"], u), np.int64)
+        Bp, Cp = pred[(sb1 >= 0) & (ss1 < 0)], pred[sb1 < 0]
+        m1, r1 = int(t1["msb_sz"]), int(t1["recsz"])
+        st = {}
+        if len(Bp) and not FASTP:
+            st["B"] = stage_reads(t1, [int(e) for e in Bp], m1, r1 - m1, max(8, len(Bp) // 2))
+        if len(Cp):
+            st["C"] = stage_reads(t1, [int(e) for e in Cp], 0, m1 if FASTP else r1, max(8, len(Cp) // 2))
+        STAGE[L1] = st
+        PFD["pB"] += 0 if FASTP else len(Bp)
+        PFD["pC"] += len(Cp)
+
+    def v4_scratch(t_, bm_, x, k, uniq, sb, ss, A, B, C):
+        msb_, rec_ = int(t_["msb_sz"]), int(t_["recsz"])
+        L = int(bm_["L"])
+        mine = {}
+        GRAVE[:] = [(a_, fs) for a_, fs in GRAVE if not all(f_.done() for f_ in fs)]
+        if AHEAD:
+            if L <= LAST[0]:                             # a new pass over the layers (next prompt / chunk): stale stages out
+                for st_ in STAGE.values():
+                    for v in st_.values():
+                        GRAVE.append((v[0], list(v[2].values())))
+                STAGE.clear()
+            LAST[0] = L
+            mine = STAGE.pop(L, {})
+            tq = time.perf_counter()
+            if L + 1 < len(LAYERS):
+                predict(L + 1, x, k)
+            PFD["tPred"] += time.perf_counter() - tq
+        ph = v4_placeholder()                            # >= 8 elements: 'device', as the kernels need (23:5x)
+        rl = rr = rm5 = ph
+        t0 = time.perf_counter()
+        rowB = rowC = None
+        if len(B) and not FASTP:
+            rl, rowB = gather(mine.get("B"), t_, uniq[B], msb_, rec_ - msb_, "B")
+        t1 = time.perf_counter()
+        if len(C):
+            arr, rowC = gather(mine.get("C"), t_, uniq[C], 0, msb_ if FASTP else rec_, "C")
+            if FASTP:
+                rm5 = arr
+            else:
+                rr = arr
+        t2 = time.perf_counter()
+        for st_ in (mine.get("B"), mine.get("C")):       # this layer's own stage: unneeded prefetches may still be landing
+            if st_ is not None:
+                GRAVE.append((st_[0], [f_ for f_ in st_[2].values() if not f_.done()]))
+        PFD["tB"] += t1 - t0
+        PFD["tC"] += t2 - t1
+        rm = np.zeros((len(uniq), 3), np.int32)
+        rm[A, 1], rm[A, 2] = sb[A], ss[A]
+        if FASTP:
+            rm[B, 0], rm[B, 1] = 4, sb[B]
+        elif len(B):
+            rm[B, 0], rm[B, 1], rm[B, 2] = 1, sb[B], rowB
+        if len(C):
+            rm[C, 0], rm[C, 1] = (5 if FASTP else 3), rowC
+        scrC = [mx.zeros((1, *sh), dt) for sh, dt in t_["shapes4"]]
+        scr = assemble_v4(t_, rm, t_["base"], t_["sideP"], rl, scrC, rr, rm5)
+        PFD["k4"] += int((rm[:, 0] == 4).sum())
+        PFD["k5"] += int((rm[:, 0] == 5).sum())
+        return scr, rm
+
 
     def prefill_call(cls, self, x, indices, bm, *a, **kw):
         tp_ = time.perf_counter()
@@ -598,11 +853,23 @@ def install_pfd(tier, check=False):
         rows = np.arange(len(uniq))
         A, B, C = rows[(sb >= 0) & (ss >= 0)], rows[(sb >= 0) & (ss < 0)], rows[sb < 0]
         msb, lsz = int(t["msb_sz"]), int(t["recsz"]) - int(t["msb_sz"])
+        if V4 or FASTP:                                  # v4 / FAST: zero-copy staged reads (+ read-ahead), one assemble pass
+            tier._reuse_drop()
+            scr, rm = v4_scratch(t, bm, x, int(indices.shape[-1]), uniq, sb, ss, A, B, C)
+            t4_ = time.perf_counter()
+            mx.eval(*scr)
+            PFD["tG"] += time.perf_counter() - t4_
+            if check:
+                _pfd_check_rows(tier, t, uniq, scr, rm[:, 0])
+            A_B = ()
         t0_ = time.perf_counter()
-        lsb = read_parts(t, uniq[B], msb, lsz) if len(B) else None
+        lsb = read_parts(t, uniq[B], msb, lsz) if len(B) and not (V4 or FASTP) else None
         t1_ = time.perf_counter()
-        tier._reuse_drop()
-        if V3:                                           # v3: C rows into their own small scratch, then one assemble pass
+        if not (V4 or FASTP):
+            tier._reuse_drop()
+        if V4 or FASTP:
+            pass
+        elif V3:                                         # v3: C rows into their own small scratch, then one assemble pass
             nC = len(C)
             scrC = [mx.zeros((max(nC, 1), *sh), dt) for sh, dt in t["shapes4"]]
             mx.eval(*scrC)
@@ -614,7 +881,7 @@ def install_pfd(tier, check=False):
             rm[A, 1], rm[A, 2] = sb[A], ss[A]
             rm[B, 0], rm[B, 1], rm[B, 2] = 1, sb[B], np.arange(len(B))
             rm[C, 0], rm[C, 1] = 2, np.arange(nC)
-            if len(B):
+            if lsb is not None:
                 bl1s, bbs = lsb_pieces(t, lsb)
             else:                                        # never read (no kind 1 rows): one-row placeholders
                 bl1s = [mx.zeros((1, *t["sideP"][p_]["l1"].shape[1:]), mx.uint32) for p_ in ("gate_proj", "up_proj", "down_proj")]
@@ -672,7 +939,7 @@ def install_pfd(tier, check=False):
         PFD["A"] += len(A)
         PFD["B"] += len(B)
         PFD["C"] += len(C)
-        PFD["ssd"] += len(B) * lsz + len(C) * int(t["recsz"])
+        PFD["ssd"] += (0 if FASTP else len(B) * lsz) + len(C) * (msb if FASTP else int(t["recsz"]))
         compact = np.searchsorted(uniq, ids).astype(np.int32)
         saved = [getattr(getattr(self, proj), field) for proj, field in PIECES]
         for (proj, field), arr in zip(PIECES, scr):
@@ -693,6 +960,7 @@ def install_pfd(tier, check=False):
 
     tier.prefill_call = prefill_call
     tier._pfd_installed = True
+    tier._pfd_dbg = dict(stage_reads=stage_reads, gather=gather, grave=GRAVE)   # unit test (pfd_unit.py) of the staging
 
 
 def _pfd_check_rows(tier, t, uniq, scr, kinds):
@@ -708,7 +976,7 @@ def _pfd_check_rows(tier, t, uniq, scr, kinds):
     PFD["checked"] += len(uniq)
     PFD["bad_A"] += int(bad[kinds == 0].sum())
     PFD["bad_B"] += int(bad[kinds == 1].sum())
-    PFD["bad_C"] += int(bad[kinds == 2].sum())
+    PFD["bad_C"] += int(bad[(kinds == 2) | (kinds == 3)].sum())
 
 
 def _pfd_check(tier, t, ids, reb, nA):

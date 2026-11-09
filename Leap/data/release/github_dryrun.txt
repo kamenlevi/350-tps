@@ -1,0 +1,50 @@
+ENGINE PACKAGE: private GitHub dry run, Mon 9 Nov 2026 13:2x-13:4x (the orchestrator's 13:07 request, relaying the owner's
+decision: author Kamen Levi; name ExactStream unless a well-known project uses it; a PRIVATE repo kamenlevi/exactstream with
+the package and no weights; a clean clone from the GitHub URL as far as it runs without the GPU; the drafter files as assets
+of a DRAFT release v1.0.0 with their licence notices; docs/ left for Breakthrough. Nothing public: the repo stays private and
+the release a draft until the owner's word, through the orchestrator.)
+
+NAME CHECK (13:3x): gh search repos ExactStream --match name: none; --match description: none; --match readme: one
+(WAN-Solutions/wan24-Core, 2 stars, a .NET extensions library naming it in its readme); kamenlevi/exactstream did not exist.
+-> ExactStream.
+
+PACKAGE CHANGES (Leap c167024; no code file changed)
+- README: title "ExactStream: ...", author line, the papers in docs/, the model's source and licence (Qwen3.8-Flash-Next by
+  Qwen, Qwen Community License 1.0, as MTPLX's 4-bit pack Youssofal/Qwen3.8-Flash-Next-MTPLX-Bare-Speed; from RELEASE
+  sections 3 and 7), the drafter files as release v1.0.0 assets, a copyright line + GPL-3 notice. LICENSE stays the verbatim
+  GPL-3.0 text (the GPL forbids changing it), so the copyright line is in README (the GPL's own "how to apply" form).
+- CITATION.cff (new): ExactStream, Kamen Levi, 1.0.0, GPL-3.0-only, the repo URL (parses as YAML; names unquoted so no
+  line puts a double quote after the name, which the public snapshot's quote rule would rewrite).
+- d22_b5: the model's own MTP head with 11 tensors trained further (TL:sticky/d22_ttt.py load_head: the stock head, then the
+  checkpoint over it; the engine: r57_screen_rel1.py l435-445, experts / norms / lm_head as shipped) -> Qwen Community License
+  1.0 (RELEASE section 7: derived weights stay under it): third_party/LICENSE-qwen (= ~/BigMoE/models/bare/LICENSE, md5
+  74d74256dcc9265da9bd7ca7a49a22fe) + third_party/NOTICE-d22_b5 (our changes); THIRD_PARTY.md row.
+- Rebuilt: make_release.py rel1 --commit 0b4df8c --refs release/refs_rel1.json -> "228 files, 6.3 MB; BigMoE 0b4df8c3,
+  EvalSuite 47cce6c6; ... leaks 0; unsafe quote lines 0; home_paths_left 43; live research paths 0; syntax errors 0";
+  COMMITTED e759a63 (230 files in git, largest 2.0 MB data/frspec_rank.npy; no /Users/ path; author kamenlevi noreply).
+- vs the tested package 242553d (the 12:10 clean-clone PASS): CITATION.cff, third_party/LICENSE-qwen, third_party/NOTICE-d22_b5
+  added; README.md, THIRD_PARTY.md, MANIFEST.json changed; MANIFEST: sha256 changed only for README.md and THIRD_PARTY.md,
+  top-level keys only leap_commit / evalsuite_commit; EvalSuite evalsuite/ 98c6072d..47cce6c6: no change. So every code file
+  the clean-clone run tested is byte-identical in e759a63.
+
+REPO (13:36-13:37): gh repo create kamenlevi/exactstream --private -> https://github.com/kamenlevi/exactstream (visibility
+PRIVATE, default branch main). git push main (credential helper = gh, given on the command line): remote main = e759a635.
+
+CLEAN CLONE FROM THE GITHUB URL (13:36:48-13:37:05; share lock, CPU only, no GPU while EvalSuite's m1b ran): tools/
+clean_clone_test.sh https://github.com/kamenlevi/exactstream.git release/cleanclone/gh prep (WHEELS = the local wheel dir;
+git credentials from gh via GIT_CONFIG_* env, no global config change): "cloned e759a63"; install.sh --offline rc 0 in 14 s
+(mlx 0.32.2, mlx-metal 0.32.2, mlx-lm 0.31.3, mtplx 2.12.2; extension built; store and drafter weights linked; drafter base
+found at the pinned revision); dry runs 6/6 "Powered by MTPLX"; PREP DONE. The run phase (GPU) was not repeated: the code
+it runs is byte-identical to the 12:10 PASS (above).
+
+DRAFT RELEASE v1.0.0 (13:37:42-13:41:56): gh release create v1.0.0 --draft --target main --title "ExactStream 1.0.0"
+(notes: the assets and their licences; the model's source). GitHub API: draft=true, tag v1.0.0 (created only when it is
+published), target main. RELEASE ASSETS, size and the API's sha256 digest = the local sha256 (shasum -a 256) for all 7:
+  d22_b5.safetensors   276,573,152 B  6af8251ada6171738e2b763cc51f76faf339a9308c47cca85ea35681c05814d4 (md5 1f8de68a = the
+                                      engine's pinned md5)
+  l120_ft.safetensors  1,140,598,723 B 9df51645d1acd6a05c372c8652f3cf64555bd7070fc1d94d2c184d921a43eb02 (md5 20aca5d0 = the file
+                                      the clean-clone runs linked)
+  NOTICE-l120_ft 748 B, LICENSE-dflash2 11,357 B, NOTICE-d22_b5 984 B, LICENSE-qwen 3,235 B, SHA256SUMS 171 B (the two
+  weight files' sha256): all digests equal. No download was made (the digests come from the API).
+GITHUB PAGES: off (GET repos/kamenlevi/exactstream/pages -> 404, 13:39); stays off until the owner's word (a Pages site is
+public even for a private repo). docs/ is added only from Breakthrough's final build (~16:50), in one commit.

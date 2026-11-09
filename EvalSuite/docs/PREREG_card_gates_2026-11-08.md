@@ -282,3 +282,97 @@ Checked on the gate keys; the result is the same in scripts/r57_screen.py and th
   - It waits for that job's "done" line, written since the hold began, after the file appears.
   - Mock-tested three ways: the done line after the file, the done line before the file, and no file until the cap.
 - **Unchanged:** keys, row counts, settings and the verdict rules.
+
+## Amendment 8 (Sun 19:3x; ~/Papers/MONDAY.md, NewIdeas 19:2x-19:3x): Monday's chain; scheduling plus one memory threshold
+
+- **Order, with no gap after F2a stage 1:**
+  - The trigger is MTP Head's STAGE1_DONE file, newer than the chain's start, or a new night.log line that is exactly
+    "[Day HH:MM:SS] F2a night DONE".
+  - The backstop is 03:40.
+  - Then: the card reference's leftover (cutoff 15:00), then lcoh, then m1b, then zs32 (cutoffs 14:30). The last process
+    must END by 15:00.
+  - zs32 is the 32 GB chat arm: M1-B + COH + SB1 at C 160, MEM 35 GB, with the card sets in its QOM sets
+    (~/BigMoE/data/stack/card_zs32_env.txt, BigMoE 6717aa3).
+  - Anything not gated by 15:00 is labelled "not gated".
+- **tools/card_chain.sh:**
+  - It waits for tonight's runner first. It stops if the reference is incomplete.
+  - After an arm with rc 0, 2 or 6, it goes on to the next arm. Any other rc stops it.
+  - A PAUSE guard runs beside the reference step (amendment 6).
+  - Mock-tested trigger: the armed line, another new line and an old STAGE1_DONE wait; the anchored line and a fresh
+    STAGE1_DONE start.
+- **The memory threshold, the one non-schedule change:**
+  - The MEM 47 arms (lcoh, m1b) start at 48 GB NO-SWAP instead of MEM + 4 = 51.
+  - Basis (NewIdeas): M1-B's measured lifetime peak is 42.2-42.4 GB up to 1,536 tokens. Add about 1.5 GB for the
+    card's longer rows, plus 4.
+  - Runner 61 reads CARD_MEM_FREE. That edit is made after tonight's runner exits and before the chain calls runner 61.
+  - The swap guard (start + 2 GB) still stops a run. zs32 keeps MEM + 4 = 39.
+- **Unchanged:** keys, row counts, settings and the verdict rules.
+- **Update (19:5x; the orchestrator 19:4x):** apps close 23:00 -> Mon 17:00, and gates may run to 16:00.
+  - The chain was stopped at 19:50 by pid (it was only waiting) and re-armed with cutoffs 16:00 (reference) / 15:30 (arms).
+  - Re-armed again at 19:51 with the backstop at 03:55 instead of 03:40 (NewIdeas 19:5x: F2a may end at 03:30 + its 10-min
+    guard). Pid 53863.
+  - The 48 GB memory threshold is dropped: the arms keep runner 61's MEM + 4. Runner 61 is not edited.
+  - At 19:32 the pause guard stopped a 54-second-old loading stage when a heat PAUSE began. No row was in flight.
+
+## Amendment 9 (Mon 06:4x, before any new arm row): a run cut at the time budget is not a row; operations only
+
+- **What happened:**
+  - The card screen (BigMoE snapshot data/r57/snap/card, HARD = 600 s) stops a run mid-decode when its process's 600 s
+    budget runs out, and flags the run `cut` in <tag>_runs.json.
+  - tools/r57rows.py did not read that flag. It kept each cut run as a row ending in "length" below the cap.
+  - lcoh's forward order kept 10 such rows, one in each process that ran out of time. GPQA: 1, 502, 24, 1,234 and 1
+    tokens. LCB: 1,165, 1,093, 1,679, 1,369 and 643 tokens. These were the only rows ending in "length" below the cap.
+  - At 06:37 the reverse order's first process cut an LCB run after 1 token. That run had no QOM use, so the engagement
+    check voided the arm (rc 5) and the chain stopped. Nothing from that process was kept. The VOID done-file is kept as
+    results/CARD_lcoh_DONE.void_0637.
+- **The fix (EvalSuite only):**
+  - r57rows leaves out a key whose first run is `cut`, so the key re-runs in the next process. Keys the screen "stopped
+    before" have always worked that way.
+  - The engagement check counts kept runs only, and names the cut ones.
+  - The 10 cut rows were removed from results/card_lcoh_fwd. The full file is in git at 1eeceb6.
+  - The code pin changes (r57rows.py is pinned): 5680b8a9731b -> 8ecc1604bd56. The decode code, the screen, BigMoE
+    b37f36b, the ext .so and the module manifest are unchanged.
+- **The restart:** tools/card_chain2.sh. lcoh resumes with CARD_RESUME=1, so its processes are checked against the 03:42
+  manifest. It decodes the 10 cut keys first, then the whole reverse order. Then m1b and zs32 follow, with the cutoffs of
+  amendment 8.
+- **The decision rule is unchanged.** At 06:3x I had scored lcoh's forward order for information with the cut rows in it.
+  That look is void. The verdict uses kept rows only.
+- **The reference is not affected.** It ran through EvalSuite's own decode path, and none of its rows ends in "length"
+  below the cap.
+- **Earlier arms that went through r57rows are audited separately.** A cut row is usually scored as wrong, but the
+  direction is not fixed: a cut IFBench reply can still meet a length limit.
+- **Audit (06:5x):** 40 runs in results/ hold screen rows written by r57rows. Only two have rows ending in "length" below
+  the item's cap:
+  - card_lcoh_fwd: the 10 rows above, now removed.
+  - agentfast_fwd_v1: 1 of 11 rows. That run was set aside as information on 11-06 (RESULT_agentfast) and fed no verdict.
+  - No earlier verdict used a cut row. A run cut after its item's cap is harmless: r57rows keeps the first max_tokens
+    ids, which an uncut run shares.
+
+## Amendment 10 (Mon 10:2x, while m1b's forward order runs, before its verdict; NewIdeas 07:22): m1b's cutoff may extend to 15:45; scheduling only
+- **Why:** m1b started at 10:07 with the arms' 15:30 cutoff (amendment 8: the last process starts by 15:15). lcoh took
+  5.8 h of decoding (RESULT_card_lcoh_2026-11-09). m1b's first GPQA process decoded about 13 % more tokens than lcoh's
+  GPQA processes, so its end is projected near 15:15, at the cutoff.
+- **The queue owner's OK (NewIdeas 07:22):** m1b may run to a 15:45 cutoff (last start 15:30, verdict by ~15:55). Nothing
+  is booked 15:30-16:00. A verdict not out by 16:00 stays "not gated" (~/Papers/MONDAY.md).
+- **How:** tools/card_extend_cutoff.sh m1b "2026-11-09 15:45" waits beside chain2. If m1b's step ends rc 6 on the 15:30
+  cutoff (the runner's "does not fit before the cutoff" or "no memory before the cutoff" stop, which writes no DONE file),
+  it resumes m1b at once: CARD_RESUME=1, CARD_CUTOFF 15:45. The resume checks its processes against m1b's first manifest.
+  Any other end starts nothing. No process is stopped to do this.
+- chain2 may meanwhile start zs32; that runner's first gate stops on the same 15:30 cutoff before any lock or process.
+- **Unchanged:** the decision rule, the keys, the code pin (8ecc1604bd56), the config, and the other arms' cutoffs.
+
+## Amendment 11 (Mon 12:4x, while m1b's forward order runs, before its verdict; the orchestrator 12:43): m1b's cutoff may extend to 16:20; scheduling only
+- **Why:** amendment 10's projection was wrong. It came from m1b's first processes. Measured over the forward order, m1b
+  runs at lcoh's pace: 309 kept rows at +122.4 min against lcoh's 308 at +121.1 (both runner logs, per process). Decoding
+  is projected to end near 15:57 (+-10 min), so under 15:45 (last start 15:30) m1b would end INCOMPLETE, one or two
+  reverse GPQA processes short.
+- **The OK (the orchestrator 12:43; it owns ~/Papers/MONDAY.md):** m1b may run to 16:20. Kamen's window runs to 17:00,
+  the package's clean-clone run passed at 12:13, and Fit12's chw19 goes after m1b. The verdict, or "not gated", goes to
+  the editor by 16:30. zs32 stays "not gated". This replaces my 12:27 ask to the queue owner (a 16:00 cutoff).
+- **How:** amendment 10's waiting extension had started nothing; it was stopped at 12:45 and re-armed as
+  tools/card_extend_cutoff.sh m1b "2026-11-09 16:20" (results/card_extend.log). If m1b's step ends rc 6 on the 15:30
+  cutoff, it resumes m1b at once with CARD_CUTOFF 16:20: the last process starts by 16:05 and ends by about 16:17 (a
+  process takes at most about 11.7 min). No process is stopped.
+- **Unchanged:** the decision rule, the keys, the code pin (8ecc1604bd56), the config, and zs32's 15:30 cutoff.
+- **Correction (13:1x):** the longest process so far took 12.7 min (m1b forward process 20, 12:47-13:00; lcoh's longest
+  was 11.7), so a process that starts at 16:05 ends by about 16:18. The runner's 15-min start gate still covers it.

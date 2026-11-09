@@ -1189,3 +1189,73 @@ parts, C rows copied from the ext's rebuild) == read_rebuilt_layout on 8 A / 8 B
   2.48 s; E: pde0 35.8 / 12.5 / 2.89 s, pde1 35.1 / 14.7 / 2.26 s. The check's CPU build rose 34.2 -> 43.7 ms (zs), mostly after a prompt's
   16th check (38.4 -> 52.3 ms); E's checks +2 %. The PF-D arms ran after the control (order / heat not excluded); PF-D also leaves ~0.35 GB
   more footprint outside MLX. Until a diagnostic (order swapped, PF-D idle, no reader threads) explains it: no chat whole-request claim.
+
+## Sun 8 Nov 23:49-23:55: PFD diagnostic = the chat decode slowdown did NOT come back (data/pfd/pfd_report_2355.txt, snapshot 366c452; data 3175ef3)
+Same 12 N45 IFEval prompts, zs = M1-B + COH + SB1, C 256, CAP 256, quiet, PF-D v3 FIRST this time (the 18:2x run had it after the control):
+| arm (run order) | whole decode | whole request | first token median (mean) | check ms (CPU build) | tokens / logits hash vs control | lifetime peak |
+|---|---|---|---|---|---|---|
+| pdz1 zs + PF-D v3 (1st) | 50.1 | **27.4** | **2.32 s** (2.39) | 39.4 (34.1) | 12/12, 721/721 | 43.40 GB |
+| pdz0 zs control (2nd) | 50.3 | 24.6 | 2.91 s (3.02) | 39.2 (33.8) | - | 42.40 GB |
+| pdz1i PF-D installed, idle (3rd) | 50.6 | 24.8 | 2.90 s (2.99) | 39.0 (33.6) | 12/12, 721/721 | 42.40 GB |
+| pdz1p PF-D v3, reader threads shut after each call (4th) | 50.8 | **28.0** | **2.25 s** (2.33) | 38.8 (33.4) | 12/12, 721/721 | 43.40 GB |
+- With PF-D first, the chat decode is unchanged (50.1-50.8 vs 50.3 tok/s; check CPU build 33.4-34.1 vs 33.8 ms, also after a prompt's
+  16th check: 37.6-38.1 vs 37.9) and whole request rises 24.6 -> 27.4 / 28.0 tok/s (+11 / +14 %), first token median 2.91 -> 2.32 /
+  2.25 s (-20 / -23 %), bitwise to the control (tokens 12/12, logits hash 721/721). SSD per prompt 20.4 -> 7.5 GB. Peak +1.0 GB.
+- The 18:2x slowdown (49.6 -> 40.0 whole decode, CPU build +9.5 ms) is not reproduced; its cause is unknown. That run had PF-D after
+  the control, fans held at 5000 (die 70-85 C, thermal state nominal; a heat pause had cleared 27 s before its start) and came right
+  after EvalSuite's reference yielded; tonight: PF-D first, fans ~7000, die 73-81 C. Not PF-D's own cost: idle (installed, unused) and
+  active arms decode alike tonight.
+- The v4 (exact, raw C reads + read-ahead), FAST and v4-check arms died compiling in-run (MLX passes inputs of < 8 elements in Metal's
+  'constant' space; the v4 kernels take 'device' pointers; the engine's placeholder had 1 element; the unit test only used real
+  arrays). Fixed in 9aa398b (pflm.v4_placeholder, a 1,024-word array; pfd_unit.py now tests the placeholders: PASS). Re-run queued.
+
+## Mon 9 Nov 00:02-00:09: PFD v4 + read-ahead (exact) and FAST (lossy) in-run, after the placeholder fix (data/pfd/pfd_report_0009.txt, snapshot 36ee120; data db922b9)
+Same 12 N45 IFEval prompts, zs, C 256, CAP 256, quiet, no heat pause in the window; control = pdz0 of 23:5x (tokens are deterministic):
+| arm (run order) | whole decode | whole request | first token median (mean) | SSD per prompt | vs the control | lifetime peak |
+|---|---|---|---|---|---|---|
+| pdz4a PF-D v4 exact + read-ahead (1st) | 50.7 | **28.8** | **2.26 s** (2.17) | 9.6 GB | tokens 12/12, logits hash 721/721 | 43.70 GB |
+| pdz1q PF-D v3, POOL=call (2nd; this run's reference) | 50.4 | 27.4 | 2.41 s (2.41) | 7.5 GB | 12/12, 721/721 | 43.40 GB |
+| pdzfa PF-D FAST + read-ahead (3rd; LOSSY) | 49.3 | 30.5 | 1.83 s (1.74) | 4.9 GB | tokens 2/12, logits hash 0/656 | 43.20 GB |
+| pde4k E + v4 + read-ahead + CHECK (4th; timing void), CAP 16 | - | - | - | 30.4 GB | 87,912 rows == the ext's (A 26,570 / B 37,265 / C 24,077), == AR 12/12 | 46.40 GB |
+- **v4 + read-ahead is exact and the fastest exact chat prefill:** on zs tokens and logits equal the control; on E every staged row
+  equals the ext's rebuild. Same run vs v3: first token mean 2.17 vs 2.41 s (-10 %), median 2.26 vs 2.41, whole request 28.8 vs 27.4
+  (+5 %). Vs the control: whole request 24.6 -> 28.8 (+17 %), first token median 2.91 -> 2.26 s (-22 %), whole decode 50.7 vs 50.3.
+- Read-ahead (layer L+1's router on layer L's MoE input, top-10 union): of the rows needed from the SSD, 75 % (B) / 72 % (C) came
+  from the stage; 19 % / 31 % of staged rows went unused (predicted B 37,068 / C 22,912, used 29,898 / 15,726, on demand 9,982 / 6,276),
+  so SSD bytes per prompt rose 7.5 -> 9.6 GB. Left: better prediction (two layers' gates, or the union of the last tokens' choices).
+- **FAST** (side-absent experts as 3-bit base-only pieces): first token median 1.83 s, whole request 30.5 (+24 % vs the control), but
+  tokens differ on 10 / 12 prompts: LOSSY and ungated (no same-scores gate is scheduled before 16:00), so it ships off, labelled.
+- Defaults (rel0): chat at 45 GB = PF-D v4 + read-ahead on (exact). E at 45 GB: off (its table rows were measured without PF-D; on
+  is exact: v3 cut E's first token 2.89 -> 2.26 s at 64 tokens). 32 GB: off (not measured there; PF-D adds 1.0-1.3 GB of peak).
+
+## Mon 9 Nov 09:47-09:57: REL ROWS = the shipped lossy config L + COH: rows, references, and a repeat (data/rel/rel_rows_report.txt, snapshot rel1 = 0b4df8c; data 53dfff5)
+L + COH = data/stack/lcoh_env.txt (== the package's lossy-45 / lossy-32 line), from the frozen rel1 snapshot, quiet lock at
+EvalSuite's lcoh process boundary (NewIdeas' slot), NO-SWAP 54.7 GB at the start, CAP 256, one process per arm, run order as listed.
+| arm | set (12 prompts) | C | whole decode | whole request | first token median (mean) | lifetime peak | == AR | ended before the cap |
+|---|---|---|---|---|---|---|---|---|
+| rlh_256 | HumanEval (E5's e5h1 keys) | 256 | 164.0 | 36.2 | 4.60 s (4.70) | 42.94 GB | 5/12 | 7 |
+| rlm_256 | MBPP (E5's e5m1 keys) | 256 | 112.7 | 25.3 | 3.72 s (3.88) | 42.60 GB | 5/12 | 11 |
+| rli_256 | IFEval (data/n45/keys.txt line 1) | 256 | 45.4 | 22.3 | 3.12 s (3.16) | 42.42 GB | 2/12 | 10 |
+| rlt_256 | math (line 2) | 256 | 78.9 | 37.9 | 3.20 s (3.52) | 43.17 GB | 5/12 | 0 |
+| rli_160 | IFEval | 160 | 39.0 | 21.1 | 2.90 s (3.00) | 31.30 GB | 2/12 | 10 |
+| rlr_256 | IFEval again (the repeat) | 256 | 44.9 | 22.5 | 2.91 s (3.06) | 42.42 GB | 2/12 | 10 |
+- **REPEAT 12/12:** rlr_256 (its own process, same keys in the same order) gave rli_256's tokens on every prompt. L alone repeated on
+  4/12 (CHS4 y0 / y0b); COH had made E's one-call path and M1-B repeat (CHS4 ycoh / ycoh2, CHS5 z0 / z0b); now L + COH too. It
+  shows same-order repeatability only: the drafter's state carries across prompts, so a different history may still change tokens.
+- **C 160 == C 256** on the IFEval tokens (12/12): one set of IFEval references serves lossy-45 and lossy-32.
+- Pooled IFEval at 45 GB (rli_256 + rlr_256, 24 rows): 45.2 / 22.4 / 3.01 s, 42.42 GB (RELEASE row 27). All peaks are under their
+  lines (45.0 at C 256, 32.0 at C 160).
+- Against L's rows (RELEASE row 28, before COH): HumanEval 164.0 vs 171.0 (-4 %), MBPP 112.7 vs 114.5 (-2 %), IFEval 45.2 vs 43.4
+  (+4 %), math 78.9 vs 86.9 (-9 %). This is not an A/B: one pass against two, different days, and COH changes tokens.
+- Checks: cut rows 0 on all six arms (the screen's 600 s budget); fanwatch shows no PAUSE or freeze between the grant (09:47:01) and
+  the end (09:56:39); the three planes_engine kernel files read live equal the copies frozen in rel1 before and after the run
+  (md5 dc81729b / 3b835480 / 936c2635).
+- The tokens (data/r57/rl*_256_tokens.json, rli_160_tokens.json) are the package's lossy references; paths and the REPEAT count went
+  to Leap at 09:5x for its 12:05 final run. turn45 logged "done rc=1": the script's last log call returned 1 outside dry runs; the
+  report and the data commit succeeded. Fixed in the next commit.
+- **Correction (Mon 10:3x, after EvalSuite's naming note):** RELEASE row 28's HumanEval / MBPP cells (171.0 / 114.5) were S5' B = CERT
+  (v1' + wired, no bundle), while its IFEval / math cells (N45 nil / nml) and this run's base are L = s5p_env = CERT + the 6-key bundle
+  (scripts/n45.sh l30-31 read s5p_env; lcoh_env = s5p_env + REF2_NAX_COH=1, one key apart). Against L itself (S5' X: spx1-2, spmx1-2;
+  pooled 181.3 / 36.6 / 4.51 s and 119.8 / 25.3 / 3.76 s) L + COH is HumanEval -9.5 %, MBPP -5.9 %, math -9.2 %, IFEval +4.1 % whole
+  decode: still not an A/B (different days, one pass against two, tokens differ, so acceptance differs), cause not measured. RELEASE row
+  28 now holds L's rows, with CERT's two rows and the certificate in its label.

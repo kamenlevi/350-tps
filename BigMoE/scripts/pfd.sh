@@ -56,11 +56,19 @@ arm() {   # tag cap keys qom_sets env
   say "$1 rc=$?"; TAGS="$TAGS $1"
 }
 QC="humaneval,mbpp"; QZ="humaneval,mbpp,ifeval,multi"
-if [ -n "$PFD_DIAG" ]; then                             # 18:3x: v3 slowed the chat decode (ck 38.7 -> 49.1 ms, CPU build, after
+if [ "$PFD_DIAG" = 2 ]; then                           # Mon 00:1x: the v4 / FAST / v4-check arms again after the placeholder fix
+  arm pdz4a 256 "$KI" $QZ "$ZS,R57_PFD=1,R57_PFD_V=4,R57_PFD_AHEAD=1"   # (23:55 they died compiling: pflm.v4_placeholder), with
+  arm pdz1q 256 "$KI" $QZ "$ZS,R57_PFD=1,R57_PFD_POOL=call"             # v3 + POOL=call as this run's own reference (pdz1p's files stay)
+  arm pdzfa 256 "$KI" $QZ "$ZS,R57_PFD=1,R57_PFD_FAST=1,R57_PFD_AHEAD=1"
+  arm pde4k 16 "$KI" $QC "$E,R57_PFD=1,R57_PFD_V=4,R57_PFD_AHEAD=1,R57_PFD_CHECK=1"
+elif [ -n "$PFD_DIAG" ]; then                           # 18:3x: v3 slowed the chat decode (ck 38.7 -> 49.1 ms, CPU build, after
   arm pdz1 256 "$KI" $QZ "$ZS,R57_PFD=1"                 # the first 16 checks of a prompt, same misses): order swapped (PF-D first),
   arm pdz0 256 "$KI" $QZ "$ZS"                           # then the control, PF-D installed but idle, and PF-D without reader
   arm pdz1i 256 "$KI" $QZ "$ZS,R57_PFD=1,R57_PFD_IDLE=1" # threads outside its calls
   arm pdz1p 256 "$KI" $QZ "$ZS,R57_PFD=1,R57_PFD_POOL=call"
+  arm pdz4a 256 "$KI" $QZ "$ZS,R57_PFD=1,R57_PFD_V=4,R57_PFD_AHEAD=1"   # 19:4x (Kamen: Strata's chat path): v4 exact + read-ahead
+  arm pdzfa 256 "$KI" $QZ "$ZS,R57_PFD=1,R57_PFD_FAST=1,R57_PFD_AHEAD=1" # FAST (lossy): side-absent experts at 3 bits + read-ahead
+  arm pde4k 16 "$KI" $QC "$E,R57_PFD=1,R57_PFD_V=4,R57_PFD_AHEAD=1,R57_PFD_CHECK=1"   # every staged row vs the ext (timing void)
 else
   arm pde0 64 "$KI" $QC "$E"
   arm pde1 64 "$KI" $QC "$E,R57_PFD=1"
@@ -134,9 +142,16 @@ def part_a(t, ctl, nm):
     pdA, pdB, pdC = (sum(x[4].get(c, 0) for x in rows) for c in ("A", "B", "C"))
     tok = "" if t == ctl else f"; tokens == {ctl} {sum(1 for x in rows if x[5])}/{len(rows)}; logits hash {sum(x[6] for x in rows)}/{sum(x[7] for x in rows)}"
     chk = ""
+    if any(x[4].get("pB") is not None for x in rows) and sum(x[4].get("pB", 0) + x[4].get("pC", 0) for x in rows):
+        g_ = lambda k: sum(x[4].get(k, 0) for x in rows)
+        chk_ra = (f"; read-ahead predicted B {g_('pB')} / C {g_('pC')}, used from the stage B {g_('hB')} / C {g_('hC')}, read on demand "
+                  f"B {g_('mB')} / C {g_('mC')}; FAST rows k4 {g_('k4')} / k5 {g_('k5')}")
+    else:
+        chk_ra = ""
     if any(x[4].get("checked") for x in rows):
         chk = (f"; CHECK rows {sum(x[4].get('checked', 0) for x in rows)}, differing A {sum(x[4].get('bad_A', 0) for x in rows)} / "
-               f"B {sum(x[4].get('bad_B', 0) for x in rows)}")
+               f"B {sum(x[4].get('bad_B', 0) for x in rows)} / C {sum(x[4].get('bad_C', 0) for x in rows)}")
+    chk += chk_ra
     L.append(f"  {t} {nm}: TTFT mean {S.mean(ttft):.2f} s (median {S.median(ttft):.2f}, {min(ttft):.2f}-{max(ttft):.2f}); SSD "
              f"{S.mean(gbs) if gbs else float('nan'):.1f} GB per prompt; rows A {pdA} / B {pdB} / C {pdC}{tok}; == AR {eq_ar(T)}/{len(T)}"
              f"{chk}{dec}; lifetime peak {peak.get(f'{t}_256', float('nan')):.2f} GB")
@@ -152,6 +167,10 @@ part_a("pdz1", "pdz0", "zs + PF-D, CAP 256")
 part_a("pdz1n", "pdz0", "zs + PF-D, MLX buffer cache kept across calls (R57_PFD_CC=0), CAP 256")
 part_a("pdz1i", "pdz0", "zs + PF-D installed but idle (R57_PFD_IDLE=1: every call takes today's path), CAP 256")
 part_a("pdz1p", "pdz0", "zs + PF-D, reader threads shut down after each call (R57_PFD_POOL=call), CAP 256")
+part_a("pdz1q", "pdz0", "zs + PF-D v3, POOL=call (the v4 run's own reference), CAP 256")
+part_a("pdz4a", "pdz0", "zs + PF-D v4 exact + read-ahead (R57_PFD_V=4, R57_PFD_AHEAD=1), CAP 256")
+part_a("pdzfa", "pdz0", "zs + PF-D FAST (3-bit side-absent experts; LOSSY) + read-ahead, CAP 256")
+part_a("pde4k", "pde4k", "E + PF-D v4 + read-ahead + CHECK (timing void), CAP 16")
 R0, T0 = load("pdpa1")
 if R0 and "pdpa1" in tags:
     L.append("Part B (the 3 PFX agent prompts, E, CAP 64): prefill TTFT, x vs PF-A, tokens and logits hash vs PF-A")
@@ -173,7 +192,8 @@ if R0 and "pdpa1" in tags:
 open("data/pfd/pfd_report.txt", "w").write("\n".join(L) + "\n"); print("\n".join(L))
 EOF
 say "report rc=$? ($D/pfd_report.txt)"
-git add $D $(for t in $TAGS; do echo data/r57/${t}_256_*; done) 2>/dev/null
+git add $D $(for t in $TAGS; do ls data/r57/${t}_256_* 2>/dev/null; done) 2>/dev/null   # existing files only (00:0x: one
+                                                        # missing arm's pattern failed the whole add, so 23:55's data went uncommitted)
 > (a quote from the project owner, kept private)
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

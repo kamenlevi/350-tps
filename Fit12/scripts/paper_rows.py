@@ -25,6 +25,10 @@ RUNS = [  # (row id, log, tag, arm, what it is)
     ("chw14ha", f"{S}/chw14/chw14ha.txt", "chw14ha", "ex", "code A' (W1 4) + PR1 + tail, 16 HumanEval, cap 256, share lock"),
     ("chw14h2", f"{S}/chw14/chw14h2.txt", "chw14h2", "ex", "code P2', 16 HumanEval, cap 256, share lock"),
 ]
+OUTP = "/Users/kamen/Fit12/data/paper/small_ram_12gb_rows"
+if len(sys.argv) > 2:   # (chw19) ad-hoc rows: paper_rows.py OUT_BASE log|tag|arm|what ... (writes OUT_BASE.txt / .json only)
+    OUTP = sys.argv[1]
+    RUNS = [(x.split("|")[1], x.split("|")[0], x.split("|")[1], x.split("|")[2], x.split("|")[3]) for x in sys.argv[2:]]
 geo = lambda xs: math.exp(sum(math.log(x) for x in xs) / len(xs)) if xs else float("nan")
 
 
@@ -87,8 +91,8 @@ def run(rid, log, tag, arm, what):
 
 
 out = [run(*a) for a in RUNS]
-os.makedirs("/Users/kamen/Fit12/data/paper", exist_ok=True)
-json.dump(out, open("/Users/kamen/Fit12/data/paper/small_ram_12gb_rows.json", "w"), indent=1)
+os.makedirs(os.path.dirname(OUTP), exist_ok=True)
+json.dump(out, open(OUTP + ".json", "w"), indent=1)
 L = ["SMALL_RAM 12 GB rows (paper_rows.py; definitions in its docstring). tok/s geo / pooled; first token s mean (median,"
      " min-max); peak = lifetime phys_footprint GB"]
 f2 = lambda v, d=2: "n/a" if v is None else f"{v:.{d}f}"
@@ -99,5 +103,5 @@ for o in out:
              f" | whole request {o['req_geo']:.2f} / {o['req_pooled']:.2f} | first token {f2(o['first_mean'])} ({f2(o['first_median'])},"
              f" {f2(o['first_min'])}-{f2(o['first_max'])}; n {o['n_first']}) | prefill mean {o['pf_mean']:.2f} s | kept {o['kept']:.2f}"
              f" | MB/token {f2(o['mb_per_tok'], 0)} | peak {f2(o['peak_gb'], 3)} GB | {o['what']}")
-open("/Users/kamen/Fit12/data/paper/small_ram_12gb_rows.txt", "w").write("\n".join(L) + "\n")
+open(OUTP + ".txt", "w").write("\n".join(L) + "\n")
 print("\n".join(L))

@@ -28,7 +28,9 @@ ap.add_argument("--pad", action="store_true", help='forward to "native+p11+pad" 
 ap.add_argument("--layers", type=int, nargs="*")
 ap.add_argument("--md5", help="md5 list of the row-major files: written before a forward run, verified after --inverse")
 ap.add_argument("--yes", action="store_true", help="actually convert (default: read-only check)")
+ap.add_argument("--floor-gb", type=float, default=FLOOR / 1e9, help="refuse when the free disk would fall under this (default 112; Sun 11-08: the release package's 2-layer conversion test runs at 57 GB free)")
 a = ap.parse_args()
+FLOOR = a.floor_gb * 1e9
 D = os.path.abspath(os.path.expanduser(a.dir))
 ix_path = os.path.join(D, "index.json")
 ix = json.load(open(ix_path))

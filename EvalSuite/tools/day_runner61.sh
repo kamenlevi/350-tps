@@ -250,11 +250,13 @@ fast() {        # tag, keys, label: one stack process (all its keys), under this
 import json, os, sys
 runs = json.load(open(sys.argv[1]))
 S = {s for s in os.environ.get("QSETS", "").split(",") if s}     # the env's QOM sets (chat ones included for chat candidates)
-code = [r for r in runs if str(r.get("key", "")).split("/")[0] in S]
+cut = [r["key"] for r in runs if r.get("cut")]      # cut at the screen's time budget: not rows (r57rows leaves them out; Mon 11-09)
+code = [r for r in runs if str(r.get("key", "")).split("/")[0] in S and not r.get("cut")]
 qom = [r["key"] for r in code if (r.get("pf") or {}).get("qom_opt", 0) > 0]
 print(f"engaged: QOM optional uses on {len(qom)} of {len(code)} runs in the QOM sets {sorted(S)}; types "
       f"{sorted({str(r.get('type')) for r in runs})}; inert {sum(1 for r in runs if r.get('inert'))}, relaxed "
-      f"{sum(1 for r in runs if r.get('rlx'))}, span {sum(1 for r in runs if r.get('spn'))} runs")
+      f"{sum(1 for r in runs if r.get('rlx'))}, span {sum(1 for r in runs if r.get('spn'))} runs"
+      + (f"; cut at the time budget (not rows): {' '.join(cut)}" if cut else ""))
 sys.exit(0 if len(qom) == len(code) else 1)
 ENG
   return $rc

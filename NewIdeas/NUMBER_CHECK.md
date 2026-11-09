@@ -77,3 +77,356 @@ FINDING 2, the Strata note (0a) against the rows:
 ### 0b. CT1 (chat prefill bytes), judged 16:40 with scripts/chat/ct1_judge.py: OK vs BigMoE (acf8ac3)
 45 GB chat prefill 244.94 GB / 12 prompts = 100.9 % of 12 GB's 242.65 GB; mean base residency at start 45.7 %; routed-resident
 65.5 % base. PF-D's TTFT 3.1 -> ~1.6 s is [P] (BigMoE's fit 0.32 s + GB / 7.33).
+
+## 1. MAIN (v3-draft, file of Mon 00:29), first pass Mon 07:22-07:31 (`date`), before the 12:00 drafts
+Scripts: scripts/numcheck/main_check.py (-> data/numcheck_main_0725.txt), main_check2.py (-> data/numcheck_main2_0728.txt),
+plus the cited reports (CERT_VERDICT.txt, chs4 / chs5 / pfd_report_0009 / pfx reports, RESULT_chat_m1b) and two inline checks
+(Strata's file size; kept per check). Exact McNemar p recomputed from the discordant counts.
+
+### DIFF (sent to the editor)
+1. Abstract l67 "728 pairs pooled: -0.96 points, p 0.27": CERT_VERDICT pools 3 sets x 2 orders (HumanEval+, math, MBPP =
+   364 x 2); IFEval is not in the pool. p = 0.2649 (11 vs 18 discordant; recomputed) -> "p 0.26". Same label fix for Table
+   5.2's "pooled, 728 pairs" row and 6.1b's first note.
+2. Abstract l68 "111-115 on MBPP": S5 111.13, S5' 114.45 -> "111-114".
+3. Section 7 l524 "its Q8_0 read adds 3-4 %": B vs D pooled +2.7 % default cache (38.73 / 37.71), +2.3 % full cache (45.75 /
+   44.71); per set +1.3 to +4.7 % -> "2-3 % pooled (1-5 % per set)".
+4. Section 7 l519-521 break-even: "past 2,000 on chat with the certified config": N45 L 2,473, CHS4 y0 + y0b 1,758 ->
+   "past about 1,750". "about 530 with M1-B": the paragraph's own method (medians, pooled decode) gives 548 -> "about 550".
+   (OK: 252 HumanEval, 246 MBPP, 201 math, 343 chat as shipped.)
+5. Section 7 l525 "a larger cache adds 12-21 %": B +12.3 to +21.4 %, D +13.4 to +22.7 % -> "12-23 %" or name arm B.
+6. Section 7 l534 "default-cache passes repeat within 0.5-5.5 %": pass 1 vs 2 decode per set: B 0.1-1.4 %, D 1.2-5.0 %
+   (C 0.7-4.0 %, A 3.2-9.4 %) -> "within 5 % (B and D)".
+7. Section 7 l533 "at most 4 of 24 rows are token-identical to our exact reference": full sequences 2 of 24 on HumanEval and
+   IFEval (both default passes), 0 on MBPP and math; 4 of 24 HumanEval rows agree up to the shorter answer.
+8. Table 6.1c l441 (M1-B + COH): peak "41.7-42.4 (CHS4 arms)": its own records give 42.36 / 42.38 -> "42.4". Status "a known
+   multilingual benchmark decides" and 5.3 l371-373: stale (Kamen 11-08: multilingual is information only; the gate is card
+   arm m1b, EV:PREREG_card_gates).
+9. 6.1b l432 (and l946 / l948 per EvalSuite): "gate open until 15:00" -> 16:00 (MONDAY.md l10 / l15).
+10. 5.3 l368 "+13 % over the certified config in the same run": CHS5 has no certified arm; 49.80 (CHS5 z0 + z0b) / 44.18
+    (CHS4 y0 + y0b) = +12.7 % across two runs -> drop "in the same run". Misses 92 -> 25 OK (93.6 / 90.4 -> 24.6).
+11. 6.3 l475-477 "44-79 %": over Tables 6.1a-c the first-token share runs 43 % (pdz4a) to 80 % (X HumanEval); 44-79 % holds
+    for 6.1a-b. "6.03 s per request" -> 6.04 (217.1 / 35.96); "exact chat 3.80 of 6.78 s" -> 3.79 of 6.77 (140.6 / 37.14, / 20.78).
+12. 4.3 l280 kept per check "5.9 on MBPP, about 6.6 on math": pooled tokens / checks: MBPP 5.96 (EB) / 6.13 (L), math
+    6.48 / 6.49 -> "6.0" and "6.5" (HumanEval 10.68, chat 2.45-2.53: OK). If the source is a mean of per-prompt values, say so.
+
+### OK (re-derived, same to the shown digits)
+- Abstract: 96 / 96 code, 24 / 24 chat, 24 / 24 math (N45, prefix to n); 36 / 36 with yes1 (12 / 12); 101.4 / 70.4 / 77.9 /
+  37.1 at 41.70-42.50 GB; lossy 171-175 HumanEval (170.96 / 175.35), 86.9 math, 43.4 chat at 42.38-43.10 GB; first token
+  2.73-4.59 s; whole request 20.78-39.56; PF-D 2.908 -> 2.263 s; Strata 40.63-47.11 tok/s, 0.540-1.013 s; ratios x2.4-3.7,
+  x1.8, x1.6-2.2, x1.7; 43.4 vs 41.8; 37.1-38.3 vs 40.6; Strata wins or ties every whole request (math 39.56 vs 40.55,
+  38.86 vs 39.87); break-even 200-250 code and math, ~340 chat as shipped.
+- Table 6.1a every cell (decode, whole request, first-token median and range, peak, == AR); 37.8 / 37.9 (ycoh / ycoh2,
+  12 / 12) and 3 / 12 without coherent reads (ycoc / ycoc2 in chs4_report).
+- Table 6.1b every cell incl. S5 175.35 / 111.13 (no pfs in S5 records, as stated); 6 / 24 and 7 / 24; S5' passes 8 / 12.
+- Table 6.1c every cell except item 8: X rows; z0 + z0b 49.80 / 24.38 / 2.92 (2.34-3.81); zs 51.89 / 24.84 / 2.98
+  (2.51-3.65), == z0 12 / 12; pdz4a 50.67 / 28.84 / 2.26 (1.55-2.59) / 43.69; pdz0 50.29 / 24.59 / 2.91 (2.34-3.74) / 42.40;
+  12 / 12 tokens and 721 / 721 logits hashes; zsgcr 56.04 / 24.62 / 2.94 (2.55-3.74). PF-D v3 medians 2.25-2.41 (pdz1p,
+  pdz1, pdz1q); 9.63 vs 7.50 GB; unused B 19.3 % / C 31.4 % (report totals); pdzfa 1.83 s, 30.45, 2 / 12 equal.
+- Memory exceptions: npl 45.11 GB, npe 44.46 GB, plm1 45.10 GB; every Table 6.1 row <= 43.69 (others <= 43.10).
+- 6.2 every cell (npe means 15.9 / 40.1 / 64.1; pe1024 15.2 / 37.3 / 61.9; plm1 8.0 / 12.9 / 18.0; SSD 109.3 -> 63.9,
+  264.5 -> 67.2, 430.1 -> 68.3 GB; hashes 8 / 8, 28 / 28, 22 / 22); lossy 16.3 / 41.2 / 66.6 (npl means).
+- 6.3: CT1 re-fit 0.318 s + GB / 7.33 GB/s, 20.41 GB per prompt; 1.63 s at 9.63 GB; 24.6 -> 28.8; 50.3 / 50.7.
+- 7: file 75.84 GB; Table 7.1's 24 Strata cells; x1.21 / x0.86 / 2.71x; first token 2.70-7.03x; MTP +53.0 % (25.31 ->
+  38.73), 86.8 % accepted; 32 GB rows (33.8 / 19.8 / 2.83 at 30.62; 51.3 / 22.5 / 2.99 at 31.22; Strata 35.83 / 37.26,
+  28.20 / 29.54, 1.06 / 0.98 s).
+- 4.1 arithmetic (4.9152 M per expert, 120.80 B, 2.36 B active, 6.0 / 6.65 B, 125.7 B); 67.9 GB and 1.33 GB per token
+  agree (67.9 / 24,576 x 480); 45 GB = 41.91 GiB. 4.4: EB +3.7 / +2.9 %; 1-row check +1 % (38.28 vs 37.80 / 37.93) and
+  +4.2 % lossy (51.89 / 49.80); NAX6-N 44.74 / 42.12 = +6.2 % (arithmetic only). 4.5: 1.9-3.4x vs pe1024; pde4k 87,912
+  rows, 12 / 12. 5.2: every cell = CERT_VERDICT.txt. 3.4: 2 vs 7 -> p 0.1797; -8.33 with p 0.0625 consistent (0 vs 5
+  of 60). 5.3: 334 per 10K (235 / 7,033); 86 vs 87, 83 vs 87.
+
+### Not yet re-derived (cited sources, next pass)
+3.2 audit counts (16,305; 15,690), 3.3 (11.65 vs 15.50), 3.4 table cells, 4.2 (-17.2 %, +8.3 %, 31.8 GB, ~250 ms, 142.2 ->
+181.2), 4.4's T-numbered levers, 5.1 (2,888 copied tokens), 5.2 "1 of 12 IFEval rows (CERT)", the chs3 bisect counts, 2's
+67.8 % HumanEval copying, 4.3's chat check cost at 1-2 rows, sections 8-12 and the appendices.
+
+### MAIN DIFF 13 (found while checking RELEASE)
+13. 4.1 l251 "the store is 72.1 GB (BM:DESIGN_3bit.md)": records3 on disk is 48 files, 68.451 GB (1,426,063,360 B per
+    layer = 2.785 MB per expert); 72.1 GB was the design's RECSZ 2,932,736 B. RELEASE's 68.5 GB is right.
+
+## 2. RELEASE (draft v1, file of Mon 07:22), first pass Mon 07:31-07:33 (`date`)
+Same scripts and records as MAIN; plus the pack's safetensors headers (bytes by tensor name), du of records3 and of the drafter
+file, pfd.log Part B, and pdz4a's pfd counters.
+### DIFF
+1. Section 2, row "45 GB E (+ bundle)": the IFEval cell is yes1 = E + coherent reads + the 1-row check, one pass (not EB, two
+   passes like the other cells). Name it in the cell.
+2. Row L, IFEval: 44.2 / 20.8 / 3.05, 42.39 is CHS4 y0 + y0b (OK as numbers). MAIN quotes N45 L (43.4 / 21.1 / 3.00, 42.37) for
+   the same config in its abstract and Table 6.1b. One choice across the set, or "43.4-44.2".
+3. Peaks: chat as shipped "43.70" -> 43.69 (pdz4a record); PF-A / PF-B "45.10 / 46.20" -> 45.09 / 46.23 (pdpa1 / pdb38s). The
+   run reports round peaks to 0.1 GB and print two decimals; two-decimal peaks should come from the records.
+4. Section 6 l139 "supplied 72-75 % of the rows read from the SSD" -> 71-75 % (B 74.97 %, C 71.48 %, pooled 73.7 %).
+5. Not a number: l51 cites the Sun 18:2x 49.6 -> 40.0 drop "with PF-D"; the editor's note 10 says never cite it as a PF-D cost
+   (BigMoE's WED_TESTS l1204: not reproduced, cause unknown). Editor's call.
+### OK
+- Section 2: every filled cell re-derived (E rows 101.36 / 32.55 / 4.41 / 42.239, 70.38 / 21.74 / 3.80 / 41.917, 38.28 / 21.27
+  / 2.82 / 41.687, 77.89 / 38.86 / 2.73 / 42.499; L rows 170.96 / 35.96 / 4.56 / 42.907, 114.45 / 25.77 / 3.79 / 42.555, 44.18 /
+  20.76 / 3.05 / 42.386, 86.91 / 39.56 / 2.96 / 43.099; M1-B + COH 49.80 / 24.38 / 2.92 / 42.377; chat as shipped 50.67 /
+  28.84 / 2.26, tokens == pdz0 == zs == z0 on 12 / 12, hashes 721 / 721; e32 33.81 / 19.82 / 2.83 / 30.618; C30 HumanEval
+  150.72 / 36.03 / 4.43 / 31.779, MBPP 111.03 / 26.78 / 3.69 / 31.436; zs32 51.33 / 22.52 / 2.99 / 31.223).
+- "Where we lose" (0.5-1.0 s, 2.7-4.6 s, 2.26 s, 28.8, 0.83 s, 33.0-33.7, peaks 40.8-41.2, 2.7x, 50.7 vs 40.6-41.8); long
+  prompts 433 / 500 tok/s (pdpa1 18.34 s, pdb38s 15.87 s at 7,932 tokens); PF-D 87,912 rows, 2.91 -> 2.26, 24.6 -> 28.8, 50.3
+  / 50.7, E 2.89 -> 2.26 (pde0 -> pde1, CAP 64), extra peak 1.0-1.3 GB (E: 0.83), 1.83 s / 30.5 / 10 of 12.
+- Section 3: pack 105.42 GB = routed 67.948 + n-gram 32.000 + dense 3.795 + MTP 1.673 (safetensors headers and file sizes);
+  store 68.451 GB; ~174 GB; drafter file 1.141 GB. Section 5: 45.1-46.4 GB on 7.9K prompts (npl 45.11, pde4k 46.39); 19-31 %
+  unused (B 19.3, C 31.4); 7.5 -> 9.6 GB; ~7.3 GB/s (CT1 fit 7.33).
+- Open: TBD-16 (L + COH rows: rel1 at the lcoh -> m1b seam today), TBD-11 (32 GB exact code / math rows).
+
+### MAIN DIFF 14 (found while checking DRAFTER)
+14. 4.4 table, "drafter by task: chat +24.5 % on 23 fresh prompts": the +24.5 % is on the 19 chat prompts of D-23d's 23 (the
+    other 4 are agent prompts, which stay on the block drafter) -> "on 19 fresh chat prompts".
+
+## 3. DRAFTER (v1.1 full draft, file of Sun 23:51), first pass Mon 07:33-07:38 (`date`)
+### Re-derived from raw data: OK
+- Abstract / Appendix C row 1-3: tokens per 16-row pass, my own walk over TL:data/d22r_b3 / d22r_b4 against TL:data/d17
+  (stock), same definition as d22_real.py (draft k at position p predicts out[p + k], answers cut at <|im_end|> /
+  <|endoftext|>): code 7.78 -> 10.98 = x1.411; gsm 6.07 -> 6.86 = x1.131; IFEval 2.43 -> 2.49 = x1.024; multi 2.92 -> 3.00 =
+  x1.028; b4: code 10.65 (x1.368), IFEval 2.51 (x1.031), multi 3.03 (x1.038).
+- Abstract / row 10 (D-23d), from TL:logs/d23d.out per-prompt lines: chat (19 prompts) whole decode 23.12 -> 28.79 (+24.5 %),
+  whole request 18.56 -> 21.95 (+18.3 %), prefill median 1.90 s both arms (1-decimal log values), lifetime peak 37.9 GB.
+- Row 22, from BM records: x2e 36.61 -> x2ep4 36.94 (exact neutral); y0 43.80 -> y0p4 40.22 (-8.2 %).
+- Row 27 / abstract: F2a held-out x1.014 (2.301 -> 2.334, 2.507 -> 2.540), on-policy x1.002 (2.444 -> 2.450) = f2a_eval.txt.
+- Row 28: Strata +53.0 % (25.31 -> 38.73), 86.8 % accepted (MAIN check).
+- Abstract "83 items, 41 killed, 27 between / parked / information": Appendix A1-A6 has 83 rows; 42 verdicts contain KILL,
+  41 without D-12 ("KILL at the desk, overturned by D-17"); 11 BETWEEN + 19 other (27 without DROPPED, OPEN, withdrawn).
+  Wording: several kills are desk / paper kills, not "by their own pre-registered lines".
+### DIFF / notes (sent to MTP Head)
+1. Row 23 / abstract "~114 tok/s" from "47.0 ms + 3.25 per row" (+ draft 0.43 + 2.59 per row): a plain least-squares fit of
+   ck on rows over the same 1,280 checks (nie1-2, first 3 checks of each prompt skipped; median wall by rows matches
+   chat150_read within 0.1-1 ms) gives ck = 44.9 + 4.00 x rows, and with it the 16-row ceiling is ~106 tok/s. The fixed share
+   (74-85 % at 2-4 rows) holds. Name the estimator, or write "~105-115 tok/s".
+2. Row 22: peaks "42.30 vs 42.40 GB" -> records 42.28 vs 42.37. Draft "9.1 -> 16.2" / "8.7 -> 14.9 ms" are the reports'
+   per-prompt means; pooled per check 8.6 -> 14.4 / 7.9 -> 13.4 (the same +68-70 %).
+### Not re-derived (result files cited): rows 4-9, 11-21, 24-26 (the walk data exist; next pass if time allows).
+
+## 4. SMALL_RAM (file of Sun 22:31), first pass Mon 07:38-07:41 (`date`)
+Scripts: scripts/numcheck/f12rows.py (Fit12's per-prompt lines + phase logs, my own
+parser: whole decode = sum tok / sum decode s, whole request = sum tok / sum (prefill + decode), first token = prefill + end
+of check 0's verify phase - window start), strata_low.py (Strata's request rows), E24 / E24m per-prompt log lines.
+### DIFF (sent to Fit12)
+1. 24 GB rows (abstract l42-43, Table 6.1, 6.5): "41.3 (per pass 41.8, 40.8)" and "38.4 (38.2, 38.6)" are geometric means
+   over prompts (the runner's aggregate; my geo 41.28 / 41.79 / 40.77 and 38.36 / 38.19 / 38.53). Pooled (STYLE 3): HumanEval
+   41.07 (passes 41.65 / 40.50), MBPP 37.43 (37.37 / 37.49) -> "41.1" and "37.4". The "1.4-1.6x" over Strata still holds
+   (37.43 / 26.58 = 1.41; 41.07 / 26.42 = 1.55).
+2. 6.4 l599 / abstract "Strata's first token 1.4-1.7 s at 24 GB and 2.0-2.8 s at its smallest settings": true on code and
+   chat; math is 2.13-2.31 s at 24 GB and 3.23 s at the 4 GB arena -> add "on code and chat".
+3. TBD-33 resolved: Strata's report "END TO END" = geometric mean over requests of generated / request wall time (StrataEval
+   h2h/report.py l8): smallest setting chat 9.70 vs the pooled 11.22. The paper's whole-request numbers are pooled (OK).
+### OK
+- Table 6.1, all nine 12 GB rows to the digit: tab12e 18.34 (18.38) / 13.12 / 4.29 (3.47-5.85) / 11.140; chat12 12.76 (12.88)
+  / 10.09 / 2.92 (2.33-3.71) / 10.962; tab12f 27.90 (27.58) / 17.60 / 4.15 (3.29-5.71) / 11.280; c1u16 44.34 (46.33) / 24.92
+  / 4.30 (3.61-5.18) / 11.245; ex16 18.47 (18.42) / 13.90 / 4.51 (4.21-5.93) / 11.144; chw13a 12.56 / 9.32 / 2.90 / 10.962;
+  chw14c2 13.97 / 10.07 / 3.04 / 11.012; chw14ha 18.69 / 14.11 / 4.48 / 11.145; chw14h2 18.47 / 13.98 / 4.48 / 11.159.
+- 32 GB rows (e32, zs32); Table 6.5's 13 Strata cells and peaks 23.75 / 24.14 / 14.82 / 14.19 (summary.json peak_footprint_b).
+- 6.2: tokens per check, pooled: code 8.86-10.09, chat 2.34-2.35; FAST x1.52 (27.90 / 18.34). 6.3: peaks 10.96-11.28;
+  +0.38-0.70 GB over 10.583; Strata 14.19 - 3.37 = 10.82 GB. 6.4: 21,986 MB in 2.906 s, 21.3 tok/s (62 timed tokens, as
+  the paper states). 6.5 bullets: +13 % (14.42 / 12.76), +11 % (11.22 / 10.09), 2.78 vs 2.92 s; 12.89 vs 13.12, 1.99 vs
+  4.29 s, 18.34 vs 15.47.
+### Not yet checked: sections 3.0, 4 (decision map) and 5 (BYTES10, incl. the abstract's 81.7 vs 210.2 MB [P]), 6.2's MB per
+kept token (491-564 / 436-441), section 7 (verify-call time), section 11.
+
+## 5. KERNELS (v1.0 full draft, file of Mon 00:18), first pass Mon 07:41-07:44 (`date`)
+### OK (raw outputs re-read or re-derived)
+- R2 (D:inv1_screen.txt): 37 records per forward both ways; logits rows equal 16 / 16; rows with a differing record 0 / 16.
+- R5 (D:kern23.txt): dense part per 16-row check 56.8 -> 27.4 ms, floor 11.9.
+- R23 (D:natfri/r57 runs.json, my pooling over the 13 prompts kept in all four arms): 3c-N 42.12, NAX6-N 44.74 = x1.0622;
+  peaks 38.10 / 38.11.
+- R24 (D:k90_arm012.txt "QUIET" section, bw_probe_k90.txt): R 295-305 GB/s at S 16-32 (287 at S 8 per TABLE_350); NAX6-N
+  218-219 GB/s = 74 % at S 16, 70-72 % at S 32; NAX6 55-59 %; 4 GB probe 285-286 GB/s.
+- R20 (pfd.log Part B; pdpa1 / pdb38s records): 215 / 432 / 500 vs 189 / 358 / 433 tok/s, x1.14-1.21; abstract's 46.2 GB.
+- R28 (D:dnks_bench.txt): -7.74 ms per 2-row check; engine -4.19 ms (mean of 55.17 / 55.30 -> 51.05).
+- x0.75 (11.65 / 15.50 = 0.752); 220 tok/s (12 / 54 ms); dispatch 2-6 ms (1,000-4,000 x 1.6 us); ten MLX findings (5.1-5.10).
+### DIFF (sent to Leap)
+1. Abstract l57 "ours (about 3-4.6 s)" -> "2.7-4.6 s" (MAIN 6.1 medians 2.73-4.59 s; 2.26 s on chat as shipped).
+2. R20 / 4.6 l231 peaks "46.20 vs 45.10 GB" -> records 46.23 / 45.09 (the run reports print 0.1-GB-rounded peaks).
+3. 6.4 DN-KS: the 7.74 ms is over 5 narrow kinds incl. shared down (16.7 -> 9.1 us x 48 = 0.36 ms); the text lists four,
+   whose savings sum to 7.38 ms. Add shared down.
+4. 6.4 table, attention query projection "243-247 GB/s": the row's own 17.7 MB / 74-75 us = 236-239 GB/s (DN-KS bench: 74.9 us,
+   236 GB/s). k / v "18 GB/s": 0.8 MB / 48-49 us = 16-17. Check R27's raw.
+5. 6.2 "At S 16 ... 287-305 GB/s ... 70-74 %": 287-305 and 70-74 % span S 8-32; at S 16 it is 295-296 GB/s and 74 %.
+### Not yet re-derived: R1, R3-R4, R6-R19, R21-R22, R25-R31's raw files; section 5's MLX findings (reproductions).
+
+## 6. EVALUATION (file of Mon 06:45), first pass Mon 07:44-07:45 (`date`)
+### OK
+- CERT row and section 5.2 of MAIN: every delta and p recomputed from the discordant counts in results/cert/CERT_*.txt (exact
+  two-sided McNemar): 0 vs 4 -> 0.1250; 2 vs 2 -> 1.0; 1 vs 3 -> 0.6250; 1 vs 4 -> 0.3750; 5 vs 3 -> 0.7266; 3 vs 4 -> 1.0;
+  4 vs 6 -> 0.7539; pooled 11 vs 18 -> 0.2649 (-7 / 728 = -0.96); accuracies match the counts (148 / 164 = 90.2 %).
+- M1-B + COH chat gate: 4 vs 5 -> p 1.0 (-1.00); 4 vs 8 -> p 0.388 (-4.00).
+- Tables 1a and 2: every p is the exact McNemar p of the smallest discordant split that gives the stated delta at the stated
+  n (e.g. 0 vs 6 -> 0.031 for ship8; 2 vs 5 -> 0.4531 for STACK MBPP; 0 vs 7 -> 0.0156 for theta 0.8; 6 vs 3 -> 0.508 for the
+  IFEval re-test); consistent. Abstract "8 points on 50 items" = REF2 math +8.0 (n 50).
+### DIFF (sent to EvalSuite)
+1. Abstract l18-19 "The 45 GB release configuration passed all 10 pre-registered lines" and Table 2's "CERT, the 45 GB release
+   FAST configuration": the certificate covers L (the certified config); the release ships L + COH, which it does not cover
+   (MAIN 6.1b, RELEASE 2; its own gate is card arm lcoh). The 10 lines are 8 set-order lines + pooled + the long-code line
+   (the abstract names 9).
+2. "Pooled over 728 pairs": name the 3 pooled sets (HumanEval+, math, MBPP; IFEval is not in the pool).
+### Not re-derived: Table 1b's audit counts (EV:RESULT_r56* / nax6 files), the card-gate reference counts (381 / 381; rows at
+the cap 10 / 54 / 88), section 4.6's power estimate (5-15 % [P]).
+
+### SMALL_RAM second pass, Mon 07:45-07:47 (`date`), on the file Fit12 updated after the first pass
+- OK, re-derived: 3.1 settings (ex16 log: C_m 47 / C_l 32 (9 %), pools 6.03 GB, MLX active 8.96 GB, drafter 0.928 GB, 10.583
+  GB after load); 3.4 (e0 36.43 -> e32 33.81 = -7 %, zs 51.89 -> zs32 51.33 = -1 %; misses per check pooled from checks.json
+  89.8 -> 168.4 and 24.6 -> 42.7); 5.4 table (x2c0 44.80 / 97.8 / 41.8, x2c0b 43.71 / 91.1 / 40.9, x2qm1 45.26 / 42.8 / 22.8,
+  x2qm2 49.05 / 25.8 / 15.5, x2qm2s 52.01 / 28.2 / 15.1, x2e 36.61 / 89.8 / 40.0; +10.7 %, -63 %, -73 %); the gated config
+  (z0 49.67, z0b 49.94, 24.39, first token median 2.9245 (2.40-3.72), 36.4 of 71.4 s); 5.5 and 6.2 SSD MB per kept token
+  from the phase logs' byte counters (chat12 556, chw13a 564, chw14c2 491; code 436-441); replay outputs (24 GB EXACT 210.2
+  vs QOM0.5+next 81.7 = -61 %; 45 GB EXACT 38.1; 5.5x and 16x); section 7's table is internally consistent (nl - CPU
+  column; 81.4 ms per GB = 12.3 GB/s).
+- DIFF (minor): 5.4's peak column and the gated config's "42.40 GB" are the report's 0.1-GB-rounded values; records:
+  x2c0 42.37, x2c0b 42.41, x2qm1 42.38, x2qm2 42.38, x2qm2s 42.33, x2e 41.70, z0 42.36.
+- Not re-derived: section 4's map outputs (DM:out/gate.txt, BD:data/m1/m1_quality.out), section 7's fit (F12P raw), 11.
+
+### MAIN DIFF 15-16 (second pass on section 4, Mon 07:47-07:48 `date`)
+15. 4.2 l267 "+27.4 % whole decode on the lossy config (142.2 -> 181.2 tok/s, 12 HumanEval)": geometric means over prompts
+    (F:2026-11-07_0945 says "geo mean"). Pooled (s6b1-2 vs s6w1-2): 144.05 -> 180.13 = +25.1 %.
+16. 4.4 table, cache keep "x1.10 on the lossy config": the geo of the screen's steady rate (tpsw; 149.1 -> 164.2, passes
+    148.1 / 150.0 -> 161.6 / 166.5 reproduced), which STYLE 3 calls information only. Whole decode pooled (scb1-2 vs sck1-2):
+    127.25 -> 134.92 = x1.06.
+    General note: the older levers in 4.4 (T489, T309, T14, M-17, T782) carry their own runs' metrics (often geo or steady);
+    label them "as measured then (metric)" or re-derive them pooled.
+
+### 0a pending items, closed Mon 07:48 (`date`)
+- "1.7 s + 22 ms per prompt token" (the Strata note): least squares on z0 + z0b's 24 rows gives 1.76 s + 22.1 ms x P (P 37-101);
+  z0 alone 1.79 + 21.4; zs 1.93 + 19.1. The note's "1.7 s" rounds 1.76 down: "1.8 s". Information; no paper uses the fit.
+- "~530 answer tokens" (49.9 config vs Strata's full-cache Q8_0 arm): by first-token medians and pooled decode it is 540
+  (z0b, 49.94) to 548 (z0 + z0b, 49.80): "about 550" (MAIN DIFF 4).
+### DRAFTER row 6 (Mon 07:48): the MTP K15 side re-derives from TL:data/d17 (code 7.78, gsm 6.07, IFEval 2.43, multi 2.92);
+the block drafter's side (10.44 / 6.60 / 2.24 / 2.22 / agent 3.28) is from d17_route.txt (its per-position arrays are not in
+d17/); the ratios 0.746 / 0.919 / 1.084 / 1.315 / 1.295 follow from those sums. OK.
+
+### MAIN Appendix E and F (Mon 07:49 `date`)
+- Appendix E (main_table.py output): every pooled value, whole request and first-token cell agrees with my re-derivations
+  (sections 0a-2 and 1); the per-pass geos match the run reports (spb 168.6 / 179.6, nie 39.9 / 39.8, z0 53.4 / 54.1, ...). It
+  has no PF-D rows (pdz4a / pdz0); add them if Table 6.1c keeps them.
+- DIFF 17: F.1 "a check's 3,000-3,900 launches cost 2-6 ms": at 1.24-1.56 us per launch that is 3.7-6.1 ms ("4-6 ms"), and
+  KERNELS 6.3 says "about 1,000-4,000 kernels" per check (-> 2-6 ms). Align the two papers on one launch count.
+
+### DRAFTER rows 7-8 and EVALUATION Table 1b (Mon 07:50-07:51 `date`)
+- DRAFTER section 3.2 table, D-20b and D-23, re-derived from TL:data/d20_runs.jsonl (C 224, head b3, 17 prompts with both
+  arms) and d23_runs.jsonl: 15.95 / 20.30 (+27.3 %), chat 11.38 / 15.07, whole request 7.11 / 6.42 and chat 9.18 / 11.61
+  (+26.5 %), first token 3.94 / 3.94 s; D-23 29.43 / 28.65 (-2.7 %), 7.09 / 7.04, 3.80 / 3.82 s. OK.
+- DRAFTER DIFF 3 (Appendix C row 7 only): "chat +26.0 % (6 of 6), math +18.3 %, agent +27.0 %" are means of per-prompt
+  rates (TrainLab REPORT l1636); pooled per type: chat +32.4 %, math +19.8 %, agent +42.0 % (code -14.7 %).
+- EVALUATION Table 1b = the result files: R-56 28 / 36 (math 4 / 12), 2,153 / 2,199; R-56b 16,341 tokens, 16,305 / 16,305;
+  R-56c and R-56d 15,525 tokens, 15,489 / 15,489; NAX6-N 15,726, 15,690 / 15,690; card line check 12 / 12. OK.
+- KERNELS R-rows spot-checked in Leap's raw files (Mon 07:51 `date`): R1 (logits 0 / 16, 16 / 16 rows differ), R4 (14.0 vs
+  35.2, floor 7.1), R7 (0.776 vs 1.242 ms, 75 % of the 0.580 floor), R9 (E 24.51 -> best 9.82 = -14.69 ms), R10 (qmm27),
+  R12 (45.0 / 38.8 / 13.9 / 2.4 %), R14 (= ycoh / ycoh2: 37.80 / 37.93, 21.10 / 21.28, 2.83 s), R15 (304 rows at 1,565),
+  R18 (bf16 210+ rows) all present as stated. OK.
+
+### MAIN DIFF 18-21 (section 11, Mon 07:52 `date`)
+18. 6.2 l470-471 "PF-B gains +15-22 % and is not bit-exact" and 11.2 "changes the logits (0 of 7-28 hashes equal) and peaks at
+    46.0-46.2 GB": stale. Since the seg-per-chunk fix, pdb38s / pdb32s (pfd.log Part B) equal PF-A in tokens and logits
+    hashes (8 / 8, 28 / 28, 22 / 22) at x1.12-1.21 (500 tok/s at 7.9K; peaks 46.23 / 45.81 GB). KERNELS R20 and RELEASE
+    already say exact; align MAIN (the "not bit-exact" numbers are the pre-fix pfb_report arms).
+19. 11.4 "the chat stack (56.0 tok/s, +27 % in its run)": +27 % is over the certified config's CHS4 runs (44.2); in its own
+    run (CHS5) zsgcr is +12.8 % over z0. "wait for a known multilingual benchmark": stale (card arm). "the X build (+2.9
+    to +4.0 % on code)": pooled X over B is +6.0 % HumanEval (181.29 / 170.96) and +4.7 % MBPP (119.83 / 114.45); geo +4.2 /
+    +2.9 %.
+20. 11.5 "+5.8 % whole decode" (never waiting for cold experts): pooled from s1bb1-2 / s1bn1-2 it is 141.42 -> 150.18 =
+    +6.2 % (geo +5.9 %); BETWEEN unchanged (the pre-registered line used the full period, +6.9 %).
+21. 11.6 "Every measured row sits at 41.7-43.1 GB": the PF-D row is 43.69 -> "41.7-43.7 GB (43.1 without PF-D)".
+- OK in 11: 20.4 GB, 65.5 % / 25.1 % resident (CT1 pfst sums), 0.32 s + GB / 7.33, 3.10 -> ~1.6 s at 9.2 GB [P], 2.91 ->
+  2.26, 1.83 s, 19-31 %, 0.54-1.01 s, 1.9-3.4x, 0.1 GB trim, 3.8-5.2 GB/s (67.2 / 12.9 and 68.3 / 18.0), 87 % / 53 %.
+22. 10.0 row 1 "142.1 tok/s whole decode" (the correction of 180.3): the geo of per-pass geos (F:2026-11-07_0500 says so);
+    pooled from s1n1-2 it is 142.77 -> "142.8". 10.0b repeats DIFF 18 (PF-B "not exact") and DIFF 20 (+5.8 %).
+- SMALL_RAM 4.1-4.3 and 11 (Mon 07:54 `date`): 10,316 / 10,316 rows (3,366 / 3,397 / 3,553) = DM:out/gate.txt; lines 1.34
+  [0.87] / 5.42 [2.22] / 3.69 [1.63] % = 45 / 3,366, 184 / 3,397, 131 / 3,553 (lines_check_gate_top2.out); section 11:
+  21.986 GB / 2.906 s = 7.57 GB/s, ~1.8 s at 12 GB/s, OPT 386.8 vs 621.6 = -37.8 %, ceiling 2.43 / (48.5 - 5.7 ms) = ~57
+  tok/s. OK. Not re-derived: 3.0 and 5.1-5.3 (SB / BD sources, [P] replays).
+- EVALUATION 4.6 / abstract "5-15 %" [P] (Mon 07:55 `date`): with exactly N x d discordant rows split 50 / 50, P(delta <= -5)
+  = 5.5 % (N 100, 10 %), 15.1 % (N 100, 15 %), ~5-7 % (N 150, 15 %): the paper's figures. With binomial discordance: 7.6 /
+  12.1 / 5.7 %; 6 independent orders 29-54 % (paper "~25-50 %"). The abstract's 5-15 % holds either way. OK.
+- EVALUATION abstract counts = Table 2: four extra passes (HC8, S4, C30 HumanEval+ only, M1-B + COH IFEval only); six
+  quality modes failed (RELAX A_E / C_E / B_F / B_G / T3ALL, ship8); STACK on the -5 boundary; every 12 GB candidate (T0,
+  theta 0.8 / 0.9 / 0.95). OK.
+- DRAFTER rows 6, 11, 15-18, 20, 21, 25 = their TrainLab result files (Mon 07:55 `date`): d17_ci (0.746, CI 0.703-0.791, ...),
+  e2_read (9.37 / 9.46 / 9.57; 9.79 / 9.85), rerank0 (11.57 x1.209, 12.37 x1.292), mtppick_sim (9.58 -> 10.28, x1.073),
+  d24_read (7.82 ms per row), d23h_read (12.60 with +G), chat150_read (x0.44-0.59, hybrids x0.89-0.98, oracle x1.012),
+  head_bench (1.475 ms), mtp_3bit_vs_4bit (4.02 -> 4.09). OK (result-file level).
+- KERNELS (Mon 07:57 `date`): R16 / R17 (pfb_seg: 41 rows at 1,100, ...), R21 (r40s3s: 0 / 64 rows, 0 of 655,360 elements), R25
+  (r40s4c: 220 / 220 logits rows) present. DIFF 6 (minor): R13 quotes D:s7b_probe.txt (B1 20 / 20, B2 505,808-524,288,
+  barrier 16 / 20, coherent 0 / 20); the also-cited s7b_probe2.txt repeat gives B1 19 / 20, B2 min 96, barrier 20 / 20. Give
+  the range ("barrier 16-20 / 20") or cite probe 1 only. Its cost "+0.7 % / +26.3 %" is coh_check.txt's third run under a
+  share lock ("rough speed"; earlier runs +1.5 % / +inf); label it rough. (The engine A/B later found coherent reads cost
+  nothing on chat: ycoc / ycoc2 37.7 / 38.0 vs ycoh / ycoh2 37.8 / 37.9.)
+- MAIN 9.1 (Mon 07:56): every number matches its ledger entry by ID (M-20 +50-65 us, ~3 ms; M-28 283 / 96 us, wake 44,
+  dispatch 8; spacing 270 / 44 us; M-29 400 us, 97.5 %; follow-up 87-94 %). OK.
+- RELEASE section 3 / 4 environment (Mon 07:56): macOS 26.5 (25F71), Python 3.12.13, MLX 0.32.2, mlx-lm 0.31.3, MTPLX 2.12.2,
+  vendored nanobind 2.15.0 (NB_VERSION in the package), d22_b5.safetensors 276.6 MB ("277 MB"), l120_ft 1.141 GB. OK.
+
+## 7. New rows since the first pass (Mon 10:31-10:34 `date`)
+### BigMoE REL ROWS (L + COH, the shipped lossy config; RELEASE TBD-16 / rows 27 and 32), re-derived from data/r57/rl*_runs.json
+- rlh 164.05 / 36.16 / 4.60 s (mean 4.70) / 42.94 GB, == AR 5 / 12, 7 ended before the cap; rlm 112.71 / 25.28 / 3.72 / 42.60;
+  rli 45.40 / 22.26 / 3.12 / 42.42; rlt 78.91 / 37.87 / 3.20 / 43.17; rli_160 38.95 / 21.12 / 2.90 / 31.30; rlr 44.92 / 22.52 /
+  2.91 / 42.42; IFEval pooled (rli + rlr, 24 rows) 45.16 / 22.39 / 3.01 s / 42.42 GB. REPEAT rlr == rli 12 / 12; C 160 == C 256
+  12 / 12. All = WED_TESTS l1231-1262. vs L = S5' X / N45 (CERT + the bundle): -9.5 % / -5.9 % / -9.2 %; IFEval +4.0 %
+  (45.16 / 43.44; the note's "+4.1 %" uses rounded inputs).
+- Env check (data/stack): s5p_env = cert_env + 6 keys (PAUSE_EVERY_MS 50, DQ1, S0CARRY, COMMIT_SUB 9, PLE_LATE, SB_FIRST =
+  the Sunday bundle); lcoh_env = s5p_env + REF2_NAX_COH=1; scripts/n45.sh and chs*.sh build L from s5p_env. So N45 L and CHS4
+  y0 / y0b ran CERT + bundle (as EvalSuite / BigMoE noted 10:1x), and only S5 / S5' B are the certified flags themselves.
+### EvalSuite card gate lcoh (RESULT_card_lcoh_2026-11-09): PASS confirmed
+- GPQA Diamond, my own recount from the raw rows (scripts/numcheck/gpqa_recount.py; simple-evals answer pattern; gold from
+  data/items/dec_gpqad.jsonl): 47 vs 44 % in both orders, arm only 6 / reference only 3, +3.00, p 0.5078. Identical.
+- LCB v6, my own code extraction + sha256 key into the grade cache (lcb_recount.py; 0 cache misses): forward 40 vs 42 (2 / 4,
+  -1.53, p 0.6875), reverse 38 vs 42 (2 / 6, -3.05, p 0.2891). Identical.
+- IFBench (n 150): 5 / 10 -> -3.33, p 0.3018 recomputed from the counts (not re-graded: its checkers are EvalSuite's).
+### Re-check of the 10:3x drafts (Mon 10:34-10:36 `date`; scripts/numcheck/diffnums.py against the 07:49 snapshot)
+- MAIN: DIFFs 1-22 applied as sent; every changed number re-checked OK (68.5 GB store, +25.1 %, 6.0-6.1 / 6.5 kept, x1.06,
+  PF-B exact x1.12-1.21 at 45.8-46.2 GB, 43-80 %, 6.04 s, 3.79 of 6.77, 1,750-2,500, ~550, 2-3 %, 12-23 %, 2 of 24, 5 %,
+  +6.2 %, 41.7-43.7 GB, Appendix E's PF-D rows, F.1's 1-6 ms). OPEN (label, sent to the editor): the "certified config"
+  wording on N45 L / CHS4 y0 rows (CERT + bundle): abstract l69, Table 6.1b chat / math rows, 5.3, 7 (Table 7.1's "lossy
+  certified" column; "two runs of the certified config"), 11.4; and 6.1b's "What the package ships" line (L + COH = CERT +
+  bundle + COH; card gate PASS 10:07).
+- RELEASE rows 26-33 and the new bullets: every cell = the records (REL ROWS above; L = S5' X + N45; CERT = S5' B).
+- SMALL_RAM 5.4 new cells (whole request, first token, totals) = records: x2c0 20.41 / 3.05 (2.60-3.85), x2c0b 20.78 / 3.02,
+  x2qm1 21.26 / 2.94, x2qm2 23.00 / 2.96, x2qm2s 22.11 / 3.10, x2e 20.66 / 2.97 (2.25-3.70); 1,480 vs 1,580 tokens; 38.5 vs 36.5 s;
+  z0 36.4 of 71.4 s, z0b 36.6 of 71.5 s. OK.
+- KERNELS v1.2: OK. Its 6.4 MB column now counts weights + input + output (e.g. 17.69 + 0.47 = 18.2 MB), so the GB/s
+  (243-247) were right; my DIFF 4's direction was wrong, the inconsistency was real.
+- EVALUATION v1.1: 381 = 150 + 100 + 131; 867,659 tokens in 346 min = 41.8 tok/s; 1,139 per row (762 rows) vs ~590. OK.
+- DRAFTER: l312 still "142.1" (-> 142.8 pooled); sent to MTP Head.
+### Precomputed for MAIN's re-base on L + COH (editor 10:5x), Mon 10:37 `date` (scripts/numcheck/lcoh_derived.py)
+| set | L + COH (REL ROWS) decode / request / first token (range), peak | vs Strata full-cache B: decode, request, first token, break-even |
+|---|---|---|
+| HumanEval | 164.05 / 36.16 / 4.60 (3.78-6.07) s, 42.94 GB | x3.49, x0.88, 6.82x slower, ~259 tokens |
+| MBPP | 112.71 / 25.28 / 3.72 (3.35-4.88) s, 42.60 GB | x2.47, x0.68, 6.87x, ~243 |
+| IFEval (2 passes) | 45.16 / 22.39 / 3.01 (2.41-3.81) s, 42.42 GB | x1.08, x0.66, 3.61x, ~1,244 |
+| math | 78.91 / 37.87 / 3.20 (2.71-6.80) s, 43.17 GB | x1.68, x0.93, 3.16x, ~256 |
+So: lossy decode x2.5-3.5 on code, x1.7 math, x1.08 chat; Strata still wins every whole request; peaks 42.4-43.2 GB.
+
+## 8. The 12:00 full drafts (re-check Mon 12:01-12:02 `date`; diffnums against the 10:36 snapshot + MAIN's re-based sections)
+- MAIN (frozen 11:5x), re-based on CERT / L / L + COH: abstract, Table 6.1b (L + COH rows + CERT's code rows), 6.1c (L's rows),
+  Table 7.1 (lossy column = L + COH) and section 7's text all equal the records and lcoh_derived.py: 164.0 / 36.2 / 4.60
+  (3.78-6.07), 112.7 / 25.3 / 3.72 (3.35-4.88), 45.2 / 22.4 / 3.01 (2.41-3.81), 78.9 / 37.9 / 3.20 (2.71-6.80); peaks
+  42.4-43.2; x2.5-3.5 code, x1.7 math, x1.08 chat; first token 2.7-7.0x; break-even 260 / 245 / 255 / ~1,200 (mine 259 / 243 /
+  256 / 1,244); whole request 20.8-38.9; lossy-32 39.0 / 21.1 / 2.90 s at 31.3 GB. OK.
+- RELEASE l117-121 "the lossy configs run what the card gate ran" (LP:data/release/lossy_card_equiv.txt): reproduced the key
+  part read-only: git diff e057abf (card) 0b4df8c (rel1) -- bigmoe ext is empty (ext last changed 5bb2743, 11-04); the
+  package's configs/lossy-45.env carries the same KEY=VALUE set as data/stack/card_lcoh_env.txt (QOM set names aside, as
+  stated). OK.
+- DRAFTER l315-316: 142.8 pooled. OK. The other changed lines in all six papers since 10:36 are the related-work pass
+  (arXiv ids, citations: the editor's check, not this one) and status lines.
+- Second-tier checks, Mon 12:02-12:04 (`date`): MAIN 5.2's bisect (chs3: x3oc 3 / 12, x3oc2 4 / 12, x3sn 3 / 12, the other
+  eight 12 / 12), "1 of 12 IFEval rows (CERT)" (CERT_chat.txt), 5.1's 2,888 copied tokens (sat_report: stackb accepted 2888),
+  2's 67.8 % (F:2026-11-05_1700) all = their sources. DRAFTER row 19: the engine figure is kept per check (stb / stbb vs sts /
+  stsb: 11.16 vs 10.01 pooled = x1.115, geo x1.082); whole decode x1.077 pooled (geo x1.056 = the report's +5.6 %): wording
+  note sent (optional).
+  - DRAFTER row 19 applied (MTP Head 12:1x) as "x1.08 geo / x1.11 pooled (11.16 vs 10.01; 1.114 unrounded)": right; my
+    script's unrounded ratio was x1.114 too (my message's "x1.115" divided the rounded values, as KS did).
+
+## 9. Leap's clean-clone FINAL (12:10-12:14), re-checked Mon 12:46-12:47 (`date`; scripts/numcheck/final_check.py on out/)
+- Tokens 12 / 12: exact-45 / exact-32 prefix-equal to BM:data/n45/ar_ref_tokens.json (ifeval/1220 153 = 153; 3280 256 of
+  265); lossy-45 / lossy-32 = rli_256 / rli_160 to full length (154, 139); chat-45 = pdz4a (192, 235); chat-32 = zs32 (184, 256).
+- Lossy / chat vs the engine's own runs of the two keys: same checks and kept per prompt (4 / 4); whole decode x0.996-1.020,
+  whole request x0.996-1.012 (= RELEASE l173). DIFF (tiny, sent): "first token within 0.1 s" -> medians +0.044 / +0.085 /
+  +0.050 / -0.107 s, per prompt up to 0.119 s. (Exact configs vs N45 nie1 / e32: decode x1.005 / x1.002, request x1.03 /
+  x1.02, first token -0.24 / -0.17 s: not claimed in the text.)
+
+## 10. m1b card gate (running) and the PDF build check (Mon 13:10 `date`)
+- m1b forward order (results/card_m1b_fwd/decode.jsonl, 381 rows, 13:05): GPQA Diamond re-graded by me: 42 vs 44 %, arm only
+  4 / reference only 6, -2.00 pt, p 0.7539. LCB: 39 forward answers not yet in the grade cache (EvalSuite grades at the
+  verdict); lcb_recount.py now reports ungraded keys instead of counting them as fails. Reverse + LCB at ~16:20.
+- The orchestrator (13:0x): the number check covers the built PDFs too (digits unchanged vs .md). scripts/numcheck/
+  pdf_digits.py (pdftotext or HTML; number-token counts after normalising minus, x and spaces) is ready and tested; paths
+  and ETA asked of Breakthrough.

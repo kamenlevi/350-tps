@@ -88,6 +88,85 @@ for i, (g, rr) in enumerate(zip(scr, ref)):
     bad3 += int((gv != rv).sum())
 print(f"PFD UNIT v3 assemble (8 A / 8 B / 8 C, shuffled rows): {'PASS' if bad3 == 0 else 'FAIL'} ({bad3} differing words)")
 bad += bad3
+# v4: kinds 0 / 1 / 3 (raw full record) exact vs the ext; kinds 4 (base pool) / 5 (raw MSB part) = the 3-bit base-only pieces,
+# vs v1's MLX-op rebuild with zero low bits and the b3 bias (q = 2m, s = s3 / 2, b = b3); 6 experts each, shuffled rows
+ids = np.sort(rng.choice(int(r["E"]), 30, replace=False))
+buf = pflm.read_parts(t, ids, 0, int(r["recsz"]))
+w3s, s3s = pflm.msb_pieces(t, buf[:, :r["msb_sz"]])
+l1s, bs = pflm.lsb_pieces(t, buf[:, r["msb_sz"]:])
+b3s = [mx.array(np.ascontiguousarray(buf[:, int(t["offs"][3 * p + 2]):int(t["offs"][3 * p + 2]) + int(r["msb_piece_size"][3 * p + 2])])
+                .view(np.uint32)) for p in range(3)]
+kind = np.repeat([0, 1, 3, 4, 5], 6)
+perm = rng.permutation(30)
+sl = lambda a, idx: a[mx.array(np.array(idx, np.int32))]
+base = {p_: {"w3": w3s[p], "s3": s3s[p], "b3": b3s[p]} for p, p_ in enumerate(P3)}   # base 'pool' slot j = ids[j]
+side = {p_: {"l1": sl(l1s[p], range(0, 6)), "b": sl(bs[p], range(0, 6))} for p, p_ in enumerate(P3)}   # side slot j = ids[j]
+rl = mx.array(np.ascontiguousarray(buf[6:12, r["msb_sz"]:]).view(np.uint32))      # kind 1: raw LSB parts of ids[6:12]
+rr = mx.array(np.ascontiguousarray(buf[12:18]).view(np.uint32))                   # kind 3: full records of ids[12:18]
+rm5 = mx.array(np.ascontiguousarray(buf[24:30, :r["msb_sz"]]).view(np.uint32))   # kind 5: MSB parts of ids[24:30]
+scrC = [mx.zeros((1, *sh), dt) for sh, dt in shapes4]
+rm = np.zeros((30, 3), np.int32)
+for k in range(30):
+    j = perm[k]
+    rm[k] = {0: (0, j, j), 1: (1, j, j - 6), 3: (3, j - 12, 0), 4: (4, j, 0), 5: (5, j - 24, 0)}[kind[j]]
+got = pflm.assemble_v4(t, rm, base, side, rl, scrC, rr, rm5)
+ref = [mx.zeros((30, *sh), dt) for sh, dt in shapes4]
+mx.eval(*ref)
+ext.read_rebuilt_layout(t["path"], int(r["recsz"]), int(r["msb_sz"]), pers4, ids[perm].astype(np.int32).tolist(), list(range(30)),
+                        ref, 2, rows3, t["offs"])
+three = pflm.rebuild_parts_ops(t, w3s, s3s, [mx.zeros_like(x) for x in l1s], b3s)   # 3-bit pieces of all 30 (expert order)
+pi = mx.array(perm.astype(np.int32))
+three = [x[pi] for x in three]                                                     # -> scratch row order
+fast = mx.array((kind[perm] >= 4).reshape(-1, 1, 1))
+bad4 = {0: 0, 1: 0, 3: 0, 4: 0, 5: 0}
+for g, rr_, th in zip(got, ref, three):
+    exp = mx.where(fast, th, rr_)
+    gv = np.array(g.view(mx.uint16) if g.dtype == mx.bfloat16 else g).reshape(30, -1)
+    ev = np.array(exp.view(mx.uint16) if exp.dtype == mx.bfloat16 else exp).reshape(30, -1)
+    rowbad = (gv != ev).any(axis=1)
+    for kk in bad4:
+        bad4[kk] += int(rowbad[kind[perm] == kk].sum())
+ok4 = sum(bad4.values()) == 0
+print(f"PFD UNIT v4 assemble (6 each of kinds 0 / 1 / 3 exact, 4 / 5 at 3 bits; shuffled): {'PASS' if ok4 else 'FAIL'} "
+      f"(differing rows by kind {bad4})")
+bad += 0 if ok4 else 1
+# v4 with the engine's placeholders (Sun 23:5x: the in-run v4 / FAST arms died compiling: MLX passes inputs of fewer than 8
+# elements in the 'constant' address space, the kernels take 'device' pointers, and every input above was a real array).
+# Exact v4 calls without kind 1 / 5 rows (rl, rm5 = placeholder) and FAST calls without kind 1 / 3 rows (rl, rr = placeholder).
+ph = pflm.v4_placeholder()
+bad4p = 0
+for subk, (rl_, rr_, rm5_) in (((0, 3), (ph, rr, ph)), ((0, 4, 5), (ph, ph, rm5))):
+    sub = [k for k in range(30) if kind[perm[k]] in subk]
+    gotp = pflm.assemble_v4(t, rm[sub], base, side, rl_, scrC, rr_, rm5_)
+    si = mx.array(np.array(sub, np.int32))
+    for g, rf, th in zip(gotp, ref, three):
+        exp = mx.where(fast, th, rf)[si]
+        gv = np.array(g.view(mx.uint16) if g.dtype == mx.bfloat16 else g).reshape(len(sub), -1)
+        ev = np.array(exp.view(mx.uint16) if exp.dtype == mx.bfloat16 else exp).reshape(len(sub), -1)
+        bad4p += int((gv != ev).any(axis=1).sum())
+print(f"PFD UNIT v4 with placeholders (kinds 0 / 3 exact; 0 / 4 / 5 FAST): {'PASS' if bad4p == 0 else 'FAIL'} "
+      f"({bad4p} differing rows)")
+bad += 0 if bad4p == 0 else 1
+# v4 staging plumbing (no model): zero-copy stage_reads / gather vs plain read_parts on real records; a partial stage
+# (prefetched subset + misses into spare rows) and an overflowing one (a second array, concatenated)
+import types
+sys.path.insert(0, os.path.expanduser('~/BigMoE'))   # install_pfd imports bigmoe.stream's PIECES
+fake = types.SimpleNamespace(prefill_call=lambda *a, **k: None, STATS={"prefill_calls": 0})
+pflm.install_pfd(fake)
+dbg = fake._pfd_dbg
+ids = [int(e) for e in np.sort(rng.choice(int(r["E"]), 20, replace=False))]
+want = pflm.read_parts(t, np.array(ids), int(r["msb_sz"]), int(r["recsz"]) - int(r["msb_sz"]))   # LSB parts
+okS = True
+for case, pre, spare in (("none", None, 0), ("partial", ids[:12], 4), ("overflow", ids[:5], 2)):
+    st = None if pre is None else dbg["stage_reads"](t, pre, int(r["msb_sz"]), int(r["recsz"]) - int(r["msb_sz"]), spare)
+    arr, rows = dbg["gather"](st, t, ids, int(r["msb_sz"]), int(r["recsz"]) - int(r["msb_sz"]), "B")
+    got_b = np.array(arr).view(np.uint8)[rows]
+    ok = bool(np.array_equal(got_b, want))
+    okS &= ok
+    print(f"  staging {case:8s}: {arr.shape[0]} rows, {'==' if ok else 'DIFFERENT'}")
+print(f"PFD UNIT v4 staging (zero-copy reads, spare rows, overflow): {'PASS' if okS else 'FAIL'}; counters "
+      f"h {pflm.PFD['hB']} / m {pflm.PFD['mB']}")
+bad += 0 if okS else 1
 if os.environ.get("PFD_UNIT_TIME", "1") == "1" and bad == 0:   # speed: 96 experts of layer 23, kernel vs ops (same bytes)
     import time
     r = ix["layers"]["23"]

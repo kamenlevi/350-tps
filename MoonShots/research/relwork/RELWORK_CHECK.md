@@ -49,3 +49,142 @@ are SELF-REPORTED unless we reproduced them (only Strata, findings/2026-11-08_16
 - No "fastest" claim on chat, on exact decode, on prefill or on first token. A decode claim on code would need Splash run
   on our prompts (decision asked, Sun 17:2x).
 - Pass 2 (Mon-Tue): the companion papers' reference lists, the hand-opened items in section 1, the issue figures.
+
+## 6. Pass 2a (Sun 8 Nov 20:2x-20:4x EET): references and new engines
+- **arXiv (check_1108_pass2a.txt):** 17 / 17 exist; titles and first authors match: HumanEval 2107.03374, EvalPlus
+  2305.01210, MBPP 2108.07732, IFEval 2311.07911, GSM8K 2110.14168, MATH 2103.03874, MATH-500 (Let's Verify) 2305.20050,
+  Leviathan 2211.17192, Chen (speculative sampling) 2302.01318, Pre-gated MoE 2308.12066, QuaRot 2404.00456, SpinQuant
+  2405.16406, BaM 2203.04910, LLM in a flash 2312.11514, Fiddler 2402.07033, QTIP 2406.11235, and the architecture paper
+  2608.30320 ("On the Design of Qwen3.8-Next Architecture", Qiu et al.).
+- **Hand-opened:** Thinking Machines (H. He, Connectionism, 10 Sep 2025, doi 10.64434/tml.20250910); KTransformers SOSP
+  '25 (Chen et al., doi 10.1145/3731569.3764843; "a novel Expert Deferral mechanism", madsys.cs.tsinghua.edu.cn page);
+  US 11,789,658 B2 (SK Hynix; a PCIe / NVMe interface; exit latency of the L1.2 low-power state); HotOS '15 "Software
+  Engagement with Sleeping CPUs" (Q. Zhu, M. Zhu, B. Wu, X. Shen, K. Shen, Z. Wang); GPUDirect Storage (NVIDIA page);
+  prompt-lookup decoding (README); Apple Newsroom (Oct 2025): M5 GPU with "a Neural Accelerator in each core".
+  developer.apple.com/metal has no "tensor" wording on its overview page: MAIN cites the Newsroom line only.
+- **"Sushi" = github.com/beamivalice/sushi** (Zig; MIT; a detached fork of mlx-serve; releases 1.4.1 30 Oct, 1.5.0 4 Nov,
+  1.5.1 6 Nov). README, self-reported: Qwen3.8-Flash-Next packs 2 bpw (48 GB+, or 32 GB streamed), STQ 2.75 bpw (64 GB+;
+  weights 44.9 GiB), 4 bpw (96 GB+, or 64 GB streamed). Speed table (Sushi 1.4.0, M5 Max 128 GB): STQ-2.75 decode 168.6 /
+  151.1 / 146.1 / 146.8 / 151.0 / 138.2 tok/s at 4K-128K context, prefill 1,122-2,049; 4 bpw decode 122.0-153.5, prefill
+  2,079-2,379. MTP drafting for Qwen. Exactness not stated. A Reddit title quotes "~90 tk/s" on an "m5u 96GB": not
+  opened (JS-rendered).
+- **Mference (github.com/NeelM0906/Mference):** README: "Qwen3.8-Flash-Next, a 180B-parameter MoE: 24-210 prompt tok/s and
+  18.2-21.0 decode tok/s resident on M3 Ultra". Self-reported.
+- **No run of this model found** in the READMEs of SwiftLM (SharpAI; MIT; SSD streaming), mlx-flash (szibis; MIT), BaseRT
+  (Apache-2.0), fiveangle/flash-moe. Edge0 (a blog) not opened.
+- Applied to MAIN v3 (section 8 rows, 1.3, 4.1's 180 B note, section 12).
+
+## 7. Pass 2b (Sun 8 Nov 21:1x-21:3x EET): KERNELS' source list
+- MLX issue #4632: "[BUG] gather_qmm(sorted_indices=True) returns wrong results on M5 Max (macOS 27) when rows > 32768 and
+  not a multiple of 64", opened 2026-10-05 by another user, closed. PR #3922 "Fix sorted gather_qmm NAX row overflow above
+  32K", merged 2026-08-26. Our first hit: 18 Oct (KERNELS' BUG1). Wording: "reported upstream before we hit it".
+- batch_invariant_ops (thinking-machines-lab; MIT; created 10 Sep 2025). vLLM docs "Batch Invariance" (page reachable).
+  LMSYS "Towards Deterministic Inference in SGLang and Reproducible RL Training" (22 Sep 2025). DFlash: github.com/z-lab/dflash
+  ("DFlash: Block Diffusion for Flash Speculative Decoding"; MIT).
+- **MTPLX (github.com/youssofal/MTPLX; Apache-2.0)**, README, self-reported, M5 Max 128 GB: Qwen 3.8 Flash Next 125.8 tok/s
+  (one OpenCode request, 1,301 tokens, 18,364 of 18,539 prompt tokens cached, depth 3, 2.11.3, 16 Sep 2026), 79.3 (9K-token
+  code prompt, 1,500 tokens), 63.5 (65K prompt; prefill 1,094 tok/s), 61.8 / 50.3 (109K / 200K turns). Packs: Bare Speed
+  flat 4-bit (96 GB+, peak 78 GiB), Optimized Speed (128 GB+, 87 GiB); n-gram table streamed from SSD. "Exact rejection
+  sampling, correct at any temperature". First Apple Silicon backend for the family: 29 Aug 2026 (as stated).
+  **Licence:** NOTICE requires "Powered by MTPLX" + URL displayed inside any product that includes or is built on it
+  (CLI banner or shipped docs); research that builds on it should credit "MTPLX by Youssof Altoukhi" + link and cite
+  CITATION.cff (v2.11.2). The package pip-installs MTPLX from a pinned commit (not vendored; Leap 21:4x) and prints the
+  line in run.py's banner + README credits, with third_party/LICENSE-mtplx + NOTICE-mtplx (package a2eedbc).
+
+## 8. Pass 2c (Mon 9 Nov 2026, 00:2x-00:5x)
+- **MAIN section 12, arXiv ids:** the 33 ids not recorded in passes 1-2b were looked up through the arXiv API
+  (check_1109_pass2c.txt: id, title, first author, first version). All 33 resolve, and MAIN's label matches the title for
+  32. WhiFlash (2606.07710) was labelled "drafter by task". Its abstract describes token-level routing between an
+  autoregressive and a diffusion drafter within one sequence, so MAIN now says that. All 58 section 12 ids are now
+  checked against their titles.
+- **DFlash** (2602.06036): "DFlash: Block Diffusion for Flash Speculative Decoding", Jian Chen, Yesheng Liang, Zhijian Liu;
+  v1 5 Feb 2026, v2 28 May 2026; "Accepted at ICML 2026".
+- **DFlash2 checkpoint** (SMALL-RAM TBD-26b; MAIN 5.1 / 12):
+  - The HF API for incoai/Qwen3.8-Flash-Next-DFlash2 gives sha a22a1744e85c17364dcc54a6a420af7135d4c7f6, created and last
+    modified 19 Oct 2026, licence apache-2.0 (tags + cardData), base_model Qwen/Qwen3.8-Flash-Next.
+  - Our hub cache holds the same revision (refs/main = a22a174, config.json + model.safetensors, fetched 23 Oct). BigMoE's
+    r57 screens and Fit12's t3_twopass.py both load it by that repo id.
+  - The model card (Inco AI) describes a 0.6B BF16 block-diffusion drafter run inside a speculative-decoding server, with
+    block size 4 in its own evaluation. It states no layer count. It asks for two citations: Inco AI, "DFlash 2: Keep
+    Drafting Parallel" (blog, Aug 2026, inco.ai/blog/dflash2) and the DFlash paper above.
+  - Strata's "tuned copy" is Strata's own, not ours.
+- **Strata's file:** IQ3_XXS, two shards, 75,839,998,528 bytes = 75.8 GB (70.6 GiB) [K, SE:models/IQ3_XXS]. MAIN section 7
+  no longer gives file size as the reason the 4-bit files went untested (the orchestrator's correction).
+- **Strata's default-cache chat:** re-derived from SE:h2h/results/{B,D}{1,2}. First token median: D (exact read) 1.06 s,
+  B (Q8_0) 0.98 s; MAIN section 7 had 0.98 s for both, now fixed. Whole request 28.2 / 29.5 confirmed.
+- **Left for 12:00-16:00:** the companions' own reference lists, SlotStream's low-memory figures (issues #5 / #41) and
+  Palm-Infra's 122B row (Fit12's RF rows), community posts, and Edge0.
+- **Correction (01:0x):** both of our engines load the DFlash2 base and then our own fine-tuned weights (Leap's l120_ft).
+  So we, like Strata, run a tuned copy, and the "not ours" line above means only that Strata's tuned copy is not ours.
+
+## 9. Pass 2d (Mon 9 Nov 10:0x, editor): issue figures, Palm-Infra, Edge0, community posts
+Fetched read-only with `gh api` (public issues and docs); raw copies in the session scratchpad only.
+- **SlotStream issue #5** ("Measured: Mac14,3, 16GB", opened 2 Sep 2026, closed): a user's Mac mini M2 with 16 GB and base
+  storage (about 1.5 GB/s). First run at a 10.2 GB target: decode 1.39-1.41 tok/s, peak 6.1 GB. Re-run of 3 Sep at a
+  10.7 GB target: decode 1.42-1.48 tok/s, prefill 2.6 tok/s; 28-token prompt, 128 generated tokens; context check 8,192
+  tokens at 8.1 GB peak RSS. SMALL_RAM's "1.48 tok/s at a 10.7 GB process target" is right; the machine (M2, base
+  storage) and the user-report source were missing.
+- **SlotStream issue #41** ("Measured: MacBook M4 Pro, 24 GB", 25 Sep 2026, closed 28 Sep): 3.52-3.61 tok/s at a 15.9 GB
+  target (lifetime footprint peak 8.83 GB); on 0.2.25, 4.92-5.58 tok/s, 16.7 GB process peak in an 8,192-token
+  context check. The maintainer's closing line: 5.41 tok/s on 0.2.25, up from 3.57.
+- **Palm-Infra** (Apache-2.0; pushed 25 Oct 2026). README "Performance" and docs/ssd-offload.md:
+  - The "122B" row is **Qwen3.5-122B-A10B** (a different model) with W4 weights on the CPU path. Cache sweep of 29 Jul
+    2026: 16-token prompt, 256 generated, greedy, three processes per size. 1 GiB cache: 12.38 tok/s, peak RSS 5.90 GiB;
+    10 GiB: 16.19 tok/s, 14.64 GiB; 16 GiB: 16.53 tok/s, 20.60 GiB. The doc names "a 48GB Apple Silicon Mac" for all four
+    models and does not say "lossy" or "exact". SMALL_RAM's "a 122B model ... lossy" should name the model and say
+    "4-bit (W4); exactness not stated".
+  - **This model** (NVFP4 experts): 16.2 prefill / 21.8 decode tok/s are "best observed" with eight CPU threads and a 20 GiB
+    cache, "not a strict five-process median". The controlled four-thread / 16 GiB run gives 18.70 / 15.74 (median of five
+    processes). MAIN section 8's row put "16.2 / 21.8" in the decode column: fixed at 10:0x (decode 21.8 best observed,
+    15.74 median; prefill in "other").
+- **Edge0** (results_first/EXTERNAL_PAPERS.md row): a Qwen3.6-35B-A3B-derived model, lossy, 2.9 GiB. No draft cites it,
+  and it is not this model nor >= 80B, so it stays out of the papers.
+- **Community posts:** no draft cites a forum or social post (grep of all six drafts at 10:0x). Re-check the finals at 12:00.
+
+## 10. Pass 2e (Mon 9 Nov 11:5x, editor): the companions' reference lists
+Read-only: arXiv API, GitHub API (`gh api`), Hugging Face API, Crossref, two web pages; extracted facts only (raw copies in
+the session scratchpad). Ids and titles: `check_1109_pass2e.txt`.
+- **arXiv ids:** the companions cite 33 ids; 10 were not in MAIN's checked 58 (DRAFTER 3, EVALUATION 7). All 10 resolve,
+  and each label matches its title and first author. DRAFTER section 6 named 14 works without ids. All 14 were found and
+  their ids added: EAGLE 2401.15077, EAGLE-2 2406.16858, Medusa 2401.10774, SpecInfer 2305.09781, Sequoia 2402.12374,
+  SpecExec 2406.02532, FR-Spec 2502.14856, SuffixDecoding 2411.04975, SpecDec++ 2405.19715, DISCO 2405.04304 (Mamou et
+  al.), SP-MoE 2510.10302, Ghidorah 2505.23219, DuoDecoding 2503.00784, PEARL 2408.11850.
+- **Fixed in DRAFTER:**
+  - "MoE-SpeQ" -> Specter (2511.14102), as in MAIN since pass 1.
+  - WhiFlash: "a drafter per task" -> switches between an autoregressive and a diffusion drafter token by token, as in
+    MAIN since pass 2c.
+  - "AngelSpec, Microsoft 2610.00888 [[RW: titles]]" -> AngelSpec (Liu et al., 2607.25852) and Badarayani et al.,
+    2610.00888. The arXiv record shows no affiliation, so "Microsoft" was dropped.
+  - RW-1: the DFlash2 base checkpoint, as in RELEASE 7 and pass 2c.
+  - RW-3: EAGLE-3's training data is ShareGPT + UltraChat-200K, about 68K + 464K entries, with responses regenerated by
+    the target, plus OpenThoughts-114k-math for its reasoning model. The paper states no token count (arxiv.org/html/
+    2503.01840v3, Implementation).
+  - RW-4: MLX documents MLX_ENABLE_TF32 ("The default is 1": docs/src/usage/environment_variables.rst; precision.rst).
+    MLX issue #4595 (29 Sep 2026, closed 27 Oct) covers TF32 on fp32 conv on the M5 since 0.32.
+- **Fixed in KERNELS 8:** "Our drafters are DFlash (z-lab, MIT)" -> our fine-tune of DFlash2 (Inco AI; Apache-2.0), a
+  DFlash-method block drafter (2602.06036; code z-lab, MIT), as STYLE has said since Mon 01:0x.
+- **Checked in KERNELS 8 (no change):**
+  - LLM-42 2601.17768 (all four authors match).
+  - Thinking Machines (Horace He, 10 Sep 2025; its table: vLLM default 26 s, deterministic 55 s, improved attention
+    42 s).
+  - MLX issue #4632 (gather_qmm sorted_indices on M5 Max, rows > 32768 and not a multiple of 64; opened 5 Oct 2026,
+    closed).
+- **Fixed in RELEASE 7:** MTPLX ran this model's MTP head on Apple Silicon "first" -> "before we did" (BRIEF: no
+  unchecked "first").
+- **Checked in RELEASE 7 (no change):**
+  - The model's licence, from the HF API and the LICENSE file at sha 812d96e: Qwen Community License 1.0, "Copyright
+    (c) 2026 Qwen". It covers the 100M monthly-users / US$20M monthly-revenue display clause and the separate licence
+    for Model-as-a-Service / AI Work Assistant businesses.
+  - The 4-bit pack (Youssofal/...-MTPLX-Bare-Speed, sha 4285a4a) is under the same licence.
+  - z-lab/dflash is MIT.
+- **EVALUATION 7:** every item checked; only the intro line changed.
+  - lm-evaluation-harness and simple-evals are MIT.
+  - Crossref matches McNemar 1947 (Psychometrika 12(2) 153-157), Dietterich 1998 (Neural Computation 10(7) 1895-1923)
+    and Schuirmann 1987 (J. Pharmacokinet. Biopharm. 15(6) 657-680).
+  - llama.cpp's perplexity tool has --kl-divergence (tools/perplexity/README.md).
+- **SMALL_RAM 9 / App. C:**
+  - Every id is in MAIN's checked set; the KTransformers DOI 10.1145/3731569.3764843 matches Crossref (SOSP '25,
+    1014-1029).
+  - Pass 2d's two fixes are applied at 11:5x by the editor. SlotStream line: a user's 16 GB Mac mini M2 with base
+    storage (issue #5). Palm-Infra line: Qwen3.5-122B-A10B, W4, 1 GiB cache, exactness not stated.
+- **Community posts:** none cited in the six drafts (grep at 11:5x).

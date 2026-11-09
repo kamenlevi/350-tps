@@ -3913,3 +3913,81 @@ loses chat hits.
   whole-request time, so whole request barely sees the drafter there. D-20b's switch reads lower on whole request
   (6.42 vs 7.11) only because its agent rows' prefills ran longer; the prefill doesn't use the drafter.
 - On chat (short prompts) the drafter's decode gain carries to whole request at about three quarters of its size.
+- **Amendment 3** (Sun 11-08 19:2x, before any night run; ~/Papers/MONDAY.md moves the release to Monday evening; runner v3
+  re-armed at 19:23):
+  - **Stage 1 only tonight**, 23:00 to about 03:15. Its line and verdict are unchanged.
+  - **Stage 2** (amendment 2) moves to after the release. Tonight it runs only if data/f2a/FULL_NIGHT exists when stage 1
+    ends, which would be Kamen's call relayed by 22:45.
+  - **End of stage 1:**
+    - peer unlock;
+    - then data/f2a/STAGE1_DONE (time + verdict);
+    - then "F2a night DONE" as the last line of data/f2a/night.log.
+    - EvalSuite's chain starts on either.
+    - Every exit after 23:00 does the same, through a trap (TERM, NO LOCK, NO DATA, the normal end).
+  - **Checked:** dry runs with stub programs: stage 1 only (3 phases), the FULL_NIGHT flag (6 phases), NO DATA, and a TERM
+    mid-phase (the live phase stopped, unlock, DONE, last line).
+- **Amendment 4** (Sun 11-08 19:5x, before any night run; Kamen's go via the orchestrator + the queue order; re-armed at 19:52):
+  - The engine's 12-min PF-D run goes first: its lock is queued at 23:00:00, after the apps close.
+  - F2a requests its quiet lock at 23:01, queues behind that ticket, and starts when it unlocks (~23:15).
+  - Stage-1 deadlines +15 min: capture 02:15, train 03:15, eval 03:30. STAGE1_DONE and the closing line are unchanged, at
+    ~03:30 at the latest.
+  - The line and the verdict are unchanged.
+
+#### F2A night RESULT (stage 1, Sun 11-08 23:01-23:48; runner v3; data/f2a/f2a_eval.txt, capture.log, train.log, night.log): KILL by its line, at 0.10M tokens, 8 % of the planned ring. The swap guard stopped capture after 27 min.
+- **Run.**
+  - Quiet lock 23:01:58. Capture at frac 0.25 (C 128) from NO-SWAP 45 GB, while the apps were closing.
+  - The 24 on-policy eval windows took 334 s.
+  - The swap guard fired at 23:29: swap 5,295 -> 7,408 MB, MLX peak 37.4 GB. The ring then held 241 windows,
+    101,070 tokens, 1.9 GB.
+  - Training: 2 epochs = 482 steps in 1,076 s, peak 27.4 GB. Eval: 45 s.
+  - Lock released 23:48:18, then STAGE1_DONE and the closing line.
+
+| set (kept per check, cut 0.3, K6, teacher-forced) | b5 | f2a | ratio | depth-1 hit b5 -> f2a |
+|---|---|---|---|---|
+| held-out IFEval (30) | 2.301 | 2.334 | x1.014 | 0.756 -> 0.758 |
+| held-out multilingual (24) | 2.507 | 2.540 | x1.013 | 0.784 -> 0.790 |
+| on-policy IFEval (24 fresh greedy answers) | 2.444 | 2.450 | x1.002 | 0.770 -> 0.777 |
+
+- **Verdict, by the pre-registered line: KILL.** Held-out geo is x1.014, under the KILL line of x1.03; on-policy is
+  x1.002.
+- **What it does and doesn't say.**
+  - It trained on 0.10M tokens: ~8 % of amendment 2's ~1.2-1.3M, and ~5 % of the pre-registration's 1.5-2M.
+  - So it kills F2a at 0.1M tokens. It is not a test of the data-rich plan.
+  - The sign is small and positive on held-out chat (+1.3-1.4 %, depth-1 +0.2..0.6 points) and flat on-policy.
+  - Prediction was x1.05-1.20 at full data, PASS ~35 %.
+- **The capture rate is the planning number.**
+  - 76-80 tok/s at C 128 over 241 windows. The smoke's 112-143 came from its first 2 windows only.
+  - So 1.3M tokens need ~4.6 h of quiet capture. Even without the guard, 02:15 would have ended the ring near ~0.9M.
+- **Memory lesson.** The gate (measured peak + 4 GB under NO-SWAP) was too thin while the apps were still closing:
+  peak 37.4 against 45, and swap +2 GB in 27 min. A re-run should gate at peak + 8, or use C 64.
+- **Next, after the release, not before.**
+  - A full-window capture at a swap-safe pool (~4.6 h for 1.3M tokens), then the same line.
+  - Then stage 2 (data scaling), as in amendment 2.
+- **The head.** ckpt/d22_f2a.safetensors, md5 4fa8f7216edb946ab9e22e18a9199388. Kept for the record, not for
+  shipping: nothing ships.
+
+### NUMBER CHECK notes (Mon 11-09 07:4x; the papers' number check of DRAFTER v1.1, re-derived from raw rows)
+- **CHAT150's chat check-cost fit.** The estimator was least squares of (cycle wall - the measured draft time) on rows,
+  over checks >= 2 (sticky/chat_ngram.py line 41): 47.0 + 3.25 ms per row.
+  - A plain least-squares fit of the check time alone, on the same 1,280 checks (first 3 per prompt skipped), gives
+    44.9 + 4.00 ms per row. Its 16-row ceiling is ~106 tok/s.
+  - So the never-miss ceiling is ~105-115 tok/s with the serial draft (~135-150 one-pass) [P]. Both fits extrapolate
+    from checks of mostly 2-4 rows.
+  - The fixed share (~74-85 % at 2-4 rows) holds under both.
+- **'D1 v1b in the engine' / the D1 engine A/B.**
+  - The draft times there (v1 9.1 -> 16.2, v1b 8.7 -> 14.9 ms) are the run report's means over prompts. Pooled per check
+    they are 8.6 -> 14.4 and 7.9 -> 13.4 ms (the same +68-70 %).
+  - The peaks 42.40 / 42.30 GB are the report's 0.1-GB rounding of 42.37 (L) / 42.28 (L + v1b) GB.
+- **'D-20b SWITCH45 confirmation'** (number check, 07:51): its per-type gains (chat +26.0 %, math +18.3 %, agent +27.0 %)
+  are means of per-prompt rates. Pooled from data/d20_runs.jsonl (C 224, the 17 prompts with both arms, as in PAPER
+  SPEED) they are chat +32.4 %, math +19.8 %, agent +42.0 % and code -14.7 %. The whole-set +27.3 % is pooled in both.
+- **Withdrawn-headline line, "180.3 tok/s"** (number check, 10:36): DRAFTER section 4 said the registered steady metric
+  "is 142.1 on whole decode". Re-derived from BigMoE's raw records (BM:data/r57/s1n1_256_runs.json + s1n2_256_runs.json,
+  24 runs, gate+t, block drafter, n 256): pooled whole decode sum(n) / sum(n / tps) = 142.77 tok/s; the geo mean of the
+  per-prompt rates is 142.10 (the correction note's 142.1); the geo mean of the steady rates is 180.25 (the 180.3).
+  DRAFTER now says "142.8 on whole decode, pooled (... the correction note's 142.1 is a geo mean)", as MAIN and KERNELS do.
+- **Appendix C row 19, MATCH** (number check, 12:05): the engine's x1.08 / x1.115 is kept per check, not speed. Re-derived
+  from BM:data/r57/st{b,bb}_224_runs.json (MATCH on: copy.chg 422) vs st{s,sb}_224_runs.json (off), 12 HumanEval x 2
+  passes: all tokens / all checks 11.158 vs 10.013 = x1.1144 (K_SCOREBOARD's x1.115 divides the rounded 11.16 / 10.01);
+  geo over prompts x1.081. Whole decode pooled 125.19 vs 116.23 tok/s = x1.077 (geo x1.056 = the run report's +5.6 %).
+  DRAFTER 3.5 and row 19 now say kept per check x1.08 geo / x1.11 pooled, and whole decode x1.077 pooled.

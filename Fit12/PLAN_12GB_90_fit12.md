@@ -626,3 +626,38 @@ fixed-cost bet. This is a measurement only: no setting changes.
   - A causal CPU-pad screen [P -> K]: a known busy-wait at the start of each layer's graph build. The call grows by the pad
     if the main thread is on the critical path, and by ~0 if it is hidden.
   - Send the GPU-side table to Leap / Breakthrough.
+
+## T2 C2c: STRATA'S CHAT WIDTH (pre-registered Sun 08 Nov 19:15, before any run; the orchestrator 19:1x: take what works from Strata, MIT, keep its notice)
+- **The two loops compared.** Strata read-only: ~/StrataEval/src/metal/src/engine/stream.h, docs/MAC.md; its numbers are
+  from FableGod findings/2026-11-08_1900_strata-low-memory.md.
+  - Strata keeps an LRU arena of expert slots. Each expert is one F_NOCACHE pread from a contiguous ".experts" copy, with
+    several reads in flight on I/O threads. It reads ahead the experts that layer L+1's router predicts from layer L's FFN
+    input.
+  - On chat it drafts ONE token per pass (MTP, 2 rows): 1.67 tokens per pass at 115.7 ms per pass. Its smallest cache
+    (3.37 GB) peaks at 14.19 GB.
+  - Ours: a 2-row verify call + its draft takes 93.5 + 10.4 ms [K]. That is already faster than Strata's pass, at
+    10.96-11.0 GB.
+  - But our check verifies up to 15 drafts in 4-row calls (157-181 ms each), while chat keeps 2.36 tokens per check and
+    40 % of checks keep only 1 [K: chw13a].
+  - So on chat the biggest difference is the speculation width, not the read path. Read-ahead is the next difference; it is
+    an engine change (the loader + a next-router kernel), not tried here.
+- **Price [P]** (/Users/kamen/Fit12/scripts/rows_price.py, a CPU replay of measured calls).
+  - Calibration: replays of A' 12.49 vs 12.56 measured, P2' 14.18 vs 13.97 (chat); code A' 18.51 vs 18.69, P2' 18.54 vs 18.47.
+  - C2c (one draft per check, then 2-row calls until the first miss): chat 15.63-16.36 tok/s whole decode, x1.10-1.15 over
+    P2'; code 18.63-18.88, x1.006-1.02 over A'. The range is the later-2-row-call cost: measured, or the first-call cost.
+  - C2 (re-draft after every 2 rows): chat 15.07; code 17.00 (x0.92).
+- **Build:** /Users/kamen/Fit12/scripts/t3_twopass.py gets F12_WL, the later-call width (default 4: unchanged).
+  - sha 7d424eb4a4fe; backup .bak_wl = 75b89b71b40b. fit_t3 42266985905b.
+  - The FAKE dry test stubs generate(), so the first GPU run is the code's first test. Check the later-call widths in the
+    per-call logs.
+- **Screen chw19** (/Users/kamen/Fit12/scripts/chw19.sh): one share lock, MEM 12 GB, ~10 min, ex + PR1 + tail.
+  - chw19c: C2c (F12_W1=2, F12_WL=2), 12 IFEval, CAP 128.
+  - chw19p: P2' (cf:0.9:2, WL 4) on the same prompts, as the same-lock reference. Its tokens + lsha must = chw14c2's 12 / 12.
+  - chw19h: C2c on 16 HumanEval, CAP 256, vs chw14ha (A', 18.69) and chw14h2 (P2', 18.47).
+- **Lines:** whole decode pooled. Whole request + first token are reported beside it.
+  - Chat, chw19c vs chw19p:
+    - >= +6 %: PASS. C2c becomes the 12 GB chat candidate. It is lossy at rounding level like P2', so it needs its own gate.
+      It is history-independent by design (all calls >= 2 rows + the ALLWAIT tail), to be confirmed.
+    - +2..+6 %: MARGINAL (reported).
+    - < +2 %: KILL.
+  - Code: chw19h vs chw14ha >= -2 %. Else C2c is chat-only, e.g. P2'c (cf0 < 0.9 -> C2c, else 4-row calls; 15.26 on chat [P]).

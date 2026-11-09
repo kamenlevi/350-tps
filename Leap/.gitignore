@@ -5,3 +5,6 @@ data/dfl2c/
 data/dfl2d*
 scripts/__pycache__/
 logs/
+release/out/
+release/cleanclone/
+release/private_patterns.json

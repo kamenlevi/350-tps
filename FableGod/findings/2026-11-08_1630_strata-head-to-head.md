@@ -2,7 +2,8 @@
 - Date: 2026-11-08 14:47-16:26 EET. Harness: ~/StrataEval/h2h (waiter + driver + report, resumable, quiet locks). Orchestrator: this
   note, checked against REPORT.md and the per-request rows. Our side: BigMoE's reports (S5', N45, CHS5, C32).
 - Setup: Strata 0.1.58-metal (commit 146df3c), experts streamed from the SSD, its IQ3_XXS file (3-bit; its table puts the 4-bit
-  variants at 72-88 GB, which does not fit 64 GB). The same prompt ids as our S5 (12 HumanEval, 12 MBPP) and N45 (12 IFEval = chat,
+  variants at 72-88 GB, and we did not test them. CORRECTED 11-08: this note first said they do not fit 64 GB, but Strata
+  streams what does not fit from the SSD and the 3-bit file is itself 75.8 GB). The same prompt ids as our S5 (12 HumanEval, 12 MBPP) and N45 (12 IFEval = chat,
   12 math) tests, greedy, 256 new tokens, EOS stop, one warm process per arm and pass.
 - Arms: A default (hyper-connections read as Q8_0, lossy), no MTP; B = A + its MTP layer; C exact (STRATA_HC_Q8=0, the BF16 read),
   no MTP; D = C + MTP.
