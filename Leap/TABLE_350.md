@@ -9812,3 +9812,16 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   - MLX issue #4632 (opened 5 Oct 2026 by another user, closed 6 Oct; not reproducible on 0.32.3; fix attributed to PR
     #3922) predates our BUG1 (PrefillKernels N3, 10-18): ours is an independent finding. Root cause line verified in the
     installed 0.32.2 header: quantized_nax.h:1547, `min(SM, short(max(0, (M - (y_row + tm)))))`.
+
+## TONIGHT AT 32 GB (Leap, Tue 2026-11-10 00:0x; orchestrator 23:2x on Kamen's yes): drafter pair, then prefill
+- DRAFTER PAIR (data/drafter_1109.md), one 2,048-token code request through chat.py, chat-32, share lock, nothing else
+  running: DFlash2 102.4 tok/s whole decode (6.14 kept/check, cycle 59.5 ms, draft 6.3 ms, peak 31.84 GB) vs MTP head
+  85.3 (6.02 kept/check, cycle 67.9 ms, draft 20.4 ms, peak 31.60 GB) = x1.20 for DFlash2 on code; the gap is the draft
+  cost, not acceptance; copy drafter 0 of 2,612 positions. Single runs, back to back (dfl first).
+- PREFILL TEST (data/prefill_1109.md), chat-32 through run.py, 64 tokens, first token = prefill / lifetime peak:
+  10K: default 78.41 s (127 tok/s) 34.01 GB | PF-A 22.71 s (440, x3.45) 34.83 GB | PF-B 20.04 s (498, x3.91) 35.77 GB;
+  30K: default 252.24 s (119 tok/s) 35.48 GB | PF-A 68.55 s (437, x3.68) 38.49 GB | PF-B 58.02 s (517, x4.35) 40.83 GB.
+  Tokens AND decode statistics: PF-A == default at 10K and 30K, PF-B == default at 10K; PF-B at 30K differs from token
+  43 (first 42 match; 100 vs 107 rows). Decode stats are identical across the other paths, so PF-B's prefill at 30K is
+  probably not bitwise (BUG until shown otherwise; the engine's PF-B check ran at <= 8K). Next: R57_LOGHASH PF-A vs PF-B
+  at 30K + the exact-32 decode (~3 min GPU).

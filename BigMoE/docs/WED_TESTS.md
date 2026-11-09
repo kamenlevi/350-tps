@@ -1365,3 +1365,28 @@ The orchestrator's option B: W24c's diagnostic w13b re-tested against the 14-row
 - Why w13b beats a 14th row: with 141 slots for at most 130 ids per check, 11 slots keep experts resident across checks, so
   the cycle is ~3 ms shorter and the SSD reads ~3 % fewer; the 14th row gains kept tokens on HumanEval only.
 - Not measured yet: w13b on MBPP and IFEval (the 14-row config was 5.2 % slower than w13t on MBPP).
+
+## Tue 10 Nov 00:28-00:54: PF-D on multi-chunk prompts = EXACT (data/pfd_long/summary.txt; scripts/pfd_long.sh, bfcc256)
+The orchestrator's question via Leap (PF-B, R57_PFLM=3, is not bitwise at 30K): is PF-D exact beyond the single-chunk IFEval
+prompts it was checked on? The published chat-45 config (PF-D on: R57_PFD=1, V=4, AHEAD=1) through the release package's
+run.py, on Leap's 9,988- and 29,988-token prompts (~/Leap/data/prefill_1109/prompt_{10k,30k}.txt), 64 new tokens,
+R57_LOGHASH=1, one process per run, quiet lock:
+
+| prompt | arm | first token | whole decode | lifetime peak | vs PF-D off | PF-D calls (fallbacks) | rows A / B / C | rows checked (differing) |
+|---|---|---|---|---|---|---|---|---|
+| 10K | PF-D off (R57_PFD=0) | 78.89 s | 35.5 | 45.17 GB | (reference) | - | - | - |
+| 10K | PF-D as published | 76.56 s | 35.5 | 47.46 GB | tokens 64/64, logits hashes 25/25 | 480 (0) | 24,634 / 50,274 / 100,271 | - |
+| 10K | + R57_PFD_CHECK=1 (timing void) | - | - | 52.66 GB | tokens + hashes equal | 480 (0) | the same | 175,179 (0) |
+| 30K | PF-D off | 249.41 s | 24.5 | 46.65 GB | (reference) | - | - | - |
+| 30K | PF-D as published | 238.39 s | 24.6 | 48.56 GB | tokens 64/64, logits hashes 27/27 | 1,440 (0) | 73,997 / 153,466 / 302,778 | - |
+| 30K | + R57_PFD_CHECK=1 (timing void) | - | - | 52.84 GB | tokens + hashes equal | 1,440 (0) | the same | 530,241 (0) |
+
+- **PF-D is exact on multi-chunk prompts:** at 10K and 30K, its tokens and logits hashes equal the stock chunk-major prefill's,
+  and the check arms found all 705,420 assembled scratch rows equal to tier._read_rebuilt's. One PF-D call per 1,024-row
+  chunk per layer (10 / 30 chunks x 48 layers), no fallback: the 45 GB chat config sets no grouped prefill, so long prompts
+  DO take PF-D (the release text says they take the grouped path without it: wrong, sent to the Editor).
+- **Its first-token gain is small on long prompts:** -3.0 % at 10K, -4.4 % at 30K (on short chat prompts: 2.91 -> 2.26 s).
+  57 % of a long prompt's per-chunk unique experts have no resident base (rows C), so most bytes are read anyway.
+- **It costs ~2 GB of lifetime peak on long prompts** (staging): 45.17 -> 47.46 GB at 10K, 46.65 -> 48.56 GB at 30K. Without
+  PF-D the 45 GB chat config is already above its 45.0 line on these prompts (as on the 7.9K agent prompt).
+- Decode is unchanged (35.5 / 24.5-24.6 tok/s). Swap grew 1.5 GB during the 10K check arm (52.7 GB peak), under the guard.
