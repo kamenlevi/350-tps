@@ -754,3 +754,20 @@ fixed-cost bet. This is a measurement only: no setting changes.
   - Lines: the one-call route stands if the call's time outside reads is <= 90 ms and MB per kept token <= 150. Else the
     route is re-priced before S2 (overlap).
   - No quality claim: it is lossy and needs its map line, then the gate.
+- **S1u BUILT (Mon 21:1x; CPU checks only, no GPU before 23:00: Kamen has the Mac).** Files, shas at arming:
+  - /Users/kamen/Fit12/scripts/t3_onecall.py c61419e920ad: a copy of t3_twopass 7d424eb4a4fe + u01b_moe + the wide-branch
+    hook + "checks of <= 2 rows take the exact check";
+  - fit_onecall.py 1f9e7c587564: a copy of fit_t3 42266985905b, + arm u01b (theta 0, _u01b);
+  - s1u_read.py e5df6a7c0370; s1u.sh 45bdb608be31.
+  - The live t3_twopass / fit_t3 and the gate snapshot are untouched.
+  - Checked: the patch's anchors apply once each to the pinned bt_b12 _install, and the patched source compiles with the
+    branch in it. py_compile is clean. The reader on c1u16 gives pooled 44.34 / geo 46.33 = paper_rows' figures.
+  - By-product [K, c1u16 records]: Saturday's two-pass wide call (P1-K1 pass 1) costs 127.9 ms per call at 0.486 GB, i.e.
+    87.2 ms outside reads, and 117 MB per kept token over the run.
+- **Map [Breakthrough 21:1x]:** S1u = the map's Q1-UNION at theta 0. It is not scored yet; its neighbours q1u_0.9_live
+  (1.25 %) and qom_0_live_c51 (1.16 %) pass the 1.34 % line. One map arm decides (q1u_0_live), asked of NewIdeas after
+  23:00.
+  - Fit [its CPU replay 148ad96]: U <= 40 by construction. Sidecar ranks 0-1 peak at 32 = C_l. Exact 16-row calls would
+    overflow C_m 47 in 68 % of live checks.
+- **Armed** Mon 21:13 (task be69wq8hc), held on WAIT for NewIdeas' GO. Gate per its board: >= 23:00, Kamen idle, NO-SWAP
+  >= 20 GB, no quiet ticket / big lock, idle GPU. Start-by Tue 00:58, hard stop 01:15.

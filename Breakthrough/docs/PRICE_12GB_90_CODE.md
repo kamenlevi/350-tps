@@ -122,3 +122,73 @@ So the single-call route has two forms: (a) the 45 GB engine with a ~5 GB non-po
 (b) batch-invariant 16-row calls inside Fit12's 12 GB loop, which already holds the pools at 11.1 GB (non-pool ~4.6 GB):
 the loop's <= 4-row exact calls exist because its kernels are not batch-invariant at wider widths; the 45 GB engine's
 kernel set (KERNELS) is. Which is cheaper to build is the next question, for Fit12 and Leap.
+
+## W24's 16-row arm at 24 GB (BigMoE, Mon 19:3x) [K, BM:data/w24/w24_report.txt, BM:docs/WED_TESTS.md]
+w16u (U3 + R57_GATEREQ: 16-row code checks on the gate at 120 base slots) read 57.5 MB per kept token against w12's 29.1
+(QOM, 12 rows) and had long tails; BigMoE dropped it. At 120 slots, 16 rows kept 11.14 per check against 9.34 at a cycle
+median of 98.9 ms against 79.9: no gain per cycle. U3 keeps unsure rows exact (all 10 ids, misses loaded) and ran with no QOM
+uses, so for route (a) at 12 GB the gate would need QOM0's classes (every drafted row 2 required ids, the bonus row 10), not
+U3's. Route (a) also still needs the ~5 GB diet.
+
+## One call per check at Fit12's call pool (C_m 47): which required sets fit [P, CPU replay] (Mon 21:0x; scripts/m1/code12_union.py -> data/m1/code12_union.out)
+Fit12 (21:0x) says its <= 4-row exact calls have two causes:
+- **Pool.** A call's top-10 union must fit C_m 47 base slots (4 x 10 = 40).
+- **Numerics.** Widths 5-16 were never tested bitwise in its loop. Its WV16 test decides whether a kernel port is needed.
+
+The required set per (check, layer) is the MSB records the rule must hold. QOM's resident-only ranks 2-9 are optional: a
+one-call check drops them when the pool is full, so they never block the fit.
+
+| rule | ids per layer, live checks (9.65 rows): mean / p99 / max | live checks with a layer > 47 | 16-row blocks: mean / p99 / max | 16-row blocks with a layer > 47 |
+|---|---|---|---|---|
+| EXACT | 52.8 / 111 / 141 | 67.9 % | 75.2 / 120 / 145 | 98.1 % |
+| Q1 0.5 (rows with cf < 0.5 exact) | 20.4 / 37 / 46 | 0 | 29.7 / 52 / 73 | 16.3 % |
+| QOM0 = S1u's U (drafted rows' ranks 0-1, the bonus row's 10) | 19.2 / 34 / 39 | 0 | 26.8 / 41 / 48 | 0.5 % |
+| QOM0+ball | 12.6 / 27 / 31 | 0 | 20.9 / 34 / 40 | 0 |
+
+- EXACT 4-row blocks peak at 40 ids (they fit, as Fit12 says). From 8 rows on, 98 % of checks overflow in some layer.
+- The sidecar (ranks 0-1 LSB) peaks at 32 at 16 rows, which is C_l 32; it never goes over.
+- The 16-row blocks are bytes10_core's synth_blocks(k 16, 'walk'). Rows with no draft cf count as exact there, which is why
+  QOM0's peak passes 40. In S1u every drafted row gives only ranks 0-1, so U <= 15 x 2 + 10 = 40 by construction.
+- So an exact single call cannot fit, while QOM0's / S1u's required set fits one call per check.
+
+Pool policy at the 12 GB pools (51 + 32), live blocks, in MB per kept token (GB per check):
+
+| rule | LRU | RCP (rank-class pools) | OPT (Belady bound) |
+|---|---|---|---|
+| EXACT | 636.8 (5.04) | 517.1 (4.09) | 351.2 (2.78) |
+| QOM0 | 162.5 (1.29) | 156.7 (1.24) | 93.2 (0.74) |
+| QOM0+ball | 101.8 (0.81) | 99.4 (0.79) | 54.2 (0.43) |
+
+RCP is no lever for QOM0 (-4 %), because its needs are ranks 0-1 already. The OPT bound is -43 % (1.29 -> 0.74 GB per
+check), so a better eviction policy is the lossless byte lever left, bounded there.
+
+Fit12's prices on its loop (21:0x) [P]: QOM0 at 1.29 GB per check gives ~50 tok/s with reads exposed and ~78 with in-layer
+overlap. At the OPT bound (0.74 GB) that becomes about 60 and 90-100. So 90 on this loop needs four things together: one
+call per check (WV16 decides port or not), a map-passing union cut, overlap, and a better eviction policy (or kept 12+).
+
+## S1u = the map's Q1-UNION at theta 0: not scored yet (Fit12 21:0x)
+What Fit12 can build today, without a residency probe:
+- one 16-row call per check, with U = the drafted rows' ranks 0-1 + the bonus row's ranks 0-9;
+- each drafted row computes its ranks that are in U, at the model's weights (no renorm);
+- the bonus row stays exact;
+- it commits up to the first miss.
+
+That is dm_q1u_masks.py's rule at theta 0: every drafted row is "sure", the bonus row is exact, and renorm is off, as in
+dm_ablations.q1_union.
+- The mask has no pool term, so its score is the same at any pool.
+- Its bytes are QOM0's required misses: 1.29 GB per check at 51 + 32 with LRU.
+
+Scored neighbours (code all-row [non-tie]; the line is 1.34 % [0.87]):
+- q1u_0.9_live: 1.25 % [0.69], PASS. Rows with cf < 0.9 stay exact there and widen U.
+- qom_0_live_c51: 1.16 % [0.54], PASS. It also keeps resident ranks 2-9: U's members (loaded for the check) and more.
+- qom_0_live_ball_c51: 1.40 % [0.93], FAIL.
+
+S1u is lossier than both passing arms and may land near the line. It needs one map arm (q1u_0_live: masks on CPU plus one
+model run, ~5-10 min at ~17 GB), which waits for Kamen's Mac (his until 23:00) and NewIdeas' queue.
+
+Pre-registered before any data (Mon 21:3x), for the map arm q1u_0_live (= S1u):
+- Read-out: `dm_screen_read.py q1u_0_live qom_0_live_c51 --also q1u_0.9_live`, with SCREEN_OUT pointing at this repo.
+- Code PASS = VERDICT2: all-row flips <= 1.34 % AND non-tie flips <= 0.87 %. BETWEEN / KILL as the script defines them.
+- IFEval and multi are information only: the 12 GB code rule applies on code sets alone, as R57_QOM_SETS does.
+- PASS sends S1u to Fit12's S1 engine run. The known-benchmark gate (HumanEval+ / MBPP at 12 GB) decides adoption.
+- Otherwise S1 needs QOM0 with a lookup-only residency probe (qom_0_live_c51 PASSES).

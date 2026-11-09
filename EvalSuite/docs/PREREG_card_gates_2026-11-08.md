@@ -397,3 +397,36 @@ Checked on the gate keys; the result is the same in scripts/r57_screen.py and th
 - **Priced length [P]:** ~9-12 h for both orders (central ~10 h): lcoh kept 867,659 tokens in 5.8 h at 45 GB; at 24 GB
   the card rows' rate is assumed x0.5-0.7, and the 600 s budget fits ~7 long rows per process (~80 processes). Re-priced
   from W24's own IFEval rate and the arm's first process.
+
+## Amendment 12a (Mon 9 Nov 21:1x, after the env file, before any w24 row): HARD 1,200 s and the process price; operations only
+- **The env file (BigMoE 8f76fc3, 20:01):** arm w13t of W24: 130 base + 26 sidecar slots, rows <= 13, prefill trim
+  (BIGMOE_TIER_PF_GROUP=64, R57_CACHE_GB=0.25), QOM on humaneval, mbpp and lcb6, and R57_HARD=1200 (the screen cuts the
+  running row and ends the process after 1,200 s of running time; BigMoE 788f0e1). Its comment names w24, C 100, MEM 24 GB
+  and the w24 screen. It is the config of W24b's w13t rows plus HARD and lcb6 in the QOM sets; BigMoE's own runner
+  (scripts/w24.sh through data/r57/snap/c45_runner_rel1.sh) passes R57_PRESET=45, R57_REPS=1, R57_WARM=1 and C 100, as
+  runner 61 does.
+- **The change (runner 61):** a process takes up to HARD plus its load, the cut row and its teardown (762 s at most at
+  HARD 600, Mon 11-09). Runner 61 now reads R57_HARD from the env line (600 when it is unset or empty, the screen's
+  default). It prices each process at HARD + 300 s before the cutoff: 900 s at 600, as before; 1,500 s at 1,200. The
+  shared lock's lease is twice that: 30 min at 600, as before; 50 min at 1,200. A value that is not whole seconds stops
+  the runner. Dry runs: the w24 env reads 1,200 s, 1,500 s and 50 min; card_m1b_env.txt reads 600 s, 900 s and 30 min; a
+  bad value stops it (rc 2); an empty one gives 600 s. The share-lock test passes. The 01:25 launcher
+  (tools/card_w24_start.sh) was stopped before the edit and re-armed after the tests; it starts nothing before 01:25.
+- **Priced length, re-done [P]:** the estimate comes from a budget sim on lcoh's rows. A row takes first token + n / tps; a
+  process is cut at HARD + 40 s of row time and costs 65 s of load and teardown. The sim gives 6.1 h for lcoh at 45 GB
+  (5.8 h measured). The 24 GB rates are scaled per set from BigMoE's CAP-256 pairs on the same 12 prompts:
+  - ifbench and gpqad (exact reads): x0.63, from IFEval at 28.4 tok/s (w12, 24 GB) vs 45.4 (rel rows, 45 GB).
+  - lcb6 (QOM): x0.71 from HumanEval (116.5 vs 164.0) and x0.80 from MBPP (90.5 without its one stalled row, vs 112.7).
+  - first token: x1.2.
+
+  | Rates (exact reads / lcb6 / first token) | Processes per order | Both orders |
+  |---|---|---|
+  | central: x0.63 / x0.75 / x1.2 | 20 | ~8.1 h |
+  | slow: x0.5 / x0.65 / x1.5 | 20 | 9.9 h |
+  | slowest: x0.4 / x0.6 / x2.0 | 21 | 11.9 h |
+  | central at HARD 600 | 25 | 8.6 h |
+
+  None of these reaches the runner's limit of 30 processes per order. This replaces amendment 12's "~80 processes",
+  which assumed ~7 long rows per 600 s; most rows are short (IFBench averages 384 tokens).
+- **Unchanged:** the keys, the reference, the decision rule, both orders, PERPROC 20, the slot (from 01:25, latest start
+  05:00) and the 15:00 cutoff. From a 01:25 start the central case ends near 09:30 if memory is free.

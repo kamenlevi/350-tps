@@ -239,9 +239,9 @@ tfwin() {       # run, label: tfwin chunks until every row of the run is scored
 }
 fast() {        # tag, keys, label: one stack process (all its keys), under this runner's share lock
   local tag=$1 keys=$2 t0 d rc
-  BMPIN=1 gate "CHAT $3" "$((MEM - 4))" 900     # needs MEM + 4 GB NO-SWAP free (BigMoE's own margin)
+  BMPIN=1 gate "CHAT $3" "$((MEM - 4))" "${STEP:-900}"     # needs MEM + 4 GB NO-SWAP free (BigMoE's own margin)
   rm -f "$BM/data/r57/${tag}_"*
-  share_lock "evalsuite: MEM $MEM GB: $PHASE, $3" 30
+  share_lock "evalsuite: MEM $MEM GB: $PHASE, $3" "$(( ${STEP:-900} / 30 ))"   # the lease: 2x the step (30 min at HARD 600)
   t0=$(date +%s)
   env "${UNSETS[@]}" "${STACKENV[@]}" "${EXTRAENV[@]}" R57_PRESET=45 R57_REPS=1 R57_WARM=1 R57_TAG="$tag" R57_KEYS="$keys" \
     "$BM/.venv/bin/python" tools/r57_wrap.py "$SCREEN" "$AF/${tag}_modules.json" "$C" "$CAP" > "$AF/${tag}.log" 2>&1; rc=$?
@@ -456,6 +456,13 @@ say "C $C (MEM $MEM); BigMoE $BMC; ext $EB .so $QOMSO; code: $MODE${SNAP:+ $SNAP
 PIN0=$(pin)
 say "code pin $PIN0"
 QS=$(printf '%s\n' "${STACKENV[@]}" | grep '^R57_QOM_SETS=' | tail -1); QS=${QS#R57_QOM_SETS=}
+# amendment 12a: the screen stops a process at R57_HARD s of running time (default 600; the w24 env sets 1200). A process
+# takes HARD + its load, the cut row and teardown (762 s at most at HARD 600, Mon 11-09), so each is priced HARD + 300 s
+# before the cutoff (900 s at 600, as before) and its shared lock lease is 2x that
+HARDS=$(printf '%s\n' "${STACKENV[@]}" | grep '^R57_HARD=' | tail -1); HARDS=${HARDS#R57_HARD=}; HARDS=${HARDS:-600}
+case "$HARDS" in *[!0-9]*) say "R57_HARD '$HARDS' is not whole seconds: runner stops"; exit 2;; esac
+STEP=$((HARDS + 300))
+say "R57_HARD $HARDS s: each process is priced $STEP s before the cutoff; shared lock lease $((STEP / 30)) min"
 KEYS=$(LC_ALL=C sort "$KF" | paste -sd, -)
 RKEYS=$(echo "$KEYS" | tr ',' '\n' | tail -r | paste -sd, -)
 [ "$DRY" = 1 ] && { say "DRY: QOM sets ${QS:-unset}; $(echo "$KEYS" | tr ',' '\n' | grep -c .) keys per order; pin $PIN0; bm_pin $(bm_pin && echo OK || echo FAILS); stops before the first GPU step"; exit 0; }

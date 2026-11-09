@@ -39,6 +39,16 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     - Order: card-reference leftover (0.5-2.5 h), then lcoh (~3.6 h), then whichever next arm fits.
     - The last chunk or arm must END by 15:00.
     - Fit12's 12 GB IFBench arm (~3 h, MEM ~12-16 GB) goes after 15:00, by day.
+  - MON 21:16 (`date`) TONIGHT'S CHAIN (each job starts when the one before it leaves its done-file; all gated on Kamen idle):
+    1. Leap's drafter test from 23:00: 4 runs (dfl / mtp x 32 / 45 GB), share, ~12-15 min. MLX peaks ~31 / ~44 GB need
+       NO-SWAP >= 39 / 52 (43.6 at 21:15, so the 45 GB pair may be skipped). Done-file ~/Leap/data/drafter_1109.done.
+       The chat replay can't run: his messages weren't saved. Any substitute is the orchestrator's call.
+    2. A BigMoE lever arm, if one is ready (quiet ticket; asked 21:08). Fit12's gate waits while any quiet ticket is out.
+    3. Fit12's S1u (GO 21:16): ~10-12 min, peak ~11.4 GB, share MEM 12, start-by 00:58. Done-file ~/Fit12/logs/s1u.done.
+    4. Breakthrough's map arm q1u_0_live (flips only; masks from dm_oea_masks.py, built after 23:00): 5-10 min, ~17 GB,
+       share, start-by 01:00. Pre-registered in TRIED as Q1U-0-LIVE: code PASS = all-row <= 1.34 % AND non-tie <= 0.87 %.
+    - Everything is done and freed by 01:15. EvalSuite re-priced the 01:25 gate (21:14): ~8 h central (ends ~09:30), slowest
+      11.9 h (~13:20). It waits for 28 GB NO-SWAP at each process.
   - MON 21:07 (`date`) TONIGHT, UPDATED (orchestrator 21:0x; Fit12's two notes since):
     - Until 23:00 the Mac is Kamen's: no GPU, lock or big-memory job. His chat process was gone by 21:05; the rule stands.
     - 23:00-01:15, only while Kamen is idle: no keyboard or mouse input for 10 min (ioreg HIDIdleTime >= 600 s) and no chat
