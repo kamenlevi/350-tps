@@ -601,3 +601,11 @@ could be improved"), checked Mon 18:08-18:09 (`date`) against the 18:04 snapshot
   added only wording and the machine line "MacBook Pro (M5 Pro, 18-core CPU, 20-core GPU, 64 GB, 2 TB SSD)", verified on the
   machine (hw.ncpu 18; system_profiler: Apple M5 Pro, 20 GPU cores; 64 GiB; disk0 2.0 TB). Five public.md = source minus
   dropped + the date line; PDF digits = public.md (unplaced page numbers only). PASS.
+
+## 22. W24 / W24b (24 GB -> 120, Kamen's publish trigger), number check Mon 21:02 (`date`)
+- w13t (the gate config, card_w24_env.txt, 8f76fc3) HumanEval: 116.45 tok/s pooled, 12 prompts 76.0-141.6, peak 23.915 GB =
+  w24b_report "116.5 / 23.92". 3 % under 120.
+- Two report rows are single-prompt stalls (both the arm's last prompt, 19:44 / 19:48, around Leap's chat smoke / Kamen's chat
+  start; 'paused' empty): w13tm MBPP 29.55 = 11 prompts 72-117 + mbpp/319 at 4.8 tok/s (43 s) -> 90.5 without it; w12rh HE
+  14.20 = HumanEval/63 at 1.6 tok/s (164 s) -> 110.4 without it. Do not quote w13t's MBPP without a re-run. Sent to BigMoE
+  and EvalSuite. Machine at 21:02: Kamen's chat (Python 20 GB, 100 % CPU), swap 31 GB.

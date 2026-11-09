@@ -39,6 +39,30 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     - Order: card-reference leftover (0.5-2.5 h), then lcoh (~3.6 h), then whichever next arm fits.
     - The last chunk or arm must END by 15:00.
     - Fit12's 12 GB IFBench arm (~3 h, MEM ~12-16 GB) goes after 15:00, by day.
+  - MON 21:07 (`date`) TONIGHT, UPDATED (orchestrator 21:0x; Fit12's two notes since):
+    - Until 23:00 the Mac is Kamen's: no GPU, lock or big-memory job. His chat process was gone by 21:05; the rule stands.
+    - 23:00-01:15, only while Kamen is idle: no keyboard or mouse input for 10 min (ioreg HIDIdleTime >= 600 s) and no chat
+      process of his above 2 GB. Each start is gated on NO-SWAP >= measured peak + 8 (share) / + 4 (quiet).
+      1. Leap's drafter test (~12 min).
+      2. Exact-vs-lossy replay of Kamen's chat (Leap).
+      3. If time is left: BigMoE's next lever arm (quiet, PEAK 24 GB) if ready, else Fit12's S1u if built.
+      - Everything ends and frees its memory by 01:15.
+    - 01:25: EvalSuite's w24 gate on w13t, as armed (~10 h, cutoff 15:00). Nothing runs beside it until BigMoE confirms that
+      w13t's tokens do not depend on machine load. Its LCB set runs QOM (optional uses served only when resident). COH made
+      two quiet runs match token for token (BM:docs/WED_TESTS.md 980), but not with an SSD-heavy neighbour.
+    - After the gate (~11:25 Tue): BigMoE's lever arms first. Fit12's S1u takes the first gap: one call per check, union-only
+      cut, 16 HumanEval at CAP 256, ~15 min, <= 12 GB, share. S0 (WV16 numerics, 5-10 min) is optional in any gap; S2 is Wed+.
+  - MON 21:03 (`date`) TONIGHT:
+    - W24 ran early on Kamen's word (orchestrator 19:0x); W24b 19:40-19:59.
+      - Gate config w13t (BigMoE card_w24_env.txt, 8f76fc3): 13 rows, 130 base / 26 side, prefill trim, R57_HARD 1200.
+      - HumanEval 116.45 tok/s at 23.92 GB, re-derived clean: 3 % under 120.
+      - Its MBPP row (29.6) and w12r's HE row (14.2) are single last-prompt stalls; never quote them. Re-run w13tm first.
+    - Now (21:02): Kamen's chat session (Python 20 GB, swap 31 GB). The queue stays clear until the orchestrator says he
+      is done.
+    - Next, in order: EvalSuite's w24 card arm (armed from 01:25, latest start 05:00, cutoff 15:00, ~10 h; its WAITMEM
+      holds it while memory is short), then BigMoE's lever arms toward 120 in its gaps or after.
+    - 12 GB -> 90 (Breakthrough priced: one exact 16-row call + a QOM0+ball cut ~85-90; Q1-t3 ~100): its first GPU
+      screen comes after W24, once BigMoE says whether its engine fits 12 GB pools.
 > (a quote from the project owner, kept private)
     then we publish by wednesday. and as soon as we reach 90tps on 12gb, we publish about it"). Published 18:35 (exactstream
     v1.0.0); the post-publish number check PASSED (18:55).

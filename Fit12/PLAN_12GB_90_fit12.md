@@ -724,3 +724,33 @@ fixed-cost bet. This is a measurement only: no setting changes.
   - Screens S1 (one wide call per check with a sure-row rank cut that fits C_m 47), S2 (BigMoE's fast path at 12 GB, if
     it fits) and S3 (byte-cut arms) wait for the ranking.
   - NewIdeas gets their GPU minutes, peak and lock type by Tue 08:00. No GPU tonight: W24 has the machine.
+
+## 12 GB -> 90: WHY <= 4 ROWS, AND THE FIRST SCREEN (Mon 09 Nov 21:2x; Breakthrough 19:3x-19:5x, its docs/PRICE_12GB_90_CODE.md 2f79c62)
+- **Breakthrough's code byte replay at these pools (51 + 32)** (data/m1/code12_replay.out, 8441677) [P]:
+  - exact 5.04 GB per check (this loop's A' measures 4.45);
+  - QOM0 + ball 0.81 GB; Q1-t3 + bonus 0.55 GB.
+  - The map's code line at 51 slots: QOM0 with the bonus row exact passes, 1.16 % [0.54], at 1.29 GB per check. QOM0 + ball
+    fails at 1.40 %. Map lines are information only; the gate decides.
+- **Why this loop's calls stop at 4 rows:**
+  - Pool (hard): a call's top-10 union must fit C_m 47 base slots (4 x 10 = 40). A 16-row top-4/5 pass already aborted (c52).
+  - Gate row (hard): the sync-free gate posts at most 92 ids per layer and call
+    (/Users/kamen/Breakthrough/v3p/bigmoe_v3f/gated.py l16-20; default 40). 16 rows x top-10 = 160.
+  - Numerics (half known): WV1 (24 Oct) found widths 2-4 bitwise equal and width 1 different. Widths 5-16 are untested.
+    Any 16-row route here is lossy through its expert cut anyway, so this only changes its label.
+    A width test (S0 WV16) is optional and not on the speed path.
+- **Residency.** The loader knows which experts are resident only when ids are posted. post() returns a slot or -1 per id,
+  and posting a miss reads it.
+  - So true QOM0 ("skip non-resident ranks 2-9") needs a lookup-only probe in the native loader: a copy of Breakthrough's
+    C++ extension. It is not buildable in this loop's Python today.
+- **Buildable now: S1u, union-only one-call check.**
+  - One 16-row call per check. U = every drafted row's ranks 0-1, plus the last (bonus) row's ranks 0-9 (<= 40 ids, which
+    fits MAXK 40 and C_m 47).
+  - Each drafted row computes its ranks 0-9 that are in U, at the model's weights. The bonus row is exact.
+  - Commit pass 1's rows up to the first miss; no exact pass.
+  - It generalizes this loop's P1-K1 wide pass (k1u_moe: U = rank 0 there). Bytes are about QOM0's (U's misses only),
+    with more dropped compute, so its map line is needed before any gate. Breakthrough was asked 21:2x.
+- **S1u pre-registration (before any run):** 16 HumanEval, CAP 256, <= 12 GB, share lock, ~15 min. Measure whole decode
+  (pooled, geo), ms per check (call / draft / rest), MB per kept token, kept per check, tokens vs ex.
+  - Lines: the one-call route stands if the call's time outside reads is <= 90 ms and MB per kept token <= 150. Else the
+    route is re-priced before S2 (overlap).
+  - No quality claim: it is lossy and needs its map line, then the gate.
