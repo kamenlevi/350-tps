@@ -6,8 +6,9 @@ FILES = sys.argv[1:] or [str(P/f) for f in ("MAIN.md","KERNELS.md","SMALL_RAM.md
 CHECKS = [
  ("never-word", r"(?i)\b(lossless|near[- ]exact|same quality|fastest|world'?s first|state[- ]of[- ]the[- ]art|SOTA|first to)\b"),
  ("4-bit", r"(?i)\b4[- ]bit\b"),
+ # a folder name inside a path into the public snapshot (BigMoE/data/...) is allowed (orchestrator 14:3x)
 > (a quote from the project owner, kept private)
- ("home path", r"~/[A-Za-z]"),
+ ("home path", r"~/[A-Za-z]|/Users/"),
  ("TBD", r"\[\[TBD"),
  ("info-only metric", r"(?i)\b(steady|tpsw|full[- ]period)\b"),
  ("personal / told", r"(?i)(we were told|zl@|blackpeak|\bhe said\b)"),

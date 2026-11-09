@@ -430,3 +430,28 @@ So: lossy decode x2.5-3.5 on code, x1.7 math, x1.08 chat; Strata still wins ever
 - The orchestrator (13:0x): the number check covers the built PDFs too (digits unchanged vs .md). scripts/numcheck/
   pdf_digits.py (pdftotext or HTML; number-token counts after normalising minus, x and spaces) is ready and tested; paths
   and ETA asked of Breakthrough.
+
+## 11. Public edition, build 13:41 (Breakthrough): digits PASS (Mon 14:31-14:35 `date`)
+Method: scripts/numcheck/pdf_digits.py on each out/<slug>/<slug>.public.md (the build's own source) vs its PDF (pdftotext),
+then a substring recount of every number whose count differs. Explained, not digit changes:
+- page numbers on pages where pdftotext does not put the number last (MAIN p. 5, 7, 11, 21; DRAFTER 4, 9, 12-14; EVALUATION
+  5-8; RELEASE 1, 2; KERNELS 10, 11; SMALL_RAM 7): each such number +1, exactly;
+- keys broken after "_" (allowed by the build) and table cells interleaved by pdftotext (e.g. EVALUATION "chat_m1b_" /
+  "0.388" / "2026-11-08"): the substring recount restores them;
+- "10^9" renders as "10ˆ9" (U+02C6), read as a letter by the tokenizer;
+- EVALUATION: two keys broken after the "-" inside a date (RESULT_card_lcoh_2026- / 11-09, RESULT_smallram_2026- / 10-22),
+  which pdftotext re-joins as "202611-09".
+After that every multi-digit number and every decimal matches in all six PDFs. Site pages (site/<slug>.html) vs each
+abstract: every abstract number is on its page; the extras are the title / subtitle numbers (shown twice) and the date.
+Still to do on the final build (~16:40): the same, plus public.md == source minus the manifest's dropped ranges.
+
+## 12. MAIN 10.10 (FAR-CEIL / FAR-STATE) and RELEASE's new abstract (Mon 14:36-14:37 `date`)
+- MAIN 10.10 = FableGod far/far_ceiling.txt and far_ridge.txt: 176 checks over 6 prompts (5, 48, 25, 32, 34, 32); K 266 / 147;
+  PERFECT-KEPT 20.3 % (recall 0.68) / 26.3 % (0.76); PERFECT-ALL 33.7 % misses, stalls 5.4 %; OPT 55.3 % / 19.3 %; token
+  LOPO recall 0.238-0.283 (layers 8-47), previous occurrence ~0.40; best token map 6.0 % (MEMO-4 + LOPO-10 + pop); ridge
+  (leave-one-prompt-out) RIDGE-1 a0.3 top16 all16: recall 0.70 / precision 0.64, 14.6 %, stalls 42.3 vs 42.9 = -1.4 %; K 147
+  best 11.9 % (RIDGE-3 a0.3 top10). OK. Note (sent): the 14.6 % is also the best of 8 settings tried at K 266 (9.6-14.6 %);
+  say "best of the settings tried" there too. A re-run of far_ceiling.py (a copy writing to my scratchpad) was refused by
+  its own guard: fanwatch PAUSE set 14:35 (heat); deferred until after m1b.
+- RELEASE abstract (l11-21): exact 37.1-101.4 tok/s, shipped lossy 45.2-164.0, peaks 41.7-43.2 GB, Strata 0.5-1.0 s vs ours
+  2.7-4.6 s (2.26 s chat as shipped), six configs: all = section 2 and the records. OK.
