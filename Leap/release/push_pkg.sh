@@ -16,7 +16,9 @@ g() { git -C "$P" -c credential.helper= -c 'credential.helper=!gh auth git-crede
 VIS=$(gh repo view kamenlevi/exactstream --json visibility --jq .visibility)
 # Since 18:35 (the owner's go, via the orchestrator) the repo is public: a push needs PUBLIC_OK=1, set only for a change
 # the owner asked for, so nothing reaches the public repo by accident.
-[ "$VIS" = PRIVATE ] || [ "${PUBLIC_OK:-0}" = 1 ] || { echo "STOP: the repo is $VIS (set PUBLIC_OK=1 only for an owner-requested change)"; exit 2; }
+# DRY=1 never pushes (it exits before the only `git push` below), so a dry run may proceed on the public repo (Tue 10 Nov).
+[ "$VIS" = PRIVATE ] || [ "${PUBLIC_OK:-0}" = 1 ] || [ "${DRY:-0}" = 1 ] || { echo "STOP: the repo is $VIS (set PUBLIC_OK=1 only for an owner-requested change)"; exit 2; }
+[ "$VIS" = PRIVATE ] || [ "${PUBLIC_OK:-0}" = 1 ] || echo "DRY run on the $VIS repo: nothing will be pushed"
 g fetch -q "$URL" main || { echo "STOP: fetch failed"; exit 2; }
 REMOTE=$(g rev-parse FETCH_HEAD)
 if [ "$MODE" = pkg ]; then

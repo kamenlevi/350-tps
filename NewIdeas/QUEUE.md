@@ -39,6 +39,13 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     - Order: card-reference leftover (0.5-2.5 h), then lcoh (~3.6 h), then whichever next arm fits.
     - The last chunk or arm must END by 15:00.
     - Fit12's 12 GB IFBench arm (~3 h, MEM ~12-16 GB) goes after 15:00, by day.
+  - TUE 11:17 (`date`) S1q LOWER-MEMORY ARM PARKED (NewIdeas' call) until after the release. Fit12's pre-checks: the same chunk
+    peaks at 11.725 GB in a re-run and 12.027 GB in the gate, with identical tokens (18 / 18). The ~0.3 GB run-to-run swing is
+    outside MLX (MLX flat at 10.40-10.46). The arm needs ~0.4 GB of real cuts. The drafter cut would move QOM's cut, so it
+    needs a new map line too. Next time: first locate the ~1.0-1.3 GB outside MLX (footprint / vmmap categories).
+  - TUE 11:07 (`date`) S1q INFO SCORE (EvalSuite ef7d28b; NOT a verdict): HumanEval+ 91.7 vs 91.7 % (60 / 60, 1 / 1), MBPP 75.9 vs
+    75.9 % on the first 58 keys (2 / 2). Memory stopped it, not quality, so a lower-memory arm is APPROVED for a slot after
+    the release: C_m 51 kept, <= 11.8 GB measured on mbpp/228 first, its own PREREG, and Fit12's q0r merge fix.
   - TUE 11:05 (`date`) S1q CODE GATE STOPPED at 11:02 on the 12.0 GB guard (12.027 GB on mbpp/228; forward 118 / 160; no verdict;
     EvalSuite RESULT_code12_s1q 0486e07). NewIdeas' call: no retry today; EvalSuite gives an information-only score of the
     118 rows. A retry is a new arm with its own PREREG after the release: keep C_m 51 (the map PASS line), take >= 0.2 GB

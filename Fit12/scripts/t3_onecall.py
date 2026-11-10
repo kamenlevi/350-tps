@@ -167,6 +167,8 @@ def gq_install(pad=False):
 
 
 CALLS = [None]   # (T2) a list: one row per exact call (check, call index, width, rows kept in the call, then _mk() at start, at end)
+MEMLOG = [None]  # (Tue 10 Nov 11:3x, S1q memory, F12_MEMLOG=1) per check and phase: (check, phase, MLX active, MLX peak since
+                 # the check began, MLX cache) in bytes; None = off
 TS1 = [None]     # (Mon 9 Nov 23:0x, S1u profile, F12_GSTAT=1) one row per wide pass-1 call: (check, -1, rows, kept) + uptime
                  # stamps t0 (start), t1 (after forward: graph built), t2 (after eval), t3 (after the commit) + the loader's
                  # (proc_s, io_s, cpu_wait_s, misses, stalled, uses) at t0, t1, t2 + the main thread's CPU at t0, t1, t2 + the
@@ -691,14 +693,20 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
             _call(ci, len(ch), m_ + 1, kc, ts_)
             return new_, mx.concatenate(tps_) if len(tps_) > 1 else tps_[0]
 
+    _ML = MEMLOG[0]                                    # (Tue 11:3x, S1q memory) per check: MLX peak after each phase
+    _mem = (lambda ph_: _ML.append((st["checks"], ph_, mx.get_active_memory(), mx.get_peak_memory(), mx.get_cache_memory()))) \
+        if _ML is not None else (lambda ph_: None)
     try:
         while len(out) < max_tokens:
+            if _ML is not None:
+                mx.reset_peak_memory()
             _t = time.perf_counter()
             _k = _mk()
             pth, cf = propose(mx.array([[y] + [MASK] * (R - 1)]), ctx[None].astype(mx.bfloat16), dcache)
             mx.eval(pth, cf)
             st["t_draft"] += time.perf_counter() - _t
             _ph("draft", _k)
+            _mem("draft")
             d = np.array(pth[0]).tolist()
             cf = np.array(cf[0]).tolist()
             calrec = {}
@@ -760,6 +768,7 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
                 st["t_p1"] += time.perf_counter() - _t
                 st["miss1"] += _miss() - _m
                 _ph("p1", _k)
+                _mem("p1")
                 _t = time.perf_counter()
                 _k = _mk()
                 p1, g1 = p1.tolist(), g1.tolist()
@@ -776,6 +785,9 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
                     rt = commit(toks, sn1, n + 1, True)
                     st["t_commit"] += time.perf_counter() - _t
                     _ph("commit", _k)
+                    if _ML is not None:
+                        mx.eval(rt) if rt is not None else None
+                        _mem(f"commit{n + 1}")         # the kept count: the PLE layer replays over these rows
                     if _p1 is not None:                # t3: the commit is done; one TS1 row per wide call
                         _p1["t"].append(_now())
                         TS1[0].append((st["checks"], -1, S, n + 1) + tuple(_p1["t"]) + tuple(_p1["g"][0]) + tuple(_p1["g"][1])

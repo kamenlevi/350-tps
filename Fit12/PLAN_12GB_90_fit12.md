@@ -949,3 +949,15 @@ fixed-cost bet. This is a measurement only: no setting changes.
     map line again if the pool shrinks (QOM0 at C_m 47 failed by one flip).
   - Also: s1qg_merge.py looked for arm "ex" while the chunk files say "q0r" (KeyError). Any resume needs that fixed, as an
     amendment, since the merge's hash is registered.
+- **S1q memory pre-checks (Tue 11:10-11:16; share lock, idle GPU; /Users/kamen/Fit12/scripts/s1m.sh, s1m2.sh; data
+  /Users/kamen/Fit12/data/scr/s1m, s1m2) [K]:**
+  - mbpp/228 alone, in a fresh process: footprint peak 11.383 GB (exact); 348 tokens.
+  - The gate's qgf06 chunk again (fwd keys 101-120, one process): peak 11.725 GB; tokens = the gate's qgf06 run on 18 / 18
+    keys, so S1q is deterministic given the history. Order does matter: mbpp/228 makes 222 tokens as the 19th key.
+  - Per prompt, MLX's own memory is flat: active 10.09-10.28 GB, peak 10.40-10.46 GB, cache <= 0.083 GB. Nothing builds up
+    in MLX. The rest of the footprint (~1.0-1.3 GB) moves run to run.
+  - The same computation peaked at 12.027 GB in the gate (10:58) and 11.725 GB here (11:16): ~0.3 GB of footprint noise.
+  - So "<= 11.8 GB on mbpp/228" is met (11.38 alone, 11.73 in the chunk) but gives no margin. To stay under 12.0 GB in
+    every chunk, the arm needs ~0.4 GB of real cuts, i.e. ~11.3 GB in a chunk re-run.
+  - Candidates [G], none built: the drafter's bf16 parts at 4 bits (the drafter is 0.928 GB of own params); MLX cache cap
+    64 -> 16 MB (<= 0.07); smaller chunks (the per-process peak ratchets over ~3 prompts).

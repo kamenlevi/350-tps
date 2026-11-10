@@ -2110,3 +2110,7 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 10:58:32 SCR s1qg qgf06 start
 11:02:20 SCR s1qg qgf06 end (rc 143)
 11:02:20 SCR s1qg run end (rc 126)
+11:10:34 SCR s1m start
+11:10:57 SCR s1m end (rc 0)
+11:12:20 SCR s1m start
+11:16:16 SCR s1m end (rc 0)
