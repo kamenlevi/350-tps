@@ -1464,3 +1464,20 @@ math prompts (data/n45/keys.txt line 2, MATH-500, 50-520 tokens), CAP 256, quiet
   cut. Math drafts on the 4-bit DFlash2 drafter here (R57_D7B=all) and reads ~196 MB from the SSD per kept token.
 - **The lifetime peak crossed 24.0 GB by 14 MB, on a 520-token prompt** (math500/test/geometry/702: MLX prefill 23.17 GB), so the
   line's prompt-length limit is about 500 tokens, not 560: the gate's 481-token row peaked 23.910 GB, this 520-token one 24.014.
+
+## Tue 10 Nov 23:08: CONV B0 = conversation-cache state sizes + restore mechanics: PASS (data/conv/b0.json; scripts/conv_b0.py, 9f86270)
+
+Kamen's goal via the orchestrator (23:0x): full Claude Code support by Thu 12 Nov 17:00, with the conversation cache on
+the critical path. B0 ran one QSA layer and one GDN layer of qwen4_exp (random weights, the real cache classes) on the
+recorded Claude Code shape:
+- turn 2 restored at 12,288 on the live cache after decode-style writes (208 tokens prefilled);
+- a new conversation restored at the stable edge 9,216 (3,084 tokens prefilled).
+
+Both match a cold prefill bit for bit (chunk outputs + all 9 state arrays), and a wrong checkpoint is caught.
+
+Sizes:
+- 29,952 B/token logical (KV 24,576 + indexer 5,376);
+- per checkpoint: GDN 115.46 MB plus the DFlash2 taps tail, 52.4 MB (the design said 13.1 MB: wrong width);
+- clone / restore ~1.2 ms.
+
+Details: docs/CONV_CACHE_DESIGN.md section 11. Next: B1 on the real engine (T1), Wednesday.
