@@ -1,28 +1,31 @@
 #!/bin/sh
-# Fit12 ifb12.sh (Mon 9 Nov 23:4x; NewIdeas 23:30, route (i): EvalSuite's runner cannot host it, so Fit12 runs it and EvalSuite
-# scores it afterwards). The 12 GB IFBench arm, a QUALITY arm (speed irrelevant), as the w24 gate's neighbour:
+# Fit12 ifb12.sh (Mon 9 Nov 23:4x; v2 Tue 02:0x with EvalSuite's 3 changes, 23:4x message). NewIdeas 23:30, route (i): Fit12 runs
+# the 12 GB IFBench arm (P2', the 12 GB chat mode) as the w24 gate's neighbour; EvalSuite scores it afterwards (its amendment 13,
+# pre-registered before the first row; tools/set_d4.py ifbench <run> ref2tnaxn.r6). A QUALITY arm: its speeds are rough.
 # - harness: the FROZEN /Users/kamen/Fit12/snap/chw1108/fit_t3.py (7a9ffd8375ed), env exactly
-#   /Users/kamen/Fit12/data/gate/card12_chw_env.txt's: F12_T3ARMS=ex F12_CAP=item F12_CMCL=47,32 F12_W1=cf:0.9:2 F12_W1SEED=1
-#   F12_W1TAIL=1 F12_PR1=1 (P2', the 12 GB chat mode); F12_IDS_OUT per chunk = EvalSuite's {key: {arm: [[ids]]}} + _meta.json;
-# - the 300 keys of EvalSuite's data/items/dec_ifbench.jsonl in file order, ONE order (P2' is history-independent: chw18,
-#   13 / 13 bit-identical), in chunks of CH keys (default 20), one process each; keys already in a chunk's ids file are skipped
-#   (resume); ifb12_merge.py merges the chunks into $O/ifb12_ids.json (+ _meta.json) for EvalSuite.
-# START of a chunk (polled every 30 s):
-#   - while the gate runs: its ETA file fresh (<= 30 min) with 'neighbour may start: yes' and not 'passes 13:30: yes';
-#   - the FIRST chunk also needs Breakthrough's beside_gate.done (its short flip-only arms go first);
-#   - after the gate (a later chunk, the gate's lock gone): alone, if no other MEM > 5 GB lock and no quiet ticket waits
-#     (BigMoE's quiet arms go first between chunks);
-#   - always: NO-SWAP >= 20 GB, no PAUSE / HOLD, before the hard end (arg 1, default Tue 23:00).
-# LOCK per chunk: peer lock share, reason starting "MEM 12 GB" (the gate yields only to a shared MEM run above 12 GB, or to two
-# above 5); released after every chunk.
-# STOP (checked every 10 s while a chunk runs; ends the whole run, done keys kept): the process's phys_footprint_peak (footprint)
-# > 12.0 GB; swap > the run's start + 0.5 GB (the gate's own guard is +2 GB); a fresh ETA file says 'passes 13:30: yes'.
-# Dry test: IFB_PY (a fake harness), IFB_O, IFB_ETA, IFB_BGD, IFB_KEYS (a key subset), IFB_CH, IFB_PEAKGB (the 12.0 guard) and
-# IFB_NOLOCK=1 (no peer lock: a dry test must not show a MEM 12 GB lock to other sessions' gates) override the real ones.
+#   /Users/kamen/Fit12/data/gate/card12_chw_env.txt's (git blob da1eb63570ee): F12_T3ARMS=ex F12_CAP=item F12_CMCL=47,32
+#   F12_W1=cf:0.9:2 F12_W1SEED=1 F12_W1TAIL=1 F12_PR1=1; F12_IDS_OUT per chunk ({key: {"ex": [[ids]]}} + _meta.json);
+# - KEYS: the 150 gate keys = the ifbench/ lines of /Users/kamen/EvalSuite/results/card/card_keys.txt, in that order (only these
+#   have a NAX6-N reference row); prompts = the items' own prompt_ids, CAP = max_tokens 1536; chunks of CH keys (default 20),
+#   one process each; keys already in an ifb12cNN ids file are skipped (resume); a key whose chunk was stopped is not in any
+#   file and runs again;
+# - REVERSE CHECK (EvalSuite 23:4x): after the 150, the first NREV (10) keys again in reverse order, in their own process
+#   (ifb12rev); any token difference makes the arm VOID (ifb12_merge.py reports it);
+# - ifb12_merge.py writes ifb12_tokens.json + ifb12_runs.json ([{key, arm "ex", cut false}]) + ifb12_meta.json.
+# HOLD: while $O/WAIT exists (released by hand once EvalSuite's amendment 13 is in).
+# START of a chunk (polled every 30 s): while the gate runs, its ETA file fresh (<= 30 min) with 'neighbour may start: yes' and
+#   not 'passes 13:30: yes'; the FIRST chunk also needs Breakthrough's beside_gate.done; after the gate (a later chunk, the
+#   gate's lock gone): alone, with no other MEM > 5 GB lock and no quiet ticket waiting; always NO-SWAP >= 20 GB, no PAUSE /
+#   HOLD, before the hard end (arg 1, default Tue 23:00).
+# LOCK per chunk: peer lock share, reason starting "MEM 12 GB"; released after every chunk.
+# STOP (every 10 s while a chunk runs; ends the whole run, done keys kept): the process's phys_footprint_peak (footprint) >
+#   12.0 GB; swap > the run's start + 0.5 GB (the gate's own guard is +2 GB); a fresh ETA file says 'passes 13:30: yes'.
+# Dry test: IFB_PY (a fake harness), IFB_O, IFB_ETA, IFB_BGD, IFB_KEYS (a key subset), IFB_CH, IFB_NREV, IFB_PEAKGB and
+#   IFB_NOLOCK=1 (no peer lock: a dry test must not show a MEM 12 GB lock to other sessions' gates) override the real ones.
 F=/Users/kamen/Fit12; LOG=$F/logs/summary.txt
 PYU=/Users/kamen/BigMoE/.venv/bin/python; PY=${IFB_PY:-$PYU}; H=$F/snap/chw1108/fit_t3.py   # PY = the harness's python
 O=${IFB_O:-$F/data/scr/ifb12}; ETA=${IFB_ETA:-/Users/kamen/EvalSuite/results/w24_gate_eta.txt}
-BGD=${IFB_BGD:-/Users/kamen/Breakthrough/data/m1/beside_gate.done}; CH=${IFB_CH:-20}
+BGD=${IFB_BGD:-/Users/kamen/Breakthrough/data/m1/beside_gate.done}; CH=${IFB_CH:-20}; NREV=${IFB_NREV:-10}
 Q=/Users/kamen/.local/share/quiet; PAUSEF=$Q/PAUSE; HOLDF=$Q/HOLD
 END=$(date -j -f "%Y-%m-%d %H:%M" "${1:-2026-11-10 23:00}" +%s) || exit 9
 log() { echo "[$(date '+%a %H:%M:%S')] $*"; }
@@ -40,32 +43,31 @@ fpeak() { footprint -p "$1" 2>/dev/null | awk '/phys_footprint_peak:/ {v = $2; u
 cd $F || exit 9
 mkdir -p $O
 rm -f $O/DONE
-KEYS=${IFB_KEYS:-$($PYU -I -c 'import json; print(",".join(json.loads(l)["key"] for l in open("/Users/kamen/EvalSuite/data/items/dec_ifbench.jsonl")))')}
+[ -e $O/GO ] || touch $O/WAIT
+KEYS=${IFB_KEYS:-$(grep '^ifbench/' /Users/kamen/EvalSuite/results/card/card_keys.txt | paste -sd, -)}
+REVK=$(echo "$KEYS" | tr ',' '\n' | head -$NREV | tail -r | paste -sd, -)
 done_keys() { $PYU -I -c 'import glob, json, sys
 s = set()
 for f in glob.glob(sys.argv[1] + "/ifb12c*_ids.json"):
     s |= set(json.load(open(f)))
 print(",".join(sorted(s)))' $O; }
 left() { d=",$(done_keys),"; echo "$KEYS" | tr ',' '\n' | while read -r k; do case "$d" in *",$k,"*) ;; *) echo "$k";; esac; done | head -$CH | paste -sd, -; }
-SW0=$(swapmb); rc=0; first=1; n=$(ls $O/ifb12c*_ids.json 2>/dev/null | wc -l | tr -d ' ')
-log "ifb12 armed: $(echo "$KEYS" | tr ',' '\n' | wc -l | tr -d ' ') keys, chunks of $CH, $n chunk file(s) already; swap at arming $SW0 MB; hard end $(date -r $END '+%a %H:%M')"
-while :; do
-  K_=$(left); [ -z "$K_" ] && { log "all keys done"; break; }
-  # ---- the gate before each chunk
-  while :; do
-    [ "$(date +%s)" -ge "$END" ] && { log "hard end reached before a chunk"; rc=5; break 2; }
+rc=0; first=1; SW0=$(swapmb); n=$(ls $O 2>/dev/null | grep -cE '^ifb12c[0-9]+_ids\.json$')
+[ "$n" -gt 0 ] && first=0
+run_chunk() {   # $1 = tag, $2 = keys; sets rc (0, or the stop / failure code)
+  T=$1; K_=$2
+  while :; do                                     # the gate before the chunk
+    [ "$(date +%s)" -ge "$END" ] && { log "hard end reached before $T"; rc=5; return; }
     ok=0
-    if [ ! -e "$PAUSEF" ] && [ ! -e "$HOLDF" ] && [ "$(nosw)" -ge 20 ]; then
+    if [ ! -e $O/WAIT ] && [ ! -e "$PAUSEF" ] && [ ! -e "$HOLDF" ] && [ "$(nosw)" -ge 20 ]; then
       if eta_may && { [ $first -eq 0 ] || [ -e "$BGD" ]; }; then ok=1; mode=neighbour
       elif [ $first -eq 0 ] && [ "$(nbig)" -eq 0 ] && [ "$(nquiet)" -eq 0 ]; then ok=1; mode=alone; fi
     fi
     [ $ok -eq 1 ] && break
     sleep 30
   done
-  n=$((n + 1)); T=$(printf 'ifb12c%02d' $n)
   [ "${IFB_NOLOCK:-0}" = 1 ] || peer lock share 90m --cpu 200 --gpu 50 "MEM 12 GB IFBench 12 GB arm (Fit12), quality" >/dev/null 2>&1
-  SWc=$(swapmb)
-  [ $first -eq 1 ] && SW0=$SWc
+  SWc=$(swapmb); [ $first -eq 1 ] && SW0=$SWc
   log "$T ($mode): $(echo "$K_" | tr ',' '\n' | wc -l | tr -d ' ') keys from $(echo "$K_" | cut -d, -f1); NO-SWAP $(nosw) GB, swap $SWc MB (run start $SW0)"
   echo "$(date +%H:%M:%S) SCR ifb12 $T start ($mode)" >> $LOG
   env F12_OUT=$O F12_T3ARMS=ex F12_CAP=item F12_CMCL=47,32 F12_W1=cf:0.9:2 F12_W1SEED=1 F12_W1TAIL=1 F12_PR1=1 \
@@ -84,10 +86,15 @@ while :; do
   [ "${IFB_NOLOCK:-0}" = 1 ] || peer unlock >/dev/null 2>&1
   log "$T end rc $w (footprint peak seen $(cat $O/.peak_$T 2>/dev/null || echo n/a) GB; harness: $(grep -o 'done; lifetime [0-9.]* GB' $O/$T.txt | tail -1))"
   echo "$(date +%H:%M:%S) SCR ifb12 $T end (rc $w)" >> $LOG
-  [ $rc -ne 0 ] && break
-  [ $w -ne 0 ] && { rc=$w; log "$T failed: stopping the run"; break; }
+  [ $rc -eq 0 ] && [ $w -ne 0 ] && { rc=$w; log "$T failed: stopping the run"; }
+}
+log "ifb12 armed: $(echo "$KEYS" | tr ',' '\n' | wc -l | tr -d ' ') keys, chunks of $CH, $n chunk file(s) already, reverse check of $NREV ($REVK); swap $SW0 MB; held while $O/WAIT exists; hard end $(date -r $END '+%a %H:%M')"
+while [ $rc -eq 0 ]; do
+  K_=$(left); [ -z "$K_" ] && { log "all $(echo "$KEYS" | tr ',' '\n' | wc -l | tr -d ' ') keys done"; break; }
+  n=$((n + 1)); run_chunk "$(printf 'ifb12c%02d' $n)" "$K_"
 done
-$PYU -I -B $F/scripts/ifb12_merge.py $O > $O/ifb12_merge.txt 2>&1; cat $O/ifb12_merge.txt
+if [ $rc -eq 0 ] && [ ! -s $O/ifb12rev_ids.json ]; then run_chunk ifb12rev "$REVK"; fi
+$PYU -I -B $F/scripts/ifb12_merge.py $O "$KEYS" "$REVK" > $O/ifb12_merge.txt 2>&1; cat $O/ifb12_merge.txt
 echo "rc $rc ended $(date '+%a %H:%M:%S')" > $O/DONE
 echo "$(date +%H:%M:%S) SCR ifb12 run end (rc $rc)" >> $LOG
 exit $rc

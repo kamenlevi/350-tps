@@ -5,8 +5,10 @@
 # sim scaled by wall time / sim time of the keys done, so memory waits, yields and a neighbour's slowdown count).
 # "passes 13:30" uses the measured pace once a process has ended, the central sim before. On a change to "yes" it tells
 # NewIdeas (peer send 21406). It ends when the runner has ended or the launcher started nothing.
+# Tue 01:5x: it also reports the gate's lifetime footprint peak so far (the processes' runs files and live logs) and
+# budgets the gate for neighbours at that peak + 2 GB, rounded up (w13b peaked at 24.813 GB on a long GPQA-D prefill).
 # usage: python3 tools/w24_gate_eta.py [--once] [--no-send] [--tag w24] [--out PATH] [--line HH:MM] [--start "Y-m-d H:M:S"]
-import glob, json, os, re, subprocess, sys, time
+import glob, json, math, os, re, subprocess, sys, time
 from datetime import datetime, timedelta
 
 A = sys.argv[1:]
@@ -46,6 +48,18 @@ def sim(order, rate):                       # seconds for these keys in this ord
         wall += cum + OV
         miss = [k for k in miss if k not in done]
     return wall
+
+def peak_so_far():                          # the gate's lifetime footprint peak (GB): ended processes' runs + the live logs
+    pk = 0.0
+    for f in glob.glob(f"{ES}/results/card/es_cd{TAG}_*_runs.json"):
+        try:
+            pk = max([pk] + [max(r["mem"][1], r["mem"][-1]) for r in json.load(open(f))])
+        except (ValueError, KeyError, IndexError):
+            pass
+    for f in glob.glob(f"{ES}/results/card/es_cd{TAG}_*.log"):
+        for m in re.finditer(r"lifetime peak after prefill ([\d.]+) -> after decode ([\d.]+) GB", open(f, errors="replace").read()):
+            pk = max(pk, float(m.group(1)), float(m.group(2)))
+    return pk
 
 def done_keys(o):
     try:
@@ -111,6 +125,8 @@ while True:
     basis = meas or fin["central"]
     passes = "yes" if basis > line_dt else "no"
     complete = len(df) == 381 and len(dr) == 381
+    pk = peak_so_far()
+    budget = max(24, math.ceil(pk + 2))     # longer prompts can raise the peak (amendment 12d's report line; 01:5x)
     may = "no"
     why = "the gate is not in a running process"
     if complete or st.startswith("stopped"):
@@ -118,7 +134,7 @@ while True:
     elif passes == "yes":
         why = f"the projected finish passes {LINE}"
     elif run_since and (now - run_since).total_seconds() >= 300:
-        may, why = "yes", f"process past its load ({int((now - run_since).total_seconds() // 60)} min in); budget the gate at 24 GB"
+        may, why = "yes", f"process past its load ({int((now - run_since).total_seconds() // 60)} min in); budget the gate at {budget} GB"
     elif run_since:
         why = "the running process is in its first 5 min (load)"
     txt = (f"updated: {now:%Y-%m-%d %H:%M:%S}\n"
@@ -129,6 +145,7 @@ while True:
            f"finish measured: {f'{meas:%H:%M} (pace x{pace:.2f} of the central sim)' if meas else 'n/a (no process ended yet)'}\n"
            f"passes {LINE}: {passes} (on the {'measured pace' if meas else 'central sim'})\n"
            f"neighbour may start: {may} ({why})\n"
+           f"gate lifetime peak so far: {pk:.3f} GB ({'over' if pk >= 24.0 else 'under'} the 24.0 GB line); budget the gate at {budget} GB\n"
            f"rule: neighbours stop when 'passes {LINE}' says yes; a file older than 30 min counts as 'no'.\n")
     tmp = OUT + ".tmp"
     open(tmp, "w").write(txt); os.replace(tmp, OUT)

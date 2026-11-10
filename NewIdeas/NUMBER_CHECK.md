@@ -636,3 +636,22 @@ Source: ~/Fit12/data/scr/s1u (s1uh.txt, s1ue.txt, s1u_read.txt, s1u_rows.txt); s
   fit_onecall.py prints 'n/a' without an ex arm; [P] marked in its read-out, PLAN, TRIED, findings). 42.64 (sum n / sum
   decode s) is the precise figure; my 42.65 came from per-prompt tok/s rounded to 2 decimals. Fit12 notes the same vacuous
   field in fit_t3.py's single-arm lines (chw19c / h, ex16); its verdicts used chw13_read's cross-run comparisons.
+
+## 24. W24c / W24d (24 GB -> 120: the gate's config), number check Tue 02:02 (`date`), after the fact
+My account was at its 5-hour limit from ~00:0x to 02:00, so the orchestrator gave EvalSuite the final word at 01:33
+(w13b, card_w24d_env.txt, blob e06f495e; EvalSuite amendment 12d). Checked now with scripts/numcheck/w24c_check.py
+(criteria fixed at 23:08, before any result): NOTHING DISAGREES.
+- W24d (same-run ABBA on HumanEval; 12 / 12 prompts clean in every arm):
+  - w13b (w13e / w13f): 130.20 / 130.46 tok/s, pooled 130.33; peaks 23.819 / 23.781 GB.
+  - 14-row (w14c / w14d): 126.35 / 125.48 tok/s, pooled 125.91; peaks 23.828 / 23.782 GB (controls 0.7 % apart).
+  - w13b over the 14-row config: +3.51 %. Tokens identical within the pair (12 / 12) and by lh hash.
+  - PASS on my 4 checks (>= 120.0, clean rows, peak < 24.000, same prompts).
+- W24c: 14-row (w14a / w14b) 125.84 / 126.38, pooled 126.11; peaks 23.808 / 23.769; controls w13c / w13d 120.91 / 121.38
+  (0.4 % apart). The gated w13t's w13d peaked 24.006 GB (HumanEval/68), over the line: the orchestrator's reason to switch.
+- CAVEAT for every "under 24 GB" claim: the w13b gate's own lifetime peak reached 24.813 GB on a GPQA prompt's prefill
+  (EvalSuite 01:58; LCB's longer prompts may go higher). "Peak < 24 GB" holds on HumanEval-length prompts only. SMALL_RAM
+  needs the prompt-length limit, as the editor noted for 32 / 45 GB (34.0-35.5 GB at 32 GB on 10K / 30K prompts).
+- S1p (Fit12, 00:01:48-00:04:14, before the gate), checked 02:06 (`date`) from s1ph.txt / s1p_prof.txt: 41.79 tok/s pooled
+  (geo 42.44), request 23.85, peak 11.314 GB, tokens = S1u's on 16 / 16 (sha), so the run is deterministic. MEASURED split [K]: the wide
+  call's loader idle (non-read) is 102.4 ms (median 103.2) of 217.4 ms; io 113.4 ms for 1.323 GB = 11.67 GB/s. S1u's 90 ms
+  line fails on the measured split too (102.4 vs the [P] 106.9-108.2).

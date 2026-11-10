@@ -39,6 +39,23 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     - Order: card-reference leftover (0.5-2.5 h), then lcoh (~3.6 h), then whichever next arm fits.
     - The last chunk or arm must END by 15:00.
     - Fit12's 12 GB IFBench arm (~3 h, MEM ~12-16 GB) goes after 15:00, by day.
+  - TUE 02:02 (`date`) TUESDAY ORDER. NewIdeas is paced to sleep until ~17:42 (weekly 50 % vs line 41 %). Messages wake it;
+    the orchestrator decides in between.
+    - Tonight's chain ended. W24c / W24d ran: w13b won (130.33 vs 125.91, +3.51 %; NUMBER_CHECK 24). Leap's drafter pair and
+      prefill tests ran, plus its PF-B exact check (PF-B != PF-A at 30K), and BigMoE's PF-D long-prompt check (exact).
+      q1u_0_live: code FAIL (1.96 %), so S1u is out. The erratum v1.0.1 is staged for Kamen's go; on go, NewIdeas checks the diff.
+    - NOW to the gate's end: the w13b gate has run since 01:36:43. ETA 08:44 at the measured pace (central 09:41, slow 11:22).
+      Its peak was 24.813 GB on a GPQA prefill, so neighbours budget the gate at 25-27 GB.
+      - The one <= 12 GB neighbour is Fit12's 12 GB IFBench arm (ifb12.sh), once EvalSuite's amendment 13 has Fit12's start
+        time, harness sha and env blob. Guards as set. Breakthrough has none: its arms need ~16 GB; beside_gate.done 00:03.
+    - AFTER THE GATE, by day one > 5 GB job at a time, in this order as each is ready:
+      1. BigMoE's W24e FIRST (GO 02:06): w13b's prefill chunk 1024 / 512 / 256 / 1024 on the gate's 6 longest prompts, hashes
+         on, ~15 min, quiet, PEAK 26 (NO-SWAP >= 34). AFTER = EvalSuite's 'runner 61 (w24) ended'. Then any other BigMoE arms.
+      2. Breakthrough's qom_0_live_c47 (~16 GB, ~4 min, flips only; S1u's fallback line; masks built and checked).
+      3. (S1p is DONE: it ran 00:01-00:04 before the gate. Measured loader idle 102.4 ms; NUMBER_CHECK 23.)
+      4. Fit12's IFBench arm continues alone if not finished, yielding at chunk ends to any quiet ticket.
+    - EVENING (by day only ~36 GB is free): Leap's PF-B length bisect (exact-32, 10K / 15K / 20K, ~2 min per run, peak
+      ~40 GB, NO-SWAP >= 48).
   - MON 23:30 (`date`) CHAIN LIVE (Kamen handed over 23:2x; Chrome closed; NO-SWAP 41.2 GB, swap 5.6 GB at 23:30):
     1. W24c (turn45; start by 01:15; decision arms start by 01:30; diagnostics only if they can start by 00:40). EvalSuite's
        dry run of card_w24c_env.txt PASSED (blob 5d2b765e). Relay: NewIdeas tells EvalSuite by 02:05, PASS only if BigMoE's

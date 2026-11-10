@@ -9825,3 +9825,9 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   43 (first 42 match; 100 vs 107 rows). Decode stats are identical across the other paths, so PF-B's prefill at 30K is
   probably not bitwise (BUG until shown otherwise; the engine's PF-B check ran at <= 8K). Next: R57_LOGHASH PF-A vs PF-B
   at 30K + the exact-32 decode (~3 min GPU).
+- PREFILL EXACTNESS AT 30K WITH EXACT DECODING (exact-32, R57_LOGHASH=1, 29,988 tokens, 64 tokens; Tue 00:57-01:07,
+  orchestrator's go; data/prefill_1109.md + prefill_1109/exact30k/): default vs PF-A: tokens 64/64 and verify-logits
+  hashes 26/26 EQUAL (first token 238.60 vs 62.64 s = x3.81; peak 34.93 vs 38.16 GB) -> PF-A bitwise to 30K. PF-B vs
+  PF-A: hashes 0/25 at TOK 8192 (192 calls) AND at TOK 4096 (384 calls), first difference at check 1, tokens from the
+  40th -> PF-B NOT bitwise at 30K. Published PF-B evidence (TOK 8192 and TOK 2048 = 3-4 calls/layer) is hash-equal to
+  7.9K, so the call count alone doesn't explain it; length / position open. Papers: Editor's erratum (fail version).

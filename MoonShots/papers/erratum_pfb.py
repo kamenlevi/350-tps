@@ -44,8 +44,9 @@ R["MAIN.md"].append((
     "  at 45.8-46.2 GB, over the line, so it does not ship [K, BM:data/pfd/pfd.log part B; [KERNELS] section 5.2].",
     "\n  It is not exact on a 30K-token prompt: on the 32 GB exact configuration its logits hashes equal the layer-major\n"
     "  prefill's on 0 of 25 checks, both at 8,192 rows per call (the published setting) and at 4,096, and its tokens differ\n"
-    "  from the 40th on [K, LP:data/prefill_1109/exact30k/summary.txt]. Its exactness is shown only up to 7.9K tokens, and\n"
-    "  the cause of the difference is not yet found.")))
+    "  from the 40th on, while the layer-major prefill's hashes equal the default prefill's on 26 of 26 [K,\n"
+    "  LP:data/prefill_1109/exact30k/summary.txt]. PF-B's exactness is shown only up to 7.9K tokens, and the cause of the\n"
+    "  difference is not yet found.")))
 
 # MAIN 10, PF-B bullet
 R["MAIN.md"].append((
@@ -144,7 +145,7 @@ R["RELEASE.md"].append((
 R33 = ("| R33 | the engine's batched prefill against the layer-major prefill on a 29,988-token prompt (32 GB exact "
        "configuration, 64 tokens, one run each) | **not** exact | verify-logits hashes equal on 0 / 25 checks at 8,192 rows "
        "per call (4 calls per layer) and at 4,096 (8 calls), first difference at check 1; tokens equal through the 39th, "
-       "differ from the 40th. On the 32 GB chat configuration: tokens differ from the 43rd at 30K, equal at 10K (no hashes) "
+       "differ from the 40th; the layer-major prefill == the default at 30K (hashes 26 / 26, tokens 64 / 64). On the 32 GB chat configuration: tokens differ from the 43rd at 30K, equal at 10K (no hashes) "
        "| [K] | D:prefill_1109/exact30k/summary.txt; D:prefill_1109.md |")
 
 if branch == "none":

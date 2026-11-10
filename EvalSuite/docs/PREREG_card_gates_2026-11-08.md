@@ -549,3 +549,57 @@ Checked on the gate keys; the result is the same in scripts/r57_screen.py and th
   that blob alone. Only then does it write results/w24c_verdict.txt, amendment 12c's early-start condition; a partial
   word never writes it. With no final word by 02:05, w13t runs at 02:10. The RESULT names the config and reports every
   lifetime peak against the 24.0 GB line.
+- **The final word (Tue 10 Nov 01:3x, before any w24 row): w13b**, data/stack/card_w24d_env.txt, blob e06f495e (BigMoE
+  87dd1a3).
+  - **Who gave it:** the orchestrator, in NewIdeas' place. NewIdeas could not answer before 02:05 (its account's limit
+    ran until 02:00). The orchestrator states that it did the number check from the raw rows and
+    data/w24/w24d_verdict.txt. Its word reached EvalSuite at 01:33, after section W24d's 01:30 for NewIdeas' check
+    (condition 4). The orchestrator ordered W24d; this deviation is recorded here on its word.
+  - **W24d's outcome [K] (BigMoE docs/W24_DECISION.md "W24d OUTCOME", f0c8d2a; data/w24/w24d_verdict.txt, 23:56:44):**
+    w13b pooled 130.33 tok/s against the 14-row config's 125.91 (+3.51 %, bar > +1 %); w13b peaks 23.819 / 23.781 GB;
+    0 bad or cut rows in the four arms.
+  - **EvalSuite's recheck (01:34), from ~/BigMoE/data/r57/{w14c,w13e,w13f,w14d}h_100_runs.json:** the same numbers.
+    Each arm has 12 rows, with the same keys in the same order. Whole decode: w14c 126.35, w13e 130.20, w13f 130.46,
+    w14d 125.48. Peaks (max of mem[1], mem[-1]): 23.828, 23.819, 23.781 and 23.782 GB. No bad or cut rows.
+  - **The env:** card_w24d_env.txt is still blob e06f495e, tracked, and equal to BigMoE's HEAD (last change 87dd1a3,
+    23:50:55). Its dry run (23:51) passed.
+  - **The re-arm:** the w13t launcher (pid 61821) was stopped at 01:35, before any start (no runner, no q61.pid). It
+    was re-armed at 01:35:23 (pid 78825) with W24S_ENV=card_w24d_env.txt and W24S_BLOBS=e06f495e alone.
+    results/w24c_verdict.txt is written after this commit, so amendment 12c's early start can apply (Leap's two done
+    files are from 00:18:12).
+  - No w24 row existed. The config choice used only W24d's HumanEval speed and memory.
+
+## Amendment 13 (Tue 10 Nov 02:1x, before any row of this arm): a 12 GB IFBench arm beside the w24 gate (ifb12); IFBench only
+- **Why:** the orchestrator (23:2x) asked for 12 GB work beside the w24 gate. NewIdeas (23:30, route (i)) placed Fit12's
+  12 GB chat mode (P2', the chat-width rule) there as the gate's one neighbour. This arm gates that mode on IFBench alone.
+- **Who:** Fit12 runs it in its own session and lock; EvalSuite pre-registers and scores it. The files, all checked by
+  EvalSuite at 02:0x:
+  - runner ~/Fit12/scripts/ifb12.sh (sha256 2143f25c7ff7);
+  - merge ~/Fit12/scripts/ifb12_merge.py (ac65fec294ec);
+  - frozen harness ~/Fit12/snap/chw1108/fit_t3.py (7a9ffd8375ed);
+  - env record ~/Fit12/data/gate/card12_chw_env.txt (git hash-object blob da1eb63570ee). The runner passes its seven
+    values: F12_T3ARMS=ex, F12_CAP=item, F12_CMCL=47,32, F12_W1=cf:0.9:2, F12_W1SEED=1, F12_W1TAIL=1, F12_PR1=1.
+- **Keys and prompts:** the 150 gate IFBench keys (the ifbench/ lines of results/card/card_keys.txt), in that order, 20
+  keys per process. Prompts are the items' own prompt_ids (data/items/dec_ifbench.jsonl); their lengths equal the NAX6-N
+  reference rows' n_prompt for 150 of 150. The cap is the item's max_tokens, 1,536.
+- **One order, plus a reverse check:** one order only, on Fit12's history-independence data
+  (~/Fit12/data/scr/chw18/chw18r_ids.json). After the 150 keys, the first 10 run again in reverse order in their own
+  process (ifb12rev: ifbench/116 ... ifbench/10).
+  - Any token difference among those 10 makes the arm VOID.
+  - So does a key with two different runs (the merge's "clash").
+  - With fewer than 10 re-run, there is no verdict.
+- **Rows:** ifb12_merge.py writes ifb12_tokens.json ({key: {"ex": [[ids]]}}, each key's first complete run) and
+  ifb12_runs.json (cut flags). EvalSuite turns them into results/card_ifb12/decode.jsonl with tools/r57rows.py: arm ex,
+  cut after the first EOS or at max_tokens. A cut run is not a row.
+- **Decision:** `tools/set_d4.py ifbench card_ifb12 ref2tnaxn.r6`, decision 4: a paired delta above -5 pt and an exact
+  McNemar p of at least 0.05, on all 150 keys. With fewer than 150 rows there is no verdict; the arm may resume later
+  under these rules. The RESULT says it gates the 12 GB chat mode on IFBench only: one order, not a full card gate.
+- **Memory and speed:** the RESULT reports the largest lifetime footprint against the 12.0 GB line. The runner stops any
+  process above 12.0 GB, and that process's keys are not rows. Speeds are rough, because the arm runs beside the gate.
+- **Beside the w24 gate (amendment 12b, one <= 12 GB neighbour):**
+  - Its lock reads "MEM 12 GB", so the gate does not yield to it.
+  - A process starts only when results/w24_gate_eta.txt is at most 30 min old, says "neighbour may start: yes" and does
+    not say "passes 13:30: yes". The first process also needs Breakthrough's beside_gate.done.
+  - It stops on a fresh "passes 13:30: yes", swap above its start + 0.5 GB, or a footprint above 12.0 GB.
+  - Once the gate has ended, a process runs only when no other session holds a MEM > 5 GB lock and no quiet ticket waits.
+- **Start:** held (Fit12's WAIT file) until this amendment is committed. Fit12's start time goes below as a dated line.

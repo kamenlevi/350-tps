@@ -836,3 +836,31 @@ fixed-cost bet. This is a measurement only: no setting changes.
     per GB in the re-price.
   - Loader-idle <= 90 ms: the S1u line passes, and the re-price uses the measured split.
   - Loader-idle > 90 ms: the non-read cut (compaction, Python) comes before S2's overlap.
+
+## S1p RESULT (Tue 10 Nov 00:01:48-00:04:14; share lock, after W24c, Kamen idle; no other lock, no PAUSE inside (16 / 16), rc 0): the measured non-read time is 102.4 ms, so S1u's 90 ms line FAILS on the measured split too
+- **Ran as registered.** /Users/kamen/Fit12/scripts/s1p.sh (S1P_IDLE=1), one process, arm u01b with F12_GSTAT=1, 16 HumanEval
+  at CAP 256.
+  - S1u reproduced: whole decode 41.79 tok/s pooled (42.46 geo) vs S1u's 41.22. Whole request 23.85. First token 3.97 s
+    median (3.65-5.18). Kept 10.32. 138 MB per kept token. Peak 11.314 GB.
+  - Read-outs in /Users/kamen/Fit12/data/scr/s1p: s1p_prof.txt, s1p_read.txt, s1p_rows.txt.
+- **The wide call, measured per call [K]** (323 calls, 15.8 rows; s1u_prof.py on the p1ts rows), mean (median):
+
+  | wall | build (to graph built) | eval | commit | loader busy | loader io | loader idle | Python CPU in build | GB | misses |
+  |---|---|---|---|---|---|---|---|---|---|
+  | 217.4 (220.1) | 200.1 (202.2) | 17.3 | 14.9 | 115.0 (116.6) | 113.4 (115.1) | 102.4 (103.2) | 29.1 (28.7) | 1.323 | 896 |
+
+  - Read rate 11.67 GB/s over the loader's io time. Loader busy = 13.2 + 76.9 ms per GB, against the chw16 exact-call fit's
+    83.7.
+  - Most of the call (200 of 217 ms) passes before the graph is built: the per-layer gate waits sit inside forward().
+- **Line (pre-registered):** outside reads = the loader-idle time, 102.4 ms [K] <= 90: FAIL. This run's fit split is
+  106.9 ms [P] (S1u's was 108.2 [P]), so the fit was close.
+  - NewIdeas' number check (02:1x): the figures hold, and S1p's tokens equal S1u's on 16 / 16 prompts by sha, so the
+    one-call check is deterministic run to run.
+  - The 102 ms is Python 29 ms of CPU plus ~73 ms of GPU critical path and syncs with the loader idle. That is the
+    non-read work a one-call route must cut (compaction of the ~4.8 weight-0 expert columns per row, fewer syncs).
+- **Map verdict for S1u's cut [Breakthrough 00:0x, information only]:** q1u_0_live FAILS code: all-row 1.96 % (line 1.34),
+  non-tie 1.36 % (line 0.87). It is worse than qom_0_live_c51 (McNemar 39 / 12) and q1u_0.9_live
+  (~/Breakthrough/data/m1/SCREEN_read_q1u_0_live.txt). So S1u (union-only) is CLOSED.
+  - The route left is QOM0 with a lookup-only residency probe: qom_0_live_c51 PASSES at 1.16 %; Breakthrough has the c47
+    masks built and asked for a 16 GB map slot.
+  - Breakthrough's eviction replay: the best simple policy cuts bytes 6 % (decayed LFU); OPT 39 %. A small lever.

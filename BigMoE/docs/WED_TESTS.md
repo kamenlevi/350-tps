@@ -1390,3 +1390,15 @@ R57_LOGHASH=1, one process per run, quiet lock:
 - **It costs ~2 GB of lifetime peak on long prompts** (staging): 45.17 -> 47.46 GB at 10K, 46.65 -> 48.56 GB at 30K. Without
   PF-D the 45 GB chat config is already above its 45.0 line on these prompts (as on the 7.9K agent prompt).
 - Decode is unchanged (35.5 / 24.5-24.6 tok/s). Swap grew 1.5 GB during the 10K check arm (52.7 GB peak), under the guard.
+
+## Tue 10 Nov 02:0x: w13b's 24 GB line holds only on short prompts (EvalSuite's gate, fwd process 1; analysis here)
+EvalSuite's card gate on w13b (card_w24d_env.txt) measured a lifetime peak of **24.81 GB** on gpqad/rec6sE2CRtD4drtHg, a
+919-token prompt: MLX prefill peak 23.83 GB (EvalSuite results/card/es_cdw24_100136_fwd1_runs.json). Every W24 prompt was
+short, which is why W24c / W24d stayed under the line. MLX prefill peak against prompt length over all 176 rows of the 24 GB
+runs plus the gate's first 20 rows [K]: under 400 tokens (174 rows) median 22.8 GB, max 23.1; 481 tokens 23.03; 919 tokens
+23.83. The lifetime footprint adds ~1.0 GB outside MLX. Mechanism [P]: the screen prefills in R57_PFCHUNK = 1,024-row chunks,
+so a prompt up to 1,024 tokens is one chunk whose transients grow with its length; beyond that only the KV / recurrent state
+grows (at 45 GB without PF-D: +1.8 GB at 10K, +3.3 GB at 30K, data/pfd_long). At 45 GB, R57_PFCHUNK=512 cut a 7.9K prompt's
+peak by 1.1 GB at 1.4-1.6x the first token (FU table above); untested at 24 GB, and probably not token-identical (the MoE call
+shapes change). Sent to the orchestrator with options: label the line as holding on benchmark-length prompts, and/or measure
+w13b with smaller chunks on long prompts after the gate. The gate itself (scores) runs on.

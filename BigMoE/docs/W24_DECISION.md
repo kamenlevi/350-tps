@@ -81,3 +81,24 @@ by 00:15, option A: no W24d, and the 14-row config runs.
 125.91 = +3.51 % (> +1 %); w13b peaks 23.819 / 23.781 GB (< 24.000); zero bad or cut rows in all four arms; EvalSuite's dry run
 of card_w24d_env.txt passed (blob e06f495e, its amendment 12d). Remaining: NewIdeas' number check by 01:30; its FINAL word to
 EvalSuite names the gated file. data/w24/w24d_verdict.txt.
+
+**Gate config set (Tue 10 Nov 01:35; corrected 01:4x on EvalSuite's note):** the final word was the ORCHESTRATOR'S (01:33),
+given in NewIdeas' place: NewIdeas was at its account limit until 02:00, so ITS NUMBER CHECK DID NOT RUN. This deviates from
+condition 4 of the W24d rule (NewIdeas' check by 01:30) and came after that deadline; EvalSuite records the deviation on the
+orchestrator's word in its PREREG amendment 12d (0f47fb7). In the check's place, EvalSuite re-derived the result from the
+raw w1[34][cdef]h_100_runs.json and it matches data/w24/w24d_verdict.txt exactly. EvalSuite's launcher re-armed at 01:35:23 on
+data/stack/card_w24d_env.txt (blob e06f495e, frozen copy), i.e. w13b; the card gate RUNS since 01:36:43 (first row: lifetime
+peak 23.6 GB), MEM 24 GB until ~09:44 (central) or ~11:32 (slow), cutoff 15:00 (EvalSuite results/card_w24_start.log).
+(The 01:35 version of this note said "NewIdeas' final word": wrong.)
+
+# W24e: does a smaller prefill chunk keep w13b under 24 GB on long prompts? (pre-registered Tue 10 Nov 02:0x, before any W24e data)
+
+Order (the orchestrator, ~02:0x): (A) is decided: the gated w13b's label says "under 24 GB on benchmark-length prompts" and
+states the gate's per-row peaks above that. (B) = W24e (scripts/w24e.sh), after the gate, with NewIdeas: w13b exactly as gated
+(data/stack/card_w24d_env.txt, blob e06f495e, its env line verbatim) plus R57_PFCHUNK = 1024 / 512 / 256 / 1024 again (pc1024,
+pc512, pc256, pc1024b), on the card gate's six longest prompts (726 to 2,801 tokens: gpqad/recnTTKdBzfuoZ7w7, lcb6/abc394_g,
+lcb6/abc400_g, lcb6/arc192_a, gpqad/rec6sE2CRtD4drtHg, lcb6/3705), CAP 128, R57_LOGHASH=1, one process per arm.
+**A smaller chunk (512 or 256) carries the gate's label only if, on all six prompts, its tokens AND logits hashes equal pc1024's**,
+and pc1024b equals pc1024 (determinism). Among the chunks that qualify, the package uses the LARGEST (the cheapest first token)
+whose lifetime peak (max of mem[1], mem[-1]) is < 24.000 GB on all six prompts. If none qualifies, Wednesday ships (A).
+Reported either way: per prompt and chunk size, the first token (the first-token cost) and the lifetime peak.

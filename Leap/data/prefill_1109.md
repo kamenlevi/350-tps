@@ -34,7 +34,8 @@ line). The runs went in this order: 10K default, 10K PF-A, 30K default, 30K PF-A
    were identical to the default's at both sizes. So were its decode statistics: the same 107 checked rows and the same
    34,963 / 35,515 optional expert uses, of which 10,452 / 11,248 were dropped.
 2. **PF-B is faster still: 3.91x and 4.35x (498 and 517 tok/s).** That is Kamen's 500 tok/s prefill line, reached at 32 GB.
-3. **PF-B at 30K is probably not bitwise-exact.** At 10K its tokens and decode statistics were identical to the default's.
+3. **PF-B at 30K is not bitwise-exact, confirmed with exact decoding and logits hashes in the section below.** At 10K its
+   tokens and decode statistics were identical to the default's.
    At 30K the first 42 tokens match (the first token too), and it differs from token 43 on: 100 checked rows instead of
    107, 33,158 optional uses and 10,753 dropped.
    - The decode is deterministic for a given prefill. Default and PF-A at both sizes, and PF-B at 10K, had identical decode
@@ -52,6 +53,41 @@ line). The runs went in this order: 10K default, 10K PF-A, 30K default, 30K PF-A
    adds 0.82 GB at 10K and 3.01 GB at 30K. PF-B adds 1.76 and 5.35 GB.
 6. **Decode after a long prompt is slower:** 32-33 tok/s at 10K and 21-22 tok/s at 30K, for these 64-token answers.
 
+## PF-B exactness at 30K with exact decoding (Tue 00:57-01:01, the orchestrator's go)
+
+Setup:
+- exact-32 (exact decoding, no lossy drops) through run.py on the same 29,988-token prompt, 64 tokens.
+- R57_LOGHASH=1: each decode check's verify logits hashed.
+- Compared with PF-A, after the Editor asked for the published setting (R57_PFLM_TOK=8192) to be checked as well.
+- Share lock, nothing else running, done-files untouched.
+
+| arm | MoE calls (48 layers x groups) | first token | lifetime peak | tokens vs PF-A | verify-logits hashes vs PF-A |
+|---|---|---|---|---|---|
+| default prefill (01:03-01:07) | per 1,024-token chunk (stock) | 238.60 s | 34.93 GB | **equal, 64 / 64** | **equal on 26 of 26** |
+| PF-A (reference) | 1,440 (per 1,024-token chunk) | 62.64 s | 38.16 GB | - | - (26 checks) |
+| PF-B, TOK 8192 (published) | 192 = 48 x 4 (3 x 8,192 + 5,412 tokens) | 51.71 s | 40.42 GB | equal through the 39th, differ from the 40th | equal on **0 of 25**, first difference at check 1 |
+| PF-B, TOK 4096 (default) | 384 = 48 x 8 (7 x 4,096 + 1,316 tokens) | 52.74 s | 40.42 GB | equal through the 39th, differ from the 40th | equal on **0 of 25**, first difference at check 1 |
+
+- **PF-A is bitwise-equal to the default prefill at 30K tokens:** the same 64 tokens and verify-logits hashes equal on 26
+  of 26 checks, with the first token 3.81x sooner (62.64 against 238.60 s). This extends the published PF-A evidence
+  (hashes up to 7.9K tokens) to 30K, and backs PF-A as chat.py's prefill (Kamen's decision on memory: +3.2 GB lifetime
+  peak here).
+- **PF-B is not bitwise-exact at 30K tokens, at either call size.** Its very first verify logits already differ, so its
+  prefill KV differs from the layer-major prefill's.
+- **Limit: shown exact up to 7.9K tokens; the cause at 30K is not yet found.**
+  - The published checks reached 7,932 tokens with hash-equal results at two call sizes: TOK 8192 (one call per layer)
+    and TOK 2048 (3 calls per layer at 4,730 tokens, 4 at 7,932; hashes 8/8, 28/28, 22/22). Source:
+    BM:data/pfd/pfd_report.txt at a6d5347, part B, arms pdb38s and pdb32s.
+  - So the number of calls per layer alone does not explain the failure here (4 calls at TOK 8192); length or position
+    is still in play.
+  - Tonight's 10K run (chat-32, 3 calls per layer) matched in tokens and decode statistics but was not hash-checked.
+- Files: prefill_1109/exact30k/
+  - summary.txt;
+  - run_<arm>.out for def, pfa, pfb8k and pfb4k;
+  - per run, the engine log and runs.json (with the per-check hashes "lh"), tokens.json and modules.json. The runs are
+    cli_1110_005716 (PF-A), 005838 (PF-B 8192), 005948 (PF-B 4096) and 010323 (default);
+  - runner_exact.sh and runner_exact_def.sh: the runners.
+
 ## PF-D on these prompts (BigMoE, Tue 00:28-00:54)
 
 BigMoE ran the published chat-45 config on these two prompts, PF-D off against PF-D as published, through the release
@@ -66,8 +102,10 @@ Data: BM:data/pfd_long (926b727).
 
 ## Next
 
-- Settle PF-B at 30K (~3 min of GPU): `R57_LOGHASH` on PF-A against PF-B at 30K, then the exact-32 config for the decoded
-  tokens. If it fails, bisect by length (15K, 20K) and by `R57_PFLM_TOK`.
+- Done, Tue 01:01: PF-B at 30K is not bitwise (below). Still open: where between 7.9K and 30K tokens PF-B stops being
+  bitwise, and why. The call count alone is ruled out: 3-4 calls per layer were exact up to 7.9K.
+- Next: exact-32 hash checks by length (10K, 15K, 20K) at TOK 2048 and 4096, then a kernel-level bisection of the grouped
+  MoE call against PF-A's per-chunk calls at the first failing length (position-dependent inputs, row counts, padding).
 - If Kamen wants it: PF-A as chat.py's prefill at 32 GB. It is exact and the tokens matched at both sizes; the extra
   memory (+0.8 GB at 10K, +3.0 GB at 30K) is his call. chat.py stays local.
 
