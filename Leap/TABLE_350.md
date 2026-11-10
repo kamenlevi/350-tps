@@ -9838,3 +9838,7 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   23.79 GB. 12 HumanEval (W24d keys, CAP 256): tokens 12/12 identical to BigMoE's w13eh / w13fh; whole decode 135.9 tok/s
   (vs 130.33 pooled), peak 23.78 GB, first token 3.63 s median. 36 GB M5 Max: unverified (wired limit = the machine's
   recommended working set; GPU arch suffix differs -> MLX tiles may differ).
+- PUBLIC CANDIDATE with the 24 GB line (release/out/pkg_w24 0f076a5; docs-only rebuild pkg_w24b b02d0ba; not pushed):
+  CLEAN-CLONE PASS 10:23 (all 8 configs 2/2 token-equal to their references, closure 0/0, 271 s); serve.py --mem 24
+  first real-engine test PASS (OpenAI + Anthropic streams well-formed, 31.9 / 32.1 tok/s, peak 23.68 GB, 0 errors;
+  SIGINT ignored when started from a script, SIGTERM has no clean shutdown path: reported, not reworked).

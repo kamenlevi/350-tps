@@ -139,10 +139,15 @@ results/card/es_cdw24_100136_<order><N>_runs.json. "P" is the longest prompt in 
     shortest is lcb6/abc397_e: 561 tokens, 24.075 GB (reverse process 3).
   - The longest prompt in a row that left its process under 24.0 GB is lcb6/abc397_f: 592 tokens, 23.954 GB (reverse
     process 3, just before abc397_e). The same prompt went over in forward process 18 (24.112 GB).
-  - So per prompt the crossing lies between 561 and 592 tokens, and it depends on the process's state as well as on the
-    prompt.
-  - All 424 rows of 560 tokens or fewer that can be read on their own stayed under. Another 185 such rows ran after
-    their process had crossed, so they cannot be read on their own.
+  - **The limit is not exact:** that 592-token prompt was the first row of a fresh process both times. It peaked at
+    23.954 GB once (MLX prefill peak 23.116) and at 24.112 GB once (23.339). That is run-to-run variation, not the
+    process's state. (Corrected 10:4x after NewIdeas' number check via the Editor; the earlier text said "process
+    state".)
+  - **The evidence for "about 560":** no process crossed 24.0 GB on a prompt of 560 tokens or fewer. The shortest
+    prompt at a crossing was 561 tokens (lcb6/abc397_e, the second row of reverse process 3).
+  - Rows before a process's first crossing are under by construction, because the lifetime peak only rises. Rows after
+    it cannot be read on their own; 185 of them had 560 tokens or fewer. (Corrected 10:4x: the earlier text cited the
+    424 rows that stayed under as evidence.)
 - **MLX prefill peak (mem[0]) by prompt length, all 764 runs:** the lifetime footprint runs about 1.0 GB above it.
 
   | Prompt tokens | Runs | Median (GB) | Max (GB) |

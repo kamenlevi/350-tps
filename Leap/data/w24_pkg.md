@@ -95,3 +95,85 @@ Wednesday. Built in ~/Leap/release/cleanclone/final/clone only; nothing is pushe
 - **Thermals:** a MacBook Pro's sustained clocks under a long run were not measured.
 - **Time budget:** R57_HARD=1200 (in the gated env line) stops new checks after 1,200 s in a run.py batch. chat.py and
   serve.py lift it.
+
+## Public candidate with the 24 GB line (Tue 10:16-10:24; orchestrator 10:1x: fold in, build locally, no push)
+
+- **Source:** release/src (commit 429f844).
+  - run.py: --mem 24, multi-line configs, snapshot().
+  - configs/lossy-24.env and chat-24.env.
+  - README: two prose sentences and the Install line; it stays 40 lines with no tables.
+  - INSTALL.md: the 36 GB notes in plain words.
+  - CONFIGS.md: a 24 GB row.
+  - tools/clean_clone_test.sh: each config runs the first two prompts of its own reference.
+- **make_release.py `--extra-snap w24`:**
+  - Archives data/r57/snap/w24 at the same BigMoE commit and places only the decode loop.
+  - Refuses the build if the snapshot's other modules differ from rel1's.
+  - Gives it the same path rewrites, plus one non-private comment rewording.
+  - refs: release/refs_rel1_w24.json, where lossy-24 and chat-24 point at BigMoE's w13eh_100 run.
+- **Build:** `make_release.py rel1 --commit 016cb7f --extra-snap w24 --refs release/refs_rel1_w24.json --es-commit 98c6072d`.
+  - Result: release/out/pkg_w24 (0f076a5), 239 files, 6.5 MB.
+  - Leaks 0, unsafe quote lines 0, live research paths 0, syntax errors 0; 6 quotes redacted (the w24 loop's one among
+    them).
+  - Against the previous candidate it differs only in the intended files.
+  - Its w24 loop and stream.py are byte-identical to the copies the morning check passed (after @ROOT@).
+- **Docs-only rebuild:** release/out/pkg_w24b (b02d0ba) with INSTALL.md's test sentence updated. It differs from pkg_w24
+  only in INSTALL.md and MANIFEST.json.
+- **Clean-clone test** (`prep`: install.sh rc 0 in 8 s, 8 dry runs OK; `run`: 10:18:37-10:23:06, 271 s, share lock,
+  NO-SWAP 51 GB, swap flat): **CLEAN-CLONE PASS**.
+  - All 8 configs matched their references 2/2: exact-45 and exact-32 prefix-equal; lossy-45 / 32, chat-45 / 32 and
+    lossy-24 / chat-24 prefix-equal with the reference's history.
+  - Closure 0 / 0 for every config: no module or opened file outside the allowed roots.
+  - The chat-45 text prompt answered sensibly.
+- **serve.py first real-engine test** (`--mem 24`; serve.py and chat.py copied into the test clone only; 10:23:09-10:24:05):
+  **SERVE TEST PASS**.
+  - Ready in 15 s.
+  - OpenAI stream: 20 chunks, [DONE], finish_reason stop, usage 30 + 89 tokens.
+  - Anthropic stream: 21 events in the right order, stop_reason end_turn, 62 output tokens.
+  - The server's lines: 89 tokens at 31.9 tok/s (first token 2.16 s) and 62 at 32.1 tok/s (1.81 s); lifetime peak
+    23.68 GB; 0 errors.
+  - Stopping: it ignored SIGINT for 30 s, then exited on SIGTERM, with memory freed (NO-SWAP 53 GB after). This comes from
+    the test: a background job of a non-interactive shell starts with SIGINT ignored, and Python then keeps it ignored
+    (no KeyboardInterrupt). Ctrl-C in a terminal is a normal SIGINT (not tested here). serve.py handles KeyboardInterrupt
+    only. On SIGTERM (`kill`, launchd) it stops without its shutdown path. A two-line handler would fix both; not done
+    (the orchestrator: report, don't rework).
+- **Evidence:** data/w24_pkg/candidate/: report.txt, cand.log, serve.log, openai.sse, anthropic.sse, models.json and the
+  two scripts.
+
+## Docs with the W24f numbers, and serve.py's stop path (Tue 10:4x; orchestrator 10:3x)
+
+- **README:** "and generates about 130 tokens per second on HumanEval, 91 on MBPP and 31 on chat"; still 40 lines.
+- **RESULTS.md:** a 24 GB row, pooled from BigMoE's run records (two passes each), in the table's order: whole decode / whole
+  request / first token median / lifetime peak.
+  - HumanEval (W24d w13eh + w13fh): 130.3 / 40.8 / 3.54 / 23.82.
+  - MBPP (W24f bf1m + bf2m): 91.2 / 26.1 / 3.34 / 23.74.
+  - IFEval (W24f bf1i + bf2i): 30.6 / 18.1 / 3.09 / 23.66.
+  - Math: not measured.
+  - The pooling reproduces BigMoE's per-run figures exactly. MBPP is 91.2 when pooled per prompt; 91.3 comes from pooling
+    the two runs' rounded figures.
+- **CONFIGS.md:** the same three speeds in the 24 GB row, with math not measured.
+- **Docs-only rebuild:** release/out/pkg_w24c (8a3adde). Leaks 0, unsafe 0, live paths 0, syntax 0. It differs from the
+  tested build pkg_w24 (0f076a5) only in CONFIGS.md, INSTALL.md, README.md, RESULTS.md and MANIFEST.json, so the
+  clean-clone pass still covers its code.
+- **serve.py (local only, uncommitted, a separate step for Kamen):**
+  - The fix: `signal.signal` for SIGINT and SIGTERM, raising KeyboardInterrupt into the existing shutdown path
+    (srv.shutdown(), "stopped").
+  - The test, on the mock engine (no GPU): started from a script as a background job, the case that failed at 10:24, then
+    one streamed request. **STOP TEST PASS** for both SIGINT and SIGTERM: exit within 1 s, rc 130, "stopped" logged, port
+    free.
+  - Control: the pre-fix copy under the same test is still running 10 s after SIGINT (FAIL), so the test catches the old
+    behaviour.
+
+## LIMITS.md 24 GB lines; candidate pkg_w24d (Tue 10:5x; orchestrator after NewIdeas' number check item 3)
+
+- **LIMITS.md** gains:
+  - 24 GB memory: under 24 GB on prompts up to about 560 tokens, up to 25.1 GB on longer ones.
+  - 24 GB against Strata, same Mac and prompts: Strata's first token is 1.9-2.5x faster on every set; on chat its whole
+    request is ahead (20.3-21.0 against 18.1 tok/s); our decode is ahead on code (3.3-5.0x) and 1.1x on chat (SMALL_RAM
+    section 6.5, checked).
+  - Math was not measured at 24 GB.
+  - The clean-clone line now reads "IFEval; HumanEval for the 24 GB configs".
+- **Docs-only rebuild:** release/out/pkg_w24d (886ad0d). Leaks 0, unsafe 0, live paths 0, syntax 0. It differs from the
+  tested build pkg_w24 (0f076a5) only in CONFIGS / INSTALL / LIMITS / README / RESULTS .md and MANIFEST.json. This is
+  the current candidate.
+- **Staged, not applied:** release/staged/limits_pfd_erratum.patch replaces LIMITS lines 12-13 with last night's PF-D 10K
+  / 30K results. Apply only if Kamen approves the erratum; release/staged/README.md has how.

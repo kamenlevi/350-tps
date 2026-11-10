@@ -2090,3 +2090,23 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 09:58:01 SCR ifb12 ifb12rev end (rc 0)
 09:58:01 SCR ifb12 run end (rc 0)
 10:17:38 SCR s1q GO (orchestrator 10:2x; finish by 14:50)
+10:25:03 SCR s1q start: QOM0 one-call check q0r at C_m 51, 16 HumanEval, share lock (NO-SWAP 52 GB, swap 6683 MB, GPU 0%)
+10:25:13 SCR s1q s1qh end (rc 134)
+10:25:13 SCR s1q end (rc 134, 10 s, swap 6683 MB)
+10:26:57 SCR s1q start: QOM0 one-call check q0r at C_m 51, 16 HumanEval, share lock (NO-SWAP 51 GB, swap 6683 MB, GPU 0%)
+10:29:22 SCR s1q s1qh end (rc 0)
+10:29:23 SCR s1q end (rc 0, 146 s, swap 6683 MB)
+10:40:43 SCR s1qg GO set by hand (EvalSuite PREREG 89d6938)
+10:41:10 SCR s1qg qgf01 start
+10:44:22 SCR s1qg qgf01 end (rc 0)
+10:44:22 SCR s1qg qgf02 start
+10:48:15 SCR s1qg qgf02 end (rc 0)
+10:48:15 SCR s1qg qgf03 start
+10:51:17 SCR s1qg qgf03 end (rc 0)
+10:51:17 SCR s1qg qgf04 start
+10:53:49 SCR s1qg qgf04 end (rc 0)
+10:53:49 SCR s1qg qgf05 start
+10:58:32 SCR s1qg qgf05 end (rc 0)
+10:58:32 SCR s1qg qgf06 start
+11:02:20 SCR s1qg qgf06 end (rc 143)
+11:02:20 SCR s1qg run end (rc 126)

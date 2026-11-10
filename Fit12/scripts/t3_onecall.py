@@ -272,7 +272,7 @@ def u01b_moe(mx, TG, x2, t, gate, L, S, ids, p20, K, W20, norm_mass, plan):
 _QSRC = r"""
 uint t = thread_position_in_grid.x;
 threadgroup int res[128];
-int off = meta[0], seq = meta[1], nc = meta[2], nu = meta[3], cap = meta[4];
+int off = meta[0], seq = meta[1], nc = meta[2], nu = meta[3], cap = meta[4], cm = meta[5];
 const volatile device int* tb = (const volatile device int*)tables;
 int r = 0;
 if ((int)t < nc) {                         // the residency table published for (pass, layer), read as post_ids reads it
@@ -287,12 +287,16 @@ if (t == 0) {                              // unique residents not in U, in row 
   uint bm[16];
   for (int i = 0; i < 16; i++) bm[i] = 0u;
   for (int i = 0; i < nu; i++) { int e = U[i] & 0xFFFFF; if (e < 512) bm[e >> 5] |= (1u << (e & 31)); }
+  int nud = 0;                             // the post's distinct experts must fit the pool (the loader aborts above C_m)
+  for (int i = 0; i < 16; i++) nud += popcount(bm[i]);
+  int room = min(cap, max(0, cm - nud));   // cap stays the output's size: every entry past k is padded
   int k = 0, over = 0;
   for (int i = 0; i < nc; i++) {
     if (!res[i]) continue;
     int e = cand[i] & 0xFFFFF;
     if (e >= 512 || (bm[e >> 5] & (1u << (e & 31)))) continue;
-    if (k < cap) { extra[k] = e; k++; bm[e >> 5] |= (1u << (e & 31)); } else { over++; }
+    bm[e >> 5] |= (1u << (e & 31));        // seen: a repeat is neither added nor counted again
+    if (k < room) { extra[k] = e; k++; } else { over++; }
   }
   int pad = U[0] & 0xFFFFF;
   for (int i = k; i < cap; i++) extra[i] = pad;
@@ -319,7 +323,8 @@ def qom0_moe(mx, TG, x2, t, gate, L, S, ids, p20, K, W20, norm_mass, plan):
     cap = QMAXK - nU
     cand = ids[:S - 1, 2:K].reshape(-1)                              # the drafted rows' ranks 2-9
     off = ((gate.seq * gate.nl + L) % gate.ntab) * 17 * 32           # tab_offset(L, seq) (bigmoe_ext.cpp; TLINES 17)
-    meta = mx.array([off, gate.seq, int(cand.size), nU, cap], mx.int32)
+    cm = int(os.environ.get("F12_CMCL", "47,32").split(",")[0])        # the base pool's slots per layer (C_m)
+    meta = mx.array([off, gate.seq, int(cand.size), nU, cap, cm], mx.int32)
     extra, cnt = _QK["k"](inputs=[gate.tables, cand, U, meta], grid=(128, 1, 1), threadgroup=(128, 1, 1),
                           output_shapes=[(cap,), (2,)], output_dtypes=[mx.int32, mx.int32])
     P = mx.concatenate([U, extra])                                   # [QMAXK] the base post

@@ -39,6 +39,24 @@ needed, use the cpu to its full to 'prep' the math which is about to go to the g
     - Order: card-reference leftover (0.5-2.5 h), then lcoh (~3.6 h), then whichever next arm fits.
     - The last chunk or arm must END by 15:00.
     - Fit12's 12 GB IFBench arm (~3 h, MEM ~12-16 GB) goes after 15:00, by day.
+  - TUE 11:05 (`date`) S1q CODE GATE STOPPED at 11:02 on the 12.0 GB guard (12.027 GB on mbpp/228; forward 118 / 160; no verdict;
+    EvalSuite RESULT_code12_s1q 0486e07). NewIdeas' call: no retry today; EvalSuite gives an information-only score of the
+    118 rows. A retry is a new arm with its own PREREG after the release: keep C_m 51 (the map PASS line), take >= 0.2 GB
+    elsewhere, measured <= 11.8 GB first. The release check is DONE (NUMBER_CHECK 25).
+  - TUE 10:31 (`date`) MORNING RESULTS + TODAY:
+    - The w24 gate PASSED 08:41 on all 6 lines (EvalSuite f6613ff), on w13b. Lifetime peak 25.112 GB; 22 of 40 processes went
+      over 24.0 GB, every one with a prompt of 739+ tokens.
+    - W24e (09:00): no smaller prefill chunk keeps tokens and hashes, so w13b ships as gated (PFCHUNK 1024), labelled 'under
+      24 GB on prompts up to ~560 tokens, up to 25.1 GB on longer ones'.
+    - W24f: MBPP 91.3, no gain vs w13t (within noise); IFEval +2.8 %.
+    - qom_0_live_c47: code FAIL by one flip (1.37 %); the probe needs pool 51.
+    - Fit12's ifb12 PASSES IFBench loose (40.0 vs 44.0 %, p 0.21). Strict drops 7.3 pt (p 0.013, information).
+    - S1q (Fit12, 10:27, on the orchestrator's GO): QOM0 at C_m 51 / C_l 32 + a GPU residency probe. VALID: misreads 0 / 16,128,
+      peak 11.765 GB. Speed 41.77 tok/s pooled, 132 MB per kept token.
+    - TODAY (GPU idle): EvalSuite's HumanEval+ / MBPP code gate on S1q offered as the one big job, for a gated 12 GB code row in
+      SMALL_RAM. EvalSuite decides whether and how.
+    - NewIdeas' number check of SMALL_RAM's 24 GB fill and Leap's pkg_w24c: asked the orchestrator whether to do it now
+      (release work) or on its release trigger. Paced asleep until ~04:00 Wed otherwise.
   - TUE 02:02 (`date`) TUESDAY ORDER. NewIdeas is paced to sleep until ~17:42 (weekly 50 % vs line 41 %). Messages wake it;
     the orchestrator decides in between.
     - Tonight's chain ended. W24c / W24d ran: w13b won (130.33 vs 125.91, +3.51 %; NUMBER_CHECK 24). Leap's drafter pair and

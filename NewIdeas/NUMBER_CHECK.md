@@ -655,3 +655,31 @@ My account was at its 5-hour limit from ~00:0x to 02:00, so the orchestrator gav
   (geo 42.44), request 23.85, peak 11.314 GB, tokens = S1u's on 16 / 16 (sha), so the run is deterministic. MEASURED split [K]: the wide
   call's loader idle (non-read) is 102.4 ms (median 103.2) of 217.4 ms; io 113.4 ms for 1.323 GB = 11.67 GB/s. S1u's 90 ms
   line fails on the measured split too (102.4 vs the [P] 106.9-108.2).
+
+## 25. SMALL_RAM's 24 GB fill + Leap's pkg_w24c (Wednesday release), number check Tue 10:35 (`date`)
+Scope (orchestrator 10:3x): SMALL_RAM's new 24 GB numbers (W24d, W24e, W24f, the gate's 25.112 GB peak, the ~560-token
+label) and ~/Leap/release/out/pkg_w24c's docs. Base: ~/Papers/.SMALL_RAM_1110_pre24.md -> SMALL_RAM.md (10:30), 119 new or
+changed numeric lines. Script: scripts/numcheck/sr24_check.py; GPQA / LCB re-grade with gpqa_recount.py / lcb_recount.py.
+VERDICT: every number CHECKS OUT. Three wording points do not:
+- CONFIRMED (STYLE 3 pooled):
+  - W24d HE w13b: 130.33 (geo 130.3; passes 130.2 / 130.5), request 40.8, first token 3.54 (3.20-4.78), peak 23.82.
+  - W24f MBPP: 91.25 (geo 93.7; passes 90.0 / 92.6), 26.1, 3.34 (3.09-4.62), 23.74; tokens 12 / 12 equal between passes.
+  - W24f IFEval: 30.58 (geo 28.7), 18.1, 3.09 (2.45-4.16), 23.66. w13t controls: MBPP 92.62, IFEval 29.74.
+  - W24e: 1024 peak 25.025, first token 5.7-14.6 s; 512 -> 24.345 GB at x1.31-1.62; 256 -> 23.954 GB at x1.95-2.89. Tokens
+    equal to 1024 on 0 / 6 and 1 / 6; hashes on 0 / 6 for both. The 1024 repeat matches 6 / 6.
+  - The gate: 40 processes, 764 prompt runs, 22 over 24.0 GB, max 25.112 GB at 2,801 tokens (gpqad/recnTTKdBzfuoZ7w7),
+    shortest first-crossing prompt 561 tokens (lcb6/abc397_e), 14 IFBench-only processes all under (max 23.813, prompts
+    <= 206). Scores re-graded: GPQA 47 vs 44 in both orders (6 / 3, p 0.5078); LCB fwd 29.8 vs 32.1 (2 / 5, p 0.4531), rev
+    32.8 vs 32.1 (4 / 3, p 1.0); IFBench 40.7 vs 44.0 (from the counts).
+  - Strata at 24 GB (SE:h2h/results_low24, B1 / D1; first token = wall TTFT): HE decode 26.14 / 26.22, request 21.97 /
+    21.29, TTFT 1.52 / 1.66; MBPP 27.02 / 27.34, 20.36 / 20.29, 1.31 / 1.31; IFEval 28.36 / 26.87, 21.02 / 20.32, 1.65 /
+    1.46; peaks 23.748 / 24.143 GB. The ratios in 6.5 (3.3-5.0x, 1.3-1.9x, 1.1-1.2x, 1.1x, 1.9-2.5x) follow.
+  - pkg_w24c: RESULTS.md l.14, README l.24 (about 130 / 91 / 31; 560; 25.1), INSTALL l.6-8.
+- NOT CHECKING OUT (sent to the orchestrator, the Editor and Leap):
+  1. SMALL_RAM l.67-68 and l.683 say smaller chunks keep it under. Only 256-token chunks do; 512-token chunks reach 24.345 GB.
+  2. SMALL_RAM l.677-680:
+     - The '424 prompts ... stayed under' sentence is true by construction, since a lifetime peak only rises.
+     - The 592-token prompt (lcb6/abc397_f) ran first in a fresh process both times (24.112 / 23.954 GB). That is
+       run-to-run variation, not 'process state'.
+  3. pkg_w24c LIMITS.md has no 24 GB line: the long-prompt peak and the first-token gap vs Strata are missing. Its l.12-13
+     are superseded by the PF-D long-prompt results if the erratum ships with it.

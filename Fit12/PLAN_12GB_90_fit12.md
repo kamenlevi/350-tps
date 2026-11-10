@@ -929,3 +929,23 @@ fixed-cost bet. This is a measurement only: no setting changes.
   <= 12 GB.
   - Lines: VALID if probe misreads = 0 and lifetime peak <= 12.0 GB. Then it can go to EvalSuite's gate (HumanEval+ /
     MBPP). Speed is reported, not lined.
+- **S1q RESULT (Tue 10:26:57-10:29:22; share lock after an idle-GPU gate, no PAUSE inside, rc 0; the orchestrator's GO 10:2x): VALID.**
+  - Attempt 1 (10:25) aborted at load ("bigmoe: 55 experts > C=51 at layer 0": a post's distinct experts must fit C_m).
+    The probe now adds at most C_m - |distinct U| residents and pads the rest; re-unit-tested.
+  - Lines [K]: probe misreads 0 in 16,128 layer-calls; lifetime peak 11.765 GB <= 12.0. VALID.
+  - Residents added: 14.14 per layer-call. Dropped for room: 1,392 (0.086 per layer-call).
+  - Speed [K]: whole decode 41.77 tok/s pooled (43.20 geo), whole request 23.97, first token 4.02 s median, kept 10.01,
+    132 MB per kept token.
+  - Wide call 215.0 ms: loader busy 111.2 (1.260 GB at 11.53 GB/s; -4.8 % bytes vs S1p at C_m 47) + loader idle 103.7. That
+    is +1.3 ms over S1p's 102.4 for the extra experts.
+  - So QOM0 at 51 + 32 runs as fast as S1u, with the cut the map passes (1.16 %, information only). Next is the gate's call
+    (EvalSuite, HumanEval+ / MBPP). Toward 90, the 104 ms non-read time is still the wall.
+- **S1q CODE GATE (Tue 10:41-11:02; EvalSuite PREREG_code12_s1q_2026-11-10, 89d6938; route (i)): STOPPED by the 12.0 GB guard, NO verdict.**
+  - fwd ran 118 / 160 keys (60 HumanEval+, 58 MBPP); rev never started.
+  - The live guard ('footprint -f bytes', exact) read the peak at 12.027 GB in chunk qgf06, on mbpp/228 (126-token prompt,
+    cap 1,024). Ten seconds earlier it read 11.673 GB.
+  - The harness's lifetime figures on completed prompts stayed <= 11.856 GB.
+  - So S1q at C_m 51 / C_l 32 does not stay under the 12 GB line on MBPP's longer outputs. A retry needs less memory, and the
+    map line again if the pool shrinks (QOM0 at C_m 47 failed by one flip).
+  - Also: s1qg_merge.py looked for arm "ex" while the chunk files say "q0r" (KeyError). Any resume needs that fixed, as an
+    amendment, since the merge's hash is registered.

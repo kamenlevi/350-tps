@@ -41,5 +41,5 @@ The `run` phase runs every config on two benchmark prompts (up to 256 tokens eac
 and compares the tokens with the references in `verify/`: exact configs must match token for token. The lossy and chat
 configs' tokens depend on what the process decoded before, so a prompt of theirs is checked only when the earlier prompts
 ran exactly as in the reference run (same prompts, same order, same lengths); otherwise it is reported as information.
-On the test MacBook Pro (Mon 9 Nov 2026) the `run` phase passed in about 4 minutes: all six configs matched their references,
-and every module and every file opened came from inside the allowed folders.
+On the test MacBook Pro (Tue 10 Nov 2026) the `run` phase passed in about 4.5 minutes: all eight configs matched their
+references, and every module and every file opened came from inside the allowed folders.
