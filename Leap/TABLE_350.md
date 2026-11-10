@@ -9842,3 +9842,12 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   CLEAN-CLONE PASS 10:23 (all 8 configs 2/2 token-equal to their references, closure 0/0, 271 s); serve.py --mem 24
   first real-engine test PASS (OpenAI + Anthropic streams well-formed, 31.9 / 32.1 tok/s, peak 23.68 GB, 0 errors;
   SIGINT ignored when started from a script, SIGTERM has no clean shutdown path: reported, not reworked).
+
+## TUE AFTERNOON (Leap, 13:46-14:02; data/tue_afternoon_1110.md)
+- 36 GB MAC SIMULATION of the 24 GB package (mlock ballast 22 / 28 GB, GPU working set capped at 27 GB in-process): HE x12
+  138.1 / 137.3 tok/s (free memory 135.9), tokens 12/12 identical, peak 23.77 GB; 3K prompt 25.03 GB; 3-turn chat OK;
+  swap flat / +0.4 GB. Unverifiable here: another GPU type, SSD, thermals.
+- PF-A AT 24 GB (chat.py): identical answers; 6,980-token first token 42.06 -> 17.70 s (x2.38), peak 25.67 -> 25.98 GB.
+  FINDING: the 24 GB line peaks at 25.67 GB on a 7K prompt (default prefill), above the label's 25.1 GB (gate prompts <= 2.8K).
+- PF-B BISECT (exact-32, TOK 8192, hashes vs PF-A): 10K 25/25, 15K 28/28, 20K 25/25, 25K 24/24 (4 groups) -> exact to 25K;
+  30K 0/25 -> breaks in (25K, 30K]; group count ruled out; hypothesis: an M-dependent matmul at the 30K group shapes.

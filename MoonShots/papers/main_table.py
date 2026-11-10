@@ -29,6 +29,7 @@ GROUPS = [  # (label, tags = one per pass)
     ("24 LOSSY w13b as gated (L + COH, 141 + 26 slots, rows <= 13), W24d w13e / w13f", ["w13eh_100", "w13fh_100"]),
     ("24 LOSSY 14-row alternative, W24d w14c / w14d (information)", ["w14ch_100", "w14dh_100"]),
     ("24 LOSSY w13b as gated, W24f bf1 / bf2 (MBPP, IFEval)", ["bf1m_100", "bf2m_100", "bf1i_100", "bf2i_100"]),
+    ("24 LOSSY w13b as gated, W24g bg1 / bg2 (math)", ["bg1a_100", "bg2a_100"]),
 ]
 
 

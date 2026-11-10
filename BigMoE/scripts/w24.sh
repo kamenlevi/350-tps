@@ -36,7 +36,7 @@ ms_same || { say "the live planes_engine kernel files differ from the frozen cop
 LC=$(grep -v '^#' data/stack/lcoh_env.txt | grep . | tail -1 | sed 's/,R57_QOM_SETS=humaneval,mbpp$//')
 echo "$LC" | grep -q 'REF2_NAX_COH=1' || { say "lcoh_env.txt's line has no REF2_NAX_COH=1: not run"; exit 2; }
 keys_of() { "$PY" -I -c 'import json, sys; print(",".join(r["key"] for r in json.load(open(sys.argv[1]))))' "$1"; }
-KH=$(keys_of data/r57/e5h1_256_runs.json); KM=$(keys_of data/r57/e5m1_256_runs.json); KI=$(sed -n 1p data/n45/keys.txt)
+KH=$(keys_of data/r57/e5h1_256_runs.json); KM=$(keys_of data/r57/e5m1_256_runs.json); KI=$(sed -n 1p data/n45/keys.txt); KA=$(sed -n 2p data/n45/keys.txt)   # W24g (Tue 13:3x): the 12 math keys (n45 line 2)
 for k in "$KH:humaneval" "$KM:mbpp" "$KI:ifeval"; do
   s=${k##*:}; l=${k%:*}
   [ "$(echo "$l" | tr ',' '\n' | grep -c "^$s/")" = 12 ] || { say "the $s keys are not 12 $s keys: not run"; exit 2; }
@@ -61,6 +61,7 @@ armenv() { case $1 in   # base slots, sidecar slots, rows
   # W24f (Tue 09:0x, the orchestrator: the slot after Leap's package check): MBPP + IFEval speed, w13b vs w13t, same-run ABBA
   tf1|tf2) echo "130 26 13 BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25";;   # W24f: w13t as gated in W24b (control, first + last)
   bf1|bf2) echo "141 26 13 BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all";;   # W24f: w13b, the card-gated 24 GB config
+  bg1|bg2) echo "141 26 13 BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all";;   # W24g (Tue 13:3x, the orchestrator): w13b on the 12 math prompts, twice
   *) return 1;; esac; }
 ARMS=${W24_ARMS:-w12 w16u w12pf w10 w8}
 for a in $ARMS; do
@@ -83,7 +84,7 @@ TAGS=""
 for a in $ARMS; do
   read -r cm cl rw ex <<< "$(armenv $a)"
   X="R57_VTIER=,BIGMOE_TIER_CM=$cm,BIGMOE_TIER_CL=$cl,R57_ROWCAP=$rw,REF2_TIER_CHUNK=1${ex:+,$ex}"
-  for s in "h:$KH" "m:$KM" "i:$KI"; do
+  for s in "h:$KH" "m:$KM" "i:$KI" "a:$KA"; do
     case " ${W24_SETS:-h m i} " in *" ${s%%:*} "*) ;; *) continue;; esac   # W24_SETS: a subset of h m i (W24b: h m)
     t=${a}${s%%:*}_100; k=${s#*:}
     rm -f data/r57/${t}_* $D/${t}.txt

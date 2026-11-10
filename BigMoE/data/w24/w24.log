@@ -131,3 +131,10 @@
 11-10 10:16:28 report rc=0 (data/w24/w24f_report.txt)
 11-10 10:16:28 W24 end
 11-10 10:16:28 W24f done: data/w24/w24f_verdict.txt
+11-10 13:37:30 dry: bg1 = base 141, sidecar 26, rows 13, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all, pools 14.87 GB
+11-10 13:37:30 dry: bg2 = base 141, sidecar 26, rows 13, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all, pools 14.87 GB
+11-10 13:37:30 dry run: snapshot w24 (016cb7f), L + COH line 33 K=V, live kernel files == frozen_rel1's
+11-10 13:38:09 W24 start (pid 66726, NO-SWAP 50.0 GB, snapshot w24 = 016cb7f, arms bg1 bg2)
+11-10 13:40:19 bg1a_100 rc=0
+11-10 13:42:25 bg2a_100 rc=0
+11-10 13:42:25 report rc=0 (data/w24/w24g_report.txt)

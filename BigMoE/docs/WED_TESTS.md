@@ -1449,3 +1449,18 @@ prompts per arm, CAP 256, quiet; every prompt clean in all four arms; tokens ide
 - **IFEval: +2.8 %** pooled (30.58 vs 29.74), the same token counts (1,658), 7 % less SSD per kept token (205.0 vs 220.6 MB).
 - All lifetime peaks under 24.0 GB on these sets (w13b 23.66-23.74, w13t 23.78-23.86 GB). Checks over 300 ms: 0 on MBPP; 3-6 of
   634 on IFEval in both configs (chat first / last checks, as in W24c).
+
+## Tue 10 Nov 13:38-13:42: W24g = w13b's math speed, 12 math prompts, two passes (data/w24/w24g_report.txt; data 16ce2de)
+The orchestrator's lean run for tomorrow's paper (the last unmeasured 24 GB cell): w13b (the card-gated 24 GB config), the 12
+math prompts (data/n45/keys.txt line 2, MATH-500, 50-520 tokens), CAP 256, quiet, two passes; no control arm.
+
+| pass | whole decode | whole request | first token | tokens | kept per check | cycle | SSD MB / kept token | lifetime peak |
+|---|---|---|---|---|---|---|---|---|
+| bg1 | 40.7 | 27.3 | 2.93 s | 3,072 | 6.41 | 155.4 ms | 195.9 | 24.014 GB |
+| bg2 | 40.9 | 27.5 | 2.84 s | 3,072 | 6.41 | 154.9 ms | 195.7 | 24.013 GB |
+
+- **Math: 40.8 tok/s whole decode** (pooled), 27.4 whole request, first token ~2.9 s; the two passes agree within 0.4 % and
+  their tokens are identical (12 / 12); every prompt ran to the 256-token cap; 1 of 498 checks over 300 ms; no pause, abort or
+  cut. Math drafts on the 4-bit DFlash2 drafter here (R57_D7B=all) and reads ~196 MB from the SSD per kept token.
+- **The lifetime peak crossed 24.0 GB by 14 MB, on a 520-token prompt** (math500/test/geometry/702: MLX prefill 23.17 GB), so the
+  line's prompt-length limit is about 500 tokens, not 560: the gate's 481-token row peaked 23.910 GB, this 520-token one 24.014.

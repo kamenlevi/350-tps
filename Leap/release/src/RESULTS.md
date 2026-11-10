@@ -11,13 +11,14 @@ first token (median, s) / lifetime peak (GB). From the RELEASE paper, section 2,
 | `lossy` | 32 | not measured (1) | not measured (1) | 39.0 / 21.1 / 2.90 / 31.30 (one pass) | not measured |
 | `chat` | 45 | not run | not run | 50.7 / 28.8 / 2.26 / 43.69 (one pass) | not run |
 | `chat` | 32 | not run | not run | 51.3 / 22.5 / 2.99 / 31.22 | not run |
-| `lossy`, `chat` | 24 (2) | 130.3 / 40.8 / 3.54 / 23.82 (two passes) | 91.2 / 26.1 / 3.34 / 23.74 (two passes) | 30.6 / 18.1 / 3.09 / 23.66 (two passes) | not measured |
+| `lossy`, `chat` | 24 (2) | 130.3 / 40.8 / 3.54 / 23.82 (two passes) | 91.2 / 26.1 / 3.34 / 23.74 (two passes) | 30.6 / 18.1 / 3.09 / 23.66 (two passes) | 40.8 / 27.4 / 2.86 / 24.01 (two passes) |
 
 (1) Only before coherent reads (config L at C 160): HumanEval 150.7 / 36.0 / 4.43 / 31.78, MBPP 111.0 / 26.8 / 3.69 / 31.44.
 
 (2) One configuration for both names (CONFIGS.md). These runs are not in the RELEASE paper. HumanEval comes from the research
-run W24d, MBPP and IFEval from W24f: the gated configuration, two passes each (data/w24 in BigMoE's research tree). The peaks
-on these benchmark prompts stay under 24 GB; longer prompts reach up to 25.1 GB.
+run W24d, MBPP and IFEval from W24f, math (MATH-500) from W24g: the gated configuration, two passes each (data/w24 in BigMoE's
+research tree). The peaks on these benchmark prompts reach 24.01 GB (a 520-token math prompt); longer prompts reach up to
+25.1 GB.
 
 The configs and their labels are in [CONFIGS.md](CONFIGS.md); the limits, including where Strata is ahead, in
 [LIMITS.md](LIMITS.md).
