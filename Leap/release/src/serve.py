@@ -68,7 +68,8 @@ def main():
     ap.add_argument("--config", default="chat", choices=("exact", "lossy", "chat"))
     ap.add_argument("--mem", default="32", choices=("45", "32", "24"))
     ap.add_argument("--port", type=int, default=8080)
-    ap.add_argument("--max-tokens", type=int, default=16384, help="the most any request may generate")
+    ap.add_argument("--max-tokens", type=int, default=65536,
+                    help="the most any request may generate (default 65536; a request's own max_tokens can ask for less)")
     ap.add_argument("--drafter", choices=("auto", "dfl", "mtp"), help="dfl: every request takes the engine's code path (DFlash2), mtp: its chat path (the MTP head), auto: the engine's type rule (default; --kind code: dfl)")
     ap.add_argument("--kind", default="chat", choices=tuple(R.KIND_SET))
     ap.add_argument("--no-warmup", action="store_true")

@@ -215,3 +215,26 @@ A gap in the runner's "another engine runs" check, found after the run and fixed
 the command to 16 characters, so a venv Python shows as `/opt/homebrew/Ce` and never matched "python". The check now
 matches the full command line. Here it changed nothing: the only other process, a no-GPU mock server of mine (0.5 GB),
 ran beside the check, and the lock and Kamen-idle checks still held.
+
+## 1.1.0 candidate pkg_110d (328a19f): answers up to 65,536 tokens (Tue 21:3x)
+
+> (a quote from the project owner, kept private)
+- **release/src (9f36cf9):** chat.py's `--max-tokens` default 16384 -> 65536 (docstring "up to 65,536 tokens per answer";
+  help "default 65536; a long answer uses memory as a long prompt does"); serve.py's `--max-tokens` (the most any request
+  may generate, also the cap for a request without max_tokens) 16384 -> 65536 (help: "a request's own max_tokens can ask
+  for less"). No README / INSTALL / LIMITS / CONFIGS line named 16,384; run.py's own default (256) is unchanged.
+- **Memory:** CAP is only the loop's stop bound in both loops (rel1 and w24: read from argv, `while len(out) < CAP`, the
+  output slice, a log line, 64 during the warm-up); nothing is sized by it, so the default alone costs no memory. A long
+  answer grows the KV as a long prompt does.
+- **Rebuild:** `make_release.py rel1 --commit 016cb7f --extra-snap w24 --refs release/refs_rel1_w24.json --es-commit
+  98c6072d --out release/out/pkg_110d` -> 328a19f; leaks 0, unsafe 0, live paths 0, syntax 0. Against pkg_110c: chat.py,
+  serve.py (the lines above) and MANIFEST.json (leap_commit + hashes) only, so pkg_110c's real-engine clean-clone PASS
+  covers its code.
+- **Check (CPU only; Kamen was chatting):** clean-clone prep of pkg_110d (release/cleanclone/v110d: install.sh rc 0, dry
+  runs lossy-24 / chat-24 / chat-32 OK); `chat.py --help` and `serve.py --help` show "default 65536"; chat.py on the
+  stand-in loop (`--_screen`) starts with "ExactStream chat: config chat-32 (C 160), up to 65536 tokens per answer",
+  answers, and exits rc 0.
+- **Clones:** the tool-call working copy (agent/clone) has the same change. The local clone Kamen chats from
+  (release/cleanclone/final/clone) gets it from a watcher (scratchpad/agent/maxtok_final.sh: exact lines, atomic renames)
+  once nothing runs from that clone; he runs `--max-tokens 65536` meanwhile.
+- **The go now pushes pkg_110d** (it supersedes pkg_110c).

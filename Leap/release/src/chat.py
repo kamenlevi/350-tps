@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """chat.py: chat with the 125B model in the terminal and watch its speed live.
 
-  .venv/bin/python chat.py                            # the 32 GB chat config, up to 16,384 tokens per answer
+  .venv/bin/python chat.py                            # the 32 GB chat config, up to 65,536 tokens per answer
   .venv/bin/python chat.py --kind code                # code requests: the DFlash2 drafter (--drafter dfl)
   .venv/bin/python chat.py --mem 45 --max-tokens 1024
 
@@ -76,7 +76,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", default="chat", choices=("exact", "lossy", "chat"))
     ap.add_argument("--mem", default="32", choices=("45", "32", "24"))
-    ap.add_argument("--max-tokens", type=int, default=16384, help="the most one answer may generate (default 16384)")
+    ap.add_argument("--max-tokens", type=int, default=65536,
+                    help="the most one answer may generate (default 65536; a long answer uses memory as a long prompt does)")
     ap.add_argument("--kind", default="chat", choices=tuple(R.KIND_SET),
                     help="which benchmark family's switches apply (code also implies --drafter dfl)")
     ap.add_argument("--drafter", choices=("auto", "dfl", "mtp"),

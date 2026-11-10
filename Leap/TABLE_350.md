@@ -9860,3 +9860,10 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
 - 1.1.0 CANDIDATE pkg_110c ON THE REAL ENGINE (clean clone; lossy-24 + chat-24 keys, a text prompt, chat.py and serve.py
   --mem 24; Tue 20:57-20:59): PASS. 2/2 keys prefix-equal with the w13eh references on both configs; closure 0 / 0;
   peaks 23.49-23.71 GB (all under 24); chat.py rc 0 (25.3 tok/s); serve.py streams both formats and stops on SIGTERM.
+- TOOL CALLS ON THE REAL ENGINE (serve.py working copy --mem 24, PF-A; Claude Code + Codex, contained; Tue 21:03-21:16):
+  probe 27/30 (the 3 misses = one prompt answered in prose on all 3 endpoints; every call made was right); Claude Code
+  3/3 tasks; Codex 2/3 + 1 partial (appended on the same line); side lane flagged; prefix reuse 8/8 follow-ups whole;
+  per turn without a cache 30.5-32.2 s (Claude Code, 12.3-12.6K tokens) / 21.7-23.2 s (Codex, 8.4K); peak 27.32 GB.
+- 1.1.0 ANSWER LENGTH (Kamen 21:3x): chat.py / serve.py --max-tokens default 16,384 -> 65,536 (CAP is only a stop bound:
+  no memory by itself); candidate rebuilt as pkg_110d (328a19f; differs from the GPU-tested pkg_110c in 2 defaults + help
+  text); clean-clone prep + stand-in start check PASS (banner "up to 65536 tokens per answer").
