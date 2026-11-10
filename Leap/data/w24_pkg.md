@@ -177,3 +177,18 @@ Wednesday. Built in ~/Leap/release/cleanclone/final/clone only; nothing is pushe
   the current candidate.
 - **Staged, not applied:** release/staged/limits_pfd_erratum.patch replaces LIMITS lines 12-13 with last night's PF-D 10K
   / 30K results. Apply only if Kamen approves the erratum; release/staged/README.md has how.
+
+## 1.1.0 candidate (Tue 14:2x): release/out/pkg_110 (dac4850)
+
+- **Built from release/src**, which carries:
+  - the v1.0.1 corrections: LIMITS' PF-D lines, run.py's --env help, the 32 GB long-prompt peaks;
+  - the 24 GB line;
+  - the math speed: about 41 tok/s (W24g: 40.8 / 27.4 / 2.86 / 24.01);
+  - the measured label: under 24 GB to about 500 tokens, then about 25.0 / 25.7 / 25.8 / 28.2 GB at 3K / 7K / 10K / 30K;
+    INSTALL says a 30K-token prompt on a 36 GB Mac leaves about 8 GB;
+  - CITATION 1.1.0.
+- **Build checks:** leaks 0, unsafe 0, live paths 0, syntax 0.
+- **Against the clean-clone-tested build** pkg_w24 (0f076a5): docs (CITATION, CONFIGS, INSTALL, LIMITS, README, RESULTS),
+  MANIFEST.json, and run.py's help string only (the v1.0.1 correction). So the clean-clone PASS covers its code.
+- **Push tomorrow** on the go: `PKG_DIR=release/out/pkg_110 push_pkg.sh pkg` on top of main 0130ead (v1.0.1) keeps docs/
+  as main has it. The 1.1.0 site (SMALL_RAM etc.) comes from the Editor and Breakthrough, folded in with AMEND.

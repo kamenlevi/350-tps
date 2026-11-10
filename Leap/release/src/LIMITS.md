@@ -16,7 +16,7 @@ on macOS 26.5 (25F71).
   (with PF-D) reaches 47.5 GB on 10K tokens and 48.6 GB on 30K. At 32 GB, `chat` reaches 34.0 GB on 10K tokens and
   35.5 GB on 30K.
 - At 32 GB, `exact` was measured on chat (IFEval) only, and `lossy` has no code or math rows of its own.
-- At 24 GB, prompts up to about 500 tokens stay under 24 GB; longer ones take it up to 25.1 GB.
+- At 24 GB, prompts up to about 500 tokens stay under 24 GB; longer ones take more: about 25.0 GB at 3K tokens, 25.7 GB at 7K, 25.8 GB at 10K and 28.2 GB at 30K.
 - At 24 GB, Strata on the same MacBook Pro and prompts gives the first token 1.9-2.5x faster on every set, and on chat
   its whole request is ahead (20.3-21.0 against 18.1 tok/s); our decode is ahead on code (3.3-5.0x) and 1.1x on chat.
 - The lossy configs are gated on the named benchmarks only. On a multilingual chat set, M1-B (the `chat` configs' lossy

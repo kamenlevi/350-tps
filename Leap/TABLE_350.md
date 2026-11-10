@@ -9851,3 +9851,9 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   FINDING: the 24 GB line peaks at 25.67 GB on a 7K prompt (default prefill), above the label's 25.1 GB (gate prompts <= 2.8K).
 - PF-B BISECT (exact-32, TOK 8192, hashes vs PF-A): 10K 25/25, 15K 28/28, 20K 25/25, 25K 24/24 (4 groups) -> exact to 25K;
   30K 0/25 -> breaks in (25K, 30K]; group count ruled out; hypothesis: an M-dependent matmul at the 30K group shapes.
+- 24 GB PEAK BY LENGTH: 25.82 GB at 10K, 28.17 GB at 30K (default prefill); PF-A 26.54 / 30.60 GB (x2.55 / x2.72 first
+  token). KERNEL CHECK: PF-B's grouped router + shared expert differ from the per-chunk calls only on a short final chunk
+  (292 rows at 30K) -> exactness depends on the last chunk's size; fix = router + shared expert per chunk slice (not built).
+- PF-B FIX (research copy, R57_PFLM_SEGALL=1): bitwise = PF-A on the short-tail prompt (5,412 tokens: 20/20, unfixed 0/20)
+  and at 30K (26/26, unfixed 0/25); speed kept: x1.17 / x1.15 over PF-A, 30K prefill 555 tok/s (unfixed 567); peak
+  unchanged (40.42 GB). Exact PF-B clears the 500 tok/s prefill line at 30K on the 32 GB line.

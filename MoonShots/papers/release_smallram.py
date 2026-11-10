@@ -23,6 +23,7 @@ TEXT = {
         ("The 24 GB line's rows and its lossy chat route are in the forthcoming [SMALL-RAM].",
          "The 24 GB line's rows, among them a gated lossy configuration, and its lossy chat route are in [SMALL-RAM]."),
         ("(details in the forthcoming [SMALL-RAM])", "(details in [SMALL-RAM])"),
+        ("- **11 November 2026 (v1.1.0).** PF-B's difference", "- **11 November 2026 (v1.1.0).** [SMALL-RAM] is published. PF-B's difference"),
     ],
     "EVALUATION": [
         ("a forthcoming\n  companion paper ([SMALL-RAM], by 11 November 2026) for the 24 / 12 GB loops.",

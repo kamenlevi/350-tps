@@ -64,3 +64,78 @@ How it was set up:
 - The next step is a kernel-level check: the 30K run's group M (5,412; and 4,096 / 1,316 at TOK 4096) against the
   per-chunk calls, bit for bit. It needs a few minutes of GPU and no model run. No fix is built; the orchestrator is asked
   first.
+
+## 4. The 24 GB line's peak by prompt length (Tue 14:05-14:13; orchestrator 14:0x: measure before the label wording)
+
+Setup: run.py --config chat --mem 24 (w13b), 64 tokens, the same paper-text prompts as the 32 GB prefill test; share lock,
+swap flat (7,062 MB). The 3K and 7K rows come from the runs above.
+
+| prompt | default prefill: first token / lifetime peak | PF-A: first token / lifetime peak |
+|---|---|---|
+| benchmark prompts (gate; up to 2.8K) | - / up to 25.11 GB | - |
+| 3,003 tokens | 17.98 s / 25.03 GB | - |
+| 6,980 tokens (chat.py) | 42.06 s / 25.67 GB | 17.70 s / 25.98 GB |
+| 9,988 tokens | 60.44 s / **25.82 GB** | 23.74 s (x2.55) / 26.54 GB |
+| 29,988 tokens | 194.95 s / **28.17 GB** | 71.73 s (x2.72) / **30.60 GB** |
+
+- The 24 GB line stays under 24 GB up to about 500 tokens (BigMoE W24g: a 520-token prompt at 24.014 GB). It then grows
+  with the prompt: about 25.0 GB at 3K, 25.7 at 7K, 25.8 at 10K and 28.2 at 30K (default prefill, as run.py runs it).
+- PF-A adds 0.3 / 0.7 / 2.4 GB at 7K / 10K / 30K. chat.py --mem 24 now uses PF-A (the orchestrator's decision at 14:0x);
+  on a 36 GB Mac a 30K-token conversation would reach 30.6 GB with it.
+
+## 5. PF-B kernel-level bit check (kcheck.py; orchestrator 14:0x; no fix built)
+
+Method: layer 1's and layer 30's real router (8-bit, group 64), shared expert (4-bit) and shared expert gate (4-bit) from
+the model's safetensors, MLX 0.32.2 on applegpu_g17s. Each op is computed once on M rows (PF-B's grouped call) and once on
+the same rows in 1,024-row chunks (PF-A's and the default prefill's calls), then compared bit for bit, on random bf16
+inputs. Layers 1 and 30 gave the same pattern:
+
+| M (chunks) | router (N=512) | shared expert MLP | shared expert gate (N=1; PF-B already per chunk) |
+|---|---|---|---|
+| 5,412 = 5 x 1,024 + 292 (30K, TOK 8192: FAIL) | **292 rows differ** | **292 rows differ** | 3,302 differ |
+| 1,316 = 1,024 + 292 (30K, TOK 4096: FAIL) | **292 rows differ** | **292 rows differ** | 190 differ |
+| 4,096 = 4 x 1,024 (30K, TOK 4096) | equal | equal | 2,613 differ |
+| 8,192 / 1,796 / 6,810 / 3,619 (passing runs) | equal | equal | differ (as known) |
+| 427 (25K's tail, alone in its group) | equal | equal | equal |
+
+- **Cause found:** in PF-B's grouped call, the router and the shared expert compute the rows of a short final chunk (292
+  tokens here) with different bits than the per-chunk call does. Longer tails (547, 666, 772 tokens) are unaffected, as are
+  full 1,024-row chunks.
+- A short tail on its own in a group is also unaffected: 25K's 427-token tail is computed alone either way, which is why
+  25K passed.
+- So PF-B's exactness depends on the size of the prompt's last chunk, not on its total length. A prompt of any length whose
+  last chunk is short and shares a group with full chunks can differ. The published 7.9K check had tails of 541, 634 and
+  764 tokens.
+- The exact threshold between 292 and 427 rows is not measured; MLX's quantized matmul probably takes another kernel below
+  some row count.
+- **Fixable**, in the same way as the shared expert gate's per-chunk fix (6553fcb): run the router and the shared expert on
+  each chunk slice inside PF-B's group, and keep the grouped SwitchGLU call. Not built: the orchestrator decides first.
+  After a fix, the PF-B check (10K / 15K / 20K / 25K / 30K, hashes) would show whether 30K becomes exact.
+
+## 6. PF-B fix, research copy only (Tue 14:18-14:24; orchestrator 14:2x: build it, not in the package or 1.1.0)
+
+The fix lives in release/cleanclone/pfbfix/clone (gitignored; = the 1.1.0 candidate pkg_110b + this change):
+- In pflm.py, `R57_PFLM_SEGALL=1` makes PF-B's grouped MoE call run the router and the shared expert per chunk slice too,
+  with the same `_SegPerChunk` wrapper the shared expert's gate already uses. The grouped SwitchGLU call is unchanged.
+- The diff is data/tue_afternoon_1110/pflm_segall_research.diff: 14 changed lines, env-gated, off by default.
+
+Test: exact-32, R57_LOGHASH=1, 64 tokens, TOK 8192, against PF-A on the same prompt; share lock, swap flat.
+
+| prompt | arm | tokens | verify-logits hashes vs PF-A | first token | prefill | lifetime peak |
+|---|---|---|---|---|---|---|
+| short tail, P 5,412 = 5 x 1,024 + 292 (one group of 6 chunks) | PF-A | - | - | 13.70 s | 395 tok/s | 33.38 GB |
+| | PF-B | equal | **0 / 20** | 12.20 s | 444 tok/s (x1.12) | 34.20 GB |
+| | PF-B + fix | equal | **20 / 20** | 11.72 s | 462 tok/s (x1.17) | 34.19 GB |
+| 29,988 tokens (4 groups) | PF-A | - | - | 62.25 s | 482 tok/s | 38.11 GB |
+| | PF-B | differ from the 40th | **0 / 25** | 52.86 s | 567 tok/s (x1.18) | 40.44 GB |
+| | PF-B + fix | equal | **26 / 26** | 54.01 s | 555 tok/s (x1.15) | 40.42 GB |
+
+- **The fix makes PF-B bitwise-equal to PF-A in both failing cases,** including a short-tail prompt well below 8K tokens.
+  There, the unfixed PF-B's logits differ at every check although its 64 tokens happen to match.
+- **It keeps PF-B's speed:** x1.15-1.17 over PF-A, against x1.12-1.18 unfixed; at 30K, 54.0 s against 52.9 s (about 2 %).
+  Its prefill at 30K is 555 tok/s at 32 GB, over Kamen's 500 tok/s line. It uses no extra memory: 40.42 against 40.44 GB.
+  PF-A peaks 2.3 GB lower.
+- 10K / 15K / 20K / 25K were exact without the fix, since their tails are not short. The fix only moves the grouped call's
+  router and shared expert onto the per-chunk calls PF-A makes, so those lengths stay exact by construction (not re-run).
+- **Next, not done:** the fix belongs in BigMoE's engine (its pflm.py; Leap does not edit other sessions' repos), then a
+  new package snapshot. PF-B also needs memory beyond the line (40.4 GB at 30K on the 32 GB line).

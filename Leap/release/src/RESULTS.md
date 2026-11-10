@@ -17,8 +17,8 @@ first token (median, s) / lifetime peak (GB). From the RELEASE paper, section 2,
 
 (2) One configuration for both names (CONFIGS.md). These runs are not in the RELEASE paper. HumanEval comes from the research
 run W24d, MBPP and IFEval from W24f, math (MATH-500) from W24g: the gated configuration, two passes each (data/w24 in BigMoE's
-research tree). The peaks on these benchmark prompts reach 24.01 GB (a 520-token math prompt); longer prompts reach up to
-25.1 GB.
+research tree). The peaks on these benchmark prompts reach 24.01 GB (a 520-token math prompt); longer prompts take more, up to
+28.2 GB at 30K tokens (LIMITS.md).
 
 The configs and their labels are in [CONFIGS.md](CONFIGS.md); the limits, including where Strata is ahead, in
 [LIMITS.md](LIMITS.md).
