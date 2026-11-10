@@ -176,10 +176,15 @@ def main():
         base = mod.load
 
         def load(nm):
+            if sys._getframe(1).f_code.co_filename == screen:   # no wait on a research heat-pause file (as chat.py)
+                G()["PAUSE"] = ""
             if nm == f"dec_{s}" and sys._getframe(1).f_code.co_filename == screen:
                 return next_item()
             return base(nm)
         mod.load = load
+
+    def _gated(mod):                                       # the engine's per-pass wait on that file, off too
+        mod._PAUSE = ""
 
     def _drafter(mod):
         sd = mod.snapshot_download
@@ -200,7 +205,7 @@ def main():
             on_commit(ids)
             return r_
         cls.committed = committed
-    patch = {"evalsuite.data": _items, "dflash_model_mlx": _drafter, "session_vocab": _session}
+    patch = {"evalsuite.data": _items, "dflash_model_mlx": _drafter, "session_vocab": _session, "bigmoe.gated": _gated}
 
     class _Hook(importlib.abc.MetaPathFinder):
         def find_spec(self, name, path, target=None):

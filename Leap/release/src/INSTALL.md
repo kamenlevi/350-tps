@@ -39,7 +39,9 @@ prints the answer and the loop's timing. The configs are in [CONFIGS.md](CONFIGS
     .venv/bin/python serve.py --mem 24 --port 8080
 
 `chat.py` keeps the engine loaded between messages and prints each answer's tokens, speed, first token and lifetime peak;
-Ctrl-C stops an answer, `/clear` starts over and `/exit` quits. At `--mem 32` and `--mem 24` it prefills long prompts
+Ctrl-C stops an answer, `/clear` starts over and `/exit` quits. A paste is one message, however long and over any number
+of lines; Enter sends it. `/file PATH message` sends the file in a fenced block, then the message. The live speed
+shows in the window title. At `--mem 32` and `--mem 24` it prefills long prompts
 layer-major (the same tokens as the default prefill, a 2.4-3.8x faster first token, 0.3-3.2 GB more memory). On a 36 GB
 Mac, for conversations near 30K tokens, start it with `R57_PFLM=0` (`R57_PFLM=0 .venv/bin/python chat.py --mem 24`): that
 saves 2.4 GB of peak memory, at about 2.7x the first-token time.

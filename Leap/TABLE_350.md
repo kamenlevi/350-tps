@@ -9867,3 +9867,7 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
 - 1.1.0 ANSWER LENGTH (Kamen 21:3x): chat.py / serve.py --max-tokens default 16,384 -> 65,536 (CAP is only a stop bound:
   no memory by itself); candidate rebuilt as pkg_110d (328a19f; differs from the GPU-tested pkg_110c in 2 defaults + help
   text); clean-clone prep + stand-in start check PASS (banner "up to 65536 tokens per answer").
+- 1.1.0 chat.py FIXES (Kamen's chat, 21:4x-22:2x): paste = one message at any length (non-canonical reader, bracketed paste;
+  the tty's 1,024-byte line cut a 1,800-character paste), live numbers in the window title (the frozen display came from
+  the UI sizing itself from the log fd: 30-row fallback), no research-PAUSE wait, /file PATH message; pty test 21/21;
+  in Kamen's clone 22:22 (real-engine start rc 0); candidate pkg_110e (7943ddb).
