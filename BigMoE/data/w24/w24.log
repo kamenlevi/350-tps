@@ -113,3 +113,21 @@
 11-10 08:59:08 pc256g_100 rc=0
 11-10 09:00:43 pc1024bg_100 rc=0
 11-10 09:00:43 W24e report rc=0 (data/w24/w24e_report.txt)
+11-10 09:00:43 W24e data committed: 8e515d5
+11-10 09:04:00 dry: tf1 = base 130, sidecar 26, rows 13, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25, pools 13.78 GB
+11-10 09:04:00 dry: bf1 = base 141, sidecar 26, rows 13, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all, pools 14.87 GB
+11-10 09:04:00 dry: bf2 = base 141, sidecar 26, rows 13, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all, pools 14.87 GB
+11-10 09:04:00 dry: tf2 = base 130, sidecar 26, rows 13, BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25, pools 13.78 GB
+11-10 09:04:00 dry run: snapshot w24 (016cb7f), L + COH line 33 K=V, live kernel files == frozen_rel1's
+11-10 10:03:45 W24 start (pid 67869, NO-SWAP 50.7 GB, snapshot w24 = 016cb7f, arms tf1 bf1 bf2 tf2)
+11-10 10:05:06 tf1m_100 rc=0
+11-10 10:07:01 tf1i_100 rc=0
+11-10 10:08:16 bf1m_100 rc=0
+11-10 10:10:07 bf1i_100 rc=0
+11-10 10:11:22 bf2m_100 rc=0
+11-10 10:13:07 bf2i_100 rc=0
+11-10 10:14:33 tf2m_100 rc=0
+11-10 10:16:28 tf2i_100 rc=0
+11-10 10:16:28 report rc=0 (data/w24/w24f_report.txt)
+11-10 10:16:28 W24 end
+11-10 10:16:28 W24f done: data/w24/w24f_verdict.txt

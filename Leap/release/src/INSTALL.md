@@ -3,6 +3,10 @@
 ## Requirements
 - An Apple-silicon Mac with 64 GB of unified memory and the model on its internal SSD. Tested: MacBook Pro, M5 Pro
   (18-core CPU, 20-core GPU), 64 GB, 2 TB SSD; macOS 26.5 (25F71).
+- The 24 GB setting (`--mem 24`) is meant for a Mac with 36 GB or more, but we have only tested it on the 64 GB MacBook
+  Pro above. On a 36 GB Mac it leaves about 11 GB for macOS and your apps, so close the browser and other large apps
+  first. Long prompts take it up to 25.1 GB. On a Mac with a different GPU type the tokens may differ slightly from
+  ours, and the speed depends on that Mac's GPU and SSD.
 - Python 3.12, CMake >= 3.27 and the Xcode command-line tools (for the extension).
 - Disk: about 174 GB in all, for the model's own files (about 105 GB without its vision tower; [WEIGHTS.md](WEIGHTS.md))
   and the converted expert store (48 layers x 512 experts x 2.79 MB = 68.5 GB; [CONVERSION.md](CONVERSION.md)); keep
@@ -20,6 +24,7 @@ the network.
 ## Run
     .venv/bin/python run.py --config exact --mem 45 --prompt "Explain how a refrigerator works."
     .venv/bin/python run.py --config chat --mem 32 --prompt-file question.txt --max-tokens 512
+    .venv/bin/python run.py --config chat --mem 24 --prompt "Explain how a refrigerator works."
     .venv/bin/python run.py --config exact --mem 45 --keys ifeval/1220,ifeval/3280   # benchmark items
 
 It prints the answer, then whole decode (tokens / decode wall), whole request (tokens / (first token + decode wall)),

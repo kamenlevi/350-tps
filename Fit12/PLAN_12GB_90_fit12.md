@@ -864,3 +864,68 @@ fixed-cost bet. This is a measurement only: no setting changes.
   - The route left is QOM0 with a lookup-only residency probe: qom_0_live_c51 PASSES at 1.16 %; Breakthrough has the c47
     masks built and asked for a 16 GB map slot.
   - Breakthrough's eviction replay: the best simple policy cuts bytes 6 % (decayed LFU); OPT 39 %. A small lever.
+
+## IFB12 RUN: the 12 GB chat mode (P2') on the IFBench gate keys (Tue 10 Nov 07:14:32-09:58:01; EvalSuite's amendment 13, 37a03ca; EvalSuite scores it with tools/set_d4.py ifbench vs ref2tnaxn.r6)
+- **What ran.** /Users/kamen/Fit12/scripts/ifb12.sh 2143f25c7ff7. The frozen harness /Users/kamen/Fit12/snap/chw1108/fit_t3.py
+  7a9ffd8375ed with the env line of card12_chw_env.txt (git blob da1eb63570ee).
+  - The 150 gate keys of EvalSuite's results/card/card_keys.txt, CAP = max_tokens 1536, one order, 8 chunks.
+  - c01 ran beside the w24 gate (07:14-07:41). EvalSuite then held the arm (SSD heat pauses every ~2 min with both runs),
+    so c02-c08 ran alone after the gate (08:41-09:53).
+  - Then ifb12rev: the first 10 keys in reverse order (09:53-09:58).
+- **Result [K]** (/Users/kamen/Fit12/data/scr/ifb12/ifb12_merge.txt):
+  - 150 / 150 keys; finish stop 134, length 16; 57,672 tokens; clashes none.
+  - REVERSE CHECK 10 / 10, 0 differ: OK.
+  - Largest harness lifetime peak 11.218 GB.
+  - Files for EvalSuite: ifb12_tokens.json, ifb12_runs.json, ifb12_meta.json (speeds rough).
+- **Guard caveat.** The live footprint probe read 10.737 GB (exactly 10 GiB) in every chunk: footprint prints whole GB at
+  that size, so the probe's resolution was 1 GiB. The 12.0 GB rule held on the harness's own lifetime figures.
+- **Verdict: EvalSuite's.** Decision 4: paired delta > -5 pt and exact McNemar p >= 0.05, IFBench alone. It gates only the
+  12 GB chat row (now "not gated" in SMALL_RAM).
+
+## 12 GB -> 90: QOM0 needs C_m 51, and it fits (Tue 10 Nov 10:0x; Breakthrough 09:16 / 09:18)
+- **Map [Breakthrough, information only]:**
+  - qom_0_live_c47 (QOM0 at this build's C_m 47) fails code by ONE flip: all-row 1.37 % (46 / 3366; the line is 45),
+    non-tie 0.69 % passes.
+  - c51 passes (1.16 %). c47 vs c51: 14 / 7 only-flips, z +1.53, not significant.
+  - By its pre-registered rule, the residency probe needs the larger pool. C_m 51 cuts QOM0's reads 3.6 % (1334 -> 1286 MB
+    per check [P], data/m1/code12_pool47.out).
+- **Slot price in this engine [K]:** the pool prints give C_m 47 / C_l 32 = 6.03 GB and C_m 51 / C_l 32 = 6.44 GB, so a base
+  slot costs 0.1025 GB over 48 layers.
+  - A measured run at 51 + 32: c51, Tue 3 Nov, /Users/kamen/Fit12/data/scr/t3p/c51.txt (4 HumanEval prompts x 5 arms at CAP 256), lifetime peak 11.734 GB.
+  - So QOM0 at 51 + 32 fits under 12.0 GB with ~0.25 GB margin. S1u's 11.335 + 0.41 = ~11.75 [P] agrees.
+- **Next build:** QOM0 at 51 + 32 with a lookup-only residency probe. That means a copy of the loader's C++ extension,
+  Breakthrough's v3p ext, used read-only and built in a Fit12 copy.
+  - Plus the non-read cut (S1p: 102.4 ms per call [K]), then the overlap.
+- **IFB12 VERDICT (EvalSuite 10:0x; ~/EvalSuite/docs/RESULT_card_ifb12_2026-11-10.md, EvalSuite 74b1dc2) [K]:**
+  - PASS on IFBench loose, the gate's metric: 40.0 % vs 44.0 % (NAX6-N), -4.00 pt, McNemar p 0.2101 (arm only 5 /
+    reference only 11). Reverse check re-verified 10 / 10; no clashes; hashes unchanged after the run.
+  - Information only: IFBench strict 32.7 % vs 40.0 %, -7.33 pt, p 0.0127 (3 / 14): significantly below. The 24 / 45 GB
+    configs scored 36.7 % strict on these keys. So no "equal instruction following" claim rests on this arm.
+  - 16 rows hit the 1,536 cap (the reference and the 24 GB config: 10 each).
+  - Fit12's look at those 16 [K, CPU, ifb12_tokens.json]: share of repeated 8-grams in the last 512 tokens.
+    - Near-pure loops (>= 0.87): ifbench/181, /214, /182, /192, /229.
+    - Partly repetitive (0.33-0.56): /210, /239, /277, /159.
+    - Long but varied (<= 0.21): the other 7.
+    - For comparison, stop rows of >= 512 tokens average 0.04.
+  - So part of the extra cap hits are repetition loops. Whether the reference loops on the same keys is EvalSuite's data.
+  - Label for SMALL_RAM's 12 GB chat row: "lossy, same scores on IFBench (loose, the card gate's metric); strict 7.3 pt
+    below (information only)". The editor's call.
+
+## S1q: QOM0 at C_m 51 with a residency probe (pre-registered Tue 10 Nov 10:3x, before any run; built in the Fit12 copies)
+- **Why a probe, and why it must post.** The loader publishes, per (pass, layer), the residency table that post_ids reads on
+  the GPU (bigmoe_ext.cpp l494-533; tab_offset l649).
+  - But make_room evicts any LRU expert that is not in the CURRENT post (l351-360).
+  - So an expert that is resident but not posted can lose its slot while this call reads it. QOM0's extra experts must be
+    posted.
+  - Posting them is free (they are hits), and it protects them (they join make_room's 'need').
+- **Build.** t3_onecall.qom0_moe (arm q0r in fit_onecall.py).
+  - A Metal probe kernel reads that table (gate.tables at tab_offset(L, gate.seq)) for the drafted rows' ranks 2-9. It
+    appends the unique residents not in U to U's post: one post of 92 ids, so BIGMOE_MAXK=92.
+  - Each row computes its posted ranks. The bonus row is exact. Commit from that call.
+  - At MAXK 92 calls of <= 4 rows are narrow, so those checks take the exact check.
+  - Self-check: every resident the probe adds must show a slot in post_ids' own dep too ('probe misreads').
+- **Pool:** C_m 51 / C_l 32 (the map's passing pool). It measured 11.734 GB lifetime in c51 (3 Nov).
+- **Screen:** /Users/kamen/Fit12/scripts/s1q.sh, one process, 16 HumanEval at CAP 256, F12_GSTAT=1, share lock, ~4 min,
+  <= 12 GB.
+  - Lines: VALID if probe misreads = 0 and lifetime peak <= 12.0 GB. Then it can go to EvalSuite's gate (HumanEval+ /
+    MBPP). Speed is reported, not lined.

@@ -143,7 +143,10 @@ ARMS = [("ex", None, {}), ("g1", 1.01, dict(p2_all=True)), ("g0", 0.0, {}), ("t8
         ("t80ck2f", 0.8, dict(cfmin=0.9, _k2=True, _dnax=True, _att1=True, _dn1=True)),
         # (Mon 9 Nov 21:3x, S1u; PLAN_12GB_90_fit12.md '12 GB -> 90: WHY <= 4 ROWS') one wide call per check: U = every row's
         # ranks 0-1 + the bonus row's ranks 2-9; each row's ranks in U; committed from that call alone (theta 0). LOSSY
-        ("u01b", 0.0, dict(_u01b=True))]
+        ("u01b", 0.0, dict(_u01b=True)),
+        # (Tue 10 Nov 10:2x, S1q) QOM0 at cf 0 with the bonus row exact: U + the drafted rows' resident ranks 2-9 in the same post
+        # (t3_onecall.qom0_moe); needs BIGMOE_MAXK=92 and the map's pool C_m 51 (F12_CMCL=51,32). LOSSY
+        ("q0r", 0.0, dict(_qom0=True))]
 if os.environ.get("F12_T3ARMS"):
     want = os.environ["F12_T3ARMS"].split(",")
     ARMS = [a for a in ARMS if a[0] in want]
@@ -246,6 +249,10 @@ def run_prompt(ri, r):                                   # all arms of one promp
         T3._PF2[0] = kw.pop("_pf2", 0)                   # P2-PREFETCH: late-flagged pass-2 ids in pass 1's base posts
         T3._TOPK[0] = kw.pop("_topk", 0)                 # (Thu 5 Nov) lever 2: wide pass 1 on ranks 0..k-1 (REF2-T tiers)
         T3._U01B[0] = kw.pop("_u01b", False)             # (Mon 9 Nov, S1u) the one-call check's union form
+        T3._QOM0[0] = kw.pop("_qom0", False)             # (Tue 10 Nov, S1q) QOM0 with the residency probe
+        if T3._QOM0[0]:
+            from bigmoe_v3f.gated import MAXK as _mk_
+            assert _mk_ >= T3.QMAXK, f"arm {arm} needs BIGMOE_MAXK={T3.QMAXK} (is {_mk_})"
         kp = dict(dnax=kw.pop("_dnax", False), att1=kw.pop("_att1", False), dn1=kw.pop("_dn1", False))   # (Fri 6 Nov) lever 3
         assert KP is not None or not any(kp.values()), f"arm {arm} needs F12_KPORTS=1"
         kpn = KP.set_arm(**kp) if KP is not None else 0
@@ -269,6 +276,7 @@ def run_prompt(ri, r):                                   # all arms of one promp
             T3._PF2[0] = 0
             T3._TOPK[0] = 0
             T3._U01B[0] = False
+            T3._QOM0[0] = False
             if KP is not None:
                 KP.set_arm()                             # every port off between arms
             ph, T3.PHLOG[0] = T3.PHLOG[0], None
@@ -316,6 +324,8 @@ def run_prompt(ri, r):                                   # all arms of one promp
               f"pass 2 {s['miss2'] / max(1, s['checks']):.0f}"
               + (f" | K1U: {s['k1u_kept'] / max(1, s['k1u_rl']):.3f} experts per row-layer, {s['k1u_over'] / max(1, s['k1u_rl']):.4f} "
                  f"of row-layers over KU ({s['k1u_rl']} row-layers)" if s.get("k1u_rl") else "")
+              + (f" | QOM0: {s['q0_added'] / max(1, s['q0_calls']):.2f} resident ranks 2-9 added per layer-call, "
+                 f"{s['q0_over']} dropped for room, probe misreads {s.get('q0_bad', 0)} ({s['q0_calls']} layer-calls)" if s.get("q0_calls") else "")
               + (f" | PF2: {s['pf2_ids']} late ids posted in {s['pf2_calls']} wide calls, loader late reads {dfs[2]}, "
                  f"forced to wait {dfs[3]}" if s.get("pf2_calls") else "") + kps, flush=True)
         if "pf_mb" in s:                                 # (Sun 8 Nov, 12 GB prefill) the prefill of ids[:-1] alone, per arm

@@ -236,6 +236,75 @@ c47_mask_check.py (same windows and shapes as qom_0_live_c51; q1u_0_live inside 
   20 GB self-guard; start by 14:50, hard stop 14:58 (weekday big tests end by 15:00). The code rule, the read-out and the
   comparison are unchanged.
 
+## qom_0_live_c47 on the map: code FAIL by one flip (Tue 09:14) [K, map arm; data/m1/SCREEN_read_qom_0_live_c47.txt]
+Pre-registered above (8a5a382; amended 6bc7efa before any data). Run: scripts/m1/c47_day.sh, log data/m1/c47_day.log.
+- The w24 gate ended at 08:41:09 and BigMoE's W24e ran 08:41-09:01.
+- Fit12's IFBench chunk yielded to my quiet ticket (granted 09:10).
+- The arm ran 09:10:13-09:14:16 at DM_C 51. Result: ~/FableGod/decision_map/out/qom_0_live_c47.json.
+
+| arm | code all-row | code non-tie | IFEval all-row | multi all-row |
+|---|---|---|---|---|
+| qom_0_live_c51 (QOM0, 51 slots) | 1.16 % (39/3366) | 0.54 % (18/3316) | 8.80 % | 5.26 % |
+| qom_0_live_c47 (QOM0, 47 slots = Fit12's C_m) | 1.37 % (46/3366) | 0.69 % (23/3316) | 9.24 % | 5.71 % |
+| q1u_0_live (S1u: union only) | 1.96 % (66/3366) | 1.36 % (45/3316) | 15.72 % | 11.15 % |
+| line (VERDICT2; IFEval / multi information only) | <= 1.34 % (45 flips) | <= 0.87 % | 5.42 % | 3.69 % |
+
+- VERDICT2 FAIL on code: all-row 46 flips against 45 allowed (BETWEEN); non-tie PASS. IFEval and multi KILL (information).
+- McNemar vs qom_0_live_c51: code 14 / 7 only-flips, z +1.53; non-tie 7 / 2, z +1.67. Neither is significant at 1.96.
+  vs q1u_0_live: 16 / 36, z -2.77 (c47 is better).
+- The pre-registered expectation held: c47 falls between q1u_0_live and c51. The four slots moved 7 net flips, enough to
+  cross the line by one.
+- Decision (pre-registered): the probe needs a larger pool, and 51 is the only passing pool tested.
+- Price of 4 more slots per layer [P]:
+  - 4 x 0.104 = 0.42 GB (a base slot holds 48 three-bit MSB records of 2,162,688 B; the LSB sidecar pool C_l is apart).
+  - On S1u's measured 11.335 GB at C_m 47, that gives ~11.75 GB, if the engine's slot costs the same.
+  - Fit12's engine numbers decide whether C_m 51 fits under 12.0 GB. The known-benchmark gate decides adoption.
+- Fit12's answer (Tue 09:59) [K, checked at the sources]: C_m 51 fits under 12.0 GB.
+  - The engine's pool prints: C_m 47 / C_l 32 = 6.03 GB (Fit12 data/scr/s1u/chw14ha.txt, s1ue.txt), C_m 51 / C_l 32 =
+    6.44 GB (data/scr/t3p/c51.txt). So +0.41 GB, 0.1025 GB per base slot: the price above holds.
+  - A real run at 51 + 32 exists: data/scr/t3p/c51.txt (3 Nov; 4 HumanEval prompts x 5 arms at CAP 256, two-pass code)
+    ends "lifetime 11.734 GB". S1u's 11.335 + 0.41 = ~11.75 [P] agrees. Margin ~0.27 GB on those prompts.
+  - Fit12's route is therefore QOM0 at 51 + 32 with a lookup-only residency probe (a copy of the v3p C++ ext), then the
+    non-read cut, then the overlap.
+- What the four slots buy in reads [P, CPU replay, Tue 09:1x; scripts/m1/code12_pool47.py -> data/m1/code12_pool47.out;
+  C_l 32 at both; LRU; its C_m 51 rows reproduce code12_replay.out exactly]:
+
+| rule | C_m 47: MB per kept (MB per check) | C_m 51: MB per kept (MB per check) | change |
+|---|---|---|---|
+| QOM0 | 168.6 (1334.0) | 162.5 (1285.8) | -3.6 % |
+| QOM0+ball | 105.3 (832.7) | 101.8 (805.1) | -3.3 % |
+| EXACT | 647.4 (5121.9) | 636.8 (5037.9) | -1.6 % |
+
+  So C_m 51 costs ~0.42 GB [P] and saves ~48 MB of QOM0 reads per check. This is a relative replay figure: the replay's
+  absolute bytes sit 1.13x above the engine's per check ("Check against the engine" in the code-bytes section above).
+- Engine check at this pool [K vs P]: Fit12's S1p profile (Fit12 data/scr/s1p/s1p_prof.txt) reads 1.323 GB per wide call
+  for S1u at C_m 47 (mean of 323 calls, 11.67 GB/s over the loader's io time). The replay prices QOM0 at C_m 47 (QOM0's
+  reads equal S1u's by construction) at 1.334 GB per check: within 1 %, although the check shapes differ (15.8 rows per
+  engine call, 9.65 rows per live map check). So the -3.6 % should carry over: ~-4 ms of io per call at C_m 51 [P].
+- Measured peak: 16.020 GB lifetime footprint (MLX active 15.33 GB), wall 237 s including the load.
+
+## QOM0's extra compute over S1u [K counts from the scored masks; P for time] (Tue 10:16; scripts/m1/code12_qom_compute.py -> data/m1/code12_qom_compute.out)
+QOM0 keeps every resident rank 2-9 expert on top of S1u's cut. These cost no SSD reads, so the byte replays price QOM0 =
+S1u, but the engine still applies them from RAM. Counted on the masks the map scored, over the replays' live checks on the
+12 code windows. Real rows only: a check's stand-in rows for wrong drafts carry another position's mask, and a prompt row
+there keeps all 10 in every arm (with stand-ins, S1u's per-layer maximum reads 102 instead of 39).
+
+| arm (real rows, 7.91 per check) | (row, expert) pairs per check | distinct expert-layers per check | vs S1u | max distinct in a layer |
+|---|---|---|---|---|
+| q1u_0_live (S1u) | 1769.2 | 691.5 | - | 39 |
+| qom_0_live_c47 | 2354.3 | 1019.5 | pairs +33 %, distinct +47 % | 47 |
+| qom_0_live_c51 | 2410.5 | 1055.8 | pairs +36 %, distinct +53 % | 51 |
+| EXACT (all 10) | 3797.3 | 2102.3 | pairs +115 %, distinct +204 % | 138 |
+
+- QOM0's per-layer maximum equals its pool (47, 51): residents are bounded by the pool, as built. S1u's 39 matches the
+  union fit's maximum (code12_union.out).
+- qom_0_live_c51 adds 364 distinct expert-layers per check over S1u: 0.79 GB of 3-bit MSB records applied from RAM. If the
+  expert kernels are bandwidth-bound, that is 2.6 ms at 300 GB/s or 3.9 ms at 200 GB/s per check [P]. The engine's own
+  per-expert cost decides; an engine A/B of S1u vs QOM0 at the same pool measures it.
+- Against the reads: C_m 51 saves ~4 ms of io per call [P] (section above). In time the two roughly cancel, but they land
+  on different sides of the overlap: the extra compute adds to the ~102 ms outside-reads time that Fit12 is cutting, and
+  the saving is in the io time.
+
 ## q1u_0_live (S1u's cut) on the map: code FAIL (Tue 00:01) [K, map arm; data/m1/SCREEN_read_q1u_0_live.txt]
 Pre-registered above (480001c) before any data. Masks: NewIdeas' builder, data/dm_masks/q1u_0_live; bit-check PASS after the
 23:5x fix of the check itself (answer-row kept share 0.4994, vs q1u_0.9_live's 0.7651). Run: scripts/m1/s1u_map_night.sh ->
@@ -252,7 +321,7 @@ q1u0_run_map.py at DM_C 51; result ~/FableGod/decision_map/out/q1u_0_live.json.
   39 / 12 only-flips, z +3.78; non-tie 30 / 3, z +4.70) and than q1u_0.9_live (40 / 16, z +3.21).
 - Decision (pre-registered): S1u is not adoptable. Fit12's S1 needs QOM0 with a lookup-only residency probe (c51 PASSES).
   qom_0_live_c47, QOM0 at the engine's call pool C_m 47, is pre-registered (8a5a382); its masks are built and checked
-  (kept share 0.702 vs c51's 0.715). It needs a slot.
+  (kept share 0.702 vs c51's 0.715). It needs a slot. (It ran Tue 09:14: code FAIL by one flip, 1.37 %; section above.)
 - At theta 0 every drafted row keeps only ranks 0-1 plus the union. Keeping the resident experts too (QOM) cuts the code
   flips from 66 to 39.
 - A map arm's measured peak: 15.96 GB lifetime footprint (MLX active 15.33 GB) at DM_C 51, wall 224 s including the load.

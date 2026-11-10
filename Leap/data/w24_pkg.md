@@ -54,4 +54,44 @@ Wednesday. Built in ~/Leap/release/cleanclone/final/clone only; nothing is pushe
 2. BigMoE W24d's 12 HumanEval keys (w13eh_100) at CAP 256: whole decode against 130.33 pooled, lifetime peak against
    23.78-23.82 GB, first token median against 3.54 s.
 
-Results: (pending)
+### Results (Tue 09:59:40-10:02:50; share lock 'MEM 26 GB', after c47, nothing else running; NO-SWAP 48 GB; swap flat at 6,683 MB)
+
+| check | result | reference |
+|---|---|---|
+| replay, 3 IFBench rows (CAP 2048) | **tokens equal on 3/3** (60, 61, 63 tokens); prompt tokens equal (71, 39, 32) | card_w24_fwd/decode.jsonl |
+| replay, 3 GPQA diamond rows (CAP 2048) | **tokens equal on 3/3** (627, 714, 798 tokens); prompt tokens equal (161, 222, 183) | card_w24_fwd/decode.jsonl |
+| replay process | lifetime peak 23.79 GB; first token 3.39 s median | gate max 25.112 GB (on longer prompts) |
+| 12 HumanEval (BigMoE W24d keys, CAP 256) | **tokens identical on 12/12** vs both of BigMoE's runs (w13eh_100, w13fh_100); 2,610 tokens | BigMoE W24d |
+| HumanEval whole decode | **135.9 tok/s** (one pass) | 130.33 pooled (130.2 / 130.5) |
+| HumanEval lifetime peak / first token | 23.78 GB / 3.63 s median (3.29-4.82) | 23.78-23.82 GB / 3.54 s |
+
+- The packaged lossy-24 reproduces w13b exactly. Its tokens equal the gate's on the no-QOM sets, and equal BigMoE's on
+  HumanEval, where QOM is on (the same 12 prompts in the same process order).
+- It reaches the gated speed and memory: +4.3 % on HumanEval in one pass, a share lock with nothing else running.
+- Files (data/w24_pkg/): check_summary.txt; he12.out with the run's log, runs.json, tokens.json and modules.json
+  (cli_1110_100130); replay_runs.json (statistics only).
+- The replay's decoded GPQA answers are NOT kept: GPQA text stays out of public files, as in EvalSuite's own records.
+- The GPQA / IFBench items were in the clone only for the run and were removed after it.
+- ~/Leap/data/pkg24_check.done was touched at 10:03 for BigMoE's W24f.
+
+## Not verified: a 36 GB M5 Max (not available here)
+
+- **Memory:**
+  - The engine sets `mx.set_wired_limit(max_recommended_working_set_size)` (R57_WIRED=1). It never raises the system's
+    limit, and sets no MLX memory limit; the MLX cache is capped at 0.25 GB (R57_CACHE_GB).
+  - Here the recommended working set is 55.7 GB of 64 GB (81 %). On a 36 GB Mac it is reported at about 27-29 GB
+    (not measured), against the gate's 25.112 GB lifetime footprint, which also counts CPU-side memory.
+  - With a ~25 GB engine, a 36 GB Mac has ~11 GB for macOS and apps. Long prompts reach 25.1 GB. A browser beside it can
+    push other apps into swap. The engine's buffers are wired, so they are not swapped.
+- **GPU type:** MLX reports this Mac's GPU as `applegpu_g17s`. A Max chip reports a different suffix, and MLX picks some
+  matmul tile shapes by that suffix. The logits' last bits, and so the tokens, can differ from these references there.
+  The quality gate's scores should carry over, but nothing was run on that Mac. Speed scales with its GPU and SSD.
+- **SSD:** ~24 MB read per kept token (W24d) is ~3.1 GB/s at 130 tok/s. A smaller or slower SSD lowers tok/s.
+- **Disk:** the 68.5 GB converted store, plus ~20 GB free for swap; the conversion needs the model's own files beside it.
+- **Cores:** nothing pins core counts. The C extension uses GCD's global queues, with one spinner thread at
+  QOS_USER_INTERACTIVE; R57_PFD_THREADS=12 is PF-D only, which w13b does not use.
+- **This Mac's tooling:** the engine checks ~/.local/share/quiet/PAUSE (this Mac's heat guard) every 50 ms. On another
+  Mac the file does not exist, so nothing pauses.
+- **Thermals:** a MacBook Pro's sustained clocks under a long run were not measured.
+- **Time budget:** R57_HARD=1200 (in the gated env line) stops new checks after 1,200 s in a run.py batch. chat.py and
+  serve.py lift it.

@@ -132,6 +132,17 @@ results/card/es_cdw24_100136_<order><N>_runs.json. "P" is the longest prompt in 
   23.920). That includes all 14 IFBench-only processes (prompts of at most 206 tokens: 23.638-23.813 GB). Every process
   with a prompt of 739 tokens or more went over (at least 24.345). Process 1's row with a 481-token prompt left the
   footprint at 23.910 GB, so the crossing lies between 481 and 739 tokens.
+- **Per row [K]:** the lifetime peak is a running maximum, so a row can be read on its own only until its process first
+  crosses 24.0 GB. Row order is checked: the running maximum never falls within a file. This per-row recount is the
+  Editor's, rechecked here from the same files.
+  - The 22 rows that first took a process over had prompts of 561 tokens or more (15 LCB, 7 GPQA, no IFBench). The
+    shortest is lcb6/abc397_e: 561 tokens, 24.075 GB (reverse process 3).
+  - The longest prompt in a row that left its process under 24.0 GB is lcb6/abc397_f: 592 tokens, 23.954 GB (reverse
+    process 3, just before abc397_e). The same prompt went over in forward process 18 (24.112 GB).
+  - So per prompt the crossing lies between 561 and 592 tokens, and it depends on the process's state as well as on the
+    prompt.
+  - All 424 rows of 560 tokens or fewer that can be read on their own stayed under. Another 185 such rows ran after
+    their process had crossed, so they cannot be read on their own.
 - **MLX prefill peak (mem[0]) by prompt length, all 764 runs:** the lifetime footprint runs about 1.0 GB above it.
 
   | Prompt tokens | Runs | Median (GB) | Max (GB) |
@@ -141,8 +152,9 @@ results/card/es_cdw24_100136_<order><N>_runs.json. "P" is the longest prompt in 
   | 920-1,024 | 18 | 23.700 | 23.873 |
   | over 1,024 | 16 | 23.949 | 24.119 |
 
-- **What it means:** with this config, the model card can say "under 24 GB" only for prompts up to about 480 tokens. For
-  longer prompts the lifetime peak reaches 25.1 GB. BigMoE's W24 memory checks ran HumanEval, MBPP and IFEval (its
+- **What it means:** with this config, the model card can say "under 24 GB" for prompts of up to about 560 tokens. That
+  is the per-row reading above: 561 tokens is the shortest prompt that took a process over. Longer prompts reach up to
+  25.1 GB. BigMoE's W24 memory checks ran HumanEval, MBPP and IFEval (its
   commit 86f0d13). The cause and any fix belong to BigMoE, the config's owner.
 - This supersedes the interim note docs/RESULT_card_w24_peak_2026-11-10.md (017c82b, after process 1).
 

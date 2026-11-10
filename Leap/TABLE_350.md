@@ -9831,3 +9831,10 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
   PF-A: hashes 0/25 at TOK 8192 (192 calls) AND at TOK 4096 (384 calls), first difference at check 1, tokens from the
   40th -> PF-B NOT bitwise at 30K. Published PF-B evidence (TOK 8192 and TOK 2048 = 3-4 calls/layer) is hash-equal to
   7.9K, so the call count alone doesn't explain it; length / position open. Papers: Editor's erratum (fail version).
+
+## 24 GB PACKAGE CHECK (Leap, Tue 2026-11-10 09:59-10:02; orchestrator 08:4x; data/w24_pkg.md)
+- `--mem 24` in the local clean clone = w13b as gated (card_w24d_env.txt blob e06f495e, C 100, w24 decode loop, PFCHUNK
+  1024 kept by W24e). Replay of 6 gate rows (3 IFBench + 3 GPQA, CAP 2048): tokens 6/6 EQUAL, prompt tokens equal; peak
+  23.79 GB. 12 HumanEval (W24d keys, CAP 256): tokens 12/12 identical to BigMoE's w13eh / w13fh; whole decode 135.9 tok/s
+  (vs 130.33 pooled), peak 23.78 GB, first token 3.63 s median. 36 GB M5 Max: unverified (wired limit = the machine's
+  recommended working set; GPU arch suffix differs -> MLX tiles may differ).

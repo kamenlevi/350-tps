@@ -57,6 +57,9 @@ _WIDE = (
     '        o = mx.argsort(-sc, axis=-1)\n'
     '        ids = mx.take_along_axis(inds, o, axis=-1).astype(mx.int32)\n'
     '        p20 = mx.take_along_axis(sc, o, axis=-1)\n'
+    '        if _F12_QOM0[0]:                                            # [Fit12 S1q] one call: U + resident ranks 2-9 (QOM0)\n'
+    '            y = _F12_QOM0_FN(mx, TG, x2, t, gate, L, S, ids, p20, K, W20, NORM_MASS, "".join(T.PLAN))\n'
+    '            return y.reshape(*x.shape[:-1], y.shape[-1]) + shared\n'
     '        if _F12_U01B[0]:                                            # [Fit12 S1u] one call: U = ranks 0-1 + the bonus row\n'
     '            y = _F12_U01B_FN(mx, TG, x2, t, gate, L, S, ids, p20, K, W20, NORM_MASS, "".join(T.PLAN))\n'
     '            return y.reshape(*x.shape[:-1], y.shape[-1]) + shared\n'
@@ -112,6 +115,15 @@ _PFTAP_FN = [None]
 _TOPK = [0]      # (Thu 5 Nov 20:1x, 12 GB plan lever 2, Breakthrough 19:5x) k > 2: the WIDE pass 1 runs each row's ranks
                  # 0..k-1 at REF2-T's tiers (0-1 at 4 bits, 2..k-1 at 3 bits) at their top-10 mass weights; 0 = off
 _U01B = [False]  # (Mon 9 Nov 21:3x, S1u) the wide call = the one-call check's union form (u01b_moe); False = off
+_QOM0 = [False]  # (Tue 10 Nov 10:2x, S1q) the wide call = QOM0 at cf 0 with the bonus row exact (qom0_moe); needs BIGMOE_MAXK=92
+QOM0_ACC = []    # per wide QOM0 call: (lazy [residents added, residents dropped for room], rows)
+_QK = {}         # the probe kernel, built on first use
+
+
+def _SMAXQ():
+    """bt_b12's SMAX = gated.MAXK // KC (KC 20): the rows a narrow (frugal-path) call takes; 4 at MAXK 92"""
+    from bigmoe_v3f.gated import MAXK
+    return MAXK // 20
 _K2 = [os.environ.get("F12_P1K2", "0") == "1"]   # pass 1's tier_glu on ranks 0-1 only (plan '44'): the 8 weight-0 pairs dropped
 S_MOE = [int(os.environ.get("F12_SMOE", "4096"))]   # (Sun 8 Nov, 12 GB prefill) b12_prefill's MoE chunk: experts read once per
                  # layer per S_MOE prompt rows (a multiple of 512); 8192 = one MoE call for prompts up to 8K (BigMoE's PFX form)
@@ -257,6 +269,79 @@ def u01b_moe(mx, TG, x2, t, gate, L, S, ids, p20, K, W20, norm_mass, plan):
     return TG(x2, t["base"], t["sideP"], s10, sl, plan=plan, scores=w)
 
 
+_QSRC = r"""
+uint t = thread_position_in_grid.x;
+threadgroup int res[128];
+int off = meta[0], seq = meta[1], nc = meta[2], nu = meta[3], cap = meta[4];
+const volatile device int* tb = (const volatile device int*)tables;
+int r = 0;
+if ((int)t < nc) {                         // the residency table published for (pass, layer), read as post_ids reads it
+  int e = cand[t] & 0xFFFFF, li = e / 31;
+  int tag = tb[off + li * 32], w = tb[off + li * 32 + 1 + (e - li * 31)];
+  bool fresh = tag == seq && ((((uint)w) & 0xFFC00000u) == ((((uint)seq) & 0x3FFu) << 22));
+  r = (fresh && ((((uint)w) & 0x3FFFFFu) != 0x3FFFFFu)) ? 1 : 0;
+}
+res[t] = r;
+threadgroup_barrier(mem_flags::mem_threadgroup);
+if (t == 0) {                              // unique residents not in U, in row then rank order, at most cap
+  uint bm[16];
+  for (int i = 0; i < 16; i++) bm[i] = 0u;
+  for (int i = 0; i < nu; i++) { int e = U[i] & 0xFFFFF; if (e < 512) bm[e >> 5] |= (1u << (e & 31)); }
+  int k = 0, over = 0;
+  for (int i = 0; i < nc; i++) {
+    if (!res[i]) continue;
+    int e = cand[i] & 0xFFFFF;
+    if (e >= 512 || (bm[e >> 5] & (1u << (e & 31)))) continue;
+    if (k < cap) { extra[k] = e; k++; bm[e >> 5] |= (1u << (e & 31)); } else { over++; }
+  }
+  int pad = U[0] & 0xFFFFF;
+  for (int i = k; i < cap; i++) extra[i] = pad;
+  cnt[0] = k; cnt[1] = over;
+}
+"""
+QMAXK = 92       # S1q's base post: U (<= 40) + residents (<= 52); the routing row's limit (gated.py)
+
+
+def qom0_moe(mx, TG, x2, t, gate, L, S, ids, p20, K, W20, norm_mass, plan):
+    """(Tue 10 Nov 10:2x) S1q: QOM0 at cf 0 with the bonus row exact, for one wide call of S rows. U = every row's ranks 0-1
+    + the bonus row's ranks 2-9, as S1u. A probe kernel reads the residency table the loader published for this (pass,
+    layer) (the one post_ids reads) and adds the drafted rows' ranks 2-9 that are resident and not in U (unique, at most
+    QMAXK - |U|) to the SAME post: posted, they are in the loader's 'need' set, so make_room cannot evict them during the
+    call, and as hits they cost no reads. Each row computes its ranks 0-9 that are posted, at REF2-T's tiers and the model's
+    weights; the others get weight 0 on rank 0's slot (never read). Needs BIGMOE_MAXK=92."""
+    import mlx.core as mx_
+    if "k" not in _QK:
+        _QK["k"] = mx_.fast.metal_kernel(name="f12_qom0_probe", input_names=["tables", "cand", "U", "meta"],
+                                         output_names=["extra", "cnt"], source=_QSRC)
+    r01 = ids[:, :2].T.reshape(-1)                                   # [2S] every row's rank 0, then rank 1
+    U = mx.concatenate([r01, ids[S - 1, 2:K]])                       # [2S + K - 2]
+    nU = 2 * S + K - 2
+    cap = QMAXK - nU
+    cand = ids[:S - 1, 2:K].reshape(-1)                              # the drafted rows' ranks 2-9
+    off = ((gate.seq * gate.nl + L) % gate.ntab) * 17 * 32           # tab_offset(L, seq) (bigmoe_ext.cpp; TLINES 17)
+    meta = mx.array([off, gate.seq, int(cand.size), nU, cap], mx.int32)
+    extra, cnt = _QK["k"](inputs=[gate.tables, cand, U, meta], grid=(128, 1, 1), threadgroup=(128, 1, 1),
+                          output_shapes=[(cap,), (2,)], output_dtypes=[mx.int32, mx.int32])
+    P = mx.concatenate([U, extra])                                   # [QMAXK] the base post
+    dep_m, n_m = gate.post(L, P | W20, wk=255 | (QMAXK << 8))
+    dep_l, n_l = gate.post(t["side"], r01 | W20, wk=255 | ((2 * S) << 8))
+    su = gate.spin(dep_m, L, n_m)[:QMAXK]
+    sl = gate.spin(dep_l, t["side"], n_l).reshape(2, S).T
+    eq = ids[:, :K, None] == P[None, None, :]                        # [S, K, QMAXK]
+    inP = eq.any(axis=-1)
+    s10 = mx.take(su, mx.argmax(eq.astype(mx.int32), axis=-1))
+    s10 = mx.where(inP, s10, s10[:, :1])
+    w = mx.where(inP, p20[:, :K], 0.0)
+    w = w / p20[:, :K].sum(axis=-1, keepdims=True) if norm_mass else w / w.sum(axis=-1, keepdims=True)
+    K1U_ACC.append((mx.stack([inP.astype(mx.int32).sum(), mx.array(0, mx.int32)]), S))   # kept pairs (generate counts them)
+    # self-check of the probe: post_ids read the same table for the posted ids (dep = [ok, slot or -1 per id]); every resident
+    # the probe added must show a slot there too, else the probe read the wrong (pass, layer) region or entry
+    dx = dep_m[1 + nU:1 + nU + cap]
+    bad = ((dx < 0) & (mx.arange(cap) < cnt[0])).astype(mx.int32).sum()
+    QOM0_ACC.append(mx.concatenate([cnt, bad.reshape(1)]))
+    return TG(x2, t["base"], t["sideP"], s10, sl, plan=plan, scores=w)
+
+
 def _diskread():
     """bytes this process has read from disk (rusage_info_v4 ri_diskio_bytesread; the loader's F_NOCACHE reads included)"""
     import ctypes
@@ -289,6 +374,8 @@ def apply(B):
     B.__dict__["_F12_TOPK"] = _TOPK
     B.__dict__["_F12_U01B"] = _U01B                    # (S1u)
     B.__dict__["_F12_U01B_FN"] = u01b_moe
+    B.__dict__["_F12_QOM0"] = _QOM0                    # (S1q)
+    B.__dict__["_F12_QOM0_FN"] = qom0_moe
     B.__dict__["_F12_PF2"] = _PF2
     B.__dict__["_F12_PF2_ROWS"] = PF2_ROWS
     B.__dict__["_F12_PF2_FN"] = pf2_extra
@@ -618,6 +705,8 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
             use_p1 = theta is not None and skip_left == 0 and (cfmin is None or (cf and cf[0] >= cfmin))
             if _U01B[0] and S <= 2:                    # (S1u) the cap's last short check takes the exact check
                 use_p1 = False
+            if _QOM0[0] and S <= _SMAXQ():             # (S1q) at MAXK 92 calls of <= 4 rows are narrow: exact check
+                use_p1 = False
             if theta is not None and skip_left > 0:
                 skip_left -= 1
                 st["skipped"] += 1
@@ -645,7 +734,14 @@ def generate(B, model, draft, DF, prompt_ids, max_tokens, theta, cfmin=None, ski
                     extra.append(mx.stack([a for a, _ in K1U_ACC]).sum(axis=0))
                 if PF2_ACC:
                     extra.append(mx.stack(PF2_ACC).sum().reshape(1))
-                mx.eval(p1, g1, tp1, *extra, *cal_t2)
+                q0 = [mx.stack(QOM0_ACC).sum(axis=0)] if QOM0_ACC else []   # (S1q) residents added / dropped for room
+                mx.eval(p1, g1, tp1, *extra, *cal_t2, *q0)
+                if q0:
+                    qa = q0[0].tolist()
+                    st["q0_added"] = st.get("q0_added", 0) + qa[0]; st["q0_over"] = st.get("q0_over", 0) + qa[1]
+                    st["q0_bad"] = st.get("q0_bad", 0) + qa[2]  # residents the post kernel did not see as resident
+                    st["q0_calls"] = st.get("q0_calls", 0) + len(QOM0_ACC)
+                    QOM0_ACC.clear()
                 if _p1 is not None:                    # t2: the GPU + loader work of the call is done
                     _p1["t"].append(_now()); _p1["g"].append(_gs()); _p1["c"].append(time.thread_time())
                     _p1["b"].append(_diskread())

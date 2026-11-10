@@ -1,0 +1,3 @@
+[Tue 10:17:41] S1q armed: held while /Users/kamen/Fit12/data/scr/s1q/WAIT exists; start by Tue 14:40; a 10-min hard stop from its start
+[Tue 10:18:12] S1q: clear for 1 min (NO-SWAP 51 GB): no quiet ticket for 5 min, then the share lock
+[Tue 10:18:20] S1q: locked, but blocked / busy (NO-SWAP 51 GB, GPU 0%, quiet 0, big 1): lock given back

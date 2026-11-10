@@ -63,3 +63,14 @@ b12: C_m=47 C_l=32 (9 %), HC 8, late rank 1 off, late MSB-3 ranks (2, 10), pools
 [ifb12c03] ifbench/195 ex theta None  | tok 358 sha bd8ee4ab24 | lsha bf269f1e55 | = ex tokens True (first divergence None) | checks 169, kept 2.12 | pass2 0 exact 169 cfgate 0 skipped 0 | rows pass 1 0 / pass 2 548 in 187 calls, refused 0 | prefill 3.35 s, decode 28.96 s, 12.36 tok/s | lifetime 11.135 GB | per check ms: draft 10.4 pass 1 0.0 pass 2 / exact 160.6 commit 0.0; misses per check pass 1 0 pass 2 640
 [ifb12c03] ifbench/195 ex PREFILL n 77 smoe 4096 | 3.354 s, 22.7 tok/s, SSD 24693 MB | lifetime 11.135 GB | pfr [] | gq {'calls': 0, 'sorted': 0, 'maxm': 0, 'exposed': 0, 'padded': 0}
 [ifb12c03] PAIR ifbench/195: SSD per arm (C) ex 67->67 | PAUSE 0.0 s inside -> ok
+[ifb12c03] ifbench/198 ex theta None  | tok 124 sha f1d247a196 | lsha 75bbe7f260 | = ex tokens True (first divergence None) | checks 79, kept 1.57 | pass2 0 exact 79 cfgate 0 skipped 0 | rows pass 1 0 / pass 2 218 in 86 calls, refused 0 | prefill 3.37 s, decode 10.92 s, 11.35 tok/s | lifetime 11.135 GB | per check ms: draft 10.4 pass 1 0.0 pass 2 / exact 127.5 commit 0.0; misses per check pass 1 0 pass 2 501
+[ifb12c03] ifbench/198 ex PREFILL n 59 smoe 4096 | 3.374 s, 17.2 tok/s, SSD 21670 MB | lifetime 11.135 GB | pfr [] | gq {'calls': 0, 'sorted': 0, 'maxm': 0, 'exposed': 0, 'padded': 0}
+[ifb12c03] PAIR ifbench/198: SSD per arm (C) ex 67->67 | PAUSE 0.0 s inside -> ok
+[ifb12c03] ifbench/199 ex theta None  | tok 426 sha f53adc5565 | lsha 839d44b766 | = ex tokens True (first divergence None) | checks 225, kept 1.89 | pass2 0 exact 225 cfgate 0 skipped 0 | rows pass 1 0 / pass 2 692 in 250 calls, refused 0 | prefill 2.59 s, decode 31.99 s, 13.32 tok/s | lifetime 11.135 GB | per check ms: draft 10.4 pass 1 0.0 pass 2 / exact 131.4 commit 0.0; misses per check pass 1 0 pass 2 509
+[ifb12c03] ifbench/199 ex PREFILL n 49 smoe 4096 | 2.588 s, 18.5 tok/s, SSD 18396 MB | lifetime 11.135 GB | pfr [] | gq {'calls': 0, 'sorted': 0, 'maxm': 0, 'exposed': 0, 'padded': 0}
+[ifb12c03] PAIR ifbench/199: SSD per arm (C) ex 67->66 | PAUSE 0.0 s inside -> ok
+[ifb12c03] PAUSE summary: intervals [] s from the start; re-run []; excluded []
+[ifb12c03] TOTAL ex: 20 prompts, 8294 tokens in 477.27 s = 17.38 tok/s | 2449 checks, kept 3.39 | pass2 0 exact 2449 | per check ms: draft 10.7 pass 1 0.0 pass 2 / exact 183.8 commit 0.0; misses per check pass 1 0 pass 2 694
+[ifb12c03] IDS: 20 keys -> /Users/kamen/Fit12/data/scr/ifb12/ifb12c03_ids.json
+[ifb12c03] PR1: 1041 keep-1 commits replayed on 2 rows
+[ifb12c03] done; lifetime 11.135 GB

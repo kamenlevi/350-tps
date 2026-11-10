@@ -1424,3 +1424,28 @@ gate's six longest prompts (726-2,801 tokens), CAP 128, R57_LOGHASH=1, one proce
 - A strictly-under-24 GB variant (256-row chunks) would need its own card gate.
 - The card gate on w13b PASSED at 08:41 on all six lines vs NAX6-N (EvalSuite results/CARD_w24_DONE): IFBench 40.7 / 40.7 % vs
   44.0 % (p 0.30), GPQA-D 47.0 / 47.0 % vs 44.0 % (p 0.51), LCB v6 29.8 / 32.8 % vs 32.1 % (p 0.45 / 1.0).
+
+## Tue 10 Nov 10:03-10:16: W24f = w13b vs w13t on MBPP and IFEval, same-run ABBA (data/w24/w24f_report.txt, w24f_verdict.txt; data 9e48f45)
+The orchestrator's slot after Leap's package check. Arms tf1 (w13t, W24b's gated config: 130 base / 26 sidecar, 13 rows, both
+drafters), bf1, bf2 (w13b, the card-gated 24 GB config: 141 / 26, 13 rows, R57_D7B=all), tf2 (w13t); 12 MBPP + 12 IFEval
+prompts per arm, CAP 256, quiet; every prompt clean in all four arms; tokens identical within each config's pair (12 / 12).
+
+| set | arm | whole decode | whole request | first token | tokens | kept per check | cycle | SSD MB / kept token | QOM drops | lifetime peak |
+|---|---|---|---|---|---|---|---|---|---|---|
+| MBPP | tf1 w13t | 92.6 | 30.1 | 3.33 s | 1,787 | 6.31 | 61.4 ms | 22.7 | 26.6 % | 23.84 GB |
+| MBPP | bf1 w13b | 90.0 | 26.0 | 3.32 s | 1,517 | 6.23 | 63.8 ms | 22.4 | 24.5 % | 23.74 GB |
+| MBPP | bf2 w13b | 92.6 | 26.2 | 3.37 s | 1,517 | 6.23 | 63.2 ms | 22.4 | 24.5 % | 23.72 GB |
+| MBPP | tf2 w13t | 92.7 | 29.6 | 3.37 s | 1,787 | 6.31 | 62.3 ms | 22.5 | 26.6 % | 23.86 GB |
+| IFEval | tf1 w13t | 29.6 | 17.8 | 3.11 s | 1,658 | 3.67 | 84.1 ms | 220.7 | - | 23.79 GB |
+| IFEval | bf1 w13b | 30.1 | 17.9 | 3.10 s | 1,658 | 3.67 | 83.9 ms | 205.0 | - | 23.66 GB |
+| IFEval | bf2 w13b | 31.1 | 18.4 | 3.07 s | 1,658 | 3.67 | 79.6 ms | 205.0 | - | 23.66 GB |
+| IFEval | tf2 w13t | 29.9 | 18.1 | 3.06 s | 1,658 | 3.67 | 82.7 ms | 220.5 | - | 23.78 GB |
+
+- **MBPP: no gain.** Pooled whole decode w13b 91.25 vs w13t 92.62 tok/s (-1.5 %), inside w13b's own spread between two
+  token-identical runs (90.0 / 92.6, 2.9 %); the w13t controls agree within 0.1 %. w13b's HumanEval gain (+7.6 % over w13t, W24c /
+  W24d) does not carry over to MBPP. Its MBPP outputs differ from w13t's (1,517 vs 1,787 tokens; the lossy rule serves what is
+  resident, and w13b drops fewer optional uses, 24.5 vs 26.6 %), so its lower whole request (26.0-26.2 vs 29.6-30.1) is mostly
+  fewer tokens over the same first-token cost.
+- **IFEval: +2.8 %** pooled (30.58 vs 29.74), the same token counts (1,658), 7 % less SSD per kept token (205.0 vs 220.6 MB).
+- All lifetime peaks under 24.0 GB on these sets (w13b 23.66-23.74, w13t 23.78-23.86 GB). Checks over 300 ms: 0 on MBPP; 3-6 of
+  634 on IFEval in both configs (chat first / last checks, as in W24c).

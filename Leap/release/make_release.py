@@ -26,8 +26,12 @@ ap.add_argument("--no-commit", action="store_true")
 ap.add_argument("--refs", help="JSON {config: tokens.json path} for verify/ (default: the PF-D-era reference files)")
 ap.add_argument("--es-commit", default="HEAD", help="EvalSuite commit for harness/evalsuite (default HEAD); a docs-only "
                 "rebuild pins the commit the clean-clone run tested, so the harness stays byte-identical")
+ap.add_argument("--extra-snap", action="append", default=[], help="another snapshot's decode loop at the same BigMoE commit "
+                "(e.g. w24, the 24 GB configs' SNAPSHOT=w24): engine/loop/r57_screen_<name>.py; its other modules must equal "
+                "the main snapshot's")
 a = ap.parse_args()
 S = a.snap
+XS = a.extra_snap
 
 
 def sh(*cmd, **kw):
@@ -52,7 +56,7 @@ WARN = []
 # ---- 1. read-only extraction (git archive of committed trees) ----
 BM_PATHS = ["bigmoe", "ext/CMakeLists.txt", "ext/bigmoe_ext.cpp", "data/seed45/laysz45_256.json", "scripts/copygate.py",
             "scripts/relax_core.py", "scripts/repack_records.py", "scripts/test_records3.py",
-            f"data/r57/snap/{S}", f"data/r57/snap/frozen_{S}"]
+            f"data/r57/snap/{S}", f"data/r57/snap/frozen_{S}"] + [f"data/r57/snap/{x}" for x in XS]
 os.makedirs(f"{STAGE}/bm")
 tar = subprocess.run(["git", "-C", BM, "archive", C, *BM_PATHS], check=True, capture_output=True).stdout
 tarfile.open(fileobj=io.BytesIO(tar)).extractall(f"{STAGE}/bm", filter="data")
@@ -95,6 +99,13 @@ for m in sorted(mods):
 for f in sorted(os.listdir(f"{B}/{S}")):                      # the decode loop and its siblings
     if f.endswith(".py"):
         placed[f"engine/loop/{f}"] = (f"{B}/{S}/{f}", f"BigMoE {C[:8]} data/r57/snap/{S}/{f}")
+for x in XS:                                                   # extra decode loops (--extra-snap): the loop only; the package
+    assert os.path.isfile(f"{B}/{x}/r57_screen_{x}.py"), f"no r57_screen_{x}.py in snapshot {x}"   # has one set of siblings
+    for f in sorted(os.listdir(f"{B}/{x}")):
+        if f.endswith(".py") and f != f"r57_screen_{x}.py":
+            assert os.path.isfile(f"{B}/{S}/{f}") and open(f"{B}/{x}/{f}", "rb").read() == open(f"{B}/{S}/{f}", "rb").read(), \
+                f"--extra-snap {x}: {f} differs from snapshot {S}'s (the package ships one copy)"
+    placed[f"engine/loop/r57_screen_{x}.py"] = (f"{B}/{x}/r57_screen_{x}.py", f"BigMoE {C[:8]} data/r57/snap/{x}/r57_screen_{x}.py")
 for p in BM_PATHS[:8]:
     src = f"{STAGE}/bm/{p}"
     if os.path.isdir(src):
@@ -160,6 +171,7 @@ for dst, (src, _) in placed.items():
 F = f"{HOME}/BigMoE/data/r57/snap/frozen_{S}"
 RW = [(f"{F}/{sub}", f"@ROOT@/{dst}") for sub, dst in ROOTS] + [(f"{HOME}/BigMoE/data/r57/snap/{S}", "@ROOT@/engine/loop")]
 for P in (HOME, "~"):
+    RW += [(f"{P}/BigMoE/data/r57/snap/{x}", "@ROOT@/engine/loop") for x in XS]
     RW += [(f"{P}/BigMoE/data/r57/snap/{S}", "@ROOT@/engine/loop"),
            (f"{P}/Leap/third_party/ms_gdn", "@ROOT@/kernels/ms_gdn"), (f"{P}/Leap/third_party", "@ROOT@/third_party"),
            (f"{P}/Leap/scripts", "@ROOT@/kernels"), (f"{P}/Leap/data/l120_ft.safetensors", "@ROOT@/weights/l120_ft.safetensors"),
@@ -264,7 +276,11 @@ def _ast_nodoc(src):
 
 
 ncs = 0
-for rel, old, new in PRIV.get("comment_subs", []):
+# Not private (the old text is step 4's own redaction line): the 24 GB loop's row-cap comment, readable again (Tue 10 Nov).
+EXTRA_CS = [(f"engine/loop/r57_screen_{x}.py", f"# {RED}\n# rows (drafts cut to N - 1",
+             "# R57_ROWCAP=N (W24, Mon 9 Nov: the 24 GB line's row cap): EVERY prompt's check verifies at most N\n"
+             "# rows (drafts cut to N - 1") for x in XS if x == "w24"]
+for rel, old, new in [tuple(x) for x in PRIV.get("comment_subs", [])] + EXTRA_CS:
     fp = f"{OUT}/{rel}"
     t0 = open(fp, encoding="utf-8").read()
     assert t0.count(old) == 1, f"comment_subs: {rel}: the old text occurs {t0.count(old)} times"
