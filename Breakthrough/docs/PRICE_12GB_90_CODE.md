@@ -230,6 +230,11 @@ c47_mask_check.py (same windows and shapes as qom_0_live_c51; q1u_0_live inside 
   a larger pool (51 passed) or S1u must pass.
 - Run: scripts/m1/beside_gate.sh with bg_run_map.py (in-memory registration; DM_C from tonight's measured peak; a
   self-guard ends the arm above 11.9 GB lifetime footprint, so it measures <= 12.0 GB).
+- AMENDMENT (Tue 03:3x, before any data): map arms do not fit the 12 GB neighbour slot (Mon night's arm measured 15.96 GB),
+  so this arm runs in Tuesday's day queue instead: NewIdeas' TUE 02:02 order, item 2, after the w24 gate's end and BigMoE's
+  W24e. Runner scripts/m1/c47_day.sh (armed 03:37, pid 68372): bg_run_map.py at DM_C 51, as qom_0_live_c51 ran, with a
+  20 GB self-guard; start by 14:50, hard stop 14:58 (weekday big tests end by 15:00). The code rule, the read-out and the
+  comparison are unchanged.
 
 ## q1u_0_live (S1u's cut) on the map: code FAIL (Tue 00:01) [K, map arm; data/m1/SCREEN_read_q1u_0_live.txt]
 Pre-registered above (480001c) before any data. Masks: NewIdeas' builder, data/dm_masks/q1u_0_live; bit-check PASS after the
