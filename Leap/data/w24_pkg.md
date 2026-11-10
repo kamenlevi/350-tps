@@ -192,3 +192,26 @@ Wednesday. Built in ~/Leap/release/cleanclone/final/clone only; nothing is pushe
   MANIFEST.json, and run.py's help string only (the v1.0.1 correction). So the clean-clone PASS covers its code.
 - **Push tomorrow** on the go: `PKG_DIR=release/out/pkg_110 push_pkg.sh pkg` on top of main 0130ead (v1.0.1) keeps docs/
   as main has it. The 1.1.0 site (SMALL_RAM etc.) comes from the Editor and Breakthrough, folded in with AMEND.
+
+## 1.1.0 candidate pkg_110c (6ef9142): clean-clone check on the real engine, PASS (Tue 20:57-20:59)
+
+> (a quote from the project owner, kept private)
+later."). Its clone was prepped at 20:25 (install.sh rc 0); the armed runner (candidate_110c/runner_v110.sh) waited for a
+free Mac (Kamen idle, no other lock or engine, NO-SWAP >= 34) and ran at 20:57 with NO-SWAP 40 GB, swap flat at 6,862 MB.
+
+| step | result | lifetime peak |
+|---|---|---|
+| lossy-24, HumanEval/68 + /16, cap 256 | 2/2 keys prefix-equal with lossy-24_w13eh.json; closure 0 / 0 outside; 131.6 tok/s whole decode | 23.71 GB |
+| chat-24, the same keys | 2/2 prefix-equal with chat-24_w13eh.json; closure 0 / 0; 133.1 tok/s | 23.68 GB |
+| chat-24, text prompt ("Explain how a refrigerator works.") | a correct 77-token answer; 27.2 tok/s, first token 2.12 s | 23.49 GB |
+| chat.py --mem 24, one message | rc 0; 72 tokens, 25.3 tok/s, first token 2.14 s, MTP head 2.35 tokens per check | 23.63 GB |
+| serve.py --mem 24, one streamed OpenAI + one streamed Anthropic request, then SIGTERM | [DONE] + finish_reason; message_stop + 4 text deltas; one "stopped" line | - |
+
+**CLEAN-CLONE PASS** at 20:59:16 (116 s). Every peak stays under 24 GB. The candidate is ready for tomorrow's go: push
+pkg_110c on top of 0130ead (v1.0.1) and fold in the new site; README line 30 then points to the published 12 / 24 GB paper.
+Evidence: data/w24_pkg/candidate_110c/ (report.txt, runner.log, runner_v110.sh).
+
+A gap in the runner's "another engine runs" check, found after the run and fixed in the next runners: `ps -o comm=` cuts
+the command to 16 characters, so a venv Python shows as `/opt/homebrew/Ce` and never matched "python". The check now
+matches the full command line. Here it changed nothing: the only other process, a no-GPU mock server of mine (0.5 GB),
+ran beside the check, and the lock and Kamen-idle checks still held.

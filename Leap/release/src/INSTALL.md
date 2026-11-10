@@ -34,6 +34,20 @@ loads the model and runs one discarded warm-up prompt (`--no-warmup` skips it; t
 The decode loop is the research harness's own loop, unchanged; `run.py` only turns a text prompt into a prompt item and
 prints the answer and the loop's timing. The configs are in [CONFIGS.md](CONFIGS.md).
 
+## Chat and a local server
+    .venv/bin/python chat.py --mem 24
+    .venv/bin/python serve.py --mem 24 --port 8080
+
+`chat.py` keeps the engine loaded between messages and prints each answer's tokens, speed, first token and lifetime peak;
+Ctrl-C stops an answer, `/clear` starts over and `/exit` quits. At `--mem 32` and `--mem 24` it prefills long prompts
+layer-major (the same tokens as the default prefill, a 2.4-3.8x faster first token, 0.3-3.2 GB more memory). On a 36 GB
+Mac, for conversations near 30K tokens, start it with `R57_PFLM=0` (`R57_PFLM=0 .venv/bin/python chat.py --mem 24`): that
+saves 2.4 GB of peak memory, at about 2.7x the first-token time.
+
+`serve.py` serves chat apps on this Mac (127.0.0.1) in two formats, with streaming: OpenAI (base URL
+`http://127.0.0.1:8080/v1`, any API key, model `exactstream`) and Anthropic (base URL `http://127.0.0.1:8080`,
+`POST /v1/messages`). Ctrl-C or `kill` stops it.
+
 ## Check your install
     bash tools/clean_clone_test.sh <this repository> /tmp/cc prep
     bash tools/clean_clone_test.sh <this repository> /tmp/cc run

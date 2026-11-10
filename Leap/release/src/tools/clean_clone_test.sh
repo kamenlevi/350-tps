@@ -109,6 +109,39 @@ if [ -n "${TEXT_PROMPT:-Explain in three sentences how a refrigerator keeps food
   rc=$?; sed -n '/^=== /,$p' "$W/out/text.txt" | head -12 | sed 's/^/    /' | tee -a "$R"
   [ $rc = 0 ] || { say "  text prompt rc $rc"; fails=$((fails + 1)); }
 fi
+if [ "${CHAT_SERVE:-1}" = 1 ]; then              # chat.py and serve.py on the real engine, one short run each (CS_MEM GB)
+  m=${CS_MEM:-24}
+  say "chat.py --mem $m: one message"
+  printf '%s\n/exit\n' "Explain in two sentences what a mixture-of-experts language model is." \
+    | HOME="$W/home" HF_HOME="$HFH" "$CL/.venv/bin/python" "$CL/chat.py" --mem $m --max-tokens 128 > "$W/out/chat.txt" 2>&1
+  rc=$?; s=$(grep -a -o -E "\[[0-9]+ tokens \| whole decode [0-9.]+ tok/s[^]]*\]" "$W/out/chat.txt" | tail -1)
+  say "  chat.py rc $rc: ${s:-no answer line (see out/chat.txt)}"
+  { [ $rc = 0 ] && [ -n "$s" ]; } || fails=$((fails + 1))
+  say "serve.py --mem $m: one streamed OpenAI and one streamed Anthropic request, then SIGTERM"
+  PORT=${CS_PORT:-8093}
+  HOME="$W/home" HF_HOME="$HFH" "$CL/.venv/bin/python" "$CL/serve.py" --mem $m --port $PORT > "$W/out/serve.txt" 2>&1 &
+  SPID=$!; t0=$(date +%s); ok=1
+  until [ "$(curl -s -m 2 http://127.0.0.1:$PORT/health 2>/dev/null | grep -o ready)" = ready ]; do
+    kill -0 $SPID 2>/dev/null && [ $(( $(date +%s) - t0 )) -lt 300 ] || { ok=0; break; }
+    sleep 2
+  done
+  if [ $ok = 1 ]; then
+    curl -sN -m 120 http://127.0.0.1:$PORT/v1/chat/completions -H 'content-type: application/json' \
+      -d '{"model":"exactstream","messages":[{"role":"user","content":"Say hello in five words."}],"stream":true,"max_tokens":64}' > "$W/out/serve_openai.sse"
+    curl -sN -m 120 http://127.0.0.1:$PORT/v1/messages -H 'content-type: application/json' -H 'anthropic-version: 2023-06-01' \
+      -d '{"model":"exactstream","max_tokens":64,"stream":true,"messages":[{"role":"user","content":"Say hello in five words."}]}' > "$W/out/serve_anthropic.sse"
+    o=$(grep -c -E '^data: \[DONE\]' "$W/out/serve_openai.sse"); f=$(grep -c '"finish_reason": *"[a-z]' "$W/out/serve_openai.sse")
+    a=$(grep -c -E '^event: message_stop' "$W/out/serve_anthropic.sse"); d=$(grep -c -E '^event: content_block_delta' "$W/out/serve_anthropic.sse")
+    say "  OpenAI stream: [DONE] $o, finish_reason $f; Anthropic stream: message_stop $a, text deltas $d"
+    { [ "$o" = 1 ] && [ "$f" -ge 1 ] && [ "$a" = 1 ] && [ "$d" -ge 1 ]; } || fails=$((fails + 1))
+  else
+    say "  serve.py did not come up within 300 s (see out/serve.txt)"; fails=$((fails + 1))
+  fi
+  kill -TERM $SPID 2>/dev/null
+  for i in $(seq 1 30); do kill -0 $SPID 2>/dev/null || break; sleep 1; done
+  if kill -0 $SPID 2>/dev/null; then say "  serve.py ignored SIGTERM for 30 s"; kill -KILL $SPID; fails=$((fails + 1))
+  else say "  serve.py stopped on SIGTERM: $(grep -a -c 'stopped; log:' "$W/out/serve.txt") 'stopped' line(s)"; fi
+fi
 [ -z "$(ls -A "$W/home" 2>/dev/null)" ] || say "note: the engine wrote into the empty HOME: $(cd "$W/home" && find . -maxdepth 3 | head -5 | tr '\n' ' ')"
 [ $fails = 0 ] && say "CLEAN-CLONE PASS" || say "CLEAN-CLONE FAIL ($fails)"
 exit $fails

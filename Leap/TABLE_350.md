@@ -9857,3 +9857,6 @@ RSS > 45 GB, swap +2 GB, cycle > 2x (BigMoE's lines). None tripped.
 - PF-B FIX (research copy, R57_PFLM_SEGALL=1): bitwise = PF-A on the short-tail prompt (5,412 tokens: 20/20, unfixed 0/20)
   and at 30K (26/26, unfixed 0/25); speed kept: x1.17 / x1.15 over PF-A, 30K prefill 555 tok/s (unfixed 567); peak
   unchanged (40.42 GB). Exact PF-B clears the 500 tok/s prefill line at 30K on the 32 GB line.
+- 1.1.0 CANDIDATE pkg_110c ON THE REAL ENGINE (clean clone; lossy-24 + chat-24 keys, a text prompt, chat.py and serve.py
+  --mem 24; Tue 20:57-20:59): PASS. 2/2 keys prefix-equal with the w13eh references on both configs; closure 0 / 0;
+  peaks 23.49-23.71 GB (all under 24); chat.py rc 0 (25.3 tok/s); serve.py streams both formats and stops on SIGTERM.

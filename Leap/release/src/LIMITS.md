@@ -19,6 +19,8 @@ on macOS 26.5 (25F71).
 - At 24 GB, prompts up to about 500 tokens stay under 24 GB; longer ones take more: about 25.0 GB at 3K tokens, 25.7 GB at 7K, 25.8 GB at 10K and 28.2 GB at 30K.
 - At 24 GB, Strata on the same MacBook Pro and prompts gives the first token 1.9-2.5x faster on every set, and on chat
   its whole request is ahead (20.3-21.0 against 18.1 tok/s); our decode is ahead on code (3.3-5.0x) and 1.1x on chat.
+- `serve.py` runs one request at a time and handles text only: tool definitions and tool calls are not mapped yet.
+  Every request prefills its whole prompt (no cache across requests), and so does every turn in `chat.py`.
 - The lossy configs are gated on the named benchmarks only. On a multilingual chat set, M1-B (the `chat` configs' lossy
   part) fails our own blunder check, which is information only.
 - Tested on one MacBook Pro, with two benchmark prompts per config in the clean-clone test (IFEval; HumanEval for the
