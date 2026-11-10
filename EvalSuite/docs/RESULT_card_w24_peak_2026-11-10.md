@@ -1,4 +1,4 @@
-# RESULT (interim): the w24 card gate's config goes over the 24.0 GB line on longer prompts (Tue 2026-11-10 02:0x)
+# SUPERSEDED by RESULT_card_w24_2026-11-10.md (f6613ff). RESULT (interim): the w24 card gate's config goes over the 24.0 GB line on longer prompts (Tue 2026-11-10 02:0x)
 
 The w24 card gate (PREREG_card_gates_2026-11-08.md, amendments 12 to 12d) runs w13b: BigMoE data/stack/card_w24d_env.txt,
 blob e06f495e, frozen as results/card_w24_env_run.txt. It started at 01:36:43. Its first forward process (20 GPQA Diamond

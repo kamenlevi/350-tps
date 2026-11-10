@@ -1402,3 +1402,25 @@ grows (at 45 GB without PF-D: +1.8 GB at 10K, +3.3 GB at 30K, data/pfd_long). At
 peak by 1.1 GB at 1.4-1.6x the first token (FU table above); untested at 24 GB, and probably not token-identical (the MoE call
 shapes change). Sent to the orchestrator with options: label the line as holding on benchmark-length prompts, and/or measure
 w13b with smaller chunks on long prompts after the gate. The gate itself (scores) runs on.
+
+## Tue 10 Nov 08:53-09:00: W24e = w13b with smaller prefill chunks on the gate's longest prompts: no smaller chunk keeps the tokens (data/w24/w24e_report.txt; data 8e515d5)
+The orchestrator's option (B). w13b exactly as gated (data/stack/card_w24d_env.txt, blob e06f495e) + R57_PFCHUNK, on the card
+gate's six longest prompts (726-2,801 tokens), CAP 128, R57_LOGHASH=1, one process per arm, quiet; rule pre-registered
+(docs/W24_DECISION.md 'W24e'). First token per prompt and the run's max lifetime peak:
+
+| chunk | 2,801 (GPQA) | 1,465 (LCB) | 1,102 (LCB) | 942 (LCB) | 919 (GPQA) | 726 (LCB) | max lifetime peak | tokens / hashes vs 1024 |
+|---|---|---|---|---|---|---|---|---|
+| 1024 (as gated) | 14.57 s | 11.29 s | 10.02 s | 6.21 s | 5.72 s | 6.02 s | 25.025 GB | (reference) |
+| 512 | 21.60 s | 14.79 s | 14.42 s | 9.90 s | 8.46 s | 9.75 s | 24.345 GB | 0/6, 0/6 |
+| 256 | 31.20 s | 23.37 s | 19.60 s | 17.93 s | 13.46 s | 12.99 s | **23.954 GB** | 1/6, 0/6 |
+| 1024 again | 14.32 s | 11.06 s | 9.77 s | 6.08 s | 5.58 s | 5.89 s | 24.961 GB | 6/6, 6/6 |
+
+- **The chunk drives the long-prompt peak** (MLX prefill peak on the 2,801-token prompt: 24.12 / 23.50 / 23.13 GB at 1024 / 512
+  / 256 rows), and only 256-row chunks stay under 24.0 GB on all six prompts, at 2.1-2.3x the first token.
+- **But a smaller chunk changes the tokens** (512: 0 of 6 prompts identical, 256: 1 of 6; logits hashes 0 of 6 for both),
+  while two 1024 runs agree exactly. By the rule neither carries the card gate's label: **Wednesday ships w13b as gated
+  (R57_PFCHUNK = 1024) with the label "under 24 GB on prompts up to about 560 tokens, up to 25.1 GB on longer ones"** (the
+  gate's recount over 40 processes: 22 over the line, max 25.112 GB, shortest prompt at a first crossing 561 tokens).
+- A strictly-under-24 GB variant (256-row chunks) would need its own card gate.
+- The card gate on w13b PASSED at 08:41 on all six lines vs NAX6-N (EvalSuite results/CARD_w24_DONE): IFBench 40.7 / 40.7 % vs
+  44.0 % (p 0.30), GPQA-D 47.0 / 47.0 % vs 44.0 % (p 0.51), LCB v6 29.8 / 32.8 % vs 32.1 % (p 0.45 / 1.0).

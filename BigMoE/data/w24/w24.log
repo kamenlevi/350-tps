@@ -101,3 +101,15 @@
 11-09 23:55:24 w13fh_100 rc=0
 11-09 23:56:44 w14dh_100 rc=0
 11-09 23:56:44 report rc=0 (data/w24/w24d_report.txt)
+11-09 23:56:44 W24 end
+11-09 23:56:44 W24d done: data/w24/w24d_verdict.txt
+11-10 02:03:40 dry: pc1024g_100 = card_w24d env (41 keys) + R57_PFCHUNK=1024; keys gpqad/recnTTKdBzfuoZ7w7,lcb6/abc394_g,lcb6/abc400_g,lcb6/arc192_a,gpqad/rec6sE2CRtD4drtHg,lcb6/3705
+11-10 02:03:40 dry: pc512g_100 = card_w24d env (41 keys) + R57_PFCHUNK=512; keys gpqad/recnTTKdBzfuoZ7w7,lcb6/abc394_g,lcb6/abc400_g,lcb6/arc192_a,gpqad/rec6sE2CRtD4drtHg,lcb6/3705
+11-10 02:03:40 dry: pc256g_100 = card_w24d env (41 keys) + R57_PFCHUNK=256; keys gpqad/recnTTKdBzfuoZ7w7,lcb6/abc394_g,lcb6/abc400_g,lcb6/arc192_a,gpqad/rec6sE2CRtD4drtHg,lcb6/3705
+11-10 02:03:40 dry: pc1024bg_100 = card_w24d env (41 keys) + R57_PFCHUNK=1024; keys gpqad/recnTTKdBzfuoZ7w7,lcb6/abc394_g,lcb6/abc400_g,lcb6/arc192_a,gpqad/rec6sE2CRtD4drtHg,lcb6/3705
+11-10 08:53:11 W24e start (pid 5337, NO-SWAP 50 GB, w13b as gated = data/stack/card_w24d_env.txt e06f495e, arms pc1024:1024 pc512:512 pc256:256 pc1024b:1024)
+11-10 08:54:36 pc1024g_100 rc=0
+11-10 08:56:27 pc512g_100 rc=0
+11-10 08:59:08 pc256g_100 rc=0
+11-10 09:00:43 pc1024bg_100 rc=0
+11-10 09:00:43 W24e report rc=0 (data/w24/w24e_report.txt)

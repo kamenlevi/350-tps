@@ -2071,3 +2071,7 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 07:14:32 SCR ifb12 ifb12c01 start (neighbour)
 07:23:21 SCR ifb12 WAIT set by hand after c01 (EvalSuite 07:2x: SSD heat pauses beside the gate)
 07:41:51 SCR ifb12 ifb12c01 end (rc 0)
+08:41:28 SCR ifb12 WAIT removed: the w24 gate ended (11-10 08:41:09 w24 start: runner 61 (w24) ended rc=0)
+08:41:43 SCR ifb12 ifb12c02 start (alone)
+08:52:40 SCR ifb12 ifb12c02 end (rc 0)
+09:00:45 SCR ifb12 ifb12c03 start (alone)

@@ -93,8 +93,12 @@ peak 23.6 GB), MEM 24 GB until ~09:44 (central) or ~11:32 (slow), cutoff 15:00 (
 
 # W24e: does a smaller prefill chunk keep w13b under 24 GB on long prompts? (pre-registered Tue 10 Nov 02:0x, before any W24e data)
 
-Order (the orchestrator, ~02:0x): (A) is decided: the gated w13b's label says "under 24 GB on benchmark-length prompts" and
-states the gate's per-row peaks above that. (B) = W24e (scripts/w24e.sh), after the gate, with NewIdeas: w13b exactly as gated
+Order (the orchestrator, ~02:0x): (A) is decided: the gated w13b's label states where it stays under 24 GB and the gate's
+per-row peaks above that. [Label wording REPLACED Tue 08:4x on the orchestrator's recount, because GPQA and LCB6 are benchmark
+prompts too and crossed: the 02:0x wording "under 24 GB on benchmark-length prompts" was too generous. (A) now reads: "under
+24 GB on prompts up to about 560 tokens, up to 25.1 GB on longer ones" (the gate, all 40 processes: 22 over 24.0 GB, max
+25.112 GB; first crossings 15 LCB6 + 7 GPQA-D, none IFBench; shortest prompt at a first crossing 561 tokens; the longest row
+still under the line 592 tokens, 23.954 GB).] (B) = W24e (scripts/w24e.sh), after the gate, with NewIdeas: w13b exactly as gated
 (data/stack/card_w24d_env.txt, blob e06f495e, its env line verbatim) plus R57_PFCHUNK = 1024 / 512 / 256 / 1024 again (pc1024,
 pc512, pc256, pc1024b), on the card gate's six longest prompts (726 to 2,801 tokens: gpqad/recnTTKdBzfuoZ7w7, lcb6/abc394_g,
 lcb6/abc400_g, lcb6/arc192_a, gpqad/rec6sE2CRtD4drtHg, lcb6/3705), CAP 128, R57_LOGHASH=1, one process per arm.
@@ -102,3 +106,11 @@ lcb6/abc400_g, lcb6/arc192_a, gpqad/rec6sE2CRtD4drtHg, lcb6/3705), CAP 128, R57_
 and pc1024b equals pc1024 (determinism). Among the chunks that qualify, the package uses the LARGEST (the cheapest first token)
 whose lifetime peak (max of mem[1], mem[-1]) is < 24.000 GB on all six prompts. If none qualifies, Wednesday ships (A).
 Reported either way: per prompt and chunk size, the first token (the first-token cost) and the lifetime peak.
+
+**W24e OUTCOME (Tue 10 Nov 08:53-09:00; data 8e515d5, data/w24/w24e_report.txt): NO smaller chunk qualifies, so Wednesday ships
+(A): w13b as gated, R57_PFCHUNK = 1024.** Determinism holds (pc1024b == pc1024: tokens 6/6, logits hashes 6/6). pc512: tokens
+0/6, hashes 0/6; pc256: tokens 1/6, hashes 0/6 (both FAIL the identity condition). Max lifetime peak over the six prompts
+(726-2,801 tokens): 1024 25.025 / 24.961 GB, 512 24.345 GB, 256 23.954 GB (the only one under the line). First token per
+prompt: 1024 5.6-14.6 s; 512 8.5-21.6 s (1.4-1.6x); 256 13.0-31.2 s (2.1-2.3x). A strictly-under-24 GB variant (256-row chunks)
+changes the tokens, so it would need its own card gate. The card gate itself PASSED 08:41 on all 6 lines (EvalSuite
+results/CARD_w24_DONE): IFBench 40.7 / 40.7 % vs 44.0 %, GPQA-D 47.0 / 47.0 % vs 44.0 %, LCB v6 29.8 / 32.8 % vs 32.1 %.

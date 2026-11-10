@@ -58,6 +58,9 @@ armenv() { case $1 in   # base slots, sidecar slots, rows
   # W24d (Mon 23:5x, the orchestrator: option B): w13b vs the 14-row config, same-run ABBA on HumanEval (w14c w13e w13f w14d)
   w14c|w14d) echo "140 28 14 BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all";;   # W24d: the 14-row config (= card_w24c_env.txt)
   w13e|w13f) echo "141 26 13 BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all";;   # W24d: w13b again, twice
+  # W24f (Tue 09:0x, the orchestrator: the slot after Leap's package check): MBPP + IFEval speed, w13b vs w13t, same-run ABBA
+  tf1|tf2) echo "130 26 13 BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25";;   # W24f: w13t as gated in W24b (control, first + last)
+  bf1|bf2) echo "141 26 13 BIGMOE_TIER_PF_GROUP=64,R57_CACHE_GB=0.25,R57_D7B=all";;   # W24f: w13b, the card-gated 24 GB config
   *) return 1;; esac; }
 ARMS=${W24_ARMS:-w12 w16u w12pf w10 w8}
 for a in $ARMS; do
