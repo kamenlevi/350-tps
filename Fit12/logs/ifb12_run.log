@@ -1,1 +1,3 @@
 [Tue 02:05:45] ifb12 armed: 150 keys, chunks of 20, 0 chunk file(s) already, reverse check of 10 (ifbench/116,ifbench/115,ifbench/112,ifbench/111,ifbench/11,ifbench/109,ifbench/106,ifbench/105,ifbench/101,ifbench/10); swap 6854 MB; held while /Users/kamen/Fit12/data/scr/ifb12/WAIT exists; hard end Tue 23:00
+[Tue 07:14:32] ifb12c01 (neighbour): 20 keys from ifbench/10; NO-SWAP 26 GB, swap 6710 MB (run start 6710)
+[Tue 07:41:51] ifb12c01 end rc 0 (footprint peak seen 10.737 GB; harness: done; lifetime 11.210 GB)

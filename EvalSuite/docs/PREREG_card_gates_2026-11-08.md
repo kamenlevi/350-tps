@@ -603,3 +603,12 @@ Checked on the gate keys; the result is the same in scripts/r57_screen.py and th
   - It stops on a fresh "passes 13:30: yes", swap above its start + 0.5 GB, or a footprint above 12.0 GB.
   - Once the gate has ended, a process runs only when no other session holds a MEM > 5 GB lock and no quiet ticket waits.
 - **Start:** held (Fit12's WAIT file) until this amendment is committed. Fit12's start time goes below as a dated line.
+- **Started (Tue 10 Nov 07:1x):** Fit12 set GO at 07:14:09 (~/Fit12/logs/summary.txt). Process ifb12c01 (20 keys from
+  ifbench/10) started at 07:14:32 in neighbour mode. Its first row file is from 07:14:55.
+  - The files are as registered (rechecked 07:1x): fit_t3.py 7a9ffd8375ed, ifb12.sh 2143f25c7ff7, ifb12_merge.py
+    ac65fec294ec, env blob da1eb63570ee.
+  - At its start the w24 gate had fwd 381/381 and rev 300/381, with a lifetime peak of 25.112 GB.
+  - The summary.txt lines at 02:04-02:05 are Fit12's dry tests: a fake harness with 10 s chunks, and the 12 GB stop
+    path (rc 126). The arm's folder held only WAIT at 02:08:33, so no row predates this amendment.
+  - The start came five hours after the amendment because EvalSuite's 02:09 release note reached Fit12, an idle session
+    on another account, only at 07:1x.

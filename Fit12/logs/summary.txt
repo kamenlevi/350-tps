@@ -2067,3 +2067,7 @@ your turn after 0s: quiet lock held until 13:35. Measure now, and `peer unlock` 
 02:05:21 SCR ifb12 ifb12c01 start (neighbour)
 02:05:36 SCR ifb12 ifb12c01 end (rc 143)
 02:05:36 SCR ifb12 run end (rc 126)
+07:14:09 SCR ifb12 GO set by hand (EvalSuite amendment 13, 37a03ca; orchestrator 07:1x)
+07:14:32 SCR ifb12 ifb12c01 start (neighbour)
+07:23:21 SCR ifb12 WAIT set by hand after c01 (EvalSuite 07:2x: SSD heat pauses beside the gate)
+07:41:51 SCR ifb12 ifb12c01 end (rc 0)
