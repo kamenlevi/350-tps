@@ -344,3 +344,22 @@ research paths 0, syntax errors 0.
 
 For the go: PKG_DIR=release/out/pkg_110k for the pkg and the docs push. The docs push waits for the v1.1.0 site with
 small-ram.pdf.
+
+## 1.1.0 candidate pkg_110l (fd1e02e): the two qualifiers on LIMITS' 24 GB line (Wed 12:1x, text only; final for the go)
+
+**The change.** The orchestrator's number check found that pkg_110k's LIMITS.md line 22 lacked two qualifiers the papers
+carry (~/Papers/RELEASE.md lines 93-98):
+- (a) the 500-token figure is a measurement with little room, not a bound: 448 tokens peaked at 23.954 GB, 520 at
+  24.01 GB;
+- (b) the 25.0 GB at 3K tokens was measured on the simulated 36 GB Mac, and the 7K / 10K / 30K figures were not.
+
+The new wording is in release/src a31794a. It also keeps the papers' "default prefill" for the 7K-30K figures, matching
+the 64K / 128K line under it.
+
+**The rebuild** used the same command (--out release/out/pkg_110l) and gave fd1e02e: 241 files, 6.6 MB; leaks 0, unsafe
+0, live research paths 0, syntax errors 0.
+- **Diff vs pkg_110k:** LIMITS.md and MANIFEST.json only. In MANIFEST, the LIMITS hash, leap_commit and one source label
+  changed (candidate_110l/diff_vs_110k.txt).
+- **Scan of all 243 files:** private patterns 0, account names 0, secrets 0, /Users/ in docs and configs 0, "laptop" 0.
+
+**For the go:** PKG_DIR=release/out/pkg_110l, for both the pkg and the docs push.

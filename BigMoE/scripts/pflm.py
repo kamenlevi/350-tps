@@ -285,7 +285,8 @@ PFD = {"calls": 0, "A": 0, "B": 0, "C": 0, "ssd": 0, "checked": 0, "bad_A": 0, "
        "tB": 0.0, "tC": 0.0, "tG": 0.0, "tM": 0.0,           # s: side-part reads, today's reads, GPU rebuild (+ scatter), the call
        "tZ": 0.0, "tP": 0.0, "bad_C": 0,                      # scratch zeros; the whole wrapped call; v3 CHECK of copied C rows
        "k4": 0, "k5": 0,
-       "pB": 0, "pC": 0, "hB": 0, "hC": 0, "mB": 0, "mC": 0, "tPred": 0.0}   # read-ahead: predicted / hit / read on demand                                      # FAST rows at 3 bits: base pooled (4) / base read (5)
+       "pB": 0, "pC": 0, "hB": 0, "hC": 0, "mB": 0, "mC": 0, "tPred": 0.0,   # read-ahead: predicted / hit / read on demand
+       "fold": 0, "tJ": 0.0}                                  # P3 (R57_PFD_FOLD): forecasts folded into the id sync; that sync's s                                      # FAST rows at 3 bits: base pooled (4) / base read (5)
 _and, _or, _shl, _shr = mx.bitwise_and, mx.bitwise_or, mx.left_shift, mx.right_shift
 
 
@@ -691,6 +692,9 @@ def install_pfd(tier, check=False, layers=None):
     CC = os.environ.get("R57_PFD_CC", "1") != "0"        # =0: keep MLX's buffer cache across layer calls (no re-faulting)
     IDLE = os.environ.get("R57_PFD_IDLE") == "1"         # =1: installed but inactive (decode-slowdown diagnostic)
     AHEAD = os.environ.get("R57_PFD_AHEAD") == "1"       # v4 / FAST: read the next layer's predicted misses during this layer
+    FOLD = AHEAD and os.environ.get("R57_PFD_FOLD") == "1"   # P3 (exact; Wed 11 Nov, docs/FIRST_TOKEN.md): the next layer's
+    # forecast is evaluated with this layer's routing ids (one sync, not two), its B + C staging arrays in one eval, and the
+    # assemble pass with the call (one eval, not two; R57_PFD_CHECK keeps the separate one). Same reads, same values.
     LAYERS = list(layers or [])
     if AHEAD:
         assert LAYERS and all(hasattr(l_.mlp, "gate") for l_ in LAYERS), "R57_PFD_AHEAD needs install_pfd(layers=...) with mlp.gate"
@@ -713,14 +717,24 @@ def install_pfd(tier, check=False, layers=None):
             _PFD_POOL.append(ThreadPoolExecutor(max_workers=int(os.environ.get("R57_PFD_THREADS", "12"))))
         return _PFD_POOL[0]
 
+    def stage_submit(t_, ids, off, size, arr):
+        """the preads of ids into an evaluated staging array's first rows (zero-copy into its buffer)."""
+        view = np.asarray(memoryview(arr)).view(np.uint8).reshape(int(arr.shape[0]), size)
+        futs = {e: pool_().submit(pread_into, t_, e, off, size, view[k]) for k, e in enumerate(ids)}
+        return [arr, {e: k for k, e in enumerate(ids)}, futs, view, len(ids)]
+
     def stage_reads(t_, ids, off, size, spare):
         """an MLX staging array (len(ids) + spare rows of size / 4 words); the preads land in its buffer (zero-copy)."""
-        n = len(ids)
-        arr = mx.zeros((n + spare, size // 4), mx.uint32)
+        arr = mx.zeros((len(ids) + spare, size // 4), mx.uint32)
         mx.eval(arr)
-        view = np.asarray(memoryview(arr)).view(np.uint8).reshape(n + spare, size)
-        futs = {e: pool_().submit(pread_into, t_, e, off, size, view[k]) for k, e in enumerate(ids)}
-        return [arr, {e: k for k, e in enumerate(ids)}, futs, view, n]
+        return stage_submit(t_, ids, off, size, arr)
+
+    def stage_many(t_, want):
+        """P3: several staging arrays [(tag, ids, off, size, spare)] allocated in ONE eval, then their preads."""
+        arrs = [mx.zeros((len(ids) + sp, sz // 4), mx.uint32) for _, ids, _, sz, sp in want]
+        if arrs:
+            mx.eval(*arrs)
+        return {tag: stage_submit(t_, ids, off, sz, a) for (tag, ids, off, sz, _), a in zip(want, arrs)}
 
     def gather(stage, t_, ids, off, size, tag):
         """rows of ids in one staging array: prefetched ones + the rest read now into its spare rows (or a second array,
@@ -760,13 +774,23 @@ def install_pfd(tier, check=False, layers=None):
             GRAVE.append((arr, rest))
         return arr, np.array([emap[e] for e in ids], np.int32)
 
-    def predict(L1, x, k):
-        """the next layer's router on this layer's MoE input (R-57's forecast): its predicted misses start reading now."""
-        lay_ = LAYERS[L1]
-        t1 = (getattr(lay_.mlp.switch_mlp, "_bm", None) or {}).get("tier")
-        if t1 is None or t1.get("side") is None or t1.get("layout") != 2:
+    def forecast_tier(L1):
+        """the next layer's tier dict when the read-ahead can serve it (sidecar, layout 2), else None."""
+        t1 = (getattr(LAYERS[L1].mlp.switch_mlp, "_bm", None) or {}).get("tier")
+        return t1 if t1 is not None and t1.get("side") is not None and t1.get("layout") == 2 else None
+
+    def forecast(L1, x, k):
+        """the next layer's router on this layer's MoE input (R-57's forecast), lazy: its top-k ids."""
+        return mx.argpartition(-LAYERS[L1].mlp.gate(x), kth=k - 1, axis=-1)[..., :k]
+
+    def predict(L1, x, k, top=None):
+        """the next layer's router on this layer's MoE input (R-57's forecast): its predicted misses start reading now.
+        top: the forecast already evaluated with this layer's ids (P3), else computed and synced here."""
+        t1 = forecast_tier(L1)
+        if t1 is None:
             return
-        top = mx.argpartition(-lay_.mlp.gate(x), kth=k - 1, axis=-1)[..., :k]
+        if top is None:
+            top = forecast(L1, x, k)
         pred = np.unique(np.array(top))
         u = pred.astype(np.int32).tolist()
         sb1 = np.array(t1["ext"].lookup(L1, u), np.int64)
@@ -774,15 +798,23 @@ def install_pfd(tier, check=False, layers=None):
         Bp, Cp = pred[(sb1 >= 0) & (ss1 < 0)], pred[sb1 < 0]
         m1, r1 = int(t1["msb_sz"]), int(t1["recsz"])
         st = {}
-        if len(Bp) and not FASTP:
-            st["B"] = stage_reads(t1, [int(e) for e in Bp], m1, r1 - m1, max(8, len(Bp) // 2))
-        if len(Cp):
-            st["C"] = stage_reads(t1, [int(e) for e in Cp], 0, m1 if FASTP else r1, max(8, len(Cp) // 2))
+        if FOLD:                                         # P3: both staging arrays in one eval
+            want = []
+            if len(Bp) and not FASTP:
+                want.append(("B", [int(e) for e in Bp], m1, r1 - m1, max(8, len(Bp) // 2)))
+            if len(Cp):
+                want.append(("C", [int(e) for e in Cp], 0, m1 if FASTP else r1, max(8, len(Cp) // 2)))
+            st = stage_many(t1, want)
+        else:
+            if len(Bp) and not FASTP:
+                st["B"] = stage_reads(t1, [int(e) for e in Bp], m1, r1 - m1, max(8, len(Bp) // 2))
+            if len(Cp):
+                st["C"] = stage_reads(t1, [int(e) for e in Cp], 0, m1 if FASTP else r1, max(8, len(Cp) // 2))
         STAGE[L1] = st
         PFD["pB"] += 0 if FASTP else len(Bp)
         PFD["pC"] += len(Cp)
 
-    def v4_scratch(t_, bm_, x, k, uniq, sb, ss, A, B, C):
+    def v4_scratch(t_, bm_, x, k, uniq, sb, ss, A, B, C, top=None):
         msb_, rec_ = int(t_["msb_sz"]), int(t_["recsz"])
         L = int(bm_["L"])
         mine = {}
@@ -797,7 +829,7 @@ def install_pfd(tier, check=False, layers=None):
             mine = STAGE.pop(L, {})
             tq = time.perf_counter()
             if L + 1 < len(LAYERS):
-                predict(L + 1, x, k)
+                predict(L + 1, x, k, top)
             PFD["tPred"] += time.perf_counter() - tq
         ph = v4_placeholder()                            # >= 8 elements: 'device', as the kernels need (23:5x)
         rl = rr = rm5 = ph
@@ -839,6 +871,14 @@ def install_pfd(tier, check=False, layers=None):
             PFD["fallback"] += 1
             return orig(cls, self, x, indices, bm, *a, **kw)
         t = bm["tier"]
+        top = None
+        L1_ = int(bm["L"]) + 1
+        if FOLD and (V4 or FASTP) and not LMC["on"] and L1_ < len(LAYERS) and forecast_tier(L1_) is not None:
+            top = forecast(L1_, x, int(indices.shape[-1]))
+            tj_ = time.perf_counter()
+            mx.eval(indices, top)                        # P3: this layer's ids and the next layer's forecast in one sync
+            PFD["tJ"] += time.perf_counter() - tj_
+            PFD["fold"] += 1
         ids = np.array(indices)
         uniq = np.unique(ids)
         G = getattr(tier, "_PF_GROUP", 0)
@@ -855,10 +895,11 @@ def install_pfd(tier, check=False, layers=None):
         msb, lsz = int(t["msb_sz"]), int(t["recsz"]) - int(t["msb_sz"])
         if V4 or FASTP:                                  # v4 / FAST: zero-copy staged reads (+ read-ahead), one assemble pass
             tier._reuse_drop()
-            scr, rm = v4_scratch(t, bm, x, int(indices.shape[-1]), uniq, sb, ss, A, B, C)
-            t4_ = time.perf_counter()
-            mx.eval(*scr)
-            PFD["tG"] += time.perf_counter() - t4_
+            scr, rm = v4_scratch(t, bm, x, int(indices.shape[-1]), uniq, sb, ss, A, B, C, top)
+            if not FOLD or check:                        # P3: the assemble pass rides on the call's eval (tM holds both)
+                t4_ = time.perf_counter()
+                mx.eval(*scr)
+                PFD["tG"] += time.perf_counter() - t4_
             if check:
                 _pfd_check_rows(tier, t, uniq, scr, rm[:, 0])
             A_B = ()
@@ -960,7 +1001,8 @@ def install_pfd(tier, check=False, layers=None):
 
     tier.prefill_call = prefill_call
     tier._pfd_installed = True
-    tier._pfd_dbg = dict(stage_reads=stage_reads, gather=gather, grave=GRAVE)   # unit test (pfd_unit.py) of the staging
+    tier._pfd_dbg = dict(stage_reads=stage_reads, gather=gather, grave=GRAVE,   # unit tests (pfd_unit.py, pfd_fold_unit.py)
+                         stage_many=stage_many)
 
 
 def _pfd_check_rows(tier, t, uniq, scr, kinds):

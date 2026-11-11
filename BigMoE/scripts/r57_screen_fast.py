@@ -497,6 +497,9 @@ if VTIER:                                                # NewIdeas' RANKED 33, 
     say(f"R57_VTIER: {_vb} / {_vs} slots per base / sidecar pool = {VT_BYTES / 1e9:.2f} GB volatile (purgeable: NOT in "
         f"phys_footprint; macOS reclaims it before compression or swap)")
 PFCHUNK = int(os.environ.get("R57_PFCHUNK", "1024") or "1024")   # Sat 23:4x (orchestrator FLAG 2: 45.1 GB on a 7.9K prompt): prefill rows per chunk
+P2MAX = int(os.environ.get("R57_P2", "0") or "0")        # Wed 11 Nov P2 (docs/FIRST_TOKEN.md; LOSSY until EvalSuite's gate): prompts of
+P2ROWS = int(os.environ.get("R57_P2_ROWS", "16") or "16")  # <= P2MAX tokens run as P2ROWS-row decode checks (verify path), not the prefill
+assert not (P2MAX and A6 & {"pools", "warm"}), "R57_P2 skips the prefill's A6 capture: no R57_A6 pools / warm"
 PFNOLOG = os.environ.get("R57_PFNOLOG") == "1"           # Sun 00:2x (Leap: prefill built full-vocab logits for every row, ~508 MB + ~45 ms per 1K chunk)
 PFLM = int(os.environ.get("R57_PFLM", "0") or 0)         # Sun 00:3x PF-A (scripts/pflm.py): prompts > one chunk prefill LAYER-major over the same
 if PFLM:                                                 # chunks, each layer's experts read from records3 once (a full-E scratch): 1 = the
@@ -1026,6 +1029,38 @@ def prefill(ids, want_w=False, chunk=1024):
         EM.STATE.capture = None
     return cache, lg[0, -1], taps(), ws
 
+P2ST = {"chunks": 0, "rows": 0}
+P2VER = os.environ.get("R57_P2_VERIFY", "1") != "0"      # =0: every chunk a plain forward under the decode arm (no verify scope)
+def prefill_p2(ids, arm, want_w=False, rows=16):
+    """P2 (Wed 11 Nov; LOSSY until gated): the prompt in `rows`-row chunks through the decode's own check path (the decode arm's
+    sync-free gate on the pool slots and its look-ahead, the check's precision with the FAST masks off; no PF-D assemble, no
+    prediction sync), each chunk verified and committed whole (keep = all its rows: the commit's full-accept branch, which
+    reads no snapshot). The first token runs alone as a plain forward, so no verify starts on an empty cache.
+    R57_P2_VERIFY=0: plain forwards throughout. Returns what prefill() returns."""
+    set_arm(arm)
+    cache, lg, ws = model.make_cache(), None, []
+    tap_reset(); TAP["on"] = True
+    try:
+        starts = [0] + list(range(1, len(ids), rows)) if P2VER else list(range(0, len(ids), rows))
+        for j, a in enumerate(starts):
+            r_ = [int(x) for x in ids[a:(starts[j + 1] if j + 1 < len(starts) else len(ids))]]
+            if P2VER and a > 0:
+                with ref2.verify_scope(model):
+                    lg = model(mx.array([r_]), cache=cache)
+                model.commit_verified_window(cache, None, keep_tokens=len(r_), verified_tokens=len(r_))
+            else:
+                lg = model(mx.array([r_]), cache=cache)
+            if want_w:                                   # the chat switch: each chunk's widened stream for the MTP head
+                w = TXT._last_widened[:, :len(r_)]
+                mx.eval(w)
+                ws.append((a, w))
+            mx.eval(lg, states(cache), [x[-1] for x in TAP["x"]])
+            P2ST["chunks"] += 1; P2ST["rows"] += len(r_)
+    finally:
+        TAP["on"] = False
+        set_arm("slot")
+    return cache, lg[0, -1], taps(), ws
+
 def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=None):
     tcut = tcut or TRUNC                                 # R57_CHATTRUNC: this prompt's confidence cut
     while os.path.exists(PAUSE):
@@ -1057,7 +1092,12 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
     pd0_ = dict(PFLMM.PFD) if PFD_ON else None           # R57_PFD: this prefill's row counters
     lm0_ = (PFLMM.LMC["reads"], PFLMM.LMC["hits"], PFLMM.LMC["calls"]) if PFLM else None   # R57_PFLM: this prefill's scratch counters
     tpf_ = time.perf_counter()                           # Sat 17:2x (E5): prefill wall (+ the first token's readback) for end-to-end tok/s
-    cache, last, T, ws = prefill(ids, mtp, chunk=PFCHUNK)
+    p2c_ = P2ST["chunks"]
+    if P2MAX and len(ids) <= P2MAX:                      # R57_P2: this prompt through the decode's check path (LOSSY until gated)
+        cache, last, T, ws = prefill_p2(ids, arm, mtp, P2ROWS)
+    else:
+        cache, last, T, ws = prefill(ids, mtp, chunk=PFCHUNK)
+    p2c_ = P2ST["chunks"] - p2c_
     if cold_:
         cap_, FG["cap"] = FG["cap"], None
         warm_ = cap_ if (U3C_LEN and len(ids) >= 128) else (cap_ | (POP45 >= 0.05))
@@ -1595,6 +1635,7 @@ def run(ids, arm, name=None, drafter="dfl", cpy=False, maxd=0, fset=None, tcut=N
                 pflm=None if lm0_ is None else dict(reads=PFLMM.LMC["reads"] - lm0_[0], hits=PFLMM.LMC["hits"] - lm0_[1],
                                                      calls=PFLMM.LMC["calls"] - lm0_[2]),   # R57_PFLM: expert reads / reuses / calls
                 pfd=None if pd0_ is None else {k_: PFLMM.PFD[k_] - pd0_[k_] for k_ in PFLMM.PFD},   # R57_PFD: rows A / B / C, SSD bytes, check
+                p2=p2c_ if P2MAX else None,          # R57_P2: this prompt's decode-path chunks (0 = it took the prefill)
                 rlx=rst if RLX_D > 0 else None,      # R57_RELAX_DELTA: rows checked, kept exact / in all, relaxed accepts
                 spn=sst if SPAN else None,           # R57_RELAX_SPAN: rows checked, kept exact / in all, relaxed, span rows
                 inert=dict(ist, arm=INERT["name"]) if INERT is not None else None,   # R57_INERT: rows checked, kept exact / in

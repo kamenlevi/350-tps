@@ -19,7 +19,10 @@ on macOS 26.5 (25F71).
   (with PF-D) reaches 47.5 GB on 10K tokens and 48.6 GB on 30K. At 32 GB, `chat` reaches 34.0 GB on 10K tokens and
   35.5 GB on 30K.
 - At 32 GB, `exact` was measured on chat (IFEval) only, and `lossy` has no code or math rows of its own.
-- At 24 GB, prompts up to about 500 tokens stay under 24 GB; longer ones take more: about 25.0 GB at 3K tokens, 25.7 GB at 7K, 25.8 GB at 10K and 28.2 GB at 30K.
+- At 24 GB, prompts up to about 500 tokens stayed under 24 GB in our runs, with little room: this is a measurement, not a
+  bound (a 448-token prompt peaked at 23.954 GB, a 520-token one at 24.01 GB). Longer ones take more: about 25.0 GB at
+  3K tokens, measured on a simulated 36 GB Mac (memory locked away to leave the engine 25-27 GB), and on the 64 GB Mac
+  with the default prefill 25.7 GB at 7K, 25.8 GB at 10K and 28.2 GB at 30K.
 - Longer prompts take more. At 24 GB, 32.0 GB at 64K tokens and 39.2 GB at 128K with the default prefill, and 37.9 and
   51.6 GB with `chat.py`'s layer-major prefill, which is 2.4x faster at 64K and about 2x at 128K. At 32 GB, `chat.py`
   reaches 46.3 GB at 64K; at 45 GB, 52.6 GB.
