@@ -851,3 +851,7 @@ in profiles/. The transcripts and the raw request log are local only, in logs/.
 - **After the run, the Mac.** 224 of the user's 621 processes are sandboxed (system services). The only sandboxed ones
   started since 08:43 are two macOS services (CoreParsec, Spotlight's Metadata worker) and the audit's own `ps`. Nothing
   from the run is left, and port 8122 is free.
+
+**EvalSuite's verdict (b1a2154): AGENTCC 32c2 PASS, confirmed 2 of 2** (32c and 32c2), with every validity item clean and 0
+flags from the integrity screen. EvalSuite notes that the 30 probe replies equal 32c's exactly (a deterministic replay), so
+the confirmation rests on the tasks.

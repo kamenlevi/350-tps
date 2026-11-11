@@ -89,6 +89,6 @@ if "f2a" in heads and RUN != "f2a":
     g2 = float(np.sqrt(hs[0] * hs[1]))
     o2 = res[("onpolicy ifeval", RUN)][0] / res[("onpolicy ifeval", "f2a")][0] if ("onpolicy ifeval", "f2a") in res else float("nan")
     rd = "more data pays" if g2 >= 1.02 else ("flat" if g2 < 1.005 else "small")
-    say(f"Data scaling ({RUN} = f2a + 2 epochs on ring 2, vs f2a; amendment 2): {rd}: held-out kept x{g2:.3f} "
+    say(f"Data scaling ({RUN} vs f2a, trained on more of the model's chat features; amendments 2 and 5): {rd}: held-out kept x{g2:.3f} "
         f"(IFEval x{hs[0]:.3f}, multi x{hs[1]:.3f}), on-policy x{o2:.3f} (more data pays >= x1.02; flat < x1.005)")
 open(OUT, "w").write("\n".join(L_) + "\n")

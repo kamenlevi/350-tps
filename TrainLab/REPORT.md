@@ -3991,3 +3991,21 @@ loses chat hits.
   passes: all tokens / all checks 11.158 vs 10.013 = x1.1144 (K_SCOREBOARD's x1.115 divides the rounded 11.16 / 10.01);
   geo over prompts x1.081. Whole decode pooled 125.19 vs 116.23 tok/s = x1.077 (geo x1.056 = the run report's +5.6 %).
   DRAFTER 3.5 and row 19 now say kept per check x1.08 geo / x1.11 pooled, and whole decode x1.077 pooled.
+
+### F2A amendment 5 = F2b, the data-rich re-run (Wed 11-11 11:23, before any F2b run; runner turns/f2b.sh, DRY-tested on both paths)
+- Why: F2a stage 1 was a KILL at 0.10M tokens, 8 % of the planned ~1.3M, so it did not test the data-rich plan
+  ('F2A night RESULT').
+- Same recipe and lines as the pre-registration: b5 continued (D-22 trainer, depth 6, lr b5 x 0.5, warm-up 20 + cosine),
+  2 epochs over the ring. f2b vs b5 on D-24's held-out 30 IFEval + 24 multi, and on the 24 on-policy IFEval windows
+  captured Sunday. PASS: held-out kept >= x1.08 AND on-policy >= x1.05. KILL: held-out < x1.03. A PASS goes to an engine
+  A/B (12 IFEval, chat whole decode, exact) and notes/F2A_SHIP.md. Also reported: data scaling f2b vs f2a (more data
+  pays >= x1.02; flat < x1.005).
+- Data: Sunday's ring (241 windows, 0.10M tokens) is kept and the capture continues from cursor.json; ring budget 25 GiB
+  (~1.3M tokens); --eval 0.
+- Validity: a ring under 1,200 windows (~0.5M tokens, 5x Sunday's) is NOT A TEST: no training.
+- Memory: the expert pool is gated at the measured peak + 8 GB. C 128 needs NO-SWAP >= 46 (Sunday's C 128 at NO-SWAP 45
+  swapped +2.1 GB at 23:29); C 64 needs >= 37.
+- Time: capture to END - 4 h 30 min; train to END - 25 min (2 epochs of a full ring take ~3.9 h at Sunday's 2.23 s per
+  window-step, data/f2a/train.log); eval to END - 5 min. Needs a quiet whole-Mac window of >= ~6 h for a minimal test
+  and ~9-10.5 h for the full ring (capture ran 76-80 tok/s at C 128; C 64 is not measured).
+- Prediction [G]: held-out x1.02-1.08; PASS ~20 % (lowered from ~35 % after Sunday's x1.014 at 0.10M tokens).
