@@ -546,3 +546,24 @@ starts a new entry. Otherwise as T1. The prediction for this setting is data/con
 
 **Reading.** Every hit of the fallback is bitwise on the real engine, and live hits never copy a QSA array. It ships if
 the copy fix of section 16 does not pass its own T1 (T1e).
+
+## 18. T1e (Wed 11 Nov 05:08-05:20, Leap's run): the copy fix passes, 12 of 12 hits bitwise with branches on
+
+**Setup.** As T1c, on 3c068d7 (conv/convcache.py sha256 55631cb8): branches on, CONV_CACHE_CHECK=1, the same 45
+requests. serve.py was the pinned copy the cached agent test will run (T1c's plus BIGMOE_IDLE_MS=50, a timing-only
+setting) [K Leap]. The stand-in test passed first, PF-A 4 PASS / 0 FAIL and chunk-major 4 / 0.
+
+**Results.** Data: data/conv/t1e/.
+- 12 hits as predicted (data/conv/t1_predicted.json), 12/12 PASS: logits, all 122 state arrays, the taps tail, the
+  widened rows and the U3C footprint are bitwise cold. 0 drift lines, 0 restore lines, 0 server errors.
+- Both copies pass (3,084 new tokens from 9,216 in 12.0 s and 12.3 s), and so do the live hits on the copy-made
+  entries (116 new tokens in 2.9-3.0 s, 339 in 4.8 s).
+- 30.2 % of the prompt tokens were prefilled (50,607 of 167,343), against 41.3 % with branches off (T1d).
+- **The census confirms the cause.** All 12 restores report one value an add of zero rewrites: `35[0] rows 0..0
+  (1 rows, 1 values, first 0x8000)`, a -0.0 in row 0 of layer 35's keys. Nothing in any GDN checkpoint or the other leaves.
+  - It shows up in both conversations. Position 0 is the same `<|im_start|>` token in each, so this is the model's
+    layer-35 key for that token.
+  - The Codex hits passed before the fix only because they never copied.
+
+**Reading.** The copy path is bitwise on the real engine, so branches stay on. The cached agent test and the 45 GB T1
+run on 3c068d7 [K Leap]. The CONV_CACHE_BRANCH=0 fallback stays in the module as a switch.

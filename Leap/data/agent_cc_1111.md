@@ -321,3 +321,39 @@ user.signingkey; the profile denies ~/.ssh, so a model can never sign with the u
 commit. 32_1111b had already started (04:23:49) when the answer came, so it runs as armed (EvalSuite's option b: commit
 failures reported as a setup limit of that rerun); agentcc_rerun3.sh (neutral HOME) was ready but not used. The cached
 runs use the neutral HOME, where commits work.
+
+## Wed 04:23-05:07: the 32 GB rerun with Bash working (agentcc_runs/32_1111b): tasks 11 / 12, 43 min (cold 94)
+
+agentcc_rerun2.sh (records: agent_cc_1111/agentcc_32_1111b/; raw request log local only, logs/, gitignored). Same server
+files as 32_1111 (the clone = release/next at 39947b1, checked against that commit's SHA256SUMS), serve.py --mem 32,
+claude 2.1.321, the same manifest / base config / launcher / timeouts; changed: CLAUDE_CODE_TMPDIR=<run>/cctmp (the Bash
+fix) and the ~/.claude* read-deny as one regex; the real HOME (EvalSuite's option b). No probe (EvalSuite: unaffected).
+- **Tasks: 11 / 12 checks passed, 0 timeouts; server 68 requests, 0 errors.** Bash works: 30 calls, 0 EPERM (the guard
+  saw t01 clean at 04:27:43). Tool calls: Bash 30, Read 21, Edit 15, Glob 2, Grep 2, Write 2; tool errors 2, both
+  ordinary (t09 wrote a scratch file to /tmp, which the sandbox refuses as it should; t11 used GNU `cat -A`, which macOS's
+  cat lacks). 3-16 turns per task. No `git commit` attempt (so 32_1111b's signing limit never mattered); no read outside
+  the task folders; no private-pattern hit in the transcripts (committed as they are).
+- **t09_refactor fails again, as in 32_1111:** format_money(amount) returns "1,234.50" and the callers keep the "$", so the
+  output is unchanged and the format string appears once, but the check also asserts format_money(1234.5) == "$1,234.50",
+  which the prompt ("Extract it into one helper function named format_money(amount) and use it in all three places.
+  The output must not change.") does not state. A spec ambiguity both runs resolved the same way; told to EvalSuite.
+- **Time:** task walls 127-364 s, 2,595 s in all (32_1111, Bash dead: 97-969 s, 5,619 s). Every turn is cold (no cache):
+  prompts 12.5-17.0K tokens (median 13.2K), first token median 31.9 s (~416 prompt tok/s), answers median 110 tokens,
+  whole decode median 61 tok/s, lifetime peak 36.69 GB. The 2 first tokens over 60 s (109 / 111 s) are fanwatch heat
+  freezes (3 freezes of ~80 s: 04:32, 04:49, 05:05; fanwatch_freezes.txt). With the conversation cache a turn would
+  prefill only its new tokens (T1d: 116-425 tokens in 2.9-5.7 s), the target of the cached runs.
+
+## Wed 05:07-05:20: T1e (BigMoE 3c068d7, bitwise clones, branches ON): PASS, 12 of 12 hits bitwise
+
+BigMoE (04:3x): T1c's signature B was the copy's `x + 0`: an add of zero is not a bit copy for floats (-0.0 + 0.0 =
++0.0; NaN bits rewritten; checked in MLX: 0x8000 -> 0x0000), and row 0 of layer 35's keys holds such a value, so the copy
+changed its bits but not its value (logits, values and taps matched). 3c068d7 (conv/convcache.py sha256 55631cb8):
+`_clone` copies bits (an integer add of zero on the same-size unsigned view), and convcache takes and restores the GDN
+checkpoints itself with that clone (they used the same rule twice). t1e.sh (records t1e_32_1111/): the cache clone,
+serve.py = cachepin (T1c's + BIGMOE_IDLE_MS=50, timing only), --mem 32, branches on, CONV_CACHE_CHECK=1, the 45 recorded
+requests. Stand-in: MOCK_PFLM=1 4 PASS / 0 FAIL (the gate), MOCK_PFLM=0 4 / 0. **Replay: 12 hits, 12 PASS, 0 FAIL; drift
+0, restore 0, server errors 0. BigMoE's verdict (t1_verdict.py at 3c068d7 -> t1e_32_1111/verdict.json): "PASS: 45 cache
+lines for 45 requests; hits 12 (predicted 12); checks 12/12 PASS".** The census lines (CHECK-only) find, on every hit
+(2 copies at 9,216, 4 live at 12,288, 6 live at 8,192), `35[0] rows 0..0 (1 rows, 1 values, first 0x8000)`: the -0.0
+the old clone rewrote. So the cache is exact at 32 GB with branches on. Pin for the cached runs: release/next 80c8041
+(serve.py = cachepin, engine/loop/convcache.py = 3c068d7; the cache clone's files equal it).

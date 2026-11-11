@@ -100,7 +100,7 @@ prompts too and crossed: the 02:0x wording "under 24 GB on benchmark-length prom
 25.112 GB; first crossings 15 LCB6 + 7 GPQA-D, none IFBench; shortest prompt at a first crossing 561 tokens; the longest row
 still under the line 592 tokens, 23.954 GB).] (B) = W24e (scripts/w24e.sh), after the gate, with NewIdeas: w13b exactly as gated
 (data/stack/card_w24d_env.txt, blob e06f495e, its env line verbatim) plus R57_PFCHUNK = 1024 / 512 / 256 / 1024 again (pc1024,
-pc512, pc256, pc1024b), on the card gate's six longest prompts (726 to 2,801 tokens: gpqad/recnTTKdBzfuoZ7w7, lcb6/abc394_g,
+pc512, pc256, pc1024b), on six long card-gate prompts (726 to 2,801 tokens: gpqad/recnTTKdBzfuoZ7w7, lcb6/abc394_g,
 lcb6/abc400_g, lcb6/arc192_a, gpqad/rec6sE2CRtD4drtHg, lcb6/3705), CAP 128, R57_LOGHASH=1, one process per arm.
 **A smaller chunk (512 or 256) carries the gate's label only if, on all six prompts, its tokens AND logits hashes equal pc1024's**,
 and pc1024b equals pc1024 (determinism). Among the chunks that qualify, the package uses the LARGEST (the cheapest first token)

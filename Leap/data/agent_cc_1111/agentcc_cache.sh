@@ -9,7 +9,10 @@
 # 12 tasks (agentcc_tasks.py); the server stopped and checked gone. Swap +2 GB stops everything.
 # Wed 04:0x: + the Bash fix (CLAUDE_CODE_TMPDIR=<run>/cctmp; 32_1111's 79 Bash calls all hit EPERM on Claude Code's temp dir
 # under /private/tmp/claude-501) and BRANCH=0 in the environment -> CONV_CACHE_BRANCH=0 (the orchestrator's 09:00 fallback:
-# a would-be copy becomes a miss). 04:2x (orchestrator): the claude processes run with HOME=<run>/home, a neutral folder
+# a would-be copy becomes a miss). 05:2x: LONGPID / LONGLOG = long_ctx's pid and log: wait while long_ctx still has arms
+# it can run (its log's last line is not "no arm fits"); once it only waits for room that never comes, stop it at GO
+# (TERM; it holds no lock then) so it cannot start an arm beside this run (it would skip those arms at 07:30 anyway).
+# 04:2x (orchestrator): the claude processes run with HOME=<run>/home, a neutral folder
 # (agent_home_tpl: .zshrc = only the exact PATH of the 11-11 runs; .gitconfig = agentcc@localhost), so Claude Code's shell
 # snapshot holds no user aliases (it sources $HOME/.zshrc; ZDOTDIR has no effect). Usage: [BRANCH=0] agentcc_cache.sh <GB> <run dir> "<FROM YYYY-MM-DD HH:MM:SS>" "<LAST ...>" [pid ...]
 GB=$1; RUN=$2; FROMS=$3; LASTS=$4; shift 4; AFTER="$*"
@@ -44,6 +47,8 @@ while :; do
   why=""
   [ $now -lt $FROM ] && why="before $FROMS"
   [ -z "$why" ] && for w in $AFTER; do kill -0 $w 2>/dev/null && why="waits for pid $w"; done
+  [ -z "$why" ] && [ -n "${LONGPID:-}" ] && kill -0 $LONGPID 2>/dev/null && ! tail -1 "$LONGLOG" 2>/dev/null | grep -q "no arm fits" \
+    && why="long_ctx (pid $LONGPID) still has arms it can run"
 > (a quote from the project owner, kept private)
   [ -z "$why" ] && [ -n "$(procs)" ] && why="an engine / chat / server runs"
   [ -z "$why" ] && [ "$(busy)" -gt 0 ] && why="another lock"
@@ -53,7 +58,17 @@ while :; do
   [ -z "$why" ] && [ $CLR -lt 2 ] && why="clear once"
   if [ -z "$why" ]; then
     peer lock share 300m --cpu 400 --gpu 100 "MEM $NEED GB: Leap Claude Code agent test at $GB GB, conversation cache on (EvalSuite PREREG_agentcc amendment)" > /dev/null 2>&1 && LOCKED=1
-    sleep 20; [ "$(busy)" = 0 ] && [ -z "$(procs)" ] && break
+    sleep 20
+    if [ "$(busy)" = 0 ] && [ -z "$(procs)" ]; then
+      if [ -n "${LONGPID:-}" ] && kill -0 $LONGPID 2>/dev/null; then
+        if tail -1 "$LONGLOG" 2>/dev/null | grep -q "no arm fits"; then
+          say "long_ctx (pid $LONGPID) only waits for room (\"$(tail -1 "$LONGLOG" | cut -c19-140)\"): stopping it"
+          kill -TERM $LONGPID; for i in $(seq 1 75); do kill -0 $LONGPID 2>/dev/null || break; sleep 1; done
+          kill -0 $LONGPID 2>/dev/null && say "WARNING: long_ctx still alive after 75 s"
+        fi
+      fi
+      [ -z "$(procs)" ] && { [ -z "${LONGPID:-}" ] || ! kill -0 $LONGPID 2>/dev/null; } && break
+    fi
     peer unlock >/dev/null 2>&1; LOCKED=0; CLR=0; why="after the lock"
   fi
   [ "$why" != "$NOTE" ] && say "wait: $why"; NOTE=$why

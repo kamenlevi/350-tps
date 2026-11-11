@@ -1405,7 +1405,7 @@ w13b with smaller chunks on long prompts after the gate. The gate itself (scores
 
 ## Tue 10 Nov 08:53-09:00: W24e = w13b with smaller prefill chunks on the gate's longest prompts: no smaller chunk keeps the tokens (data/w24/w24e_report.txt; data 8e515d5)
 The orchestrator's option (B). w13b exactly as gated (data/stack/card_w24d_env.txt, blob e06f495e) + R57_PFCHUNK, on the card
-gate's six longest prompts (726-2,801 tokens), CAP 128, R57_LOGHASH=1, one process per arm, quiet; rule pre-registered
+gate's six long prompts (726-2,801 tokens; not its six longest), CAP 128, R57_LOGHASH=1, one process per arm, quiet; rule pre-registered
 (docs/W24_DECISION.md 'W24e'). First token per prompt and the run's max lifetime peak:
 
 | chunk | 2,801 (GPQA) | 1,465 (LCB) | 1,102 (LCB) | 942 (LCB) | 919 (GPQA) | 726 (LCB) | max lifetime peak | tokens / hashes vs 1024 |
@@ -1544,3 +1544,16 @@ prefill instead.
 
 **Next.** This is the fallback for the cached agent test. The copy fix (T1c above) needs its own T1 (T1e) before
 branches come back. Details: docs/CONV_CACHE_DESIGN.md section 17.
+
+## Wed 11 Nov 05:08-05:20: CONV T1e = the copy fix on the real engine: PASS, 12 of 12 hits bitwise with branches on (data/conv/t1e/verdict.json)
+
+**Setup.** Leap ran T1 on 3c068d7 (bitwise clones), with branches on and the serve.py the cached agent test will use.
+
+**Results.**
+- 12 hits as predicted, all 12 bitwise vs cold, both branch copies included. 0 drift lines, 0 server errors.
+- 30.2 % of the prompt tokens were prefilled (41.3 % with branches off).
+- Every restore's census shows the cause: a single -0.0 in row 0 of layer 35's keys (bits 0x8000), which the old clone
+  turned into +0.0.
+
+**Next.** The cached 32 GB agent test runs on 3c068d7 with branches on, after Leap's 64K / 128K runs. Details:
+docs/CONV_CACHE_DESIGN.md section 18.

@@ -227,6 +227,75 @@ Written and committed before any run of this test.
 - **Part 2, before the first cached run:** the pin, the served-path change, the folders, the timeouts, and each run's
   role (verdict or information).
 
+## Amendment 3, part 2 (Wed 2026-11-11 05:2x: before the cached 32 GB run starts): the arm "32 GB with the conversation cache" (32c)
+- **Role:** a new arm with its own verdict under the registered lines: probe at least 28 / 30 with 0 invented, tasks at
+  least 10 / 12.
+  - It is scored with tools/agentcc_score.py under amendment 1, and its line reads "AGENTCC 32c".
+  - The 32 GB verdict without the cache stays FAIL (32_1111).
+- **Folder and schedule:** agentcc_runs/32c_1111, run by Leap's scratchpad/agent/agentcc_cache.sh (sha256
+  46f58cd9a9fdb6de..., armed 05:2x).
+  - It starts after the 64K / 128K runs' arms, about 06:00-06:40. The last start is 10:00.
+- **Server:** the cache clone at Leap release/next 80c8041. All 7 files are checked against its SHA256SUMS at GO.
+  - serve.py is d6b44ed034dbcf7b... (it was c9d0e5b5051fbea1...).
+  - agentio.py and tools/claude_local.sh are unchanged (60e4520efc8de3e3..., e5b900fae5fada10...), so the rendering,
+    tools and lanes are unchanged.
+  - engine/loop/convcache.py is 55631cb8e1760878..., equal to BigMoE 3c068d7.
+- **What serve.py changes** (EvalSuite read the diff from 39947b1 to 80c8041):
+  1. The conversation cache is on: CONV_CACHE=1, CONV_CACHE_GB 2.5 at --mem 32, and branches on (CONV_CACHE_BRANCH=1).
+     A turn prefills only its new tokens, and the cache's lines go to <run>/convcache.log.
+  2. With the cache on, every request uses the DFlash2 drafter. Before, requests outside code used "auto".
+  3. BIGMOE_IDLE_MS=50, which changes timing only.
+  4. The log line adds the cache's figures.
+- **Exactness:** Leap's T1e (05:07-05:20; Leap be35dc7) found 12 of 12 cache hits bitwise equal to a cold prefill in this
+  setup.
+- **Environment:**
+  - HOME=<run>/home (part 1);
+  - CLAUDE_CODE_TMPDIR=<run>/cctmp and the regex ~/.claude* read-deny (amendments 2 and 2a);
+  - the same manifest, base config, launcher, claude 2.1.321, 1,200 s timeouts, --max-turns 25 and allowed tools.
+- **The probe runs again,** because the server path changed. The runner calls ~/EvalSuite/tools/probe_cc.py as of
+  amendment 1 (sha256 1fffa3b687d332be...). EvalSuite will not edit it while the runner can call it.
+- **Disclosure:** amendment 1's case 10 fix was written after seeing 32_1111's probe calls.
+  - This server may return the same 30 calls: the cache's prefill is bitwise equal, and if decoding is exact the
+    drafter does not change the output. In that case the probe's outcome follows from that fix, since 32_1111's calls
+    score 28 / 30 under it.
+  - The RESULT reports how many of the 30 calls equal 32_1111's. If all do, the probe half is not independent evidence,
+    and the RESULT says so next to the verdict.
+- **Validity:**
+  - As amendment 2: no Bash result holds the EPERM.
+  - provenance.txt must show the pin's sums, the neutral HOME with its PATH line, git's identity under it (agentcc
+    <agentcc@localhost>), and CONV_CACHE_BRANCH=1.
+  - A run with branches off (the 09:00 fallback) is another arm, and it needs its own dated line before it starts.
+- **Information:** as before, plus the cache: hits and misses per request (convcache.log), the tokens prefilled, and time
+  to first token on hits against misses.
+- **The cached 45 GB run (45c_1111)** gets its own part 3 before it starts, after Leap's T1 check at 45 GB.
+
+## Amendment 3, part 3 (Wed 2026-11-11 05:2x: before the cached 45 GB run starts): the arm "45 GB with the conversation cache" (45c)
+- **Role:** a new arm with its own verdict under the registered lines, scored as in part 2. Its line reads "AGENTCC 45c".
+  - The 45 GB setting without the cache has not been run, so it has no verdict.
+  - The registered condition, a verdict only if the run completes by Thu 12:00, still holds. This run is due to end by
+    Wed 13:45.
+- **Folder and schedule:** agentcc_runs/45c_1111, run by Leap's agentcc_cache45.sh (sha256 4823f6c847be6dc2..., armed
+  05:2x).
+  - It runs after the cached 32 GB run and T1-45, with a last start of 12:15.
+- **Against 32c (part 2), the changes:**
+  - serve.py --mem 45, on port 8126;
+  - CONV_CACHE_GB=2.5, set explicitly (serve.py's 45 GB default is 6);
+  - the manifest's 45 GB task timeout of 3,000 s.
+  - With the cache on, the 45 GB path also uses DFlash2 throughout. It has its own prefill; PF-A is for 32 / 24 GB only.
+- **Same as 32c:** pin release/next 80c8041 with its sums, branches on, the neutral HOME, CLAUDE_CODE_TMPDIR, the regex
+  read-deny, probe_cc.py as of amendment 1, and the 12 tasks.
+- **Gates (the runner's):**
+  - It starts only after T1-45 (Leap's t1_runs/45_1111f: the 45-request replay at --mem 45, CONV_CACHE_GB 2.5, branches
+    on) ends with BigMoE's verdict PASS and FAIL 0.
+  - Its free-memory floor is T1-45's highest server peak, rounded up, plus 3 GB.
+  - Otherwise it writes SKIP and runner.done: a skipped run has no verdict, and EvalSuite reads runner.log before
+    scoring.
+- **Validity:** as part 2, with --mem 45, CONV_CACHE_GB=2.5 and CONV_CACHE_BRANCH=1 in provenance. A swap-guard stop, or
+  anything short of 30 probe calls and 12 tasks, means no verdict.
+- **Disclosure, as part 2:** the RESULT reports how many of the 30 probe calls equal 32_1111's and 32c's.
+- **Memory (information):** Leap's limits note puts chat-45 at 47.5-48.6 GB on 10-30K-token prompts, which is close to
+  tonight's 51-52 GB free. A skip or a swap stop is possible.
+
 ## Known limits
 - **Small N:** 12 tasks and 30 calls bound the failure rate only loosely.
 - **Small tasks:** they are single-step, Python plus one shell task, with no long sessions and no large repos.

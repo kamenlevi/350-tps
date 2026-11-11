@@ -1,4 +1,4 @@
-# RESULT: Claude Code with our local model at the 32 GB setting (Wed 2026-11-11 03:45) — FAIL on the probe line (27 / 30, line 28); tasks 11 / 12 PASS; the sandbox blocked every Bash call
+# RESULT: Claude Code with our local model at the 32 GB setting (Wed 2026-11-11 03:45) — FAIL on the probe line (27 / 30, line 28); tasks 11 / 12 PASS; the sandbox blocked every Bash call; the rerun with Bash: tasks 11 / 12 (information)
 
 Pre-registered in docs/PREREG_agentcc_2026-11-11.md before any run: 63218d0, with the pin 8046bac, the re-pin to Leap
 39947b1 (89651df), and the dated schedule line (ea53db1). Leap's runner ran it in Leap's sandbox. EvalSuite scored it
@@ -140,3 +140,61 @@ Not committed:
 - the server's request log, which holds Claude Code's system prompt and tool text (kept locally as
   data/agentcc/runs/32_1111_server_requests.jsonl);
 - the isolated Claude Code config folder.
+
+## Addendum: the 12 tasks again with Bash working (32_1111b, Wed 04:23-05:07) — information; tasks 11 / 12
+Pre-registered as amendments 2 and 2a (e0fea3a, 211650c) before it started. The known git commit limit (9b5ce10) was
+written after the start and before any result.
+
+- **Run [K]:** the provenance shows pin 39947b1 with matching sums, claude 2.1.321, manifest a44aaeeeefea, the 32 GB
+  setting and port 8124.
+  - GO 04:23:49; the server was ready at 04:24:08 (config chat-32, C 160).
+  - Tasks ran from 04:24:08 to 05:07:25: 68 requests, 0 server errors.
+- **Valid:** no Bash result in any of the 12 transcripts holds the EPERM, and 28 of 30 Bash calls ran without error.
+- **Tasks [K]** (results/agentcc_32b/agentcc_score_32b.txt): 11 / 12 pass, and t09_refactor fails (wrong edit). That
+  meets the registered task line (at least 10 / 12) with the task half run as designed.
+  - The 32 GB verdict stays FAIL; it was set by the probe half of 32_1111.
+  - The scorer's AGENTCC line reads INCOMPLETE because this folder has no probe, as amendment 2 says.
+
+| Task | Check | Turns | Wall (s) | s / turn | Tool calls | Bash calls | Tool errors |
+|---|---|---|---|---|---|---|---|
+| t01_fix_test | PASS | 7 | 214 | 30.6 | 6 | 3 | 0 |
+| t02_add_function | PASS | 9 | 364 | 40.5 | 8 | 4 | 0 |
+| t03_config | PASS | 5 | 154 | 30.7 | 4 | 0 | 0 |
+| t04_traceback | PASS | 5 | 127 | 25.4 | 4 | 1 | 0 |
+| t05_rename | PASS | 16 | 269 | 16.8 | 15 | 4 | 0 |
+| t06_cli_flag | PASS | 5 | 168 | 33.5 | 4 | 2 | 0 |
+| t07_import | PASS | 9 | 205 | 22.8 | 8 | 3 | 0 |
+| t08_readme | PASS | 3 | 172 | 57.3 | 2 | 0 | 0 |
+| t09_refactor | FAIL (wrong edit) | 9 | 297 | 33.0 | 8 | 6 | 1 |
+| t10_type_hints | PASS | 6 | 199 | 33.2 | 5 | 2 | 0 |
+| t11_shell | PASS | 7 | 248 | 35.4 | 6 | 5 | 1 |
+| t12_requirements | PASS | 3 | 177 | 59.1 | 2 | 0 | 0 |
+
+- **Totals:** 84 turns and 2,595 s, or 30.9 s per turn; the median task took 6.5 turns and 202 s.
+  - Against 32_1111 (Bash blocked, 160 turns and 5,619 s) that is 48 % fewer turns and 54 % less wall time.
+  - Every session ended in success, with no timeouts. Tool calls: Bash 30, Read 21, Edit 15, Glob 2, Grep 2, Write 2.
+- **The 2 tool errors:** both are command failures, not malformed tool calls.
+  - In t09, a Bash command wrote a scratch file to /tmp, and the sandbox denied it.
+  - In t11, the model ran `cat -A`, which macOS's cat does not support.
+- **git commit:** no task tried one, so the signing limit never applied.
+- **Outside the task folder:** there were no reads outside the task folders and no dangerouslyDisableSandbox flags. The
+  only out-of-folder action was t09's denied /tmp write.
+- **t09_refactor:** the model made the same final edit as in 32_1111 (identical diff).
+  - The prompt does not say whether the helper includes the dollar sign, and the check requires it. This is a prompt
+    ambiguity.
+  - Under the registered check the task stays a failure, and it is not re-scored.
+- **Server [K]:**
+  - Prompts were 12,504-17,003 tokens, median 13,195.
+  - Median time to first token 31.9 s, at most 111.5 s (in a heat freeze).
+  - Median whole decode 61.3 tok/s; median reply 110 tokens.
+  - The lifetime peak was 35.55-36.69 GB, above 32.0 GB on every request again.
+- **Heat freezes [K]** (results/agentcc_32b/fanwatch_0423_0508.log): 3 of 81 s each, at 04:32:23, 04:49:12 and 05:05:20.
+  - They fell in t02, t08 and t12: 243 s in all, or 9.4 % of the tasks' wall time.
+  - Without them the tasks average 28.0 s per turn.
+- **Data:** results/agentcc_32b/, laid out as results/agentcc_32, with no raw transcripts or request logs (kept locally
+  in data/agentcc/runs/32_1111b/). It was scanned with the public build's leak regex: 0 hits.
+
+**What the rerun shows (information):** with Bash working, Claude Code and this model finished 11 of 12 small coding
+tasks at 32 GB. They needed about half the turns and time of the blocked run, with two ordinary command errors and no
+reads outside the task folders. The registered 32 GB verdict is still FAIL, on the probe (27 / 30, one call short; one
+of the three failures is EvalSuite's check). The next verdict run is 45 GB, under amendments 1-3.
