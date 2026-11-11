@@ -513,3 +513,28 @@ command runs a heredoc and a here-string, then prints TMPPREFIX, PATH, the git i
   line, beside CLAUDE_CODE_TMPDIR), with the .zshrc unchanged.
 
 Scripts and outputs: agent_cc_1111/heredoc/ (the PATH lines are replaced by a note).
+
+## Wed 07:21-07:45: T1-45 (BigMoE 3c068d7, branches ON, --mem 45, CONV_CACHE_GB 2.5): PASS, 12 of 12 hits bitwise
+
+**Setup.** Runner t1_45.sh; records in t1_45_1111f/. It is T1e's setup at 45 GB:
+- the cache clone with serve.py = cachepin (d6b44ed0) and engine/loop/convcache.py = 3c068d7 (sha 55631cb8);
+- `serve.py --mem 45`, CONV_CACHE_BRANCH=1, CONV_CACHE_GB=2.5, CONV_CACHE_CHECK=1;
+- the 45 recorded requests.
+
+It started at 07:21:15, after the cached 32 GB run (NO-SWAP 52 GB).
+
+**Stand-in.** MOCK_PFLM=0 (the gate at 45 GB, chunk-major): 4 PASS / 0 FAIL. MOCK_PFLM=1 (information): 4 / 0.
+
+**Replay: 45 requests; 12 hits, 12 PASS, 0 FAIL; drift 0, restore 0, server errors 0.**
+- BigMoE's t1_verdict.py at 3c068d7 (written to t1_45_1111f/verdict.json): "PASS: 45 cache lines for 45 requests; hits 12
+  (predicted 12); checks 12/12 PASS, fail []; not as predicted []; prefilled 50607 of 167343 tokens; max cache 2.067 GB".
+- On every hit (2 copies at 9,216, 4 live at 12,288, 6 live at 8,192) the census finds `35[0] rows 0..0 (1 rows, 1 values,
+  first 0x8000)`, the same -0.0 as at 32 GB.
+- **So the cache is exact at 45 GB too, with branches on.**
+
+**Timing at 45 GB** (with CHECK on, so it is information only):
+- hits prefilled 116-3,084 new tokens (median 293) in 3.0-23.2 s (median 4.9 s); the two 3,084-token copy hits took about
+  23 s;
+- the 2 misses (8.4K and 12.3K tokens, cold) took 61-89 s, about 138 tok/s with 45 GB's own prefill (PF-D);
+- serve.py's highest lifetime peak was 50.02 GB. The cached 45 GB run's gate is therefore NO-SWAP >= 54 GB (peak + 3,
+  rounded up).

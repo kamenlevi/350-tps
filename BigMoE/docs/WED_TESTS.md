@@ -1572,3 +1572,18 @@ branches on, a 2.5 GB budget, and no per-hit cold check.
 
 **Next.** T1-45 (the 45 GB chunk-major T1) on 3c068d7. This run's exactness rests on T1e (12/12 bitwise). Details:
 docs/CONV_CACHE_DESIGN.md section 19.
+
+## Wed 11 Nov 07:21-07:45: CONV T1-45 = T1 at 45 GB: PASS, 12 of 12 hits bitwise on the chunk-major path (data/conv/t1_45/verdict.json)
+
+**Setup.** Leap ran T1 on 3c068d7 at --mem 45 (branches on, CHECK on, the same 45 requests). At 45 GB every prefill
+takes convcache's chunk-major path over the engine's PF-D prefill, and convcache takes the GDN checkpoints itself.
+T1 through T1e ran PF-A at 32 GB.
+
+**Results.**
+- 12 hits as predicted, all 12 bitwise vs cold. 0 drift lines, 0 server errors; 30.2 % of the prompt tokens
+  prefilled.
+- The census is the same as at 32 GB: one -0.0 in row 0 of layer 35's keys at every restore.
+- Long prefills run at PF-D's ~138 tok/s (PF-A at 32 GB: 369-444), so the misses and copies took 1.9-3.2x longer.
+  Short ones match. Peak 50.02 GB.
+
+**Next.** Leap's cached 45 GB agent run. Details: docs/CONV_CACHE_DESIGN.md section 20.

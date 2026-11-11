@@ -597,3 +597,32 @@ below from Leap's convcache.log and serve.log (Leap 72b6601).
 included, and memory stays within the line. This run checked no hit against a cold prefill; the module's exactness on
 the real engine is T1e's (section 18: same module, 12/12 bitwise, both copies included). Next: T1-45 (chunk-major at
 45 GB) on 3c068d7 [K Leap].
+
+## 20. T1-45 (Wed 11 Nov 07:21-07:45, Leap's run): 12 of 12 hits bitwise at 45 GB, on the chunk-major path
+
+**Setup.** As T1e, at --mem 45 [K Leap]:
+- the cache clone: serve.py = cachepin d6b44ed0, engine/loop/convcache.py = 3c068d7;
+- branches on, CONV_CACHE_GB 2.5, CONV_CACHE_CHECK=1, the same 45 recorded requests.
+
+serve.py sets R57_PFLM only at 32 and 24 GB; at 45 GB the engine refuses PF-A and has its own prefill, PF-D. So at
+45 GB every prefill takes convcache's chunk-major path over PF-D, and convcache takes the GDN checkpoints itself
+(`_snapshot_gdn`). This is that path's first run on the real engine; T1 through T1e ran PF-A at 32 GB. The stand-in
+passed first: chunk-major (the gate) 4 PASS / 0 FAIL, PF-A 4 / 0.
+
+**Results.** Data: data/conv/t1_45/: verdict.json from conv/t1_verdict.py, convcache.log and replay.out (Leap 3671b2e).
+- **12 hits as predicted, 12/12 PASS: every hit is bitwise cold at 45 GB.** 0 drift lines, 0 restore lines, 0 server
+  errors.
+- The prefill share is T1e's: 30.2 % (50,607 of 167,343 tokens).
+- **The census lines are identical to T1e's.** All 12 restores report `35[0] rows 0..0 (1 rows, 1 values, first
+  0x8000)`: 2 copies at 9,216, 4 live hits at 12,288 and 6 at 8,192. The -0.0 belongs to the model; it does not
+  depend on the memory mode or the prefill path.
+- **Timing** (CHECK on, so information only):
+  - Short prefills match 32 GB: live hits prefill 116-425 new tokens in 3.0-5.8 s (T1e 2.9-6.5 s).
+  - Long ones run at PF-D's speed. The misses (8,390 and 12,302 tokens) took 61.4 and 88.7 s, about 137-139 tok/s;
+    T1e did them with PF-A in 22.7 and 27.7 s (369-444 tok/s). The copies' 3,084 new tokens took 22.9-23.2 s here,
+    12.0-12.3 s in T1e.
+  - serve.py's lifetime peak was 50.02 GB, and the cache held at most 2.067 GB.
+
+**Reading.** The module is bitwise on both of the real engine's prefill paths, at 32 and 45 GB. Next is Leap's cached
+45 GB agent run. Its misses and copies will be slower than the 32 GB run's, because long prefills at 45 GB run at
+PF-D's ~138 tok/s, about a third of PF-A's speed at 32 GB. That gap is known: N45 measured 98-124 tok/s on Saturday.
