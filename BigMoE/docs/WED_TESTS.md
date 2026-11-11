@@ -1502,3 +1502,18 @@ requests.
   the array.
 
 Leap reruns with the fix at ~02:00. Details: docs/CONV_CACHE_DESIGN.md section 14.
+
+## Wed 11 Nov 01:3x-01:45: CONV T1b = the kind A fix holds; the last kind is layer 35's attention keys after a copy (data/conv/t1b/verdict.json)
+
+**Setup.** Leap reran T1 with the module choosing PF-A by the whole prompt (now conv/convcache.py, sha256 00488b23) and the
+FAIL line naming each differing leaf.
+
+**Results.**
+- 12 hits, 7 PASS, 5 FAIL.
+- The 4 logit FAILs of T1 are gone; all 6 Codex hits pass.
+- The 5 FAILs are one array: layer 35's attention keys, on every Claude Code hit from the conversation's first branch
+  copy on. Logits, taps and the other 121 arrays are equal.
+- Warm prefill: 2.8 s for 116 new tokens, 3.8-5.6 s for 196-425, 12.1 s for 3,084 (a cold 12,302-token prompt: 28.0 s).
+
+**Next.** A per-row drift diagnostic (docs/CONV_CACHE_DESIGN.md section 15) goes into T1c, after the night's long-context
+runs, to show where those rows change.

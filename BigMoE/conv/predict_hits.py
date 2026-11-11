@@ -61,9 +61,14 @@ def main():
                 if ok and max(ok) > c:
                     best, c = e, max(ok)
         src = "none"
+        src_conv0 = None if best is None else best.get("conv")
+        src_idx0 = None if best is None else next(i for i, x in enumerate(ents) if x is best)
         if best is not None:
             same = (not side) and best["lane"] == lane and (conv is None or best["conv"] in (None, conv))
             copy = side or not (same or c >= max(best["ck"]))
+            if copy and os.environ.get("CONV_CACHE_BRANCH", "1") == "0":   # the fallback: a branch is a miss
+                best, c = None, 0
+        if best is not None:
             kept = {k for k in best["ck"] if k <= c}
             if copy:
                 cur = dict(ck=kept)
@@ -80,6 +85,7 @@ def main():
         if not cur["ck"]:
             ents.remove(cur)
         rows.append(dict(rid=r["rid"], N=N, sys_end=m.get("sys_end"), lane=lane, conv=conv, hit=best is not None, c=c,
+                         src_entry=src_idx0, src_conv=src_conv0,
                          src=src, prefilled=N - c, edges=sorted(cur["ck"])))
     R = dict(what="convcache's expected behaviour on the recorded renders (CPU, the module's rules)", im_start=IM,
              requests=len(rows), hits=sum(r["hit"] for r in rows), prompt_tokens=sum(r["N"] for r in rows),

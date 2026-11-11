@@ -161,3 +161,36 @@ path chosen by the whole prompt, (b) the check names differing leaves). Data: da
   never copied and passed all 6, live trims below a decoded reply included. So the copy changes or aliases the main
   entry's layer-35 keys (or the copy's prefill writes into a buffer shared with it); the stand-in's copy passes, so it
   takes something the real engine has. Sent to BigMoE (owner) for the fix; T1c on it next.
+
+## Wed 02:1x: T1c armed (BigMoE 134e811: my tested module + a per-row drift diagnostic for signature B)
+
+BigMoE committed my tested file as 91c9a5f (sha256 00488b23, byte for byte) and sent 134e811 (sha256 e3434b13): the same
+plus a CHECK-only diagnostic: per-row integer prints of every QSA leaf (keys, values, raw, pooled) at each prefill's end,
+re-checked at the next request's start, after a restore (rows below c vs the source's prefill) and after the prefill;
+the FAIL line names the warm-vs-cold rows. Read before use: logs only, nothing else changes. Installed in the cache clone
+(my 00488b23 kept as convcache.py.00488b23). t1c.sh: BigMoE's stand-in, then the T1b replay; run folder
+t1_runs/32_1111c (raw convcache.log + serve.log kept). Placed after the cold agent test and the pkg_110g checks, before
+64K / 128K (~15 min). How to read it (BigMoE): drift at a request's start = the decode changed stored rows; a restore line
+= the copy's read; FAIL rows only in [c, N) = the warm prefill itself.
+
+Cold 32 GB agent test so far: probe 27 / 30 pass, 0 invented tools (02:11, 762 s); the 12 tasks started 02:11.
+
+## Wed 02:3x: T1d armed after T1c (BigMoE b855883: CONV_CACHE_BRANCH=0, the orchestrator's 09:00 fallback, checked early)
+
+The orchestrator's rule (02:1x): if there is no clean fix for signature B by 09:00, a branch (copy) becomes a miss; T1 runs
+again on that at once, and if it passes, the cached 32 GB agent test goes next. BigMoE's b855883 (sha256 266f76e5) =
+134e811 + CONV_CACHE_BRANCH (default 1, unchanged; 0 = a would-be copy is a cold miss and a new entry; the decision now
+runs before the check's cold prefill). Read before use: the switch only. t1d.sh: after T1c, installs b855883 in the cache
+clone (sha checked from BigMoE's repo and in the clone), BigMoE's stand-in with BRANCH=0, then the T1b replay with
+CONV_CACHE_BRANCH=0; run folder t1_runs/32_1111d. Expected (BigMoE): 10 hits (the 2 copies at 9,216 become misses), all
+PASS, unless the main entry's own decode changes its layer-35 keys (T1c's drift lines decide that).
+
+**Correction (02:3x, BigMoE's predict_hits.py 3a2dc46, which matches T1 / T1b hit for hit):** the T1b section above says
+the later failing live hits (k 33 / 35 / 36) were on the MAIN entry. They were not: by the module's rules k 33 is a live
+hit on entry 1 (the copy k 32 made; it shares more with k 32 than with k 31) and k 35 / 36 on entry 2 (the copy k 34
+made). All 5 FAILs are on copy-made entries; the main entry (entry 0) passed its only live hit (k 31) and was never
+restored live again; Codex (entry 3, live take-overs only) passed all 6. So signature B is either (a) the copy itself, or
+(b) entry 0's layer-35 keys below 9,216 changing during k 31's decode, seen only by the copies. T1c separates them: (b)
+-> a `drift (request start): entry 0 ... 35[0]` line at k 32; (a) -> `restore (copy at 9216): ... 35[0]` with no start
+drift; neither -> FAIL rows only in [9216, N). T1d's prediction (BigMoE data/conv/t1_predicted_branch0.json): 10 hits,
+all live, 41.3 % of prompt tokens prefilled.

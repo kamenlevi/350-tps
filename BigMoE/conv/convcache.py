@@ -37,6 +37,8 @@ BUDGET = float(os.environ.get("CONV_CACHE_GB", "2.5") or 2.5) * 1e9
 GRID = int(os.environ.get("CONV_CACHE_GRID", "8192") or 0)
 LOG = os.environ.get("CONV_CACHE_LOG", "")
 TAPS_ALL = os.environ.get("CONV_CACHE_TAPS") == "all"
+BRANCH = os.environ.get("CONV_CACHE_BRANCH", "1") != "0"   # 0: a request that would copy (branch) from an entry is a
+                                                        # miss (cold prefill, new entry); the fallback for T1b's kind B
 
 S = dict(g=None, orig=None, hint={}, last={}, entries=[], cur=None, pend_mtp=None, im_start=None, swin=2048)
 
@@ -299,6 +301,66 @@ def _named(cache):
     return out
 
 
+def _rowfp(x, axis):
+    """CONV_CACHE_CHECK drift diagnostic: a per-row print of one cache leaf, [rows, 2] uint32 = two integer sums of the
+    row's raw bits (plain, position-weighted) over every other axis. Integer sums are exact, so equal rows give equal prints
+    whatever the strides or capacity of the backing buffer."""
+    if x.dtype in (mx.bfloat16, mx.float16):
+        u = x.view(mx.uint16).astype(mx.uint32)
+    elif x.dtype in (mx.float32, mx.int32, mx.uint32):
+        u = x.view(mx.uint32)
+    else:
+        u = x.astype(mx.uint32)
+    u = mx.moveaxis(u, axis, 0)
+    u = u.reshape(u.shape[0], -1)
+    w = mx.arange(u.shape[1], dtype=mx.uint32) * mx.array(2654435761, dtype=mx.uint32) + mx.array(1, dtype=mx.uint32)
+    return mx.stack([u.sum(axis=1), (u * w).sum(axis=1)], axis=1)
+
+
+def _fps(cache):
+    """{(cache index, slot): [rows, 2] numpy} for every QSA leaf (keys, values, raw, pooled; rows = positions / blocks)"""
+    out = {}
+    for i, ent in enumerate(cache or []):
+        if not _trimmable(ent):
+            continue
+        st = getattr(ent, "state", None)
+        if not isinstance(st, (list, tuple)):
+            continue
+        for j, x in enumerate(st):
+            if x is not None:
+                out[(i, j)] = _rowfp(x, 2 if x.ndim == 4 else 1)
+    mx.eval(list(out.values()))
+    return {k: np.asarray(v) for k, v in out.items()}
+
+
+def _fpcmp(old, new, upto=None):
+    """rows where two _fps differ, over the rows both hold (and < upto): 'layer[slot] rows a..b (n of m)' per leaf"""
+    msgs = []
+    for key in sorted(old):
+        a, b = old[key], new.get(key)
+        if b is None:
+            msgs.append(f"{key[0]}[{key[1]}] missing")
+            continue
+        n = min(len(a), len(b))
+        if upto is not None:
+            n = min(n, upto if key[1] != 3 else upto // 4)    # slot 3 (pooled) counts blocks of 4 positions
+        d = np.flatnonzero((a[:n] != b[:n]).any(axis=1))
+        if len(d):
+            msgs.append(f"{key[0]}[{key[1]}] rows {d[0]}..{d[-1]} ({len(d)} of {n})")
+    return msgs
+
+
+def _drift(tag, skip=None):
+    """CONV_CACHE_CHECK: has any stored entry's QSA state changed since the end of its last prefill (rows below that
+    prompt's end only: a decode appends after it and must never touch them)? One log line per changed entry."""
+    for k, e in enumerate(S["entries"]):
+        if e is skip or getattr(e, "fp", None) is None:
+            continue
+        msgs = _fpcmp(e.fp, _fps(e.cache))
+        if msgs:
+            _say(f"drift ({tag}): entry {k} (N {len(e.ids)}, {e.lane}): " + "; ".join(msgs[:12]))
+
+
 def _cold_ref(ids, want_w, chunk):
     """CONV_CACHE_CHECK: the loop's own prefill on a fresh cache, before the warm one (U3C footprint kept aside)"""
     FG = S["g"]["FG"]
@@ -308,7 +370,7 @@ def _cold_ref(ids, want_w, chunk):
     c2, last2, T2, ws2 = S["orig"](ids, want_w, chunk)
     N, sw = len(ids), S["swin"]
     ref = dict(last=_sha(last2), states=[_sha(x) for ent in c2 for x in _leaves(ent)], tail=_sha(T2[max(0, N - sw):N]),
-               shapes=[tuple(x.shape) for _, x in _named(c2)],
+               shapes=[tuple(x.shape) for _, x in _named(c2)], fps=_fps(c2),
                ws={a: _sha(w) for a, w in ws2}, cap=None if cap is None else FG["cap"].copy())
     if cap is not None:
         FG["cap"] = cap
@@ -335,8 +397,17 @@ def prefill(ids, want_w=False, chunk=1024):
     ids_np = np.asarray(ids, dtype=np.int32)
     side = bool(h.get("side"))
     lane, conv = h.get("lane") or ("side" if side else "main"), h.get("conv")
+    if CHECK:
+        _drift("request start")
     e, c = _lookup(ids_np, want_w, need_cap) if N > chunk else (None, 0)
-    if e is None:
+    copy = False
+    if e is not None:                                      # take the entry over (same conversation, or its deepest edge) or copy
+        same = (not side) and e.lane == lane and (conv is None or e.conv in (None, conv))
+        copy = side or not (same or c >= max(e.ck))
+        if copy and not BRANCH:                            # CONV_CACHE_BRANCH=0: a branch is a miss (cold prefill, new entry)
+            e, c, copy = None, 0, False
+            info["miss"] = "branch (CONV_CACHE_BRANCH=0)"
+    if e is None and not info["miss"]:
         info["miss"] = "no stored prefix" if N > chunk else "one chunk"
     if CHECK and e is not None:
         tc = time.perf_counter()
@@ -348,15 +419,19 @@ def prefill(ids, want_w=False, chunk=1024):
     tail, tail_base = None, 0
     if e is not None:
         tr = time.perf_counter()
-        same = (not side) and e.lane == lane and (conv is None or e.conv in (None, conv))
-        deepest = c >= max(e.ck)
-        copy = side or not (same or deepest)
         if copy:
             S["cur"] = e                                   # (kept while making room for the branch)
             if _evict(reserve=c * 30000) + c * 30000 > BUDGET and not side:
                 copy = False                               # no room for a branch: take the entry over
             S["cur"] = None
         cache, mtp, ck = _restore(e, c, copy)
+        if CHECK:
+            _drift("after the cold check + restore")
+            if getattr(e, "fp", None) is not None:
+                msgs = _fpcmp(e.fp, _fps(cache), upto=c)
+                if msgs:
+                    _say(f"restore ({'copy' if copy else 'live'} at {c}): rows below c differ from the source's prefill: "
+                         + "; ".join(msgs[:12]))
         if need_cap:
             FG["cap"] = FG["cap"] | ck.cap
         tail, tail_base = ck.tail, ck.tail_base
@@ -411,6 +486,9 @@ def prefill(ids, want_w=False, chunk=1024):
     tot = _evict()
     info.update(prefill_ms=round(1e3 * (time.perf_counter() - t0), 1), entries=len(S["entries"]),
                 gb=round(tot / 1e9, 3), edges=sorted(cur.ck))
+    if CHECK:
+        _drift("after this prefill", skip=cur)
+        cur.fp = _fps(cache)                               # rows [0, N): the baseline the next request's drift check reads
     if ref is not None:
         bad = []
         if _sha(lg[0, -1]) != ref["last"]:
@@ -421,6 +499,8 @@ def prefill(ids, want_w=False, chunk=1024):
             dk = [k for k, (a_, b_) in enumerate(zip(st, ref["states"])) if a_ != b_]
             lab = "; ".join(f"{nm[k][0]} {tuple(nm[k][1].shape)} vs {ref['shapes'][k]}" for k in dk[:8])
             more = "" if len(st) == len(ref["states"]) else f"; leaf count {len(st)} vs {len(ref['states'])}"
+            rows = _fpcmp(ref["fps"], cur.fp if getattr(cur, "fp", None) is not None else _fps(cache))
+            more += f"; QSA rows warm vs cold: {', '.join(rows[:8])}" if rows else ""
             bad.append(f"states ({len(dk)} of {len(st)}: {lab}{' ...' if len(dk) > 8 else ''}{more})")
         if _sha(T[max(0, N - sw):N]) != ref["tail"]:
             bad.append("taps tail")

@@ -283,6 +283,8 @@ if __name__ == "__main__":
     e_end = ((12302 - D - 5) // 1024) * 1024
     expect = [(False, 0), (True, e_end), (True, (min(10019 - D, 10159 - D - 1) // 1024) * 1024), (False, 0), (True, e_end),
               (False, 0), (True, e_end)]
+    if os.environ.get("CONV_CACHE_BRANCH") == "0":         # the fallback: the branch (case 3) is a cold miss
+        expect[2] = (False, 0)
     got = [(r["hit"], r["c"]) for r in rows]
     R = dict(what="convcache B1 on a stand-in loop (1 QSA + 1 GDN layer, random weights)", pflm=PFLM, small=D, rows=rows,
              hits_as_expected=got == expect, expected=expect, got=got,

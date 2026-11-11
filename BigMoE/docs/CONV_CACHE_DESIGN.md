@@ -420,3 +420,62 @@ warm vs cold shapes.
 1. Leap's rerun with the fix and the leaf names (~02:00).
 2. The kind B fix.
 3. The cached agent tests (32 / 45 GB, CHECK off).
+
+## 15. T1b (Wed 11 Nov 01:3x-01:45, Leap's run): kind A fixed; kind B = layer 35's attention keys after the first copy
+
+**Setup.** Same as T1. The module was Leap's copy, now conv/convcache.py (sha256 00488b23): 7eb3401 plus two changes:
+- PF-A is chosen by the whole prompt;
+- the FAIL line names each differing leaf.
+
+The stand-in test passes on it: 4 PASS / 0 FAIL [K Leap].
+
+**Results.** Data: data/conv/t1b/.
+- 12 hits, as predicted. 7 PASS, 5 FAIL.
+- **Kind A is gone.** All 6 Codex hits pass, including the 196- and 197-token tails, and the 116-token Claude Code tails no
+  longer differ in logits, taps or the other 119 states. That also rules out the stale-rows confound of section 14.
+- **Kind B is one leaf.** All 5 FAILs show `35:QSACache[0]`, the attention KEYS of layer 35 (a QSA layer), with equal
+  shapes.
+  - Values, raw and pooled at layer 35 are equal, and so are the other 121 leaves, the last logits and the taps tail.
+  - So the differing key rows are rows the attention never selected.
+- **Pattern.** In the Claude Code conversation, the live hit before any copy passes. The first copy (from 9,216, 3,084 new
+  tokens through PF-A) fails, and so does every later hit:
+  - live on the main entry from 12,288 (116 new, twice);
+  - the second copy;
+  - live with 339 new.
+  The Codex conversation never copies, and all 6 of its live hits pass, including trims below a decoded reply.
+- **Warm prefill alone:**
+
+  | case | new tokens | warm prefill |
+  |---|---|---|
+  | live tail | 116 | 2.8 s |
+  | live tail | 196-425 | 3.8-5.6 s |
+  | copy | 3,084 | 12.1 s |
+  | cold | 12,302 / 8,390 (whole prompt) | 28.0 s / 21.5 s |
+
+  The check runs first, so the experts are resident: these times are optimistic until the CHECK-off test.
+
+**Reading so far.**
+- Keys are stored after RoPE and values are not. So something rewrote layer-35 keys, or wrote them at a wrong position, in
+  rows that attention never selected.
+- The main entry passed its check right after its prefill, and the copy taken from it failed. So its layer-35 keys changed
+  between its check and the copy: during its decode, or in the copy's read.
+- Leap finds no decode-time write to a QSA layer's kv.keys outside update_and_fetch in the loop or REF2:
+  - the key buckets pad copies;
+  - COPY = g2 is a host-side draft gate;
+  - SVH, SB1, SBN and S0CARRY do not touch the KV.
+- Not yet ruled out: MTPLX's own QSA verify / commit path.
+- Layer 35 is one of the drafter's tap layers (5, 15, 25, 35, 45), but layer 15 is also a QSA tap and is clean.
+
+**The drift diagnostic (CHECK-only, for T1c).**
+- Every QSA leaf gets a per-row print: two exact integer sums of the row's raw bits, so equal rows print equal whatever
+  the strides or capacity.
+- The prints are recorded at the end of each prefill (rows [0, N)) and re-checked at four points:
+  1. at the next request's start;
+  2. after the cold check and the restore;
+  3. on the restored rows below c, against the source's prefill;
+  4. on the other entries, after the prefill.
+- A FAIL line now also gives the differing rows, warm vs cold.
+- Unit checks: equal rows at different capacities print equal; one changed value is caught at its row; the stand-in loop
+  stays 7/7.
+- Reading the result: drift at the request's start means the decode changed stored rows. A restore mismatch means the
+  copy's read. Rows that differ only in [c, N) mean the warm prefill itself.
