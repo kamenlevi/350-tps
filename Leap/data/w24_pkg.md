@@ -258,3 +258,22 @@ The orchestrator (01:5x) approved both changes for 1.1.0, to be reviewed in the 
   A B), the clean-clone check as pkg_110c's (lossy-24 + chat-24, text prompt, chat.py + serve.py --mem 24), and the
   packaged chat.py / serve.py at idle with no variable set. Results below when run. The go would push pkg_110g instead
   of pkg_110f once the orchestrator has reviewed it.
+
+### pkg_110g real-engine checks (Wed 03:45-03:57, cc110g.sh): all PASS; held for the orchestrator's review
+
+Run right after the cold 32 GB agent test, in the prepped clean clone release/cleanclone/v110g (outputs:
+w24_pkg/candidate_110g/checks_0345/).
+1. **BIGMOE_IDLE_MS confirmation at 32 GB** (run.py chat --kind code, 3 HumanEval x 256 tokens, 8 processes, B A A B B A A
+   B; A = 0, B = 50): tokens EQUAL in all 8. Run 3 (arm A, 5.6 tok/s, process wall 137 s) is invalid: fanwatch's heat
+   pause froze the research jobs 03:48:21-03:49:21 (fanwatch_0347.txt; run 3 ran 03:47:05-03:49:24 and is the only run
+   inside that window; its median cycle 59.8 ms is normal, the freeze is in the wall time). Without it: A 132.7 tok/s (n 3,
+   sd 3.00), B 132.4 (n 4, sd 2.85), B/A 0.998, -0.30 tok/s = -0.13 SE. Pooled with 01:5x's 4 runs: A 132.0 (n 5), B
+   131.3 (n 6), B/A 0.995, -0.68 tok/s = -0.43 SE. **No measurable change** (data/idle_ms_1111.md). The runner's own summary
+   line (A 100.9, "B/A 1.31") includes the frozen run and is not the result.
+2. **Clean-clone check (as pkg_110c's): CLEAN-CLONE PASS.** lossy-24 and chat-24: 2/2 keys prefix-equal with the shipped
+   references (w13eh), 133.4 / 132.5 tok/s, lifetime peak 23.68 GB; closure 848 modules, 0 outside the clone + stdlib,
+   3,302 files opened, 0 outside the allowed roots; chat.py rc 0 (71 tokens, MTP head); serve.py --mem 24: one streamed
+   OpenAI + one streamed Anthropic request, stopped on SIGTERM.
+3. **Packaged defaults at idle (no variable set):** serve.py --mem 24 1.6 % of one core over 60 s (was ~100 %); chat.py
+   --mem 24 1.5 % after its answer.
+So pkg_110g (7f61f48) is ready for the orchestrator's review; the go would push it instead of pkg_110f.

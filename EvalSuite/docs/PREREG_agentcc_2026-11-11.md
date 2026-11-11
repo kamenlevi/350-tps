@@ -125,6 +125,54 @@ Written and committed before any run of this test.
 - **From the server log:** time to first token.
 - The scorer was tested on a synthetic run with one task of each type, and it labelled each one as defined.
 
+## Amendment 1 (Wed 2026-11-11 03:53: after the 32 GB run, before any other run)
+- **Why:** the 32 GB run (docs/RESULT_agentcc_32_2026-11-11.md) exposed two scorer bugs, both EvalSuite's.
+  - Probe case 10's check rejected a correct `ls -la`, because it looked for the substring "-a".
+  - The scorer flagged a false "invented" tool: the init event lists the subagent tool as Task, while the tools array
+    sent to the model calls it Agent.
+- **The changes** (tools/probe_cc.py and tools/agentcc_score.py, in this commit):
+  1. Case 10's check accepts `ls` with any flag group containing a or A, or --all.
+     - It was self-tested on 11 commands.
+     - Re-checked on the 32 GB run's stored calls, only case 10 changes result.
+  2. The scorer counts Agent as a session tool when the init event lists Task.
+- **Disclosure:** both changes were written after seeing the 32 GB outputs.
+  - The 32 GB verdict was scored under the registered checks, and it is not re-scored: it stays FAIL, 27 / 30.
+  - The changes apply to every later run: a 32 GB task rerun, 45 GB and 24 GB.
+- **Unchanged:** the lines (probe at least 28 / 30 with 0 invented; tasks at least 10 / 12), the cases, the tasks and the
+  failure types.
+- **Next:** the sandbox fix and any 32 GB task rerun get amendment 2. It is written when Leap sends the profile change,
+  the folder and the start time, and before that run starts.
+
+## Amendment 2 (Wed 2026-11-11 03:57: before the 32 GB task rerun starts)
+- **What runs:** the 12 tasks again at 32 GB, in Leap's folder agentcc_runs/32_1111b.
+  - Leap's runner is scratchpad/agent/agentcc_rerun.sh (sha256 d13479ba447ef9f4...).
+  - There is no probe. It calls the API directly, so the sandbox could not have affected it.
+- **The one change:** Claude Code's environment gets CLAUDE_CODE_TMPDIR=<run>/cctmp.
+  - Claude Code then makes its temp folder for each working folder inside the run folder, which the profile already
+    allows.
+  - The profile generator is unchanged; only the run folder's path differs.
+  - Leap's mock check (scratchpad/agent/bashfix_check.sh, 03:54, no GPU): without the fix it gives the same EPERM. With
+    it the command runs, and a write to $HOME is denied.
+- **Unchanged from 32_1111:**
+  - the clone's serve.py, agentio.py and tools/claude_local.sh at pin 39947b1, checked against that commit's
+    SHA256SUMS;
+  - serve.py --mem 32 with its request log, on port 8124;
+  - agentcc_tasks.py (sha256 3e84be3864b4017b..., the cold run's file), the manifest a44aaeeeefea, the base config and
+    the launcher;
+  - claude 2.1.321, the 1,200 s timeout, --max-turns 25 and the allowed tools.
+- **Validity:** the run counts only if Bash works, meaning no Bash result in any task holds the EPERM mkdir error. Leap's
+  runner stops at once if t01's transcript holds it.
+- **Role:** information. The 32 GB verdict stays FAIL; it was set by 32_1111's probe half.
+  - The tasks are scored against the registered task line (at least 10 / 12) with tools/agentcc_score.py under
+    amendment 1. This is the task half, run as designed.
+  - The scorer's AGENTCC line will read INCOMPLETE, because the folder has no probe. Only its TASKS line is used.
+- **Information reported, as in the first run:** turns, time per turn, tool calls and errors, failure types, the Bash
+  calls that ran, time to first token, and the server's lifetime peak.
+  - Wall times include heat pauses: fanwatch freezes the server when it runs hot. The RESULT lists them from fanwatch's
+    log.
+- **Schedule:** it starts once T1d's runner (pid 75700) has exited and the Mac is free, expected ~04:45-05:00. The last
+  start is 08:00, and the run takes about 95 min.
+
 ## Known limits
 - **Small N:** 12 tasks and 30 calls bound the failure rate only loosely.
 - **Small tasks:** they are single-step, Python plus one shell task, with no long sessions and no large repos.

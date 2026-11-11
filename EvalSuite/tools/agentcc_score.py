@@ -45,6 +45,7 @@ def main():
     for r in rows:
         tools, uses, errs, res, turns = transcript(r["id"])
         names = set(tools or [])
+        names |= {"Agent"} if "Task" in names else set()  # amendment 1: init lists the subagent tool as Task, the API array as Agent
         inv = [n for n, _ in uses if names and n not in names]
         bad_in = [e for e in errs if any(s in e.lower() for s in BAD_INPUT)]
         rep = any(uses[i] == uses[i + 1] == uses[i + 2] for i in range(len(uses) - 2))

@@ -194,3 +194,68 @@ restored live again; Codex (entry 3, live take-overs only) passed all 6. So sign
 -> a `drift (request start): entry 0 ... 35[0]` line at k 32; (a) -> `restore (copy at 9216): ... 35[0]` with no start
 drift; neither -> FAIL rows only in [9216, N). T1d's prediction (BigMoE data/conv/t1_predicted_branch0.json): 10 hits,
 all live, 41.3 % of prompt tokens prefilled.
+
+## Wed 01:58-03:45: EvalSuite's cold 32 GB agent test (agentcc_runs/32_1111): ran, but Bash never worked (harness bug)
+
+Pin: the agent clone = release/next 39947b1 (provenance.txt), serve.py --mem 32 (chat-32), claude 2.1.321, the sandbox
+and launcher as in agentcc_night.sh. Records: agent_cc_1111/agentcc_32_1111/ (results, probe, serve.log, runner.log,
+sandbox.sb, fanwatch_freezes.txt; transcripts/ redacted, see below). The raw request log (175 requests, 22 MB) is local
+only: logs/agentcc_32_1111_server_requests.jsonl.gz (gitignored).
+- **Probe (EvalSuite's 30 direct API calls): 27 / 30, 0 calls with an invented tool.** Fails: case 6 and case 10 (Bash, "case
+  check failed"), case 25 (Bash instead of Write). EvalSuite: case 10's check was its own bug (it rejected `ls -la`
+  looking for the substring "-a"); its pre-registered 32 GB line is 28, so the probe verdict as registered is FAIL.
+- **Tasks: 11 / 12 checks passed, 0 timeouts, server 175 requests, 0 errors.** t09_refactor failed: the model extracted
+  format_money() but kept the "$" in each caller, so format_money(1234.5) gives "1,234.50" (behavior-preserving, not
+  what the check asks). Task walls 97-969 s, 5,619 s in all.
+- **Harness bug: all 79 Bash calls failed** with `EPERM: operation not permitted, mkdir
+  '/private/tmp/claude-501/<the task folder, dashed>'`: Claude Code makes a per-folder temp dir under
+  /private/tmp/claude-<uid>/ before it runs any command, and the sandbox allows writes only in the run folder,
+  /private/var/folders and /dev. So the 12 tasks ran with no working shell (the probe checks the call, not its run, so it
+  was unaffected). EvalSuite found it at the same time (03:5x). Tool calls across the tasks (EvalSuite's count): Bash 79
+  (all EPERM), Read 37, Glob 16, Edit 15, Grep 5, Write 2, Agent 1 (the subagent lane worked: exactstream-sub), ToolSearch 1.
+- **What a lossy model does when the shell fails** (observed): retries with `dangerouslyDisableSandbox: true` (Claude
+  Code's own sandbox is off here, so the flag changes nothing; the outer seatbelt still applies), `cd /tmp`,
+  run_in_background, `ls -la /Users/kamen` (t12), and reading Claude Code's own config folder: t01 Read cc_home's
+  .claude.json and its **shell snapshot (snapshot-zsh-*.sh, built from the user's ~/.zshrc: his aliases, including the
+  private account names)**. All stayed on this Mac, inside the sandbox's allowed reads. The record's transcripts are
+  redacted: those two tool results are withheld, and the leak pattern finds 0 hits in transcripts/. EvalSuite told
+  (03:5x) not to commit that transcript or the request log as is.
+- **Cold-run timing** (no conversation cache: every turn prefills the whole prompt): probe prompts ~8.7K tokens, first
+  token median 21.3 s; task prompts 9.1-20.2K (median 13.8K), first token median 32.6 s (~419 prompt tok/s); answers
+  median 110 tokens, whole decode median 58 tok/s (short answers); lifetime peak 37.46 GB. The 7 first tokens over 60 s
+  (103-124 s) are all fanwatch heat freezes: the server was frozen 7 times for ~80 s (02:08, 02:19, 02:32, 02:46, 03:02,
+  03:16, 03:31; fanwatch_freezes.txt), ~9.5 min of the 94-min task phase.
+
+## Wed 03:5x: the Bash fix (CLAUDE_CODE_TMPDIR) and the 12-task rerun at 32 GB armed (agentcc_runs/32_1111b)
+
+- **Fix:** `CLAUDE_CODE_TMPDIR=<run>/cctmp` in Claude Code's environment (a documented variable in Claude Code's string
+  table: it moves the per-uid temp root). Claude Code then makes its per-folder temp dir inside the run folder, which the
+  profile already allows; the sandbox profile is unchanged (its generator is byte-identical; nothing is written outside
+  the scratchpad). With a long override Claude Code keeps child processes' TMPDIR at the system default
+  (/var/folders/.../T/, allowed), since a socket path there would be too long.
+- **Mock check 03:54** (bashfix_check.sh + mock_bash.py = mock_tools.py with one Bash call; no GPU, < 1 GB; output
+  bashfix_check.out): V0 (as 32_1111) gives the same EPERM; V1 (the fix) runs the command: TMPDIR=/var/folders/.../T/,
+  a file written in the task folder, a Python tempfile written, a write to $HOME denied (no file appeared outside).
+- **Rerun** (agentcc_rerun.sh, armed 03:55 after T1d's runner, one clear poll, 10-s polls; last start 08:00): the same
+  server files (the clone checked against release/next's SHA256SUMS at 39947b1, not HEAD), serve.py --mem 32 on port 8124,
+  the same manifest, base config and launcher, no probe; a guard stops the run at once if t01's transcript still holds
+  the EPERM. EvalSuite's PREREG_agentcc amendment 2 (e0fea3a, 03:57) covers the fix, the new folder, its corrected case
+  10 check and a scorer fix (the init event names the subagent tool Task, the API array Agent).
+
+## Wed 04:0x: no account names in tracked files; the rerun re-armed with a regex read-deny (agentcc_rerun2.sh)
+
+The orchestrator (04:0x): the sandbox profiles in the record named the two account config folders literally, and the
+public sync's leak check refuses those strings. Fixed in every tracked file (git grep for them: 0 hits):
+- the ~/.claude read-deny rules (three subpaths) are now one rule, `(regex #"^/Users/[^/]+/\.claude[^/]*(/|$)")`,
+  covering every ~/.claude* entry, ~/.claude.json included (the old list did not cover ~/.claude.json, which holds the
+  account's config). Applied by deny_regex.py to agentcc_night.sh, agentcc_cache.sh, agentcc_rerun.sh, bashfix_check.sh
+  and, as a marked record copy, agentcc_32_1111/sandbox.sb;
+- scripts/copyspan_lookup.py + copyspan_width.py read the second projects folder from COPYSPAN_DIRS; HANDOVER reworded.
+- **Mock check 04:05** (bashfix_check2.out, the regex profile): claude rc 0, Bash runs, file + tempfile written, write
+  outside denied, `~/.claude*`: 7 entries, 0 readable; ~/.ssh denied.
+- **The rerun:** agentcc_rerun.sh (pid 38588, still waiting for T1d) was stopped by SIGKILL (no trap, so no runner.done
+  for EvalSuite's watcher; its log kept as 32_1111b/runner_rerun1_armed_0355.log) and agentcc_rerun2.sh armed 04:05:46
+  (task b2h18m0yw): the same folder, gate and settings, only the read-deny rule as above.
+- Note for the next runs: the shell snapshot that t01 read lives in the run's own Claude Code config folder (cc_home),
+  which Claude Code itself must read, so no read-deny can hide it; keeping the user's aliases out of it would mean a
+  neutral zsh startup (ZDOTDIR), which changes PATH (python3) for the tasks: not done without EvalSuite's call.

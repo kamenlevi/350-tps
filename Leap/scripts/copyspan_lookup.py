@@ -13,7 +13,9 @@ from tokenizers import Tokenizer
 TK = Tokenizer.from_file(os.path.expanduser("~/BigMoE/models/bare/tokenizer.json"))
 enc = lambda s: TK.encode(s, add_special_tokens=False).ids if s else []
 random.seed(3)                                       # fshare.py's sample
-files = [f for d in ("~/.claude/projects", "~/.claude-account-1/projects")
+DIRS = ["~/.claude/projects"] + [d for d in os.environ.get("COPYSPAN_DIRS", "").split(":") if d]  # the recorded runs
+# also read the research account's projects folder (its config dir + /projects), given here via COPYSPAN_DIRS
+files = [f for d in DIRS
          for f in glob.glob(os.path.expanduser(d) + "/*/*.jsonl") if 300_000 < os.path.getsize(f) < 40_000_000]
 random.shuffle(files); files = files[:int(sys.argv[1]) if len(sys.argv) > 1 else 80]
 X = float(sys.argv[2]) if len(sys.argv) > 2 else 1.0

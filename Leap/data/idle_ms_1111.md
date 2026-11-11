@@ -35,3 +35,15 @@ in-decode difference is one clock read per idle spin pass (tens of ns). Confirma
 in the clean-clone slot after the cold agent test. Adopted per the orchestrator: BIGMOE_IDLE_MS=50 as an env default in
 release/src chat.py + serve.py (1.1.0 candidate rebuild + clean-clone check, held for the orchestrator's review) and in
 release/next serve.py; BIGMOE_IDLE_MS=0 in the shell restores the spin.
+
+## Confirmation (Wed 03:45-03:52, the pkg_110g clean clone v110g, 8 more runs at 32 GB, B A A B B A A B)
+
+| run | 1 B | 2 A | 3 A | 4 B | 5 B | 6 A | 7 A | 8 B |
+|---|---|---|---|---|---|---|---|---|
+| whole decode tok/s | 128.8 | 129.3 | (5.6: heat freeze) | 135.1 | 131.5 | 133.8 | 135.0 | 134.2 |
+
+Tokens equal in all 8. Run 3 is excluded: fanwatch froze the research jobs 03:48:21-03:49:21 (heat pause at die 84.5 C),
+inside that run (03:47:05-03:49:24, process wall 137 s); its median cycle (59.8 ms) is normal. Without it: A 132.7 (n 3),
+B 132.4 (n 4), B/A 0.998 (-0.13 SE). Pooled with the 4 runs above: A 132.0 (n 5, sd 2.43), B 131.3 (n 6, sd 2.79), B/A
+0.995, -0.68 tok/s = -0.43 SE. **Verdict unchanged: no measurable decode change; idle CPU ~100 % -> 1.5-1.6 %** (the
+packaged defaults, no variable set: serve.py 1.6 %, chat.py 1.5 %). Records: w24_pkg/candidate_110g/checks_0345/.

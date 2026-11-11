@@ -7,11 +7,13 @@
 # 2 clear polls); last start LAST. Then, under a share lock: the pinned agent server (release/next; the clone's files must
 # match its SHA256SUMS) as serve.py --mem GB on port 8120 with its request log; probe_cc.py (EvalSuite's 30 calls); the
 # 12 tasks (agentcc_tasks.py); the server stopped and checked gone. Swap +2 GB stops everything.
-# Usage: agentcc_night.sh <GB> <run dir> "<FROM YYYY-MM-DD HH:MM:SS>" "<LAST ...>" [pid ...]
+# Wed 04:0x: + the Bash fix (CLAUDE_CODE_TMPDIR=<run>/cctmp; 32_1111's 79 Bash calls all hit EPERM on Claude Code's temp dir
+# under /private/tmp/claude-501) and BRANCH=0 in the environment -> CONV_CACHE_BRANCH=0 (the orchestrator's 09:00 fallback:
+# a would-be copy becomes a miss). Usage: [BRANCH=0] agentcc_cache.sh <GB> <run dir> "<FROM YYYY-MM-DD HH:MM:SS>" "<LAST ...>" [pid ...]
 GB=$1; RUN=$2; FROMS=$3; LASTS=$4; shift 4; AFTER="$*"
 A=/private/tmp/claude-501/-Users-kamen-OjoX/f2971937-6c95-4e86-a049-05beff6a8e32/scratchpad/agent
 CL=/Users/kamen/Leap/release/cleanclone/cache/clone; NEXT=/Users/kamen/Leap/release/next; MAN=/Users/kamen/EvalSuite/agentcc/manifest.json
-PORT=8122; mkdir -p $RUN; LOG=$RUN/runner.log
+PORT=8122; mkdir -p $RUN $RUN/cctmp; LOG=$RUN/runner.log; BR=${BRANCH:-1}
 case $GB in 32) NEED=45;; 45) NEED=${NEED45:-58};; 24) NEED=35;; *) echo "GB must be 24 / 32 / 45"; exit 2;; esac
 ep() { date -j -f "%Y-%m-%d %H:%M:%S" "$1" +%s; }
 FROM=$(ep "$FROMS"); LAST=$(ep "$LASTS")
@@ -67,6 +69,7 @@ done
 echo "release/next commit: $(git -C /Users/kamen/Leap log -1 --format='%h %s' -- release/next | cut -c1-120)" >> $RUN/provenance.txt
 echo "claude --version: $(CLAUDE_CONFIG_DIR=$RUN/cc_version /Users/kamen/.local/bin/claude --version 2>&1 | head -1)" >> $RUN/provenance.txt
 echo "manifest sha256: $(shasum -a 256 $MAN | cut -c1-12); setting $GB GB; port $PORT; date $(date '+%F %T')" >> $RUN/provenance.txt
+echo "cache: CONV_CACHE=1 CONV_CACHE_BRANCH=$BR; Bash fix: CLAUDE_CODE_TMPDIR=$RUN/cctmp" >> $RUN/provenance.txt
 # the sandbox: writes only in the run folder and temp, network only to localhost, private home folders unreadable
 H=/Users/kamen
 cat > $RUN/sandbox.sb <<SB
@@ -77,13 +80,13 @@ cat > $RUN/sandbox.sb <<SB
 (allow network-outbound (remote unix-socket))
 (deny file-write*)
 (allow file-write* (subpath "$RUN") (subpath "/private/var/folders") (regex #"^/dev/"))
-(deny file-read* (subpath "$H/.ssh") (subpath "$H/.aws") (subpath "$H/.gnupg") (subpath "$H/.claude") (subpath "$H/.claude-account-1")
-  (subpath "$H/.claude-account-2") (subpath "$H/.codex") (subpath "$H/.config/gh") (literal "$H/.netrc") (literal "$H/.git-credentials")
+(deny file-read* (subpath "$H/.ssh") (subpath "$H/.aws") (subpath "$H/.gnupg") (regex #"^/Users/[^/]+/\.claude[^/]*(/|$)")
+  (subpath "$H/.codex") (subpath "$H/.config/gh") (literal "$H/.netrc") (literal "$H/.git-credentials")
   (subpath "$H/Library/Keychains") (subpath "$H/Library/Mail") (subpath "$H/Library/Messages") (subpath "$H/Library/Cookies")
   (subpath "$H/Library/Safari") (subpath "$H/Library/Application Support/Google") (subpath "$H/Library/Application Support/Claude")
   (subpath "$H/Documents") (subpath "$H/Desktop") (subpath "$H/Downloads") (subpath "$H/Papers") (subpath "$H/.local/share/exactstream-sessions"))
 SB
-( cd $CL && CONV_CACHE=1 CONV_CACHE_LOG=$RUN/convcache.log EXACTSTREAM_LOG_REQUESTS=$RUN/server_requests.jsonl exec .venv/bin/python serve.py --mem $GB --port $PORT ) > $RUN/serve.log 2>&1 &
+( cd $CL && CONV_CACHE=1 CONV_CACHE_BRANCH=$BR CONV_CACHE_LOG=$RUN/convcache.log EXACTSTREAM_LOG_REQUESTS=$RUN/server_requests.jsonl exec .venv/bin/python serve.py --mem $GB --port $PORT ) > $RUN/serve.log 2>&1 &
 SP=$!; t0=$(date +%s)
 until curl -s -m 2 http://127.0.0.1:$PORT/health 2>/dev/null | grep -q ready; do
   kill -0 $SP 2>/dev/null && [ $(( $(date +%s) - t0 )) -lt 600 ] || { say "serve.py did not come up (tail: $(tail -2 $RUN/serve.log | tr '\n' ' '))"; exit 2; }; sleep 2
@@ -92,7 +95,19 @@ say "serve.py --mem $GB ready in $(( $(date +%s) - t0 )) s (pid $SP)"
 P0=$(date +%s); python3 /Users/kamen/EvalSuite/tools/probe_cc.py $PORT $RUN/probe_cc.jsonl > $RUN/probe_cc.out 2>&1 &
 TP=$!; while kill -0 $TP 2>/dev/null; do [ $(( $(date +%s) - P0 )) -gt 7200 ] && { say "probe: 2-h cap"; for c in $(desc $TP); do kill -TERM $c; done; kill -TERM $TP; }; sleep 5; done
 wait $TP; say "probe rc $? in $(( $(date +%s) - P0 )) s: $(tail -1 $RUN/probe_cc.out | cut -c1-160)"; TP=""
+export CLAUDE_CODE_TMPDIR=$RUN/cctmp
 /opt/homebrew/opt/python@3.12/bin/python3.12 -I $A/agentcc_tasks.py $RUN $GB $MAN $PORT $RUN/sandbox.sb $A/cc_home $CL/tools/claude_local.sh > $RUN/tasks.out 2>&1 &
-TP=$!; wait $TP; say "tasks: $(grep -c . $RUN/results.jsonl 2>/dev/null) results; checks passed $(grep -c '"check_rc": 0' $RUN/results.jsonl 2>/dev/null); $(tail -1 $RUN/tasks.out)"; TP=""
+TP=$!; G1=0
+while kill -0 $TP 2>/dev/null; do
+  if [ $G1 = 0 ] && [ -s $RUN/results.jsonl ]; then
+    G1=1; f=$(ls $RUN/t01_*.jsonl 2>/dev/null | head -1)
+    if [ -n "$f" ] && grep -q "EPERM: operation not permitted, mkdir" "$f"; then
+      say "STOP: t01's transcript still holds the EPERM (the Bash fix did not take): stopping the tasks"
+      for c in $(desc $TP); do kill -TERM $c 2>/dev/null; done; kill -TERM $TP; break
+    fi
+  fi
+  sleep 5
+done
+wait $TP 2>/dev/null; say "tasks: $(grep -c . $RUN/results.jsonl 2>/dev/null) results; checks passed $(grep -c '"check_rc": 0' $RUN/results.jsonl 2>/dev/null); $(tail -1 $RUN/tasks.out)"; TP=""
 say "server: $(grep -c 'done:' $RUN/serve.log) requests; errors $(grep -c -E 'Traceback|Error' $RUN/serve.log); cache hits $(grep -c ' hit ' $RUN/convcache.log 2>/dev/null) of $(grep -cE ' (hit|miss) ' $RUN/convcache.log 2>/dev/null)"
 stopsrv; say "serve.py stopped (NO-SWAP $(noswap) GB)"

@@ -5,7 +5,7 @@ Each case wants exactly one of Read / Bash / Grep / Glob / Write / Edit (5 each;
 Claude Code requires one). A call PASSES when: a tool_use came back; every tool name used is in the tools array (no invented
 tool); the first tool_use is the expected tool; its input fits that tool's input_schema (required keys, types, enums); the
 case's own checks hold; file_path is absolute for Read / Write / Edit. Usage: probe_cc.py <port> <out.jsonl>"""
-import hashlib, json, os, sys, time, urllib.request
+import hashlib, json, os, re, sys, time, urllib.request
 
 PORT, OUT = int(sys.argv[1]), sys.argv[2]
 TF = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "agentcc", "cc_tools_2.1.321.json")
@@ -19,6 +19,8 @@ SYSTEM = (f"You are Claude Code, a command-line coding assistant. Use the tools 
 end = lambda suf: (lambda a: str(a.get("file_path", "")).endswith(suf))
 has = lambda k, *subs: (lambda a: all(s.lower() in str(a.get(k, "")).lower() for s in subs))
 both = lambda *fs: (lambda a: all(f(a) for f in fs))
+# amendment 1 (Wed 11-11, after the 32 GB run): any ls flag group with a / A, or --all ("ls -la" was rejected)
+lsall = lambda a: bool(re.search(r"\bls\b[^|;&]*\s(-[A-Za-z]*[aA][A-Za-z]*|--all)\b", str(a.get("command", ""))))
 CASES = [  # (prompt, expected tool, check on its input, prior Read (path, content) for Edit cases)
     ("Show me src/app.py.", "Read", end("src/app.py"), None),
     ("Open the README.", "Read", end("README.md"), None),
@@ -29,7 +31,7 @@ CASES = [  # (prompt, expected tool, check on its input, prior Read (path, conte
     ("Show me the git status.", "Bash", has("command", "git status"), None),
     ("Count the lines in src/app.py with wc.", "Bash", has("command", "wc", "app.py"), None),
     ("Install the requests package with pip.", "Bash", has("command", "pip", "install", "requests"), None),
-    ("List the files in this directory, including hidden ones.", "Bash", has("command", "ls", "-a"), None),
+    ("List the files in this directory, including hidden ones.", "Bash", lsall, None),
     ("Find every TODO comment in the project.", "Grep", has("pattern", "TODO"), None),
     ("Which files mention database_url?", "Grep", has("pattern", "database_url"), None),
     ("Search the src folder for functions whose names start with parse_.", "Grep", has("pattern", "parse_"), None),
