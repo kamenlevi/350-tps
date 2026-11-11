@@ -567,3 +567,33 @@ setting) [K Leap]. The stand-in test passed first, PF-A 4 PASS / 0 FAIL and chun
 
 **Reading.** The copy path is bitwise on the real engine, so branches stay on. The cached agent test and the 45 GB T1
 run on 3c068d7 [K Leap]. The CONV_CACHE_BRANCH=0 fallback stays in the module as a switch.
+
+## 19. The cached 32 GB agent run (Wed 11 Nov 07:01-07:21, Leap's run 32c_1111): 117 of 118 requests hit, tasks 2.8x faster
+
+**Setup.** EvalSuite's agent test (the 30-case probe, then 12 Claude Code tasks) against serve.py --mem 32 on Leap's
+cache clone, as registered in EvalSuite's amendment 3 part 2 [K Leap]:
+- serve.py = cachepin d6b44ed0 plus the hook; engine/loop/convcache.py = 3c068d7 (sha256 55631cb8);
+- branches on, CONV_CACHE_GB 2.5 (the 32 GB default);
+- CONV_CACHE_CHECK off, so there was no cold compare per hit.
+
+**Results.** Data: data/conv/agent32c/. That folder holds convcache.log and summary.json, which recomputes every number
+below from Leap's convcache.log and serve.log (Leap 72b6601).
+- **117 of 118 requests hit: 106 live and 11 copies.** The one miss is the first probe request (8,738 tokens, 20.4 s
+  cold).
+- **The 11 copies are the first requests of tasks t02-t12.** The gaps between them equal the task walls. Each new
+  conversation starts from the previous task's entry at 9,216 tokens, the shared system-prompt edge (as T1e's copies),
+  and prefills 3,286-3,364 new tokens.
+- **Prompt size:** median 13.0K tokens, max 30.2K.
+- **New tokens prefilled per request:** median 664, p90 3,293, max 11,248. In total that is 9.3 % of all prompt tokens
+  (141,318 of 1,519,622).
+- **First token:** median 6.3 s, p90 12.7 s, max 36.4 s (the 11,248-token prefill). The cold rerun's median was 31.9 s
+  [K Leap]. Restores take 2.7 ms median and 10.6 ms max.
+- **Memory:** lifetime peak 37.07 GB (the cold rerun peaked at 36.69 GB [K Leap]). The cache held at most 2 entries and
+  2.58 GB, and ended with 1 entry of 2.58 GB.
+- **Agent results [K Leap]:** probe 29/30, tasks 11/12 (t09_refactor fails in every run), 0 server errors. The tasks
+  took 916 s in all, against 2,595 s cold (2.8x).
+
+**Reading.** The cache holds up through a whole Claude Code session at 32 GB: nearly every request is a hit, copies
+included, and memory stays within the line. This run checked no hit against a cold prefill; the module's exactness on
+the real engine is T1e's (section 18: same module, 12/12 bitwise, both copies included). Next: T1-45 (chunk-major at
+45 GB) on 3c068d7 [K Leap].

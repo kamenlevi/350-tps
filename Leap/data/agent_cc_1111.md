@@ -199,7 +199,7 @@ all live, 41.3 % of prompt tokens prefilled.
 
 Pin: the agent clone = release/next 39947b1 (provenance.txt), serve.py --mem 32 (chat-32), claude 2.1.321, the sandbox
 and launcher as in agentcc_night.sh. Records: agent_cc_1111/agentcc_32_1111/ (results, probe, serve.log, runner.log,
-sandbox.sb, fanwatch_freezes.txt; transcripts/ redacted, see below). The raw request log (175 requests, 22 MB) is local
+sandbox.sb, fanwatch_freezes.txt; tool_calls.jsonl, the per-call summary; see below). The raw request log (175 requests, 22 MB) is local
 only: logs/agentcc_32_1111_server_requests.jsonl.gz (gitignored).
 - **Probe (EvalSuite's 30 direct API calls): 27 / 30, 0 calls with an invented tool.** Fails: case 6 and case 10 (Bash, "case
   check failed"), case 25 (Bash instead of Write). EvalSuite: case 10's check was its own bug (it rejected `ls -la`
@@ -217,9 +217,11 @@ only: logs/agentcc_32_1111_server_requests.jsonl.gz (gitignored).
   Code's own sandbox is off here, so the flag changes nothing; the outer seatbelt still applies), `cd /tmp`,
   run_in_background, `ls -la /Users/kamen` (t12), and reading Claude Code's own config folder: t01 Read cc_home's
   .claude.json and its **shell snapshot (snapshot-zsh-*.sh, built from the user's ~/.zshrc: his aliases, including the
-  private account names)**. All stayed on this Mac, inside the sandbox's allowed reads. The record's transcripts are
-  redacted: those two tool results are withheld, and the leak pattern finds 0 hits in transcripts/. EvalSuite told
-  (03:5x) not to commit that transcript or the request log as is.
+  private account names)**. All stayed on this Mac, inside the sandbox's allowed reads. The transcripts were first
+  committed redacted (those two tool results withheld; the leak pattern found 0 hits). EvalSuite told (03:5x) not to
+  commit that transcript or the request log as is. **Correction (Wed 07:3x):** under the 04:0x rule raw transcripts stay
+  out of git. The transcripts left HEAD at 07:3x; agentcc_32_1111/tool_calls.jsonl is the per-call summary. The
+  transcripts are local only, in logs/agentcc_transcripts/.
 - **Cold-run timing** (no conversation cache: every turn prefills the whole prompt): probe prompts ~8.7K tokens, first
   token median 21.3 s; task prompts 9.1-20.2K (median 13.8K), first token median 32.6 s (~419 prompt tok/s); answers
   median 110 tokens, whole decode median 58 tok/s (short answers); lifetime peak 37.46 GB. The 7 first tokens over 60 s
@@ -332,7 +334,10 @@ fix) and the ~/.claude* read-deny as one regex; the real HOME (EvalSuite's optio
   saw t01 clean at 04:27:43). Tool calls: Bash 30, Read 21, Edit 15, Glob 2, Grep 2, Write 2; tool errors 2, both
   ordinary (t09 wrote a scratch file to /tmp, which the sandbox refuses as it should; t11 used GNU `cat -A`, which macOS's
   cat lacks). 3-16 turns per task. No `git commit` attempt (so 32_1111b's signing limit never mattered); no read outside
-  the task folders; no private-pattern hit in the transcripts (committed as they are).
+  the task folders (summarize_calls.py: outside_task 0); no private-pattern hit in the transcripts. **Correction (Wed
+  07:3x):** the transcripts were committed as they were (05:09), against the 04:0x rule that raw transcripts stay out of
+  git. They left HEAD at 07:3x; agentcc_32_1111b/tool_calls.jsonl is the per-call summary. The transcripts are local only
+  (logs/agentcc_transcripts/). They were in the public snapshots of 05:25 and 06:24; the orchestrator has been told.
 - **t09_refactor fails again, as in 32_1111:** format_money(amount) returns "1,234.50" and the callers keep the "$", so the
   output is unchanged and the format string appears once, but the check also asserts format_money(1234.5) == "$1,234.50",
   which the prompt ("Extract it into one helper function named format_money(amount) and use it in all three places.
@@ -357,3 +362,154 @@ lines for 45 requests; hits 12 (predicted 12); checks 12/12 PASS".** The census 
 (2 copies at 9,216, 4 live at 12,288, 6 live at 8,192), `35[0] rows 0..0 (1 rows, 1 values, first 0x8000)`: the -0.0
 the old clone rewrote. So the cache is exact at 32 GB with branches on. Pin for the cached runs: release/next 80c8041
 (serve.py = cachepin, engine/loop/convcache.py = 3c068d7; the cache clone's files equal it).
+
+## Wed 07:1x: a 64K window for Claude Code (orchestrator 07:1x, option (b)): stand-in check
+
+**What was asked.** The orchestrator chose (b) from data/long_ctx_1111.md: tell Claude Code 64K at `--mem 32` and `--mem 45`
+for now. Before relying on it, check that Claude Code really compacts before 64K, and report it if Claude Code clamps the
+window to 100K or more.
+
+**Claude Code 2.1.321's code.** `CLAUDE_CODE_AUTO_COMPACT_WINDOW` accepts 100,000 to 1,000,000 tokens (constants
+`pI=1e5`, `dW=1e6`). A smaller value is classed "below_minimum" and read as 100K. The settings schema says the same
+("100000 to 1000000"). In `-p` mode this happened silently. Interactive mode goes through a `[autocompact] ...` warning
+path ("Set it to a size from 100k to 1M"). `CLAUDE_CODE_MAX_CONTEXT_TOKENS` has no such floor; the run's own usage line
+reports contextWindow 65536.
+
+**Runs.** Real Claude Code on the stand-in engine (mock_tools.py), through the clone's `tools/claude_local.sh` with
+`EXACTSTREAM_CONTEXT`. Setup:
+- the night runs' sandbox, an isolated config folder and the neutral HOME;
+- serve.py's limit left at 131,072, so a clamped window would show as a conversation growing past 64K;
+- each turn a `claude -p --continue` with new text; the mock answers with one Write call, then "Done".
+
+| window told (launcher) | step per turn | last turn without compaction (largest prompt) | auto compaction (pre -> post) |
+|---|---|---|---|
+| 65,536 (sets both variables) | ~6K tokens | turn 2 (25,487) | turn 3: 34,362 -> 11,563 |
+| 65,536 (sets both variables) | ~1.6K tokens | turn 12 (30,365) | turn 13: 32,134 -> 4,463 |
+| 65,536 (MAX_CONTEXT_TOKENS only; see below) | ~1.6K tokens | turn 12 (30,392) | turn 13: 32,161 -> 4,464 |
+| 131,072 (sets both variables) | ~7K tokens | turn 11 (90,189) | turn 12: 99,115 -> 11,618 |
+
+In every run the session went on after the compaction (one more turn each, rc 0).
+
+**Answer.** With a 64K window, Claude Code compacts at about 32K tokens, well before 64K. The window variable is clamped
+to 100K, but compaction follows the context window from `CLAUDE_CODE_MAX_CONTEXT_TOKENS`. Compaction comes about 33K below
+the window Claude Code is told: about 32K at 64K, and between 90K and 99K at 128K. So a 64K session compacts at about
+half its window. A turn that adds a lot, such as a large file read, can still take a prompt past 32K before the next
+check.
+
+**Launcher variant** (`agent_cc_1111/compact64/launcher_variant/tools/claude_local.sh`).
+- It sets `CLAUDE_CODE_AUTO_COMPACT_WINDOW` only from 100K up, so 64K sessions avoid the clamp and its possible
+  interactive warning.
+- The same compaction point (32,161 against 32,134).
+- Env check: at 65,536 only MAX_CONTEXT_TOKENS is set; at 131,072 both are.
+- For release/next once the cached 45 GB runner has passed its provenance step (release/next stays frozen until then),
+  together with a per-`--mem` default in tools/claude_code.sh: 65,536 at 32 and 45 GB, 131,072 at 24 GB, and
+  `EXACTSTREAM_CONTEXT` still overrides.
+
+Scripts and logs: agent_cc_1111/compact64/. The stream transcripts of these stand-in runs stay local.
+
+## Wed 07:01-07:21: the cached 32 GB agent run (agentcc_runs/32c_1111): probe 29 / 30, tasks 11 / 12, 15 min (cold rerun 43)
+
+**Records and setup.** Runner agentcc_cache.sh; records in agent_cc_1111/agentcc_32c_1111/. The raw request log is local
+only (logs/agentcc_32c_1111_server_requests.jsonl.gz, gitignored). The setup is as registered (EvalSuite amendment 3
+part 2):
+- the cache clone = release/next at 80c8041: serve.py = cachepin d6b44ed0 + hook, engine/loop/convcache.py = BigMoE
+  3c068d7 (sha 55631cb8), all 7 SHA256SUMS OK;
+- serve.py --mem 32 with CONV_CACHE=1, CONV_CACHE_BRANCH=1 and CONV_CACHE_GB 2.5 (the 32 GB default);
+- claude 2.1.321;
+- the neutral HOME: .zshrc = the exact PATH only; git identity agentcc <agentcc@localhost>;
+- CLAUDE_CODE_TMPDIR and the regex read-deny sandbox.
+
+It started at 07:01:41, once long_ctx had no arm left that fitted (long_ctx was stopped by design), and ended at
+07:21:08. There were no heat freezes in that window.
+
+- **Probe: 29 / 30, 0 calls with an invented tool.** The one fail is case 6 (Bash, "case check failed"), which also
+  failed in the cold run 32_1111 (27 / 30 there; cases 10 and 25 pass now).
+- **Tasks: 11 / 12 checks passed, 0 timeouts; server 118 requests, 0 errors.**
+  - t09_refactor fails as in both earlier runs: format_money returns "1,234.50" and the callers keep the "$", while the
+    check wants "$1,234.50".
+  - 3-15 turns per task. Tool calls: Bash 50, Read 21, Edit 16, Grep 3, Glob 2, Write 1.
+  - 7 git commands, all read-only (diff, log, show, status, grep, check-attr). There was no commit, so the git identity
+    was never used.
+  - **Three calls went outside the task folder, all in t12** (#9-#11, Bash). EvalSuite found them; my first count looked
+    only at file paths, not at Bash commands. Corrected at 07:3x.
+    - #9 listed the run folder (`ls` of tasks/, `find <run> -maxdepth 2`).
+    - #10 read its own check and stderr files in the run folder: the check file was still empty, and stderr held only
+      the model warning.
+    - #11 read its own live transcript.
+    The model was looking for the grader and found nothing useful. EvalSuite reports it as information: scoring t12 a
+    FAIL would give 10 / 12, still at the line. No call in any of the three runs read ~/EvalSuite, the manifest or a
+    .agentcc_check.py (EvalSuite's regex scan).
+  - The transcripts have 0 private-pattern hits and 0 account names. Under the 04:0x rule they stay out of git: local
+    only in logs/agentcc_transcripts/. agentcc_32c_1111/tool_calls.jsonl is the per-call summary (summarize_calls.py:
+    tool, error class, sandbox flag, outside_task; no inputs or outputs).
+- **Tool errors: 4.**
+  - t02: an `ls` of a missing name (exit 1).
+  - t05: `python` (macOS has python3 only; exit 127).
+  - t12: GNU `cat -A`, which BSD cat lacks.
+  - t09: **a heredoc in Bash failed with "can't create temp file for here document: operation not permitted".** zsh
+    writes heredoc temp files under TMPPREFIX (default /tmp/zsh), and the sandbox allows writes only in the run folder,
+    /private/var/folders and /dev. This is a setup limit, like 32_1111's EPERM but much smaller: one call, and the model
+    carried on.
+  - A fix for later runs: `export TMPPREFIX="$TMPDIR/zsh"` in the neutral .zshrc, since the Bash tool's TMPDIR is under
+    /private/var/folders. It needs a stand-in check, and EvalSuite and the orchestrator must agree first. It is not
+    applied to the armed 45 GB run, whose setup is registered.
+- **Time: task walls 29-171 s, 916 s in all, against 2,595 s in the cold rerun 32_1111b (2.8x).**
+
+| task | cached (s) | cold rerun (s) | check |
+|---|---|---|---|
+| t01_fix_test | 57.0 | 214.1 | pass |
+| t02_add_function | 92.3 | 364.4 | pass |
+| t03_config | 42.5 | 153.7 | pass |
+| t04_traceback | 53.3 | 127.2 | pass |
+| t05_rename | 78.9 | 269.3 | pass |
+| t06_cli_flag | 47.3 | 167.7 | pass |
+| t07_import | 83.2 | 205.4 | pass |
+| t08_readme | 29.3 | 171.8 | pass |
+| t09_refactor | 98.1 | 297.0 | fail (both) |
+| t10_type_hints | 57.7 | 199.3 | pass |
+| t11_shell | 104.5 | 248.1 | pass |
+| t12_requirements | 171.4 | 177.2 | pass |
+
+- **Cache: 117 of 118 requests hit (106 live, 11 copy).**
+  - The one miss was the first probe request: 8,738 tokens cold, first token 20.4 s.
+  - Prompts: median 13.0K tokens, max 30.2K.
+  - New tokens prefilled per request: median 664, p90 3,294, max 11,248.
+  - **First token: median 6.3 s, p90 12.7 s, max 36.4 s** (the max is the 11,248-token prefill). The cold rerun's median
+    was 31.9 s.
+  - Answers: median 100 tokens; whole decode median 72.9 tok/s.
+  - Lifetime peak 37.07 GB (cold rerun 36.69). At the end the cache held one entry: 2.58 GB, 29.7K tokens.
+- **Provenance** (provenance.txt) has everything EvalSuite's amendment 3 part 2 asks for:
+  - the pin's sums: release/next's 7 files OK; the clone = release/next for serve.py, agentio.py, the two local
+    launchers and engine/loop/convcache.py; commit 80c8041;
+  - the neutral HOME with its PATH line;
+  - agentcc <agentcc@localhost>;
+  - CONV_CACHE_BRANCH=1.
+
+## Wed 07:3x: the zsh heredoc limit, and TMPPREFIX for the runs after the cached 45 GB one
+
+**The limit.** In 32c_1111, t09 hit it: zsh writes heredoc and here-string temp files under TMPPREFIX (default /tmp/zsh),
+and the sandbox does not allow writes there.
+
+**Approvals.** The orchestrator (07:3x) approved TMPPREFIX pointing at the run's own temp folder, for runs after the
+armed 45 GB one, with an EvalSuite amendment first. EvalSuite agreed for later runs, with a dated amendment. The 45 GB run
+stays as registered, and agent_home_tpl is unchanged (the armed runner copies it).
+
+**Stand-in checks** (mock_bash.py, the night runs' sandbox, CLAUDE_CODE_TMPDIR, HOME=<run>/home from the template; the
+command runs a heredoc and a here-string, then prints TMPPREFIX, PATH, the git identity and the alias count):
+
+| variant | heredoc / here-string | TMPPREFIX in the Bash tool | .zshrc |
+|---|---|---|---|
+| H: as registered | both fail ("can't create temp file for here document") | /tmp/zsh | df313e2ac75d (PATH only) |
+| T: `export TMPPREFIX='<run>/cctmp/zsh'` added to .zshrc | **both still fail** | **/tmp/zsh** | 677818f72d7c |
+| E: `TMPPREFIX=<run>/cctmp/zsh` in the claude process environment | **both work** | <run>/cctmp/zsh | df313e2ac75d (unchanged) |
+
+- In all three variants the PATH is identical, the git identity is agentcc <agentcc@localhost>, and there are 2
+  aliases.
+- After E, zsh left 0 temp files in cctmp.
+- So a `.zshrc` export does not reach Claude Code's Bash tool: its shell snapshot did not carry TMPPREFIX here. The
+  environment does, because zsh takes TMPPREFIX from its environment (also checked directly: `env TMPPREFIX=... zsh -f`
+  runs a heredoc in that folder).
+- **The form for the amendment:** `TMPPREFIX=<run>/cctmp/zsh` in the claude process environment (the runner's `env`
+  line, beside CLAUDE_CODE_TMPDIR), with the .zshrc unchanged.
+
+Scripts and outputs: agent_cc_1111/heredoc/ (the PATH lines are replaced by a note).

@@ -320,3 +320,27 @@ README.md, LIMITS.md, RESULTS.md, configs/lossy-24.env, configs/chat-24.env, MAN
 private patterns 0, secrets 0, /Users/ 0, "laptop" 0. The orchestrator: the final candidate unless the papers' fixes need
 something. Go: PKG_DIR=release/out/pkg_110j for the pkg and the docs push (docs waits for the v1.1.0 site with
 small-ram.pdf).
+
+## 1.1.0 candidate pkg_110k (932591e): memory at 64K and 128K tokens (Wed 07:1x, docs only; final)
+
+The long-context runs (data/long_ctx_1111.md) measured memory past the docs' 30K figures. The orchestrator (07:1x) asked for
+a docs-only rebuild with two additions (release/src 4ea3ff6):
+- LIMITS.md, a new line after the 24 GB line: "Longer prompts take more. At 24 GB, 32.0 GB at 64K tokens and 39.2 GB at
+  128K with the default prefill, and 37.9 and 51.6 GB with `chat.py`'s layer-major prefill, which is 2.4x faster at 64K
+  and about 2x at 128K. At 32 GB, `chat.py` reaches 46.3 GB at 64K; at 45 GB, 52.6 GB."
+- INSTALL.md, the 36 GB note in Requirements, after the 30K sentence: "Prompts near 64K tokens need about 32 GB (38 GB
+  with `chat.py`'s layer-major prefill), more than a 36 GB Mac can spare."
+
+The wording is as approved: the orchestrator approved the LIMITS line as Leap drafted it and gave the INSTALL
+sentence. The only change is backticks around chat.py, as everywhere else in these files.
+Rebuilt with the same command (--out release/out/pkg_110k), giving 932591e: 241 files, 6.6 MB; leaks 0, unsafe 0, live
+research paths 0, syntax errors 0.
+- **Diff vs pkg_110j:** INSTALL.md, LIMITS.md and MANIFEST.json only. MANIFEST changes the two doc hashes, leap_commit
+  and one source label.
+- **Diff vs pkg_110g** (the GPU-checked candidate): README.md, LIMITS.md, RESULTS.md, INSTALL.md, configs/lossy-24.env,
+  configs/chat-24.env and MANIFEST.json, all docs or comments (candidate_110k/).
+- **Independent scan of all 243 files:** private patterns 0, account folder names 0, secrets 0, /Users/ in docs and
+  configs 0, "laptop" 0.
+
+For the go: PKG_DIR=release/out/pkg_110k for the pkg and the docs push. The docs push waits for the v1.1.0 site with
+small-ram.pdf.

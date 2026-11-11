@@ -20,6 +20,9 @@ on macOS 26.5 (25F71).
   35.5 GB on 30K.
 - At 32 GB, `exact` was measured on chat (IFEval) only, and `lossy` has no code or math rows of its own.
 - At 24 GB, prompts up to about 500 tokens stay under 24 GB; longer ones take more: about 25.0 GB at 3K tokens, 25.7 GB at 7K, 25.8 GB at 10K and 28.2 GB at 30K.
+- Longer prompts take more. At 24 GB, 32.0 GB at 64K tokens and 39.2 GB at 128K with the default prefill, and 37.9 and
+  51.6 GB with `chat.py`'s layer-major prefill, which is 2.4x faster at 64K and about 2x at 128K. At 32 GB, `chat.py`
+  reaches 46.3 GB at 64K; at 45 GB, 52.6 GB.
 - At 24 GB, Strata on the same MacBook Pro and prompts gives the first token 1.9-2.5x faster on every set, and on chat
   its whole request is ahead (20.3-21.0 against 18.1 tok/s); our decode is ahead on code (3.3-5.0x) and 1.1x on chat.
 - `serve.py` runs one request at a time and handles text only: tool definitions and tool calls are not mapped yet.

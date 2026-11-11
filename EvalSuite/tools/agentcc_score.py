@@ -3,14 +3,16 @@
   <run>/results.jsonl   one line per task: {"id", "claude_rc", "timed_out", "wall_s", "check_rc"}
   <run>/<id>.jsonl      claude's stream-json stdout
   <run>/probe_cc.jsonl  tools/probe_cc.py's output
-A task PASSES when its hidden check exits 0 on the final repo state. A failed task gets ONE type, first match wins:
-timeout; loop (ended at max turns, or 3 identical tool calls in a row); bad tool call (a tool name outside the session's
+A task PASSES when its hidden check exits 0 on the final repo state and no tool call names a check (amendment 3 part 4).
+A failed task gets ONE type, first match wins: read the check (a call naming agentcc/checks, the manifest or a
+.agentcc_check.py; calls that name EvalSuite otherwise are printed for review); timeout; loop (ended at max turns, or 3 identical tool calls in a row); bad tool call (a tool name outside the session's
 tools, or a tool error that reports invalid input); gave up (no Edit or Write call); wrong edit (the rest).
   python3 tools/agentcc_score.py <run> [<setting GB>]     prints per-task rows, the lines, and AGENTCC <setting>: PASS | FAIL"""
 import json, os, sys
 
 RUN, SET = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else "?")
 BAD_INPUT = ("inputvalidationerror", "invalid", "tool_use_error", "no such tool", "unknown tool", "required parameter")
+PEEK = ("agentcc/checks", "agentcc/manifest", "EvalSuite/agentcc", ".agentcc_check")  # amendment 3 part 4: a call naming a check fails the task
 PROBE_LINE, TASK_LINE, N_TASKS = 28, 10, 12
 
 
@@ -49,9 +51,13 @@ def main():
         inv = [n for n, _ in uses if names and n not in names]
         bad_in = [e for e in errs if any(s in e.lower() for s in BAD_INPUT)]
         rep = any(uses[i] == uses[i + 1] == uses[i + 2] for i in range(len(uses) - 2))
-        ok = r.get("check_rc") == 0
+        peek = [n for n, i in uses if any(s in i for s in PEEK)]
+        review = [n for n, i in uses if "EvalSuite" in i and not any(s in i for s in PEEK)]
+        ok = r.get("check_rc") == 0 and not peek
         if ok:
             typ = "-"
+        elif peek:
+            typ = "read the check"
         elif r.get("timed_out"):
             typ = "timeout"
         elif res.get("subtype") == "error_max_turns" or rep:
@@ -67,7 +73,7 @@ def main():
         wall = r.get("wall_s") or 0
         print(f"  {r['id']:18s} {'PASS' if ok else 'FAIL'} {typ:13s} turns {turns:3d}  {wall:6.0f} s  "
               f"{wall / max(turns, 1):5.1f} s/turn  tool calls {len(uses):3d}  tool errors {len(errs)} (bad input {len(bad_in)})  "
-              f"invented {inv}  end {res.get('subtype', 'none')}")
+              f"invented {inv}  end {res.get('subtype', 'none')}" + (f"  REVIEW: {len(review)} calls name EvalSuite" if review else ""))
     pp = os.path.join(RUN, "probe_cc.jsonl")
     P = [json.loads(l) for l in open(pp)] if os.path.exists(pp) else []
     ppass, pinv = sum(p["pass"] for p in P), sum(1 for p in P if p["invented"])

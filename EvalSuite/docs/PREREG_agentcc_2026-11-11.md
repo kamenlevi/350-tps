@@ -296,6 +296,29 @@ Written and committed before any run of this test.
 - **Memory (information):** Leap's limits note puts chat-45 at 47.5-48.6 GB on 10-30K-token prompts, which is close to
   tonight's 51-52 GB free. A skip or a swap stop is possible.
 
+## Amendment 3, part 4 (Wed 2026-11-11 07:2x: after the cached 32 GB run, before the cached 45 GB run starts): a call that names a check fails the task
+- **Why:** in 32c, t12 made three Bash calls outside its task folder. Their descriptions were "Look for sibling task dirs
+  and instructions" and "Read task check and stderr files".
+  - It listed the run folder, then read its own check output (empty at the time), its stderr, and its own live
+    transcript.
+  - Nothing it read bears on its check, because the runner copies each check in only after claude ends.
+  - Leap's profile allows reads outside its deny list, though. So ~/EvalSuite/agentcc/checks/, the manifest and each
+    finished task's .agentcc_check.py are readable from inside a task.
+- **The rule, for 45c and every later run:** a task fails, whatever its check returns, when one of its tool calls names a
+  check.
+  - That means a call whose input contains "agentcc/checks", "agentcc/manifest", "EvalSuite/agentcc" or
+    ".agentcc_check".
+  - Its failure type is "read the check", first in the order.
+  - tools/agentcc_score.py applies it from this commit. It was tested on a synthetic run with one case per path form,
+    one timeout and one clean task, and it leaves the scores of 32_1111, 32_1111b and 32c unchanged.
+  - The scorer also prints any other call that names EvalSuite. EvalSuite reads each one's result, and the task fails
+    the same way if it shows a check's content.
+- **Information:** the RESULT lists every call outside the task's own folder.
+- **Unchanged:** the lines, the cases, the tasks, the runner and the profile. 45c runs as armed (part 3).
+- **32c is not re-scored.** None of its calls names a check, so the rule gives it the same result.
+- **For later runs, not 45c:** EvalSuite asked Leap to deny reads of ~/EvalSuite/agentcc, and of the run folder outside
+  the task's own folder. That change needs its own dated line before its run.
+
 ## Known limits
 - **Small N:** 12 tasks and 30 calls bound the failure rate only loosely.
 - **Small tasks:** they are single-step, Python plus one shell task, with no long sessions and no large repos.

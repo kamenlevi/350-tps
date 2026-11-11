@@ -6,7 +6,8 @@
 - The 24 GB setting (`--mem 24`) is meant for a Mac with 36 GB or more, but we have only tested it on the 64 GB MacBook
   Pro above. On a 36 GB Mac it leaves about 11 GB for macOS and your apps, so close the browser and other large apps
   first. Long prompts take it further: a 30K-token prompt reaches 28.2 GB, which leaves about 8 GB for macOS and your
-  apps. On a Mac with a different GPU type the tokens may differ slightly from ours, and the speed depends on that Mac's
+  apps. Prompts near 64K tokens need about 32 GB (38 GB with `chat.py`'s layer-major prefill), more than a 36 GB Mac can
+  spare. On a Mac with a different GPU type the tokens may differ slightly from ours, and the speed depends on that Mac's
   GPU and SSD.
 - Python 3.12, CMake >= 3.27 and the Xcode command-line tools (for the extension).
 - Disk: about 174 GB in all, for the model's own files (about 105 GB without its vision tower; [WEIGHTS.md](WEIGHTS.md))

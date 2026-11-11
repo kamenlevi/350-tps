@@ -1557,3 +1557,18 @@ branches come back. Details: docs/CONV_CACHE_DESIGN.md section 17.
 
 **Next.** The cached 32 GB agent test runs on 3c068d7 with branches on, after Leap's 64K / 128K runs. Details:
 docs/CONV_CACHE_DESIGN.md section 18.
+
+## Wed 11 Nov 07:01-07:21: CONV agent32c = the cached 32 GB Claude Code agent run (Leap's 32c_1111): 117 of 118 requests hit, tasks 2.8x faster (data/conv/agent32c/summary.json)
+
+**Setup.** Leap ran EvalSuite's agent test (30-case probe + 12 tasks) with the conversation cache on: 3c068d7,
+branches on, a 2.5 GB budget, and no per-hit cold check.
+
+**Results.**
+- 117 of 118 requests hit: 106 live and 11 copies (each task's first request after t01). The only miss is the first
+  request.
+- 9.3 % of the prompt tokens were prefilled, a median of 664 new tokens per request.
+- First token: median 6.3 s against 31.9 s cold, p90 12.7 s, max 36.4 s. Peak 37.07 GB.
+- Probe 29/30, tasks 11/12, 0 server errors; the tasks took 916 s against 2,595 s cold (2.8x) [K Leap].
+
+**Next.** T1-45 (the 45 GB chunk-major T1) on 3c068d7. This run's exactness rests on T1e (12/12 bitwise). Details:
+docs/CONV_CACHE_DESIGN.md section 19.
