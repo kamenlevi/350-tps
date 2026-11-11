@@ -68,7 +68,7 @@ OTHER = [
  ("schuirmann", 'Donald J. Schuirmann. "A comparison of the two one-sided tests procedure and the power approach for assessing the equivalence of average bioavailability." Journal of Pharmacokinetics and Biopharmaceutics 15(6): 657-680, 1987. doi:10.1007/BF01068419.', r"Schuirmann|\bTOST\b"),
 ]
 # Companions not published with tonight's set (Kamen, Mon 9 Nov 15:08): cited as forthcoming.
-FORTHCOMING = {"SMALL-RAM": "by 11 November 2026"}
+FORTHCOMING = {}  # SMALL_RAM released
 COMPANIONS = {"MAIN": "MAIN", "SMALL-RAM": "SMALL_RAM", "KERNELS": "KERNELS", "EVAL": "EVALUATION",
               "DRAFTER": "DRAFTER", "RELEASE": "RELEASE"}
 

@@ -196,3 +196,47 @@ Why not today: two full-E scratches put even the 24 GB setting past the ~25 GB c
 - **Tonight, a second runner** (scripts/prefill15/prof2/prof_qsa.sh, armed 14:3x, after prof_pipe.sh) runs 30K, PIPE=1,
   with the dense band. It wraps cProfile around every QSA self_attn call (R57_PFLM_QSA_PROFILE, in a separate copy so
   tonight's A/B module is untouched) and checks bitwise against prof_pipe.sh's 30K PIPE=1 run (tokens + LOGHASH).
+
+## The GIL-free read binding (11-11 16:2x, CPU + SSD only, ~1.1 GB)
+
+scripts/prefill15/ext_ov/ holds a copy of BigMoE's engine/ext/bigmoe_ext.cpp as module `bigmoe_ext_ov`. BigMoE's source is
+not edited. The only changes:
+- read_rebuilt and read_rebuilt_layout carry `nb::call_guard<nb::gil_scoped_release>()`;
+- `a.eval()` on each destination is replaced by an `is_available()` check, so no MLX scheduling happens without the GIL.
+  The destinations must be evaluated beforehand, as the scratches are.
+
+It builds with the clone's own nanobind (third_party/nanobind) and MLX 0.32.2 in ~5 s, into the scratchpad; the .so is not
+committed.
+
+**Test** (gil_read_test.py; layer 0, experts 0..191, 0.53 GB per read; data/prefill15/gil_read_test_1111.txt):
+- **Bitwise:** the scratches filled by the original and by the copy are EQUAL.
+- **The GIL:** during a 48 ms read in a background thread, a pure-Python loop on the main thread ran at **12.9 %** of its
+  normal speed with the original binding and at **85.6 %** with the copy.
+- **Read speed:** ~11 GB/s.
+
+**So a background reader using the copy lets the main thread build the next graphs while the read runs**, and it touches
+no MLX state. Next: R57_PFLM_PIPE=2, background reads through bigmoe_ext_ov, queued tonight after the PIPE 0 / 1 A/B and the
+QSA run.
+
+## PIPE=2 and the FAST QSA option, queued for tonight (11-11 16:3x)
+
+- **R57_PFLM_PIPE=2** (scripts/prefill15/prof3/: a third module copy, so tonight's PIPE 0 / 1 module stays as it was):
+  PIPE 1 with layer L+1's expert read in a one-worker background thread through bigmoe_ext_ov.
+  - The main thread builds layer L+1's attention while the read runs. The worker touches no MLX state, and the GIL-free
+    test above showed the main thread keeps ~86 % of its speed.
+  - Runner prof3/prof_pipe3.sh: 10K and 30K, bitwise vs tonight's PIPE=0 runs (tokens + LOGHASH).
+- **The FAST QSA option = MTPLX's own sparse QSA prefill pipeline**, NAX flash plus the direct consumer. It is on by
+  default on M5, but engages only past a 32,768-token context: MTPLX_QSA_PREFILL_MIN_CONTEXT, _FLASH_MIN_CONTEXT and
+  _DIRECT_MIN_CONTEXT all default to 32768. Setting the three to 4096 engages it from 4K.
+  - Not exact: PrefillKernels measured max |d| 0.009-0.016 for this lane, ~2x faster per chunk at 16K.
+  - It needs no new code; the gathered-key PV the orchestrator described is what this lane already does, with a NAX flash
+    kernel.
+  - Runner prof4/prof_fast4.sh: PIPE=1 at 10K and 30K. It reports the time and how many of the 32 decoded tokens equal
+    the exact PIPE=1 run's.
+  - Adoption goes through EvalSuite's same-scores gate (the two-track rule), and the exact fused kernel stays the exact
+    path.
+- **Tonight's chain**, each step behind gates and a share lock retried until granted:
+  1. prof_pipe2.sh, from 00:33;
+  2. prof_qsa2.sh, the dense band + the QSA cProfile;
+  3. prof_pipe3.sh, PIPE=2;
+  4. prof_fast4.sh, the FAST lane.

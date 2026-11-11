@@ -373,3 +373,31 @@ the 64K / 128K line under it.
 - **At Kamen's go:** `PKG_DIR=release/out/pkg_110l PUBLIC_OK=1 release/push_pkg.sh pkg`, then the same with `docs` once
   Breakthrough's v1.1.0 site with small-ram.pdf is in ~/Papers/public/site. The repo is public, so PUBLIC_OK=1 is only for
   this owner-requested change.
+
+## 1.1.0 PUSHED (Wed 11 Nov 16:51): eb72552 on exactstream main, one commit with the package and docs; the release drafted
+
+**Go and site.**
+> (a quote from the project owner, kept private)
+  His decision on the transcript snapshots: "leave the two snapshots" (no history purge).
+- Breakthrough's v1.1.0 site was built 16:49, PASS. All 15 files match Breakthrough's sha256 list, both in
+  ~/Papers/public/site/ and in the docs/ copied into the commit. publish_set lists SMALL_RAM, and all 7 PDFs the README
+  links are present.
+
+**Steps.**
+1. `DRY=1 push_pkg.sh pkg`: the package commit 67ec60c on top of 0130ead, as at 14:3x.
+2. `DRY=1 AMEND=1 push_pkg.sh docs`: docs/ folded into it, giving eb72552. The docs checks for paths and private names in
+   the HTML and PDFs passed.
+3. `PUBLIC_OK=1 push_pkg.sh pkg`: "PUSHED eb72552 to main (fast-forward)", and remote main == local HEAD. Pushing with
+   pkg mode leaves an already-folded HEAD unchanged; a second AMEND=1 docs run would have put "; docs: ..." in the commit
+   subject twice.
+
+**Diff vs 0130ead (v1.0.1): 29 files, +3,359 / -186.**
+- Package, 17 files: CITATION.cff, CONFIGS.md, INSTALL.md, LIMITS.md, MANIFEST.json, README.md, RESULTS.md, chat.py,
+  configs/chat-24.env, configs/lossy-24.env, engine/bigmoe/stream.py, engine/loop/r57_screen_w24.py, run.py, serve.py,
+  tools/clean_clone_test.sh, and verify/chat-24_w13eh.json and lossy-24_w13eh.json.
+- docs/, 12 files: complete.html, index.html, kernels.html, release.html, the new small-ram.html, 6 updated PDFs and the
+  new pdf/small-ram.pdf. main.html, drafter.html and evaluation.html are unchanged from v1.0.1.
+
+**Release.** A draft (gh release create --draft), "ExactStream 1.1.0", tag v1.1.0 (created when published), target
+eb72552, 0 assets (the drafter files stay on v1.0.0). Its body equals release/staged/v110_notes.md. URL (draft):
+https://github.com/kamenlevi/exactstream/releases/tag/untagged-b046589ed7cb86bf3e68. The orchestrator publishes it.
