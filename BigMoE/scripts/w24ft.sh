@@ -90,6 +90,16 @@ arm("w3p_100", "w3c1_100", "+ R57_P2=256 (P2 v0, LOSSY), 4th")
 arm("w3c2_100", "w3c1_100", "the control again (drift), 5th")
 arm("w3p13_100", "w3c1_100", "+ R57_P2=256, R57_P2_ROWS=13 (the card's ROWCAP: 130 ids <= 141 base slots, the sync-free gate), LOSSY")
 arm("w3p13n_100", "w3c1_100", "+ R57_P2=256, R57_P2_ROWS=13, R57_P2_VERIFY=0 (plain forwards), LOSSY")
+arm("w4c1_100", "w4c1_100", "W24T: the card as gated (control), 1st")
+arm("w4p1_100", "w4c1_100", "W24T: card + P2 (13 rows, plain; the gated arm), 2nd")
+arm("w4p2_100", "w4p1_100", "W24T: the same P2 again, 3rd (vs the 2nd: determinism)")
+arm("w4c2_100", "w4c1_100", "W24T: the card again, 4th (vs the 1st: drift)")
+TT = {t: [r["pfs"] for r in load(t)[0].values() if r.get("pfs")] for t in ("w4c1_100", "w4c2_100", "w4p1_100", "w4p2_100") if t in tags}
+c_, p_ = TT.get("w4c1_100", []) + TT.get("w4c2_100", []), TT.get("w4p1_100", []) + TT.get("w4p2_100", [])
+if c_ and p_:
+    L.append(f"POOLED W24T (ABBA): card median {S.median(c_):.2f} s (mean {S.mean(c_):.2f}, {min(c_):.2f}-{max(c_):.2f}); P2 median "
+             f"{S.median(p_):.2f} s (mean {S.mean(p_):.2f}, {min(p_):.2f}-{max(p_):.2f}); P2 / card {S.median(p_) / S.median(c_):.3f} "
+             f"(median), {S.mean(p_) / S.mean(c_):.3f} (mean). Strata on these prompts: 1.46 s (D) / 1.65 s (B) median")
 print("\n".join(L))
 EOF
 say "report rc=$? ($D/${W24FT_REPORT:-w24ft}_report.txt)"

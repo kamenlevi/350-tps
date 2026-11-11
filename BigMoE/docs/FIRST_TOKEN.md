@@ -72,3 +72,6 @@ files were deleted in the 11-09 cleanup, so no new Strata timing can run without
   and MSB-only reads for the low ranks.
 - **P3 (exact):** the fold keeps tokens and logits hashes (12/12, 634/634). On PF-D at 24 GB it gives 3.32 -> 3.11 s.
   PF-D itself is slower than the card's own prefill at 24 GB and adds 5.7 GB of peak. The 45 GB ABBA runs tonight.
+- **P2 at 24 GB: EvalSuite's same-scores gate PASSED (Wed 19:51, EvalSuite 8adeb09).** IFBench -1.33 pt (p 0.80), GPQA
+  Diamond's 67 short prompts -2.99 pt (p 0.63); 5 longer-prompt controls token-identical. The clean ABBA timing against
+  Strata's 1.46 s runs tonight (docs/PREREG_W24T_2026-11-11.md).

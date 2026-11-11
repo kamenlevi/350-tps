@@ -1635,3 +1635,65 @@ Strata at 24 GB on the same 12 prompts (StrataEval results_low24 REPORT): median
   one order; tonight's 45 GB ABBA settles it.
 
 **Next.** Tonight's 45 GB A/B (P3 ABBA, FAST without / with the fold, P2). Then the plan for EvalSuite's P2 gate at 24 GB.
+
+## Wed 11 Nov 18:37-19:36: D2 = a 2-bit trunk copy + resident experts as a training-free chat drafter: KILL (data/d2/d2_score.json)
+
+**Setup.** Kamen's ask (via the orchestrator): a better drafter without retraining, for any model, toward 98 %. D2 is
+FableGod BREAK_THE_WALL section 4.4. Pre-registered before any run (docs/PREREG_D2_2026-11-11.md, with amendment 1 for a
+definitive verdict).
+- The swap: every trunk linear converted to 2 bits (532 linears: GDN, attention, indexer, HC mixers and inject, PLE;
+  dequantize, then requantize, group 64). Router and shared expert unchanged.
+- Experts: a fixed resident set by expert id (the 45 GB base pool's size per layer, by popularity), with drop semantics.
+- Harness: teacher-forced on the decision map's windows (code 24, IFEval 30, multi 24, agent 12), against the 125B's
+  exact top-1, with no 125B run. Breakthrough's map and scoring.
+
+**Results.** Agreement on chat (IFEval + multi), kept per 16-row check, and agreement on code:
+
+| arm | chat agreement | chat kept / check | code agreement |
+|---|---|---|---|
+| D2: 2-bit trunk + resident | **0.026** (IFEval 0.025, multi 0.027) | 1.03 | 0.066 |
+| 2-bit trunk, all experts | 0.056 | 1.06 | 0.110 |
+| 3-bit trunk + resident | 0.442 | 1.78 | 0.920 |
+| 4-bit trunk + resident | 0.572 | 2.31 | 0.987 |
+| store trunk + resident (control) | 0.580 | 2.35 | 0.990 |
+| ops path, all experts (harness floor) | 1.000 | - | 1.000 |
+
+**Validity.** The gate passed at 100 %, the swap census was exact, and the determinism repeat was bit-identical. The agent
+set is excluded: its own gate failed at 83.4 % against the stored reference, because its windows start mid-conversation
+and the map prefills only the window.
+
+**Reading.**
+- KILL: naive 2-bit conversion destroys the trunk (44-49 % weight error per matrix).
+- 3 bits keeps code (0.92) but not chat (0.44).
+- A popularity-based fixed expert set, drawn from code runs, caps chat at about 0.58 even with the full trunk.
+- A training-free drafter from the 125B itself needs a trunk of 4 bits or more and a domain-matched expert set; that is
+  the near-copy, whose cost per drafted token is the known wall (DRAFTER_98 section 3.4).
+- Breakthrough's independent read (79cb1b5) matches every printed digit on all 8 arms. Its kept per check against the
+  exact top-1, chat / code: resident 2.35 / 14.35, 4-bit 2.30 / 13.84, 3-bit 1.78 / 8.55, D2 1.03 / 1.07.
+
+## Wed 11 Nov 14:41-19:51: EvalSuite's same-scores gate on P2 at 24 GB: PASS (EvalSuite 8adeb09, docs/RESULT_p2gate_2026-11-11.md)
+
+**Setup.** The 24 GB card w13b as gated plus P2 (R57_P2=256, R57_P2_ROWS=13, R57_P2_VERIFY=0; data/stack/card_w24p2_env.txt
+6ff0296f; screen w24ft), against the card as gated. EvalSuite's pre-registration (12007aa) set the scope: every card-gate
+prompt of 256 tokens or fewer, that is IFBench 150 / 150 and GPQA Diamond 67 / 100. The controls were the 5 shortest GPQA
+prompts above 256 tokens (258-269).
+
+**Results.**
+
+| set | P2 | card as gated | delta | McNemar p (arm-only / card-only) | line |
+|---|---|---|---|---|---|
+| IFBench (150) | 39.3 % | 40.7 % | -1.33 pt | 0.80 (7 / 9) | PASS |
+| GPQA Diamond (67 short prompts) | 55.2 % | 58.2 % | -2.99 pt | 0.63 (1 / 3) | PASS |
+
+- The gate: PASS (delta above -5 pt and p >= 0.05 on both sets).
+- The 5 controls were token-identical, so P2 leaves longer prompts alone.
+- runs.json p2 was above 0 on all 217 short prompts (median 6 chunks on IFBench, 16 on GPQA) and 0 on the controls.
+
+**Information only.** The gate ran by day through 12 heat freezes.
+- Median first token: IFBench 1.60 vs 3.31 s; GPQA 3.12 vs 3.75 s.
+- Peak 23.25 vs 25.05 GB on the same GPQA keys.
+- Decode 27.9 vs 29.3 tok/s, which is not a controlled comparison: the card's figure is from a night run. In W24FT's
+  same-run arms, P2's decode was 31.8 against the control's 31.0.
+
+**Next.** One clean ABBA timing at 24 GB under a quiet lock tonight (docs/PREREG_W24T_2026-11-11.md). If it holds near
+1.1 s, P2 at 24 GB goes into the next package (1.2), on Kamen's word.

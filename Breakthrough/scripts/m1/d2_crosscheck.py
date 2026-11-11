@@ -108,3 +108,36 @@ for arm in arms:
         say(f"| {dom} | {len(X)} | {int(X[:, 1].sum())} | {100 * a:.2f} % [{100 * alo:.2f}, {100 * ahi:.2f}] | "
             f"{k:.2f} [{klo:.2f}, {khi:.2f}] | {vb} |")
 open(os.path.expanduser("~/Breakthrough/data/m1/d2_crosscheck.out"), "w").write("\n".join(lines) + "\n")
+
+# Information lines (added Wed 19:4x after the agent gate failed: 11 of 12 agent windows start at off 5,877-8,555 and the
+# map prefills only ids[off:], so the stored full-context references do not apply there).
+ba_p = os.path.join(OUT, "bm_base_agent.json")
+if os.path.exists(ba_p) and not sys.argv[1:]:
+    ba = json.load(open(ba_p))
+    say("")
+    say("AGENT, information only (excluded by the gate): each arm vs bm_base_agent, the exact pass on the same cut "
+        "context, 95 % window bootstrap")
+    for arm in arms:
+        if arm == "bm_base_agent":
+            continue
+        res = json.load(open(os.path.join(OUT, arm + ".json")))
+        P = []
+        for nm, b in ba.items():
+            if nm not in res:
+                continue
+            x = np.array([t[0] for t in res[nm]["tk"]]); y = np.array([t[0] for t in b["tk"]]); m = min(len(x), len(y))
+            f = x[:m] == y[:m]
+            k, c = walk(f)
+            P.append((int(f.sum()), m, k, c))
+        if P:
+            X = np.array(P, float)
+            a, alo, ahi = ci(X[:, 0], X[:, 1]); k, klo, khi = ci(X[:, 2], X[:, 3])
+            say(f"  {arm}: agreement {100 * a:.2f} % [{100 * alo:.2f}, {100 * ahi:.2f}], kept per check {k:.2f} "
+                f"[{klo:.2f}, {khi:.2f}] ({int(X[:, 1].sum())} rows, {len(X)} windows)")
+rp = os.path.join(OUT, "bm_d2_rep.json")
+if os.path.exists(rp) and not sys.argv[1:]:
+    rep, d2 = json.load(open(rp)), json.load(open(os.path.join(OUT, "bm_d2.json")))
+    for nm in rep:
+        same = rep[nm]["tk"] == d2[nm]["tk"] and rep[nm]["lp"] == d2[nm]["lp"]
+        say(f"DETERMINISM bm_d2_rep vs bm_d2 on {nm}: top-8 ids and log-probs {'bit-identical' if same else 'DIFFER'}")
+open(os.path.expanduser("~/Breakthrough/data/m1/d2_crosscheck.out"), "w").write("\n".join(lines) + "\n")
