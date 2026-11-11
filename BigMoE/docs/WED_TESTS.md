@@ -1587,3 +1587,17 @@ T1 through T1e ran PF-A at 32 GB.
   Short ones match. Peak 50.02 GB.
 
 **Next.** Leap's cached 45 GB agent run. Details: docs/CONV_CACHE_DESIGN.md section 20.
+
+## Wed 11 Nov 07:47-08:11: CONV agent45c = the cached 45 GB Claude Code agent run (Leap's 45c_1111): 117 of 118 requests hit (data/conv/agent45c/summary.json)
+
+**Setup.** As agent32c, at --mem 45 (PF-D prefill): 3c068d7, branches on, a 2.5 GB budget, and no per-hit cold check.
+
+**Results.**
+- 117 of 118 requests hit: 107 live and 10 copies. The only miss is the first request, 72.5 s cold (32 GB: 20.4 s).
+- 8.8 % of the prompt tokens were prefilled, a median of 746 new tokens per request.
+- First token: median 6.8 s (32 GB: 6.3 s), p90 26.2 s (32 GB: 12.7 s, since PF-D is slower on big chunks), max
+  72.5 s. Peak 49.43 GB, no swap growth.
+- Probe 29/30. The task checks gave 12/12, but EvalSuite scores t10 a fail because it searched outside its folder,
+  giving 11/12. 0 server errors; the tasks took 1,097 s (32 GB cached: 916 s) [K Leap].
+
+**Next.** Exactness at 45 GB rests on T1-45. Details: docs/CONV_CACHE_DESIGN.md section 21.

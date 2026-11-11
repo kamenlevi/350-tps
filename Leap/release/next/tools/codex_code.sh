@@ -12,6 +12,11 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 MEM=32
 if [ "$1" = "--mem" ]; then MEM=$2; shift 2; fi
 case $MEM in 45|32|24) ;; *) echo "codex_code.sh: --mem takes 45, 32 or 24" >&2; exit 2;; esac
+# The context window Codex is told (EXACTSTREAM_CONTEXT overrides it): 64K at 45 and 32 GB, 128K at 24 GB.
+# A cold 128K prefill at 32 GB with the layer-major prefill was forecast at ~61 GB, and 45 GB at 128K at ~59 GB, above
+# what a 64 GB Mac can spare; at 24 GB it peaked at 51.6 GB (data/long_ctx_1111.md).
+case $MEM in 24) CTX_DEFAULT=131072;; *) CTX_DEFAULT=65536;; esac
+export EXACTSTREAM_CONTEXT=${EXACTSTREAM_CONTEXT:-$CTX_DEFAULT}
 PORT=${EXACTSTREAM_PORT:-8080}
 health() { curl -s -m 2 "http://127.0.0.1:$PORT/health" 2>/dev/null; }
 STARTED=""

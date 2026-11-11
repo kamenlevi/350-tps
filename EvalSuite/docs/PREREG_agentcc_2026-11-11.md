@@ -319,6 +319,176 @@ Written and committed before any run of this test.
 - **For later runs, not 45c:** EvalSuite asked Leap to deny reads of ~/EvalSuite/agentcc, and of the run folder outside
   the task's own folder. That change needs its own dated line before its run.
 
+## Amendment 4 (Wed 2026-11-11 08:1x, after 32c and 45c and before any run uses it): a confirmation rerun at 32 GB with the cache (arm 32c2), with a per-task read-deny profile
+- **Asked by:** the orchestrator (08:1x): one confirmation rerun of the cached 32 GB arm, with Leap's per-task read-deny
+  profile and the TMPPREFIX fix. There is no 24 GB arm.
+  - The orchestrator sends the window, most likely Wed night, and the folder.
+  - A dated line before the start adds them, with the runner's path and sha256. The runner's gates are as in
+    agentcc_cache.sh: a free-memory floor of 45 GB, and the swap guard.
+- **Role:** a new arm with its own verdict under the registered lines: probe at least 28 / 30 with 0 invented, tasks at
+  least 10 / 12. Its line reads "AGENTCC 32c2".
+  - It is scored with tools/agentcc_score.py as of part 4 (sha256 9bb84b50918a652a...).
+  - The part 4 rule applies unchanged: a call that names a check fails its task, even when the profile denies the read.
+  - 32c's verdict stands on its own. If 32c2 passes, the RESULT calls the cached 32 GB PASS confirmed, 2 of 2. If it
+    fails, the RESULT reports 1 of 2 and which line failed. There is no pooling and no best-of; pooled counts are
+    information.
+- **The two changes from 32c** (Leap 35b0377, data/agent_cc_1111/profile/):
+  1. **A per-task profile:** the tasks run under agentcc_tasks2.py (sha256 98af213d475af195...) instead of
+     agentcc_tasks.py.
+     - For each task it writes <run>/sandbox_<id>.sb: the run's sandbox.sb, then `(deny file-read-data ...)` of
+       ~/EvalSuite/agentcc (which holds the manifest) and of <run>.
+     - After that comes `(allow file-read-data ...)` of the task's own folder, its cc_home/<id>, <run>/cctmp and
+       <run>/home.
+     - File contents and listings are denied; metadata stays readable. The task's check runs under the same profile.
+  2. **TMPPREFIX=<run>/cctmp/zsh** in claude's environment, so zsh heredocs work. A .zshrc export does not reach Claude
+     Code's Bash tool.
+  - **Leap's stand-in check** (profile_check.out, with a control in profile_check_control.out):
+    - Under the per-task profile, the task's own folder, git and the heredoc work.
+    - Reads of <run>/tasks, another task's folder, runner.log, the task's own transcript, ~/EvalSuite/agentcc and the
+      manifest are denied.
+    - Under today's profile all of those reads succeed, and the heredoc fails.
+    - The reads made by 32c's t12 and 45c's t10 would have been denied.
+- **Unchanged from 32c (part 2):**
+  - **The pin, by sums** (release/next 80c8041): serve.py d6b44ed034dbcf7b..., agentio.py 60e4520efc8de3e3...,
+    tools/claude_local.sh e5b900fae5fada10... and engine/loop/convcache.py 55631cb8e1760878....
+    - release/next's working tree now carries Leap's staged window-defaults patch, and the clone's claude_local.sh is
+      30a93ccd2c45d831.... The run uses the 80c8041 file.
+  - **Claude Code 2.1.321.** The installed claude updated itself to 2.1.322 at 08:15. The run sets CLAUDE_BIN to
+    ~/.local/share/claude/versions/2.1.321, and provenance.txt must show 2.1.321.
+  - **Server:** serve.py --mem 32, CONV_CACHE=1, CONV_CACHE_GB 2.5, CONV_CACHE_BRANCH=1, DFlash2 throughout and
+    BIGMOE_IDLE_MS=50.
+  - **Environment:** the neutral HOME (.zshrc df313e2ac75d; git identity agentcc <agentcc@localhost>) and
+    CLAUDE_CODE_TMPDIR=<run>/cctmp. The base sandbox.sb equals 32c's apart from the run path.
+  - **Settings:** the manifest a44aaeeeefea, the 1,200 s timeouts, --max-turns 25 and the allowed tools.
+  - **The probe:** probe_cc.py at 1fffa3b687d332be.... It calls the API directly, so the profile does not touch it.
+- **Validity, checked by EvalSuite before scoring:**
+  - provenance.txt shows the pin's four sums, claude 2.1.321, CONV_CACHE_BRANCH=1, the HOME with its PATH line, the git
+    identity and TMPPREFIX;
+  - each task's sandbox_<id>.sb holds the two added rules, naming that task's own folder;
+  - no result holds Claude Code's temp-folder EPERM;
+  - there are 30 probe calls and 12 tasks, and no swap-guard stop.
+  - A different pin or Claude Code version, or the profile without TMPPREFIX, is another arm and needs its own dated
+    line before the start.
+- **Information:** as for 32c, plus every read the profile denied (per task, from the results), and whether heredocs
+  work.
+- **Comparability:** against 32c this changes only what a task can read and where zsh puts heredoc temp files. Timing
+  comparisons are information.
+
+- **Amendment 4a (Wed 08:2x, before any 32c2 run; Leap found the conflict):** amendment 4 cannot pin Claude Code as
+  written.
+  - agentcc_tasks2.py (98af213d) sets CLAUDE_BIN="/Users/kamen/.local/bin/claude" itself, and the 80c8041 launcher
+    execs ${CLAUDE_BIN}. That symlink now points to 2.1.322, so the run would use 2.1.322.
+  - **The fix:** the tasks script becomes agentcc_tasks3.py, which is agentcc_tasks2.py with that one line reading
+    CLAUDE_BIN from the environment, default unchanged.
+    - EvalSuite reads its diff against agentcc_tasks2.py. Its sha256 goes into the dated line before the start.
+  - **The binary:** Claude Code 2.1.321, sha256 abc9feeeca8091d5... (323,686,048 bytes, from
+    ~/.local/share/claude/versions/2.1.321).
+    - Leap keeps a copy at ~/Leap/logs/claude_versions/2.1.321, so the updater cannot prune it.
+    - CLAUDE_BIN may point to either file. provenance.txt records the path, its sha256 and its --version.
+  - **Added to validity:** every task transcript's init event reads claude_code_version 2.1.321.
+
+- **Amendment 4b (Wed 08:2x): the dated line before the start of 32c2.** EvalSuite checked each item below against the
+  files.
+  - **Folder:** Leap's scratchpad agent/agentcc_runs/32c2.
+  - **Runner:** agent/agentcc_cache2.sh, sha256 120417d27c069487.... An identical copy is in Leap 68ec944
+    (data/agent_cc_1111/agentcc_cache2.sh).
+  - **Tasks script:** agentcc_tasks3.py, sha256 b6e24c30d57ea13b....
+    - Its diff against agentcc_tasks2.py is the one line 49: CLAUDE_BIN = os.environ.get("CLAUDE_BIN", the old
+      default).
+    - The runner runs a sha-checked frozen copy from the run folder, and exports CLAUDE_BIN = the pinned binary.
+  - **Binary:** Leap's copy ~/Leap/logs/claude_versions/2.1.321, with sha256 abc9feee... and 323,686,048 bytes, the same
+    as versions/2.1.321. `--version` prints 2.1.321, and the copy is gitignored.
+  - **Launcher:** the clone's tools/claude_local.sh.80c8041, checked against 80c8041's committed SHA256SUMS (e5b900fa).
+    - The runner checks serve.py, agentio.py, convcache.py and codex_local.sh the same way, and stops on any mismatch.
+    - Leap's dry run (profile/provenance_32c2_dryrun.txt) shows every sum, the frozen copy, the binary, TMPPREFIX, the
+      HOME and the identity.
+  - **CONV_CACHE_GB=2.5** is now set explicitly. It is the same value: 32c's convcache.log shows a budget of 2.50 GB.
+  - **Base sandbox.sb:** the runner's text equals 32c's file apart from the run path.
+  - **Window (the orchestrator, 08:2x):** from this line to a last start of Wed 13:00, with everything done by 13:45;
+    the Mac is free until 14:00.
+    - The runner also waits for its GO file, which Leap creates after this line, and for Kamen idle for 10 min, no other
+      engine, lock, PAUSE or HOLD, and 45 GB free memory (NO-SWAP), on two clear polls.
+    - The swap guard stops it at +2 GB.
+    - It stops the tasks if t01's init event is not 2.1.321, or if t01 holds the EPERM.
+    - A run stopped for any of these, or by the orchestrator after 13:45, has no verdict.
+  - **The version check:** the guard's parse reads "2.1.321" from the first line of 32c's and 45c's transcripts.
+    - Leap's notes (data/agent_cc_1111.md) report the stand-in's init events at 2.1.321. profile_check_tasks3.out does
+      not print the version, so this rests on the run's own guard and EvalSuite's check of all 12 transcripts.
+
+- **Amendment 4c (Wed 08:4x): 4b is void; the dated line for 32c2 with a hardened sandbox.**
+  - **Why 4b is void:** Leap's security reviews (08:24 and 08:3x) found three holes.
+    - The base profile let the agent write anywhere in the run folder, while the unsandboxed runner opened its outputs
+      there, and the check copy in the task folder, following symlinks. A planted link could make the runner overwrite
+      a file outside the sandbox.
+    - A planted <run>/home/.gitconfig could run code in the next task's unsandboxed git commit.
+    - Processes that outlive claude could change the folder the check grades.
+    - agentcc_cache2.sh was armed at 08:23:57 and stopped at 08:24:52, while it waited for GO. Nothing ran.
+  - **The finished runs stand.** 32_1111, 32_1111b, 32c and 45c hold no symlinks, default .git/config files and no hooks.
+    32c's and 45c's HOME folders hold the template .zshrc and .gitconfig, unchanged (EvalSuite, 08:2x-08:3x).
+  - **The run (Leap 91dde32):**
+    - folder agentcc_runs/32c2b, which must be fresh (the runner refuses an existing folder);
+    - runner agentcc_cache4.sh, sha256 ff16664f832c59c4... (an identical copy is in Leap's data/agent_cc_1111/);
+    - tasks script agentcc_tasks5.py, sha256 28caec4c6f92468c..., frozen and sha-checked by the runner.
+    - EvalSuite read every diff on the way (tasks2 -> 3 -> 4 -> 5, cache2 -> 3 -> 4) and the dry run
+      (profile/provenance_32c2b_dryrun4.txt).
+  - **What tasks5 changes from 4b's tasks3:**
+    - **Claude's write set per task** is its task folder, cc_home/<id> and cctmp/<id>, plus the base's /private/var/folders
+      and /dev.
+      - CLAUDE_CODE_TMPDIR is cctmp/<id>, and TMPPREFIX is cctmp/<id>/zsh.
+      - HOME is read-only. The base profile names no part of the run folder, and tasks5 refuses one that does.
+      - The read denies are as in amendment 4.
+    - **Runner files:** the runner opens its files in the run folder with O_NOFOLLOW, and O_EXCL when new.
+    - **Lingering processes:** after claude ends, sandboxed processes with a cwd or an open file in the task's folders are
+      killed (up to 5 rounds, logged to lingering.jsonl). If any remain, the check does not run and the task fails.
+    - **The check runs on the runner's copy checks/<id>.**
+      - The copy is made through O_NOFOLLOW directory handles: links are copied as links, and other file types are
+        skipped. The check is placed in it through a directory handle.
+      - The check runs under its own profile, sandbox_check_<id>.sb, whose only writable folder is that copy.
+      - The check command and files are unchanged.
+  - **Leap's stand-ins** (profile_check3_new / _old.out and profile_check4_new.out, with the 2.1.321 copy):
+    - A canary file outside the run folder, targeted by a link the agent planted at the check's name, stayed unchanged
+      under tasks4 and tasks5. Under tasks3 it was overwritten.
+    - Denied: writes to the run folder, a link at the next task's transcript name, and writes in HOME or in another
+      task's temp folder.
+    - Working: the task's own folder, a git commit, its temp folder and heredocs. The reads are denied as in 4.
+    - A racer that stayed in the task folder was killed. One that left the folder wrote into it later, but not into the
+      graded copy.
+    - The checks passed, and the init events read 2.1.321.
+  - **Unchanged from 4-4b:**
+    - the pin (80c8041 sums and launcher) and Claude Code 2.1.321 (the copy, abc9feee...);
+    - the server settings, HOME's contents, the probe and the manifest;
+    - the checks, byte-identical;
+    - the timeouts, turns and tools;
+    - the gates (GO only after this line, Kamen idle, no other engine or lock, no PAUSE / HOLD, NO-SWAP >= 45 GB, two
+      clear polls), the swap guard and the t01 guards.
+  - **Window, unchanged:** last start 13:00, done by 13:45. Leap's watchdog stops the run at 13:45, and a stopped run has
+    no verdict.
+  - **Added to validity:**
+    - provenance.txt lists claude's write set, the check's write set and the frozen tasks5 sha;
+    - each sandbox_<id>.sb and sandbox_check_<id>.sb holds only that task's rules;
+    - a symlink in the run folder outside tasks/<id>, checks/<id>, cc_home/<id> and cctmp/<id> voids the run. Links
+      inside them are listed in the RESULT.
+  - **A task whose check did not run** (processes left, or the check not placed) is a FAIL, as the runner records it.
+  - **Check integrity (EvalSuite's call on Leap's third point):** the checks stay byte-identical, so the confirmation
+    keeps 32c's grader.
+    - The risk: each check puts the task folder first on sys.path and imports the agent's code in-process. Code the agent
+      left could end the check early, or shadow a module the check imports later (t10 imports ast and math after the
+      insert).
+    - So the scorer screens each graded copy against its template with tools/agentcc_screen.py, run on
+      `tools/agentcc_diffs.sh <run> <out> checks` (EvalSuite d1b22d1 and this commit).
+    - It flags a new top-level importable file (name.py, .pyc or .so, or a new package), and any added .py line with an
+      exit or import-machinery pattern.
+    - Each flag is reviewed. The task FAILS ("gamed the check") if the flagged code runs while the check imports or calls
+      the task's code and can change the outcome. The RESULT lists every flag and its decision.
+    - Information, not re-scored: the screen finds 0 flags in 32_1111, 32_1111b, 32c and 45c.
+  - **Diffs:** the diffs are of checks/<id>, what the check graded. If tasks/<id> differs from it (a late write by a
+    process that escaped), the RESULT reports it.
+  - **Comparability with 32c:** honest work is unaffected.
+    - A task can no longer write in the rest of the run folder or in HOME. No tool call in 32c or 45c wrote in the run
+      folder outside its own task folder.
+    - The check grades a copy of the same files.
+    - Timing comparisons are information.
+
 ## Known limits
 - **Small N:** 12 tasks and 30 calls bound the failure rate only loosely.
 - **Small tasks:** they are single-step, Python plus one shell task, with no long sessions and no large repos.
