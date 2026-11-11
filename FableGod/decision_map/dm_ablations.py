@@ -193,6 +193,8 @@ def ablation(name):
     lag 1, lag<k> = copy from row t - k, chain = sure rows (baseline class) take the last computed row's output, chain<S>
     = the same with a refresh so no output is reused more than S rows on (stage 2); _topk<k> stacks top-k (mass) on
     every row and layer; e.g. moe_reuse_prev_L12_35, moe_reuse_lag4_L12_35, moe_reuse_chain1_L08_35_topk2."""
+    if re.match(r"d\d+_", name) and name not in ABLATIONS:   # (Breakthrough, Wed 11 Nov) BigMoE's D2 family d<k>_* lives in
+        import dm_d2  # noqa: F401                           # dm_d2.py (BigMoE's file), imported only when one is asked for
     if name in ABLATIONS: return ABLATIONS[name]
     if "+" in name:                                      # FLOOR night stacks (Tue 07:0x): a+b runs both setups in order
         parts = [ablation(p) for p in name.split("+")]
