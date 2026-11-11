@@ -15,7 +15,8 @@ first token (median, s) / lifetime peak (GB). From the RELEASE paper, section 2,
 
 (1) Only before coherent reads (config L at C 160): HumanEval 150.7 / 36.0 / 4.43 / 31.78, MBPP 111.0 / 26.8 / 3.69 / 31.44.
 
-(2) One configuration for both names (CONFIGS.md). These runs are not in the RELEASE paper. HumanEval comes from the research
+(2) One configuration for both names (CONFIGS.md). These runs are in the 12 GB and 24 GB paper and in the RELEASE paper,
+section 3. HumanEval comes from the research
 run W24d, MBPP and IFEval from W24f, math (MATH-500) from W24g: the gated configuration, two passes each (data/w24 in BigMoE's
 research tree). The peaks on these benchmark prompts reach 24.01 GB (a 520-token math prompt); longer prompts take more, up to
 28.2 GB at 30K tokens (LIMITS.md).

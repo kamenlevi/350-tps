@@ -12,6 +12,9 @@ on macOS 26.5 (25F71).
 - The chat prefill path (PF-D) is on for `chat` at 45 GB only. It was measured on chat-length prompts (37-101 tokens)
   and checked exact on 10K and 30K-token prompts, where it shortens the first token by only 3-4 % and adds about 2 GB
   to the lifetime peak.
+- At 32 and 24 GB, `chat.py` prefills long prompts layer-major (PF-A). Its tokens match the default prefill's except when
+  a prompt's last 1,024-token chunk is under about 200 tokens: there the arithmetic rounds differently and an answer can
+  differ. `R57_PFLM=0` in the shell turns it off (INSTALL.md).
 - Lifetime peaks go above the memory line on long prompts. At 45 GB: 45.1-46.4 GB on 7.9K tokens, and `chat` as shipped
   (with PF-D) reaches 47.5 GB on 10K tokens and 48.6 GB on 30K. At 32 GB, `chat` reaches 34.0 GB on 10K tokens and
   35.5 GB on 30K.

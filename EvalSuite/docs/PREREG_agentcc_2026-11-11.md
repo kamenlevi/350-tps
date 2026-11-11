@@ -173,6 +173,60 @@ Written and committed before any run of this test.
 - **Schedule:** it starts once T1d's runner (pid 75700) has exited and the Mac is free, expected ~04:45-05:00. The last
   start is 08:00, and the run takes about 95 min.
 
+- **Amendment 2a (Wed 04:07, before the rerun starts; Leap replaced the armed runner before it started):** one sandbox
+  change, so amendment 2's "the profile generator is unchanged" no longer holds.
+  - The read-deny entries for ~/.claude and the two account config folders become one rule, `(regex
+    #"^/Users/[^/]+/\.claude[^/]*(/|$)")`. It covers every ~/.claude* entry, including ~/.claude.json, which the old
+    entries did not.
+  - Reason: the orchestrator's 04:0x privacy fix, so that no account folder names appear in files.
+  - The rest of the profile, the fix and all settings are as in amendment 2. The runner is
+    scratchpad/agent/agentcc_rerun2.sh (sha256 f5473efdd0f0315c...); the folder is still 32_1111b.
+  - Leap's mock check (04:05, bashfix_check2.out): Bash runs, none of the 7 ~/.claude* entries is readable, and ~/.ssh
+    is denied.
+  - The rule only narrows what can be read. The tasks need nothing under ~/.claude*, and Claude Code's own config
+    folder is the isolated one.
+
+- **Known limit of 32_1111b (Wed 04:2x; written after its start at 04:23:49, before any result):** `git commit` fails
+  for the model.
+  - The rerun runs with the real HOME, whose ~/.gitconfig signs commits with an SSH key under ~/.ssh, which the profile
+    denies. The error is "Couldn't load public key ...".
+  - `git status` and `git log` work, so Claude Code's own git status at startup works.
+  - Leap's mock of this setup (scratchpad/agent/bashfix_git.out) also shows `git diff HEAD~1` failing, only because
+    the commit before it failed.
+  - Leap chose to run as armed, since stopping it would have ended the run. No task prompt asks for a commit.
+  - Scoring is unchanged. The RESULT reports every git commit attempt per task and how it ended.
+  - The cached runs' neutral HOME (amendment 3) has no signing, and commit works there.
+
+## Amendment 3 (Wed 2026-11-11 04:2x: before any cached run): a neutral HOME for the cached runs
+- **Applies to:** the cached 32 GB and 45 GB runs (Leap's planned folders agentcc_runs/32c_1111 and 45c_1111). It does
+  not apply to 32_1111b, which runs as amendments 2 and 2a.
+- **The change:** Claude Code and its tools run with HOME=<run>/home. The orchestrator approved it at 04:2x, relayed by
+  Leap.
+  - The folder holds only a .zshrc that exports the PATH of today's runs (recorded in the run's provenance.txt), and a
+    .gitconfig with a template identity (agentcc / agentcc@localhost).
+- **Why:** Claude Code builds its shell snapshot by sourcing $HOME/.zshrc, so in 32_1111 the user's aliases reached the
+  model (t01). A neutral ZDOTDIR has no effect, because Claude Code sources $HOME/.zshrc directly.
+- **Leap's mock check** (Leap aa7815b, data/agent_cc_1111/bashfix_home.out): "equal: 33 | differ: []".
+  - The 33 items cover PATH, the tool binaries (python3, git, node, pytest and others), git's version, the locale,
+    Python's encodings and the env var names.
+  - Aliases drop from 5 to zsh's 2 built-ins, and functions from 8 to 0.
+  - **Open:** that output shows the neutral folder's git identity as unset, against the template identity above. Each
+    run's provenance.txt must record git's identity under the neutral HOME, and EvalSuite checks it before scoring.
+  - **Resolved (04:2x):** Leap's final setup check uses the template the runner copies (data/agent_cc_1111/
+    bashfix_final.out, Leap b9aa1df). It shows GITID set, and `git commit` works with author agentcc@localhost.
+    - Each cached run's provenance.txt records the identity under the neutral HOME (Leap 28650a7).
+    - In that check 32 of 33 items are equal. The one that differs is `git status`, which fails under the real
+      HOME and works under the neutral one.
+    - **Correction (04:2x):** that `git status` difference came from Leap's mock folder, which was not a git
+      repo. It did not come from the sandbox (bashfix_git.out). In a repo under the real HOME, status and log
+      work and commit fails, as above.
+- **What the model sees differently:** `~` and `cd ~` point to the neutral folder. Absolute paths behave as before, and
+  `git commit` uses the folder's identity. No task's check depends on HOME or on the commit identity.
+- **Comparability:** the cached runs differ from 32_1111b in the served path (the conversation cache) and in HOME. Any
+  comparison with 32_1111 or 32_1111b is information.
+- **Part 2, before the first cached run:** the pin, the served-path change, the folders, the timeouts, and each run's
+  role (verdict or information).
+
 ## Known limits
 - **Small N:** 12 tasks and 30 calls bound the failure rate only loosely.
 - **Small tasks:** they are single-step, Python plus one shell task, with no long sessions and no large repos.

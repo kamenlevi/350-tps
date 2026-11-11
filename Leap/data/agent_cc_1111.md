@@ -259,3 +259,65 @@ public sync's leak check refuses those strings. Fixed in every tracked file (git
 - Note for the next runs: the shell snapshot that t01 read lives in the run's own Claude Code config folder (cc_home),
   which Claude Code itself must read, so no read-deny can hide it; keeping the user's aliases out of it would mean a
   neutral zsh startup (ZDOTDIR), which changes PATH (python3) for the tasks: not done without EvalSuite's call.
+
+## Wed 03:57-04:09: T1c (BigMoE 134e811): signature B is the copy itself, layer 35 QSA keys, row 0 only
+
+Same setup as T1b (cache clone, serve.py --mem 32, CONV_CACHE_CHECK=1, the 45 recorded requests; t1c_32_1111/). BigMoE's
+stand-in on the module first: 4 PASS / 0 FAIL. Replay: 45 requests, **12 hits, 7 PASS, 5 FAIL** (as T1b), server errors 0.
+- **drift lines 0**: entry 0's layer-35 keys did not change during k 31's decode (BigMoE's (b) is out).
+- **restore lines 2**, one per copy (k 32, k 34): `restore (copy at 9216): rows below c differ from the source's prefill:
+  35[0] rows 0..0 (1 of 9216)`: BigMoE's (a), the copy itself.
+- Every FAIL (copies k 32 / 34 at c 9,216, N 12,300; live k 33 / 35 at c 12,288, N 12,404; live k 36, N 12,627) is
+  `35:QSACache[0] ... QSA rows warm vs cold: 35[0] rows 0..0 (1 of N)`: one row, row 0 of layer 35's QSA keys, made by
+  the copy and carried into the copy-made entries' later live hits. k 31 (live on entry 0) PASS.
+- Warm prefill: copies restore 81-114 ms + 3,084 tokens in 12.2-12.3 s; live hits restore 59-102 ms + 116-339 tokens in
+  2.9-4.7 s (cold: 12,302 tokens 28.2 s, 8,390 tokens 23.1 s).
+Sent to BigMoE 04:1x. T1d (b855883, CONV_CACHE_BRANCH=0: no copies) started 04:09:56; its stand-in 3 PASS / 0 FAIL.
+
+## Wed 04:1x: a neutral shell startup for the next agent runs (orchestrator 04:0x): ZDOTDIR does not work; HOME does
+
+The orchestrator's call: tonight's 32_1111b stays as armed; from the next runs on (cached 32 GB, 45 GB) the claude
+processes get a neutral zsh startup that keeps today's exact PATH, without the user's aliases or functions; checked on
+the mock first (python3, git and the task tools must resolve to the same binaries).
+- **ZDOTDIR=<run>/zdot (bashfix_zdot.sh / .out): no effect.** PATH and all 32 compared items equal, but aliases 5 -> 5
+  and functions 8 -> 8: Claude Code builds its shell snapshot by sourcing `$HOME/.zshrc` itself (its string table: the
+  snapshot script's `source "<config file>" < /dev/null`; ZDOTDIR is only read by its `alias claude=` check), so
+  ZDOTDIR never reaches it.
+- **HOME=<run>/home with .zshrc = `export PATH='<the exact PATH of today's runs>'` (bashfix_home.sh / .out): works.**
+  All 33 compared items equal (PATH, the binary of python3 / python / pip3 / git / sh / bash / zsh / ls / cat / grep /
+  sed / awk / find / wc / sort / head / tail / diff / patch / make / env / xargs / tr / cut / node / npm / pytest,
+  python3 3.14 (Homebrew), git's version, the locale and Python's encodings, the env var names); aliases 5 -> 2 (zsh's
+  own run-help / which-command), functions 8 -> 0. Side effects: `~` is the neutral folder (so `ls ~` no longer lists
+  the user's home; absolute paths still behave as before), and git has no global identity (proposed: a .gitconfig in
+  the neutral home with the template's identity, agentcc@localhost). Not adopted yet: sent to the orchestrator and
+  EvalSuite (an amendment) before the cached runs.
+- **Approved (orchestrator 04:2x) for the cached 32 GB and 45 GB runs; EvalSuite told for an amendment.** The home
+  template is agent_cc_1111/agent_home_tpl/ (.zshrc: only the exact PATH; .gitconfig: agentcc / agentcc@localhost);
+  agentcc_cache.sh copies it to <run>/home, records it in provenance.txt and runs agentcc_tasks.py (so every claude) with
+  HOME=<run>/home. **Mock check of exactly that setup (bashfix_final.sh / .out), in a git repo task folder:** 32 of 33
+  items equal to today's (the one difference: `git status` ok, the baseline's mock folder was no repo); aliases 2 (zsh's
+  own), functions 0; `git commit` works, author agentcc@localhost. Tonight's 32_1111b keeps the old home, as armed.
+
+## Wed 04:09-04:23: T1d (BigMoE b855883, CONV_CACHE_BRANCH=0): PASS, 10 of 10 hits bitwise
+
+The orchestrator's 09:00 fallback, checked early: b855883 (sha256 266f76e5) installed in the cache clone, BigMoE's
+stand-in with BRANCH=0 first (3 PASS / 0 FAIL), then the T1b replay with CONV_CACHE_BRANCH=0 (t1d_32_1111/).
+**45 requests; 10 hits, 10 PASS, 0 FAIL; drift 0, restore 0; server errors 0**, as BigMoE predicted: the 2 would-be
+copies are cold misses (`miss N 12300 c 0 (none, branch (CONV_CACHE_BRANCH=0))`, 27.5 / 28.0 s), every hit is live (c
+12,288: k 31 / 33 / 35 / 36; c 8,192: the 6 Codex turns), restore 58-93 ms, 116-425 new tokens prefilled in 2.9-5.7 s.
+The first long miss (N 12,302) took 135 s instead of 28 s: fanwatch froze the server 04:15:35-04:17:16 (heat pause at
+die 84.3 C; fanwatch_0415.txt). Short one-chunk misses (~700 tokens, the side calls) take ~8 s each at 32 GB.
+So the cache is exact with copies off; with copies on, the copy changes row 0 of layer 35's QSA keys (T1c). Under the
+orchestrator's rule the cached 32 GB agent test runs on b855883 + BRANCH=0 at 09:00 unless BigMoE has a clean copy fix.
+
+## Wed 04:2x: git in 32_1111b's setup: `git commit` fails (the user's gitconfig signs with an SSH key under ~/.ssh)
+
+EvalSuite asked (04:2x) whether git works for the model in 32_1111b (real HOME). Mock check of exactly that setup in a
+git repo (bashfix_git.sh / .out; R = 32_1111b's, F = the cached runs' neutral HOME): R: `git status`, `git log`, `git
+diff` ok (so Claude Code's own startup git status works), **`git commit` FAILS**: `error: Couldn't load public key
+<home>/.ssh/id_ed25519.pub` (the global gitconfig turns on commit signing with an SSH key: commit.gpgsign, gpg.format,
+user.signingkey; the profile denies ~/.ssh, so a model can never sign with the user's key). F: all four ok. (The earlier
+"B: GIT status FAIL" in bashfix_final.out was the mock's task folder, not a repo.) None of the 12 prompts asks for a
+commit. 32_1111b had already started (04:23:49) when the answer came, so it runs as armed (EvalSuite's option b: commit
+failures reported as a setup limit of that rerun); agentcc_rerun3.sh (neutral HOME) was ready but not used. The cached
+runs use the neutral HOME, where commits work.

@@ -479,3 +479,70 @@ The stand-in test passes on it: 4 PASS / 0 FAIL [K Leap].
   stays 7/7.
 - Reading the result: drift at the request's start means the decode changed stored rows. A restore mismatch means the
   copy's read. Rows that differ only in [c, N) mean the warm prefill itself.
+
+## 16. T1c (Wed 11 Nov 03:57-04:09, Leap's run): the copy's clone rewrote one value; the fix = bitwise copies
+
+**Setup.** As T1b, with the drift diagnostic of section 15 (134e811, sha256 e3434b13). The stand-in test passed first,
+4 PASS / 0 FAIL [K Leap].
+
+**Results.** Data: data/conv/t1c/.
+- The same 12 hits as predicted. 7 PASS, 5 FAIL: the same 5 as T1b.
+- **No drift.** 0 drift lines. No stored entry's QSA rows changed between the end of its prefill and the next request,
+  nor across the cold check and the restore. The decode does not touch stored rows.
+- **The copy changes one row.** Both copy restores (from 9,216) log `restore (copy at 9216): rows below c differ from the
+  source's prefill: 35[0] rows 0..0 (1 of 9216)`. Right after the copy, before any prefill, row 0 of layer 35's keys
+  differs from the source's.
+- Every FAIL is that row (`QSA rows warm vs cold: 35[0] rows 0..0`). The failing live hits are on the copy-made entries
+  and carry the row from their copy.
+
+**Cause.**
+- The copy's only arithmetic is its clone, `x + 0` (cache_state._clone_tree's rule, borrowed so that a copy owns its
+  buffer).
+- An add of zero is not a bit copy for floats. -0.0 + 0.0 = +0.0, and NaN bits are rewritten. Checked in MLX: 0x8000
+  becomes 0x0000; 0x7fc1 and 0xffc0 become 0x7fc0.
+- -0.0 equals +0.0 as a number, so attention, logits and taps stay equal and only the bits differ, as T1b saw.
+- So row 0 of layer 35's keys holds a value the add rewrites. A -0.0 is the likely one: a NaN there would have broken
+  every output.
+- Where it comes from is open. No key-norm gain is zero (all 13 QSA layers, min |gain| 0.98), so it is not a dead
+  dimension. T1e's census line prints the value's bits.
+
+**The fix (conv/convcache.py).**
+- `_clone` copies bits: an integer add of zero on the same-size unsigned view (bf16 as uint16, f32 as uint32), viewed
+  back. It is exact for every bit pattern, strided slices included.
+- The GDN checkpoints went through the same rule twice: cache_state.snapshot_untrimmable_cache (chunk-major) or `_clone`
+  (PF-A) when taken, and cache_state.restore_cache on every restore, live hits included.
+  - T1's live hits passed because no checkpointed GDN value was a -0.0 or a NaN. That was luck, not design.
+  - convcache now takes and restores the checkpoints itself with the bitwise clone (`_snapshot_gdn`, `_restore_gdn`),
+    using cache_state's container logic.
+- The checkpoints' taps tails use `_clone`, so they are bitwise now too.
+- No add-of-zero copy is left on the cache path.
+- A CHECK-only census line at each restore lists the values an add of zero would rewrite, in the source rows below c
+  and in the GDN checkpoint.
+
+**Tests.** conv/test_bitclone.py runs on the CPU in a few MB, on the real QSACache and ArraysCache classes with planted
+-0.0 and NaN payloads and a strided live state. 10/10 PASS:
+- the copy restore, the live restore, the GDN checkpoint and its restore, and the MTP copy are all bit-exact;
+- writes into a copy leave the source and the checkpoint unchanged;
+- the census finds every planted value;
+- control: the old rule changes the planted bits, so the test can see the bug.
+
+The stand-in loop (conv/test_mock.py, MOCK_SMALL=1) passes on the fix in both modes: PF-A and chunk-major, 7/7 cases,
+4/4 checks each (data/conv/b1_mock_small_pflm{1,0}_bitclone.json). Its census finds nothing, as expected with random
+weights.
+
+## 17. T1d (Wed 11 Nov 04:10-04:23, Leap's run): the fallback passes, 10 of 10 hits bitwise
+
+**Setup.** b855883 with CONV_CACHE_BRANCH=0: a request that would copy from an entry runs a cold prefill instead and
+starts a new entry. Otherwise as T1. The prediction for this setting is data/conv/t1_predicted_branch0.json (10 hits).
+
+**Results.** Data: data/conv/t1d/.
+- 10 hits as predicted. 10/10 PASS: logits, all 122 state arrays, the taps tail, the widened rows and the U3C footprint
+  are bitwise cold. 0 drift lines, 0 server errors.
+- The 2 would-be copies ran cold (27.5 s and 28.0 s for 12,300 tokens).
+- 41.3 % of the prompt tokens were prefilled (69,039 of 167,343). With branches on it was 30.2 %.
+- Live hits restore in 58-93 ms and prefill 116-425 new tokens in 2.9-5.7 s (the check runs first, so the experts are
+  resident).
+- One cold miss took 135 s instead of 28 s: a heat freeze of the server, 04:15:35-04:17:16 [K Leap], not the module.
+
+**Reading.** Every hit of the fallback is bitwise on the real engine, and live hits never copy a QSA array. It ships if
+the copy fix of section 16 does not pass its own T1 (T1e).

@@ -1517,3 +1517,30 @@ FAIL line naming each differing leaf.
 
 **Next.** A per-row drift diagnostic (docs/CONV_CACHE_DESIGN.md section 15) goes into T1c, after the night's long-context
 runs, to show where those rows change.
+
+## Wed 11 Nov 03:57-04:09: CONV T1c = the branch copy's clone rewrote one value (data/conv/t1c/verdict.json)
+
+**Setup.** Leap reran T1 with the per-row drift diagnostic (conv/convcache.py 134e811, sha256 e3434b13).
+
+**Results.**
+- The same 12 hits, 7 PASS, 5 FAIL.
+- No stored entry changed between requests (0 drift lines): the decode does not touch the stored rows.
+- Both branch copies come out with row 0 of layer 35's keys changed, before any prefill. Every FAIL is that one row.
+
+**Cause and fix.** The copy cloned arrays as `x + 0`, which turns -0.0 into +0.0 (and rewrites NaN bits). The values stay
+equal, so outputs matched, but the bits did not. convcache now copies bits through an integer view, the GDN checkpoints
+too (they used the same rule). A unit test with planted -0.0 and NaN values passes 10/10. Details:
+docs/CONV_CACHE_DESIGN.md section 16. Next: T1e, the same run on the fix with branches on.
+
+## Wed 11 Nov 04:10-04:23: CONV T1d = the fallback (a branch is a miss) on the real engine: PASS, 10 of 10 hits bitwise (data/conv/t1d/verdict.json)
+
+**Setup.** Leap ran T1 on b855883 with CONV_CACHE_BRANCH=0: a request that would copy from another entry runs a cold
+prefill instead.
+
+**Results.**
+- 10 hits as predicted (data/conv/t1_predicted_branch0.json), all 10 bitwise vs cold. 0 drift lines, 0 server errors.
+- 41.3 % of the prompt tokens were prefilled (30.2 % with branches on): the 2 branches ran cold, 28 s each.
+- Live hits: restore 58-93 ms, then 2.9-5.7 s for 116-425 new tokens.
+
+**Next.** This is the fallback for the cached agent test. The copy fix (T1c above) needs its own T1 (T1e) before
+branches come back. Details: docs/CONV_CACHE_DESIGN.md section 17.

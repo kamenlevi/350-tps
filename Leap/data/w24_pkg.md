@@ -277,3 +277,46 @@ w24_pkg/candidate_110g/checks_0345/).
 3. **Packaged defaults at idle (no variable set):** serve.py --mem 24 1.6 % of one core over 60 s (was ~100 %); chat.py
    --mem 24 1.5 % after its answer.
 So pkg_110g (7f61f48) is ready for the orchestrator's review; the go would push it instead of pkg_110f.
+
+## 1.1.0 candidate pkg_110h (02b6f98): the orchestrator's review of pkg_110g, docs only (Wed 04:4x)
+
+The orchestrator reviewed pkg_110g (04:3x): code and most docs check out; three doc changes before the go.
+- **README line 32:** "A 12 GB and 24 GB paper is coming soon; ..." -> "The 24 GB and 12 GB lines are written up in [A 125B
+  mixture-of-experts model in 32, 24 and 12 GB of memory on one Mac](docs/pdf/small-ram.pdf)." (the title is SMALL_RAM.md's
+  heading; small-ram.pdf is the papers build's slug for SMALL_RAM, so Breakthrough's v1.1.0 site build names it so).
+- **LIMITS:** a PF-A line: at 32 and 24 GB, chat.py's layer-major prefill gives the default prefill's tokens except when a
+  prompt's last 1,024-token chunk is under about 200 tokens; R57_PFLM=0 turns it off.
+- **RESULTS footnote (2):** "These runs are not in the RELEASE paper" -> "These runs are in the 12 GB and 24 GB paper and in
+  the RELEASE paper, section 3."
+- release/src 16b495d; rebuilt as pkg_110g (same command, --out release/out/pkg_110h) -> 02b6f98: 241 files, 6.6 MB;
+  leaks 0, unsafe 0, live research paths 0, syntax errors 0 (candidate_110h/build.txt). **Diff vs pkg_110g:** README.md,
+  LIMITS.md, RESULTS.md, MANIFEST.json only (leap_commit, those three hashes, one source label; candidate_110h/
+  diff_vs_110g.txt). Independent scan of pkg_110h: private patterns 0 files, secret patterns 0, /Users/ in the docs 0,
+  "laptop" 0. Docs only, so no new clean-clone run (pkg_110g's checks stand).
+- **push_pkg.sh docs (40c6668):** the old guard refused any small-ram file in the site (SMALL_RAM withheld until Wed),
+  which would block the 1.1.0 docs push; now small-ram files are refused only while ~/Papers/public/src/publish_set.txt
+  withholds SMALL_RAM, and every docs/pdf/*.pdf the package README links must be in the site (a missing README stops).
+  Tested on temporary folders (5 cases). Today it STOPs: the site has no small-ram.pdf until Breakthrough's v1.1.0 build.
+
+## 1.1.0 candidate pkg_110i (db2b7f0): the 24 GB memory label in lossy-24 / chat-24.env (Wed 04:5x, comment only)
+
+The orchestrator's full number check (04:5x): configs/lossy-24.env and chat-24.env line 6 still said "under 24 GB on
+prompts up to about 560 tokens, up to 25.1 GB on longer ones". Now (release/src 754ce56): "under 24 GB on prompts up to
+about 500 tokens, more on longer ones (28.2 GB at 30K; the gate: ..." with the gate data unchanged on line 7. Comment lines
+only: the env lines are identical (parsed: equal to pkg_110h's, 4 keys each; run.py's loader skips '#' lines), and no
+code reads the comment; no other "560 tokens" / "25.1 GB" left in release/src. Rebuilt (same command, --out
+release/out/pkg_110i) -> db2b7f0: 241 files, 6.6 MB; leaks 0, unsafe 0, live research paths 0, syntax errors 0.
+**Diff vs pkg_110h:** configs/lossy-24.env, configs/chat-24.env, MANIFEST.json only (leap_commit, the two hashes, one
+source label). Independent scan: private patterns 0, secrets 0, /Users/ in docs + configs 0, "laptop" 0.
+
+## 1.1.0 candidate pkg_110j (717df58): the stale W24e clause in lossy-24 / chat-24.env (Wed 04:5x, comment only; final)
+
+The orchestrator (04:5x): line 7's "Unless BigMoE's W24e changes R57_PFCHUNK below." is stale (W24e is done and kept 1024).
+Now (release/src 33f181f): "R57_PFCHUNK below stays 1024: smaller prompt chunks change the tokens (W24e)." (wrapped onto a
+new comment line 8; R57_PFCHUNK=1024 is set in both files). Comment lines only: the parsed env equals pkg_110g's in both
+files. Rebuilt (--out release/out/pkg_110j) -> 717df58: 241 files, 6.6 MB; leaks 0, unsafe 0, live research paths 0,
+syntax errors 0. **Diff vs pkg_110i:** the two configs + MANIFEST only; **vs pkg_110g** (the GPU-checked candidate):
+README.md, LIMITS.md, RESULTS.md, configs/lossy-24.env, configs/chat-24.env, MANIFEST.json (candidate_110j/). Scan:
+private patterns 0, secrets 0, /Users/ 0, "laptop" 0. The orchestrator: the final candidate unless the papers' fixes need
+something. Go: PKG_DIR=release/out/pkg_110j for the pkg and the docs push (docs waits for the v1.1.0 site with
+small-ram.pdf).

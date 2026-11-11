@@ -16,6 +16,9 @@ share one prefill(); the cached one below runs the same per-chunk calls.
   PF-B (R57_PFLM=3) and A6 "warm" prompts take the loop's own prefill (a miss, not stored).
 - The taps: only the rows the drafter reads (the last SWIN) and the edges' tails are kept, not every position (exact; the
   loop's T held 25.6 KB per prompt token). CONV_CACHE_TAPS=all keeps every chunk (debug).
+- Every copy is bitwise (_clone: an integer add of zero on the same-size unsigned view). An add of zero on the floats
+  (cache_state._clone_tree's rule, used here up to 11-11) turns -0.0 into +0.0 and rewrites NaN bits: T1c's branch FAILs,
+  row 0 of layer 35's QSA keys. So the GDN checkpoints are taken and restored here too (_snapshot_gdn, _restore_gdn).
 
 serve.py:  import convcache as CC;  CC.install(G())  once;  CC.hint(sys_end=, lane=, side=, conv=)  before each item;
            CC.last()  after it (the info record).
@@ -51,13 +54,64 @@ def _say(msg):
             f.write(line + "\n")
 
 
+_UINT = {1: mx.uint8, 2: mx.uint16, 4: mx.uint32, 8: mx.uint64}
+
+
 def _clone(x):
-    """a new buffer (cache_state._clone_tree's rule: mx.array(x) can keep the storage)"""
-    return None if x is None else x + mx.zeros((), dtype=x.dtype)
+    """a new buffer with x's exact bits. mx.array(x) can keep the storage (cache_state._clone_tree's note), and the add of
+    zero used up to 11-11 is not a copy for floats: -0.0 + 0.0 = +0.0 and NaN bits are rewritten (T1c 11-11: row 0 of
+    layer 35's QSA keys came out changed in both branch copies). An integer add of zero on the same-size unsigned view
+    copies every bit, strided slices included."""
+    if x is None:
+        return None
+    if mx.issubdtype(x.dtype, mx.inexact):
+        u = _UINT[x.dtype.size]
+        return (x.view(u) + mx.zeros((), dtype=u)).view(x.dtype)
+    return x + mx.zeros((), dtype=x.dtype)                 # integers and bools: an add of zero is exact
+
+
+def _clone_tree(v):
+    """cache_state._clone_tree with _clone's bitwise copy"""
+    if v is None:
+        return None
+    if isinstance(v, mx.array):
+        return _clone(v)
+    if isinstance(v, tuple):
+        return tuple(_clone_tree(x) for x in v)
+    if isinstance(v, list):
+        return [_clone_tree(x) for x in v]
+    if isinstance(v, dict):
+        return {k: _clone_tree(x) for k, x in v.items()}
+    return v
 
 
 def _trimmable(c):
     return c is not None and hasattr(c, "is_trimmable") and c.is_trimmable()
+
+
+def _snapshot_gdn(cache):
+    """cache_state.snapshot_untrimmable_cache with the bitwise clone: the recurrent (non-trimmable) entries' state and
+    meta state, None for the trimmable KV"""
+    st = tuple(None if _trimmable(c) else _clone_tree(getattr(c, "state", None)) for c in cache)
+    meta = tuple(None if _trimmable(c) else _clone_tree(getattr(c, "meta_state", None)) for c in cache)
+    return CS.CacheSnapshot(states=st, meta_states=meta)
+
+
+def _restore_gdn(cache, snap):
+    """cache_state.restore_cache(cache, snap) (its _restore_state_preserving_container, clone=True) with the bitwise
+    clone: the checkpoint stays intact for later restores"""
+    for ent, st, meta in zip(cache, snap.states, snap.meta_states):
+        if st is not None:
+            cl = _clone_tree(st)
+            cur = getattr(ent, "state", None)
+            if hasattr(ent, "replace_state"):
+                ent.replace_state(cl)
+            elif isinstance(cur, list) and isinstance(cl, list) and len(cur) == len(cl):
+                cur[:] = cl
+            else:
+                ent.state = cl
+        if meta is not None:
+            ent.meta_state = _clone_tree(meta)
 
 
 def _leaves(entry):
@@ -272,7 +326,7 @@ def _restore(e, c, copy):
         for x in list(cache) + list(mtp or []):
             if _trimmable(x) and x.offset > c:
                 x.trim(x.offset - c)
-    CS.restore_cache(cache, ck.gdn)                        # clones: the checkpoint stays intact for later restores
+    _restore_gdn(cache, ck.gdn)                            # bitwise clones: the checkpoint stays intact for later restores
     mx.eval([x for ent in cache for x in _leaves(ent)], [x for ent in (mtp or []) for x in _leaves(ent)])
     return cache, mtp, ck
 
@@ -347,6 +401,44 @@ def _fpcmp(old, new, upto=None):
         d = np.flatnonzero((a[:n] != b[:n]).any(axis=1))
         if len(d):
             msgs.append(f"{key[0]}[{key[1]}] rows {d[0]}..{d[-1]} ({len(d)} of {n})")
+    return msgs
+
+
+def _x0msgs(cache=None, upto=None, gdn=None):
+    """CONV_CACHE_CHECK census: the values an add of zero rewrites (-0.0, NaN bits), i.e. where the clone used up to 11-11
+    changed bits. Per QSA leaf of `cache` below `upto`: 'L[slot] rows a..b (n rows, k values, first 0x....)'; per leaf of
+    a GDN checkpoint `gdn` (a CacheSnapshot): 'gdn L[slot] k values (first 0x....)'."""
+    def bad(x):
+        u = _UINT[x.dtype.size]
+        return x.view(u) != (x + mx.zeros((), dtype=x.dtype)).view(u)
+
+    def first(x, b):
+        u = _UINT[x.dtype.size]
+        i = int(np.flatnonzero(np.asarray(b).reshape(-1))[0])
+        return "0x%x" % int(np.asarray(x.view(u)).reshape(-1)[i])
+
+    msgs = []
+    for i, ent in enumerate(cache or []):
+        st = getattr(ent, "state", None) if _trimmable(ent) else None
+        for j, x in enumerate(st if isinstance(st, (list, tuple)) else []):
+            if x is None or not mx.issubdtype(x.dtype, mx.inexact):
+                continue
+            ax = 2 if x.ndim == 4 else 1
+            n = x.shape[ax] if upto is None else min(x.shape[ax], upto if j != 3 else upto // 4)
+            xs = x[..., :n, :] if ax == 2 else x[:, :n, :]
+            b = bad(xs)
+            k = int(b.sum().item())
+            if k:
+                r = np.flatnonzero(np.asarray(mx.moveaxis(b, ax, 0).reshape(n, -1).any(axis=1)))
+                msgs.append(f"{i}[{j}] rows {r[0]}..{r[-1]} ({len(r)} rows, {k} values, first {first(xs, b)})")
+    for i, st in enumerate(gdn.states if gdn is not None else []):
+        for j, x in enumerate(st if isinstance(st, (list, tuple)) else []):
+            if x is None or not mx.issubdtype(x.dtype, mx.inexact):
+                continue
+            b = bad(x)
+            k = int(b.sum().item())
+            if k:
+                msgs.append(f"gdn {i}[{j}] {k} values (first {first(x, b)})")
     return msgs
 
 
@@ -432,6 +524,13 @@ def prefill(ids, want_w=False, chunk=1024):
                 if msgs:
                     _say(f"restore ({'copy' if copy else 'live'} at {c}): rows below c differ from the source's prefill: "
                          + "; ".join(msgs[:12]))
+            try:                                           # a diagnostic: never the request's failure
+                cen = _x0msgs(e.cache, upto=c, gdn=ck.gdn) + [f"MTP {m}" for m in _x0msgs(e.mtp, upto=c)]
+                cen = "; ".join(cen[:12]) if cen else "none"
+            except Exception as ex:
+                cen = f"census error {type(ex).__name__}: {str(ex)[:160]}"
+            _say(f"census ({'copy' if copy else 'live'} at {c}): values an add of zero rewrites (the pre-11-11 clone), "
+                 f"source rows below c + the GDN checkpoint: {cen}")
         if need_cap:
             FG["cap"] = FG["cap"] | ck.cap
         tail, tail_base = ck.tail, ck.tail_base
@@ -538,7 +637,7 @@ def _run_cm(g, ids, c, chunk, cache, want_w, edges, need_cap, sink):
             mx.eval(w)
             ws.append((a, w))
         if a + chunk in edges:
-            snap = CS.snapshot_untrimmable_cache(cache)
+            snap = _snapshot_gdn(cache)
             mx.eval([x for st in snap.states if st is not None for x in st if x is not None])
             caps[a + chunk] = Ckpt(a + chunk, snap, FG["cap"].copy() if need_cap else None)
     return lg, ws, caps

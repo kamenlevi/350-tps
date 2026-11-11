@@ -9,7 +9,9 @@
 # 12 tasks (agentcc_tasks.py); the server stopped and checked gone. Swap +2 GB stops everything.
 # Wed 04:0x: + the Bash fix (CLAUDE_CODE_TMPDIR=<run>/cctmp; 32_1111's 79 Bash calls all hit EPERM on Claude Code's temp dir
 # under /private/tmp/claude-501) and BRANCH=0 in the environment -> CONV_CACHE_BRANCH=0 (the orchestrator's 09:00 fallback:
-# a would-be copy becomes a miss). Usage: [BRANCH=0] agentcc_cache.sh <GB> <run dir> "<FROM YYYY-MM-DD HH:MM:SS>" "<LAST ...>" [pid ...]
+# a would-be copy becomes a miss). 04:2x (orchestrator): the claude processes run with HOME=<run>/home, a neutral folder
+# (agent_home_tpl: .zshrc = only the exact PATH of the 11-11 runs; .gitconfig = agentcc@localhost), so Claude Code's shell
+# snapshot holds no user aliases (it sources $HOME/.zshrc; ZDOTDIR has no effect). Usage: [BRANCH=0] agentcc_cache.sh <GB> <run dir> "<FROM YYYY-MM-DD HH:MM:SS>" "<LAST ...>" [pid ...]
 GB=$1; RUN=$2; FROMS=$3; LASTS=$4; shift 4; AFTER="$*"
 A=/private/tmp/claude-501/-Users-kamen-OjoX/f2971937-6c95-4e86-a049-05beff6a8e32/scratchpad/agent
 CL=/Users/kamen/Leap/release/cleanclone/cache/clone; NEXT=/Users/kamen/Leap/release/next; MAN=/Users/kamen/EvalSuite/agentcc/manifest.json
@@ -70,6 +72,10 @@ echo "release/next commit: $(git -C /Users/kamen/Leap log -1 --format='%h %s' --
 echo "claude --version: $(CLAUDE_CONFIG_DIR=$RUN/cc_version /Users/kamen/.local/bin/claude --version 2>&1 | head -1)" >> $RUN/provenance.txt
 echo "manifest sha256: $(shasum -a 256 $MAN | cut -c1-12); setting $GB GB; port $PORT; date $(date '+%F %T')" >> $RUN/provenance.txt
 echo "cache: CONV_CACHE=1 CONV_CACHE_BRANCH=$BR; Bash fix: CLAUDE_CODE_TMPDIR=$RUN/cctmp" >> $RUN/provenance.txt
+mkdir -p $RUN/home && cp -p $A/agent_home_tpl/.zshrc $A/agent_home_tpl/.gitconfig $RUN/home/
+echo "claude HOME: $RUN/home (.zshrc sha256 $(shasum -a 256 $RUN/home/.zshrc | cut -c1-12): only the exact PATH; .gitconfig: agentcc@localhost)" >> $RUN/provenance.txt
+grep "^export PATH=" $RUN/home/.zshrc | sed "s/^/  /" >> $RUN/provenance.txt
+echo "git identity under that HOME: $(HOME=$RUN/home git config --global user.name) <$(HOME=$RUN/home git config --global user.email)>" >> $RUN/provenance.txt
 # the sandbox: writes only in the run folder and temp, network only to localhost, private home folders unreadable
 H=/Users/kamen
 cat > $RUN/sandbox.sb <<SB
@@ -96,7 +102,7 @@ P0=$(date +%s); python3 /Users/kamen/EvalSuite/tools/probe_cc.py $PORT $RUN/prob
 TP=$!; while kill -0 $TP 2>/dev/null; do [ $(( $(date +%s) - P0 )) -gt 7200 ] && { say "probe: 2-h cap"; for c in $(desc $TP); do kill -TERM $c; done; kill -TERM $TP; }; sleep 5; done
 wait $TP; say "probe rc $? in $(( $(date +%s) - P0 )) s: $(tail -1 $RUN/probe_cc.out | cut -c1-160)"; TP=""
 export CLAUDE_CODE_TMPDIR=$RUN/cctmp
-/opt/homebrew/opt/python@3.12/bin/python3.12 -I $A/agentcc_tasks.py $RUN $GB $MAN $PORT $RUN/sandbox.sb $A/cc_home $CL/tools/claude_local.sh > $RUN/tasks.out 2>&1 &
+HOME=$RUN/home /opt/homebrew/opt/python@3.12/bin/python3.12 -I $A/agentcc_tasks.py $RUN $GB $MAN $PORT $RUN/sandbox.sb $A/cc_home $CL/tools/claude_local.sh > $RUN/tasks.out 2>&1 &
 TP=$!; G1=0
 while kill -0 $TP 2>/dev/null; do
   if [ $G1 = 0 ] && [ -s $RUN/results.jsonl ]; then

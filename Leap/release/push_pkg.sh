@@ -4,7 +4,9 @@
 #       fast-forward: fetch main, move HEAD there keeping the new tree (git reset --soft), keep docs/ as the remote has it,
 #       commit with the build's message, show the diff, push. Never a force push.
 # docs: copy Breakthrough's final public site (~/Papers/public/site/) to docs/ in one commit on top of main, after checks:
-#       no small-ram file (SMALL_RAM is withheld until Wed), no /Users/ path in the HTML, no home path in the PDFs' text.
+#       no small-ram file while the papers' publish set withholds SMALL_RAM (~/Papers/public/src/publish_set.txt;
+#       1.1.0 publishes it), every docs/pdf/*.pdf the package README links present in the site, no /Users/ path in
+#       the HTML, no home path in the PDFs' text.
 # The repository stays private, the release a draft and Pages off: only the orchestrator flips them, on the owner's word.
 set -uo pipefail
 MODE=${1:?pkg|docs}
@@ -37,8 +39,15 @@ elif [ "$MODE" = docs ]; then
     [ "$(g rev-parse HEAD)" = "$REMOTE" ] || { echo "STOP: local HEAD $(g rev-parse --short HEAD) is not the remote main $(g rev-parse --short "$REMOTE"): push pkg first"; exit 2; }
   fi
   [ -f "$SITE/index.html" ] || { echo "STOP: no $SITE/index.html"; exit 2; }
-  bad=$(find "$SITE" -iname '*small-ram*' -o -iname '*small_ram*' | head -3)
-  [ -z "$bad" ] || { echo "STOP: small-ram files in the site: $bad"; exit 2; }
+  PUBSET=${PUBSET_FILE:-/Users/kamen/Papers/public/src/publish_set.txt}
+  if ! grep -v '^#' "$PUBSET" 2>/dev/null | grep -qw SMALL_RAM; then      # SMALL_RAM withheld: no small-ram file may go out
+    bad=$(find "$SITE" -iname '*small-ram*' -o -iname '*small_ram*' | head -3)
+    [ -z "$bad" ] || { echo "STOP: small-ram files in the site while SMALL_RAM is withheld ($PUBSET): $bad"; exit 2; }
+  fi
+  [ -f "$P/README.md" ] || { echo "STOP: no $P/README.md to check the PDF links against (set PKG_DIR)"; exit 2; }
+  for f in $(grep -o 'docs/pdf/[A-Za-z0-9_.-]*\.pdf' "$P/README.md" | sort -u); do   # every PDF the README links is in the site
+    [ -f "$SITE/${f#docs/}" ] || { echo "STOP: README links $f, but the site has no ${f#docs/}"; exit 2; }
+  done
   LOCAL='/Users/|~/(BigMoE|Leap|EvalSuite|FableGod|NewIdeas|MoonShots|TrainLab|Breakthrough|Fit12|Papers)\b'
   # the private names (account, address, personal phrases) come from the gitignored file, never written here: written
   # out they would block the public snapshot, whose own leak check refuses them (as make_release.py, 11-09)

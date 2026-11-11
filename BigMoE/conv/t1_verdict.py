@@ -5,10 +5,12 @@ are compared with data/conv/t1_predicted.json (the module's rules on the recorde
 are reported, but with the check on a warm request's includes its cold check (check_ms) and runs with that check's experts
 resident, so they are info only; the warm-only prefill is convcache's prefill_ms. Per-request stats come from serve.log's
 "done:" lines (Leap's runner; requests.jsonl holds only the bodies there); only numbers are written, no request content.
-usage: python3 -I conv/t1_verdict.py <run dir> [out.json]"""
+A miss's reason may hold parentheses ("none, branch (CONV_CACHE_BRANCH=0)"). The prediction file: the third argument or
+T1_PRED (T1d, CONV_CACHE_BRANCH=0: data/conv/t1_predicted_branch0.json).
+usage: python3 -I conv/t1_verdict.py <run dir> [out.json] [predicted.json]"""
 import json, os, re, sys
 
-LINE = re.compile(r"convcache: (hit|miss) N (\d+) c (\d+) \(([^)]*)\) prefilled (\d+), restore ([\d.]+) ms, prefill "
+LINE = re.compile(r"convcache: (hit|miss) N (\d+) c (\d+) \((.*?)\) prefilled (\d+), restore ([\d.]+) ms, prefill "
                   r"([\d.]+) ms; entries (\d+), ([\d.]+) GB; edges \[([^\]]*)\](?:; check (.*))?$")
 DONE = re.compile(r"done: (\d+) prompt tokens -> (\d+) tokens, whole decode ([\d.]+) tok/s, first token ([\d.]+) s, peak "
                   r"([\d.]+) GB")
@@ -17,7 +19,8 @@ DONE = re.compile(r"done: (\d+) prompt tokens -> (\d+) tokens, whole decode ([\d
 def main():
     d = sys.argv[1]
     dst = sys.argv[2] if len(sys.argv) > 2 else os.path.expanduser("~/BigMoE/data/conv/t1/verdict.json")
-    pred = json.load(open(os.path.expanduser("~/BigMoE/data/conv/t1_predicted.json")))["rows"]
+    pp = sys.argv[3] if len(sys.argv) > 3 else os.environ.get("T1_PRED", "~/BigMoE/data/conv/t1_predicted.json")
+    pred = json.load(open(os.path.expanduser(pp)))["rows"]
     lines = []
     for l in open(os.path.join(d, "convcache.log")):
         m = LINE.search(l.rstrip("\n"))
@@ -62,7 +65,7 @@ def main():
                          peak_gb=dd.get("peak_gb"), gb=x["gb"],
                          entries=x["entries"]))
     hits = [r for r in rows if r["hit"]]
-    R = dict(run=os.path.basename(os.path.normpath(d)), lines=len(lines), predicted_requests=len(pred), hits=len(hits),
+    R = dict(run=os.path.basename(os.path.normpath(d)), predicted_file=os.path.basename(pp), lines=len(lines), predicted_requests=len(pred), hits=len(hits),
              predicted_hits=sum(q["hit"] for q in pred), check_pass=sum(r["check"] == "PASS" for r in hits),
              check_fail=bad, not_as_predicted=off, rows=rows,
              prefilled=sum(r["prefilled"] for r in rows), prompt_tokens=sum(r["N"] for r in rows),
