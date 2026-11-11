@@ -96,7 +96,9 @@ def main():
            "HF_HUB_OFFLINE": "1", "PYTHONDONTWRITEBYTECODE": "1"}
     env.update(cenv)
     env["BIGMOE_EXT_BUILD"] = "build"
-    os.environ.update(env)
+    env["BIGMOE_IDLE_MS"] = os.environ.get("BIGMOE_IDLE_MS", "50")  # idle: the ext's loader naps (200 us) after 50 ms without
+    os.environ.update(env)                                          # work instead of spinning a core; timing only (exact).
+                                                                    # BIGMOE_IDLE_MS=0 in the shell keeps the spin.
 
     term = os.fdopen(os.dup(1), "w", buffering=1)          # serve.py's own lines; the engine's prints go to the log
 

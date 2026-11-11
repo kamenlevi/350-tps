@@ -3,12 +3,15 @@
 request, in order; every hit must say "check PASS" (CONV_CACHE_CHECK=1: a cold prefill before it, same process); the hits
 are compared with data/conv/t1_predicted.json (the module's rules on the recorded ids). First-token times (stats.pfs)
 are reported, but with the check on a warm request's includes its cold check (check_ms) and runs with that check's experts
-resident, so they are info only; the warm-only prefill is convcache's prefill_ms.
+resident, so they are info only; the warm-only prefill is convcache's prefill_ms. Per-request stats come from serve.log's
+"done:" lines (Leap's runner; requests.jsonl holds only the bodies there); only numbers are written, no request content.
 usage: python3 -I conv/t1_verdict.py <run dir> [out.json]"""
 import json, os, re, sys
 
 LINE = re.compile(r"convcache: (hit|miss) N (\d+) c (\d+) \(([^)]*)\) prefilled (\d+), restore ([\d.]+) ms, prefill "
                   r"([\d.]+) ms; entries (\d+), ([\d.]+) GB; edges \[([^\]]*)\](?:; check (.*))?$")
+DONE = re.compile(r"done: (\d+) prompt tokens -> (\d+) tokens, whole decode ([\d.]+) tok/s, first token ([\d.]+) s, peak "
+                  r"([\d.]+) GB")
 
 
 def main():
@@ -34,10 +37,19 @@ def main():
             st = r.get("stats") or (r.get("result") or {}).get("stats")
             if isinstance(st, dict):
                 res.append(st)
+    dn = []                                                # serve.log: the server's own per-request lines
+    p = os.path.join(d, "serve.log")
+    if os.path.exists(p):
+        for l in open(p):
+            m = DONE.search(l)
+            if m:
+                g = m.groups()
+                dn.append(dict(N=int(g[0]), n=int(g[1]), tps=float(g[2]), pfs=float(g[3]), peak_gb=float(g[4])))
     rows, bad, off = [], [], []
     for i, (x, q) in enumerate(zip(lines, pred)):
         st = res[i] if i < len(res) else {}
         cc = st.get("cache") if isinstance(st.get("cache"), dict) else {}
+        dd = dn[i] if i < len(dn) and dn[i]["N"] == x["N"] else {}
         same = (x["hit"], x["c"], x["N"]) == (q["hit"], q["c"], q["N"]) and (not x["hit"] or x["src"] == q["src"])
         if x["hit"] and x["check"] != "PASS":
             bad.append(i)
@@ -46,9 +58,11 @@ def main():
         rows.append(dict(i=i, N=x["N"], hit=x["hit"], c=x["c"], src=x["src"], prefilled=x["prefilled"], check=x["check"],
                          predicted=dict(hit=q["hit"], c=q["c"], src=q["src"], N=q["N"]), as_predicted=same,
                          prefill_ms=x["prefill_ms"], restore_ms=x["restore_ms"], check_ms=cc.get("check_ms"),
-                         pfs=st.get("pfs"), n=st.get("n"), tps=st.get("tps"), gb=x["gb"], entries=x["entries"]))
+                         pfs=st.get("pfs", dd.get("pfs")), n=st.get("n", dd.get("n")), tps=st.get("tps", dd.get("tps")),
+                         peak_gb=dd.get("peak_gb"), gb=x["gb"],
+                         entries=x["entries"]))
     hits = [r for r in rows if r["hit"]]
-    R = dict(run=d, lines=len(lines), predicted_requests=len(pred), hits=len(hits),
+    R = dict(run=os.path.basename(os.path.normpath(d)), lines=len(lines), predicted_requests=len(pred), hits=len(hits),
              predicted_hits=sum(q["hit"] for q in pred), check_pass=sum(r["check"] == "PASS" for r in hits),
              check_fail=bad, not_as_predicted=off, rows=rows,
              prefilled=sum(r["prefilled"] for r in rows), prompt_tokens=sum(r["N"] for r in rows),

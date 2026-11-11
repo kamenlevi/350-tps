@@ -1481,3 +1481,24 @@ Sizes:
 - clone / restore ~1.2 ms.
 
 Details: docs/CONV_CACHE_DESIGN.md section 11. Next: B1 on the real engine (T1), Wednesday.
+
+## Wed 11 Nov 01:01-01:13: CONV T1 = the conversation cache on the real engine: FAIL, 5 of 12 hits bitwise; cause of 4 found (data/conv/t1/verdict.json; conv/t1_verdict.py)
+
+**Setup.** Leap ran serve.py `--mem 32` with the cache hook (conv/convcache.py, 7eb3401) and CONV_CACHE_CHECK=1. With the
+check on, every hit is compared with a cold prefill in the same process. The load was the 45 recorded Claude Code and Codex
+requests.
+
+**The cache's choices matched the prediction exactly.**
+- 12 hits, every one at its predicted restore point.
+- 30.2 % of the prompt tokens were prefilled.
+- Restore took 3-15 ms; the cache peaked at 2.07 GB.
+
+**Only 5 of the 12 hits were bitwise equal to cold.**
+- 4 FAILs had different logits. Each had a tail of 116-197 new tokens, which the module ran chunk-major, while the cold
+  prompt ran it in PF-A. On short MoE calls the two pick different MLX gather kernels (E = 512 vs the call's unique
+  experts).
+  - Fix: choose PF-A by the whole prompt, as the loop does.
+- 3 FAILs differ in one state array of 122 while the logits and taps are equal. The cause is not yet known; the rerun names
+  the array.
+
+Leap reruns with the fix at ~02:00. Details: docs/CONV_CACHE_DESIGN.md section 14.

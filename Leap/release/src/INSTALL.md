@@ -42,7 +42,9 @@ prints the answer and the loop's timing. The configs are in [CONFIGS.md](CONFIGS
 Ctrl-C stops an answer, `/clear` starts over and `/exit` quits. A paste is one message, however long and over any number
 of lines; Enter sends it. `/file PATH message` sends the file in a fenced block, then the message. The live speed
 shows in the window title. At `--mem 32` and `--mem 24` it prefills long prompts
-layer-major (the same tokens as the default prefill, a 2.4-3.8x faster first token, 0.3-3.2 GB more memory). On a 36 GB
+layer-major (a 2.4-3.8x faster first token, 0.3-3.2 GB more memory). Its tokens are the default prefill's, except when a
+prompt runs less than about 200 tokens past a multiple of 1,024: there the arithmetic rounds differently and an answer
+can differ. On a 36 GB
 Mac, for conversations near 30K tokens, start it with `R57_PFLM=0` (`R57_PFLM=0 .venv/bin/python chat.py --mem 24`): that
 saves 2.4 GB of peak memory, at about 2.7x the first-token time.
 

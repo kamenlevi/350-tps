@@ -238,3 +238,23 @@ ran beside the check, and the lock and Kamen-idle checks still held.
   (release/cleanclone/final/clone) gets it from a watcher (scratchpad/agent/maxtok_final.sh: exact lines, atomic renames)
   once nothing runs from that clone; he runs `--max-tokens 65536` meanwhile.
 - **The go now pushes pkg_110d** (it supersedes pkg_110c).
+
+## 1.1.0 candidate pkg_110g (7f61f48): PF-A qualifier + BIGMOE_IDLE_MS=50 (Wed 01:5x-02:0x; for the orchestrator's review)
+
+The orchestrator (01:5x) approved both changes for 1.1.0, to be reviewed in the morning before Kamen's 14:00 go:
+- **PF-A wording** (data/pfa_tail_1111.md: PF-A differs from the default prefill when a prompt's last 1,024-token chunk is
+  under ~200 tokens): run.py's --env help, INSTALL.md 44-45, chat.py's docstring and comment.
+- **BIGMOE_IDLE_MS=50** as an env default in chat.py and serve.py (data/idle_ms_1111.md: idle CPU 100 % -> 1.5 %, decode
+  within noise, tokens identical; BIGMOE_IDLE_MS=0 in the shell keeps the old spin).
+- **release/src d37fb68; rebuild:** `make_release.py rel1 --commit 016cb7f --extra-snap w24 --refs release/refs_rel1_w24.json
+  --es-commit 98c6072d --out release/out/pkg_110g` -> 7f61f48: 241 files, 6.6 MB; leaks 0, unsafe 0, live research paths
+  0, syntax errors 0 (candidate_110g/build.txt).
+- **Diff vs pkg_110f:** INSTALL.md, chat.py, run.py, serve.py (the lines above only) and MANIFEST.json (leap_commit, those
+  four files' hashes, and one source label: convert/convert_records_p11.py "Leap 83d99bb" -> "Leap 97d84e2", same sha256).
+  pkg_110f's engine/loop/__pycache__ (untracked, ignored) is the only other difference on disk.
+- **Clean-clone prep** (CPU only, 02:00): release/cleanclone/v110g, install.sh rc 0 in 10 s, dry runs lossy-24 / chat-24 /
+  chat-32 OK (candidate_110g/prep_report.txt).
+- **Real-engine checks armed** (cc110g.sh, right after the cold 32 GB agent test): 8 more 32 GB IDLE_MS runs (B A A B B A
+  A B), the clean-clone check as pkg_110c's (lossy-24 + chat-24, text prompt, chat.py + serve.py --mem 24), and the
+  packaged chat.py / serve.py at idle with no variable set. Results below when run. The go would push pkg_110g instead
+  of pkg_110f once the orchestrator has reviewed it.

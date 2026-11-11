@@ -41,6 +41,12 @@ Written and committed before any run of this test.
 - **Schedule (Leap):** 32 GB from 00:30 Wed (last start 04:00); run folder
   /private/tmp/claude-501/-Users-kamen-OjoX/f2971937-6c95-4e86-a049-05beff6a8e32/scratchpad/agent/agentcc_runs/32_1111.
   45 GB on Wed night. 24 GB tonight only if time is left.
+  - **Schedule moved (dated line, Wed 01:2x, before any run; the design is unchanged):** the night window is now
+    01:00-14:00 (Kamen, via the orchestrator). Leap re-armed the same runner on the same folder and pin (its runner.log:
+    "from 2026-11-11 01:00:00, last start 2026-11-11 08:00:00"). Two short Leap jobs go first, so the start is expected
+    around 02:15-02:30.
+  - Leap's cached runs (BigMoE's conversation cache) are on hold. Any such run is a new server config, and it gets its own
+    amendment here before it starts.
 
 ## Settings and order
 | Setting | Role | Timeout per task |

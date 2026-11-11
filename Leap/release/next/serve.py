@@ -104,6 +104,9 @@ def main():
            "HF_HUB_OFFLINE": "1", "PYTHONDONTWRITEBYTECODE": "1"}
     env.update(cenv)
     env["BIGMOE_EXT_BUILD"] = "build"
+    env["BIGMOE_IDLE_MS"] = os.environ.get("BIGMOE_IDLE_MS", "50")  # idle: the ext's loader naps (200 us) after 50 ms without
+                                                           # work instead of spinning a core; timing only (exact; Leap 11-11:
+                                                           # idle CPU 100 -> 1.5 %). BIGMOE_IDLE_MS=0 in the shell keeps the spin.
     if a.mem in ("32", "24"):                              # PF-A, as chat.py: layer-major prefill of long prompts (agents send
         env["R57_PFLM"] = os.environ.get("R57_PFLM", "1")   # 10K+ tokens); the 45 GB path has its own prefill (PF-D)
     os.environ.update(env)

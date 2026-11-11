@@ -73,3 +73,91 @@ DFlash2 throughout while the cache is on (BigMoE: an MTP-head turn can restore o
 **T1** (t1_cache.sh + replay.py): serve.py --mem 32 with CONV_CACHE_CHECK=1 (every hit compared with a cold prefill),
 replaying the 45 recorded requests of sessions_real_1110 in order. Night order: two quick checks -> T1 (00:29) ->
 EvalSuite 32 GB cold (pin 39947b1) -> 64K / 128K runs. If T1 passes: the cached agent test on Wednesday (32, then 45 GB).
+
+## Wed 01:01-01:13: T1 FAIL (5 of 12 hits bitwise); cause of 4 found (BigMoE's path rule); T1b armed
+
+T1 ran at 01:01 (the 00:29 start moved to 01:00 by Kamen): serve.py --mem 32 (chat-32, PF-A, DFlash2) in the cache clone
+with BigMoE's convcache 7eb3401 unchanged, CONV_CACHE_CHECK=1, the 45 recorded requests replayed in order
+(data/agent_cc_1111/t1_32_1111/). 45 / 45 HTTP 200, 0 server errors, ready in 18 s. 33 misses (30 short ~700-token
+requests and the 18-token quota probe: one chunk, never stored; the first prompt of each conversation), **12 hits: check
+PASS 5, FAIL 7.** k = the replay index (30-36 Claude Code /v1/messages, 37-43 Codex /v1/responses):
+
+| k | N | c (source) | new tokens | warm prefill | check |
+|---|---|---|---|---|---|
+| 30 | 12,302 | miss | 12,302 | 29.0 s | - |
+| 31 | 12,496 | 12,288 (live) | 208 | 5.5 s | PASS |
+| 32 | 12,300 | 9,216 (copy) | 3,084 | 12.4 s | FAIL B |
+| 33 | 12,404 | 12,288 (live) | 116 | 4.1 s | FAIL A |
+| 34 | 12,300 | 9,216 (copy) | 3,084 | 12.2 s | FAIL B |
+| 35 | 12,404 | 12,288 (live) | 116 | 4.0 s | FAIL A |
+| 36 | 12,627 | 12,288 (live) | 339 | 6.3 s | FAIL B |
+| 37 | 8,390 | miss | 8,390 | 21.4 s | - |
+| 38 | 8,491 | 8,192 (live) | 299 | 7.0 s | PASS |
+| 39 | 8,388 | 8,192 (live) | 196 | 6.9 s | FAIL A |
+| 40 | 8,479 | 8,192 (live) | 287 | 6.7 s | PASS |
+| 41 | 8,573 | 8,192 (live) | 381 | 7.8 s | PASS |
+| 42 | 8,389 | 8,192 (live) | 197 | 6.0 s | FAIL A |
+| 43 | 8,617 | 8,192 (live) | 425 | 7.8 s | PASS |
+
+(Warm prefill = the cached path alone; the check's own cold prefill, test-only, is excluded, so the logged first tokens
+of 28-41 s include it.)
+
+- **Signature A** (k 33, 35, 39, 42): "last logits, states (119 of 122), taps tail" at 116 / 116 / 196 / 197 new tokens;
+  every hit with 208-425 new tokens on the same path passed. **Cause (BigMoE agrees, its bug):** convcache chose the
+  prefill path by the new part (`N - c > chunk` -> PF-A), the loop by the whole prompt (r57_screen_rel1.py:987,
+  `len(ids) > chunk`). A tail of one chunk or less therefore ran chunk-major (tier.prefill_call's compact scratch of the
+  call's unique experts) while the cold prefill runs it inside the PF-A sweep (mode 1's full-E scratch on the original
+  ids). pflm.py:15-17 already warns that E = 512 vs len(unique) changes MLX's gather kernel choice on short calls; the
+  boundary (197 FAIL, 208 PASS) fits a kernel switch on the call's size; 119 of 122 leaves = from the first MoE call on.
+  BigMoE's confound: all four also had N below the entry's previous prompt + reply (stale QSA rows past N); T1b replays
+  the same order, so a PASS there rules it out.
+- **Signature B** (k 32, 34, 36): "states (1 of 122)" only, last logits and taps tail equal: a copy restore at 9,216
+  (3,084 new tokens through PF-A from c) and a live trim at 12,288 (339 new tokens chunk-major). The check did not name
+  the leaf. BigMoE's suspects: the PLE layer's slots (chunk-major vs PF-A's own PLE staging), or a QSA raw / pooled leaf
+  after a copy (the state setter resets the reserved capacity to c).
+- **What it implies for PF-A itself:** at a hit the restored state at c is the cold PF-A's own (the 5 PASS rows) and only
+  the tail's path differs, so PF-A (mode 1) and the default prefill should differ in bits whenever a prompt's last
+  1,024-token chunk is short (under ~200 tokens). The earlier PF-A bitwise records never had a short last chunk (30K:
+  292; 6,980: 836). Direct check below (T1b's runner, step 2).
+- Ops: 01:14-01:25 the queue waited on a stale research PAUSE (fanwatch's 61-s heat pause at T1's end; its clear kept the
+  file because `pgrep -f quiet_window.sh` matched a mere command line). The orchestrator fixed fanwatch and removed it.
+
+**T1b** (t1b_pfa.sh, armed 01:28, after the two quick checks; BigMoE agreed): my copy of convcache.py = 7eb3401 + (a)
+the path chosen by the whole prompt, `if PFLM and N > chunk` (PF-A from c, also for a one-chunk tail) + (b) the check
+names each differing leaf (cache index:class[slot], warm vs cold shape) (convcache_t1b.diff). Step 0: BigMoE's stand-in
+(conv/test_mock.py, MOCK_PFLM=1) on the patched module. Step 1: the same replay. Step 2: PF-A vs the default prefill at
+exact-32 in the 1.1.0 clean clone, P = 5 x 1,024 + 116 and + 300, R57_LOGHASH=1, 64 tokens. Then the cold 32 GB agent
+test (pin 39947b1, unchanged), then 64K / 128K. The cached agent runs wait for a passing T1.
+
+## Wed 01:27-01:30: idle CPU of the 1.1.0 serve.py: one core, the extension's loader spin (lever: BIGMOE_IDLE_MS)
+
+idle_cpu.sh (the orchestrator saw the agent server at ~100 % CPU while idle): the v110 clean clone's serve.py at --mem 24
+and 32, one 16-token request, 10 s rest, then CPU time over 60 s idle: **100 % of one core at both settings** (24 GB:
+47.4 -> 107.5 s; 32 GB: 68.0 -> 128.1 s; 52 threads). A 5-s `sample` (idle_cpu_1111/busy_thread_32.txt) shows one busy
+thread, entirely inside bigmoe_ext's loader (no system call on its stack): the loader thread's idle pass ends in
+`__builtin_arm_yield()` (engine/ext/bigmoe_ext.cpp:1804), i.e. it spins by design ("CPU (native thread): spin on the
+sequence number", line 8). The ext already has the lever: **BIGMOE_IDLE_MS=n** (Breakthrough 11-02, bigmoe_ext.cpp:1521-1526,
+in all three builds here): after n ms without a served call the loader naps 200 us per pass instead of yielding; calls
+within a request come far less than 50 ms apart, so decoding never sees it; the first call after a long idle waits at most
+~0.2 ms; timing only, so exact. Neither release/src (1.1.0) nor release/next sets it. Proposed: BIGMOE_IDLE_MS=50 as an
+env default in chat.py / serve.py, after an idle-CPU + decode-speed A/B (a ~5-min job, next free slot); 1.1.0 is frozen,
+so adopting it there is the orchestrator's and Kamen's call.
+
+## Wed 01:32-01:45: T1b: signature A fixed (7 of 12 PASS); B = one leaf, QSACache keys at cache index 35, after a copy
+
+T1b = T1 again (same replay order) on my patched copy of convcache.py (sha256 00488b23...; convcache_t1b.diff: (a) the
+path chosen by the whole prompt, (b) the check names differing leaves). Data: data/agent_cc_1111/t1b_32_1111/.
+- **BigMoE's stand-in** (conv/test_mock.py, one QSA + one GDN layer with the real cache classes, MOCK_PFLM=1) on the
+  patched module: rc 0, 4 PASS / 0 FAIL, hits as expected (including its copy at 9,216).
+- **T1b: 12 hits, PASS 7, FAIL 5; 45 / 45 HTTP 200, 0 server errors.** Signature A is gone: the Codex hits with 196 and
+  197 new tokens now pass (all 6 Codex hits pass), and the 116-token Claude Code hits no longer differ in logits, taps or
+  the other 119 states. Warm prefill with the fix: 2.8 s for 116 new tokens, 3.8-5.6 s for 196-425, 12.1 s for 3,084
+  (cold 28.0 s for 12,302 and 21.5 s for 8,390).
+- **Signature B** (all 5 FAILs): `states (1 of 122: 35:QSACache[0] (1, 2, N, 256) vs (1, 2, N, 256))`: the attention
+  KEYS of the QSA cache at cache index 35 (QSACache.state = (*kv.state, raw, pooled)); same shape, different values;
+  values, raw, pooled and the other 121 leaves, the last logits and the taps tail are equal. Pattern: in the Claude Code
+  conversation the first live hit (before any copy) passes; the first COPY (k 32, from 9,216) fails, and so does every
+  later hit, including live hits on the MAIN entry (k 33 / 35 / 36) and the second copy (k 34). The Codex conversation
+  never copied and passed all 6, live trims below a decoded reply included. So the copy changes or aliases the main
+  entry's layer-35 keys (or the copy's prefill writes into a buffer shared with it); the stand-in's copy passes, so it
+  takes something the real engine has. Sent to BigMoE (owner) for the fix; T1c on it next.

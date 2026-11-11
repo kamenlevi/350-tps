@@ -69,3 +69,9 @@ on a path that does not exist) until it ended at 1,494 tokens, with no file.
   32 --max-tokens 600 with his 22:27 request on the same file; PASS = code in the answer and no made-up tool calls.
   Result below when it has run.
 - pkg_110f differs from pkg_110e in chat.py, INSTALL.md (/file sentence) and MANIFEST.json. The go pushes pkg_110f.
+
+**Real-engine /file check: PASS (Wed 01:31-01:32, filecheck_night.sh in the v110d clone = release/src chat.py):** chat.py
+--kind code --mem 32 --max-tokens 600, /file on the 417-line HTML file (11,345 tokens) with Kamen's 22:27 request: rc 0 in
+55 s, 600 tokens at 54.9 tok/s whole decode, first token 25.7 s, lifetime peak 35.32 GB, drafter dfl at 3.85 tokens per
+check; made-up tool-call lines 0, code lines 3. The answer finds the bug (the grid has 2 hidden rows above the 20 drawn
+ones; the drawing maps rows straight to the canvas). Log: chatpy_fixes_1110/filecheck_night_1111.log.

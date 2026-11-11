@@ -368,3 +368,55 @@ in DFlash2 requests too (one MTP-layer pass per prompt row).
 
 T1 on the real engine is next: serve.py `--mem 32` with the hook, `CONV_CACHE_CHECK=1`, replaying Leap's 45 recorded
 requests.
+
+## 14. T1 on the real engine (Wed 11 Nov 01:01-01:13, Leap's run): FAIL, 5 of 12 hits bitwise; cause of 4 found
+
+**Setup.**
+- Engine: Leap's cache clone, i.e. pkg_110f prep plus the agent files plus conv/convcache.py from 7eb3401, unchanged.
+- Server: serve.py `--mem 32` (chat-32, C 160, R57_PFLM=1, chunk 1,024), drafter dfl, CONV_CACHE_GB 2.5, CONV_CACHE_CHECK=1.
+- Load: Leap's replay of the 45 recorded requests.
+- Data: data/conv/t1/ (verdict.json, convcache.log, replay.out). The prediction is data/conv/t1_predicted.json.
+
+**What the cache did = the prediction, exactly.**
+- All 45 requests returned HTTP 200, and there are 45 cache lines.
+- 12 hits (6 Claude Code, 6 Codex), all at the predicted restore points, live or copy as predicted.
+- 33 misses: 31 one-chunk requests plus the 2 first turns.
+- Prefilled 50,607 of 167,343 prompt tokens (30.2 %). Restore 3.1-15.4 ms. The cache stayed at or below 2.07 GB (budget 2.5).
+
+**Exactness: 5 of 12 hits PASS.** A PASS means bitwise equal last logits, all 122 state arrays, the taps tail, the widened
+rows and the U3C footprint. The 7 FAILs come in two kinds:
+
+| kind | hits | new tokens | what differs |
+|---|---|---|---|
+| A | N 12,404 at c 12,288 (twice); N 8,388 and 8,389 at c 8,192 | 116, 116, 196, 197 | last logits, 119 of 122 states, taps tail |
+| B | N 12,300 copied at c 9,216 (twice, PF-A from c); N 12,627 at c 12,288 | 3,084, 3,084, 339 | 1 of 122 states; logits and taps equal |
+
+**Kind A cause (found by Leap, confirmed in the code).** The module chose PF-A by the new part (`N - c > chunk`). The loop
+chooses it by the whole prompt (r57_screen_rel1.py:987, `len(ids) > chunk`).
+- So a warm tail of at most one chunk ran chunk-major. Its MoE calls used tier.prefill_call's compact scratch, where E =
+  the call's unique experts.
+- The cold prompt ran the same tail in PF-A mode 1, on the full-E scratch: E = 512, original ids.
+- pflm.py:15-17 warns that E changes MLX's gather kernel on short calls. That fits the boundary seen here: tails of 116-197
+  new tokens differ, tails of 208-425 match.
+- 119 of 122 differing means the change starts at the first MoE call. Layer 0's GDN states run before it, and one PLE slot
+  depends only on the ids.
+- Fix: choose by the whole prompt. When `PFLM and N > chunk`, run PF-A from c, even for a one-chunk tail.
+- The rule in section 7 gains a clause: prefill [c, N) in the same chunks **and the same prefill mode the cold prompt
+  takes**. The mode depends on N, not on N - c.
+
+A confound remains. All 4 kind-A hits also had N below their entry's previous prompt plus output, which leaves stale QSA rows
+past N in the live buffers; every PASS had N above it. The rerun with the fix uses the same order, so it separates the two.
+
+**Kind B: not yet known.** The FAIL line does not name the leaf. Leap's rerun names it: cache index, class, leaf number, and
+warm vs cold shapes.
+
+**Info only, because CHECK runs a cold reference beside the warm path.**
+- Peak: 34.83 GB on the cold 12.3K prompt; up to 37.47 GB with the checks. The CHECK-off cached test gives the real number.
+- Warm prefill alone (prefill_ms): 4.0-7.8 s for 116-425 new tokens on 8-12K contexts, against a cold 21.4 s (8,390
+  tokens) and 29.0 s (12,302). The copy at 9,216 with 3,084 new tokens took 12.2-12.4 s. The warm path ran with the check's
+  experts resident, so these times are optimistic.
+
+**Next.**
+1. Leap's rerun with the fix and the leaf names (~02:00).
+2. The kind B fix.
+3. The cached agent tests (32 / 45 GB, CHECK off).

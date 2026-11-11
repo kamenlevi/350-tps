@@ -160,8 +160,8 @@ def main():
     ap.add_argument("--out", default=os.path.join(ROOT, "out"))
     ap.add_argument("--trace", action="store_true", help="log every file the engine opens (closure check)")
     ap.add_argument("--env", action="append", default=[], help="extra KEY=VALUE for the engine (research switches, e.g. the "
-                    "prefill paths: R57_PFLM=1 PF-A and R57_PFD=1 PF-D, both exact; R57_PFLM=3 PF-B, which can differ when the "
-                    "prompt's last chunk is short)")
+                    "prefill paths: R57_PFD=1 PF-D, exact; R57_PFLM=1 PF-A, exact except when the prompt's last 1,024-token "
+                    "chunk is under about 200 tokens; R57_PFLM=3 PF-B, which can differ when the prompt's last chunk is short)")
     ap.add_argument("--dry-run", action="store_true", help="print the engine command and environment, run nothing")
     a = ap.parse_args()
 

@@ -14,8 +14,8 @@ Ctrl-C stops the current answer (the process keeps running), /clear starts a new
 /file PATH [message] sends the file in a fenced block and then the message. A built-in system line tells the model it
 is a terminal chat without tools (--system adds to it).
 A paste is one message, newlines included and of any length; Enter sends it. Backspace, Ctrl-U and Ctrl-W edit a message.
-At --mem 32 and 24 long prompts prefill layer-major (PF-A: the same tokens, a faster first token, a little more memory);
-R57_PFLM=0 in the shell turns that off.
+At --mem 32 and 24 long prompts prefill layer-major (PF-A: a faster first token, a little more memory; the same tokens
+unless the prompt runs less than ~200 tokens past a multiple of 1,024); R57_PFLM=0 in the shell turns that off.
 The engine's own log goes to out/<tag>.log; each answer's numbers, message and text go to out/<tag>.jsonl. Ctrl-Z is caught
 (a suspended chat would keep its memory)."""
 import argparse, codecs, importlib.abc, importlib.util, json, os, runpy, select, signal, sys, termios, time, unicodedata
@@ -259,10 +259,14 @@ def main():
            "HF_HUB_OFFLINE": "1", "PYTHONDONTWRITEBYTECODE": "1"}
     env.update(cenv)                                       # the config's own line wins, as in run.py
     env["BIGMOE_EXT_BUILD"] = "build"
+    env["BIGMOE_IDLE_MS"] = os.environ.get("BIGMOE_IDLE_MS", "50")  # idle (a chat waiting for its next message): the ext's
+                                                           # loader naps after 50 ms without work instead of spinning a core;
+                                                           # timing only (exact). BIGMOE_IDLE_MS=0 in the shell keeps the spin.
     if a.mem in ("32", "24"):                              # PF-A (R57_PFLM=1): layer-major prefill on prompts over one chunk;
-        env["R57_PFLM"] = os.environ.get("R57_PFLM", "1")  # the same tokens as the default prefill (bitwise at 30K tokens;
-    os.environ.update(env)                                 # identical answers at 32 and 24 GB), a 2.4-3.8x faster first token
-                                                           # on long prompts, +0.3-3.2 GB. R57_PFLM=0 in the shell turns it off.
+        env["R57_PFLM"] = os.environ.get("R57_PFLM", "1")  # bitwise with the default prefill unless the last 1,024-token chunk
+    os.environ.update(env)                                 # is under ~200 tokens (Leap 11-11: 115 differs, 300 equal), a
+                                                           # 2.4-3.8x faster first token on long prompts, +0.3-3.2 GB.
+                                                           # R57_PFLM=0 in the shell turns it off.
 
     ui, st = UI(), State()
     kbd = Keys(ui)                                         # the message reader (keys: the loop's item keys)
