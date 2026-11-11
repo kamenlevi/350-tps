@@ -1601,3 +1601,37 @@ T1 through T1e ran PF-A at 32 GB.
   giving 11/12. 0 server errors; the tasks took 1,097 s (32 GB cached: 916 s) [K Leap].
 
 **Next.** Exactness at 45 GB rests on T1-45. Details: docs/CONV_CACHE_DESIGN.md section 21.
+
+## Wed 11 Nov 14:12-14:25: W24FT = first token at 24 GB: P2 v0 (LOSSY) 3.08 -> 1.12 s median, under Strata's 1.46 s; P3's fold exact (data/w24/w24ft_report.txt, w24ft2_report.txt)
+
+**Setup.** An idle-GPU hour by day, with the owner's apps open, under a share lock. The shipped 24 GB card (w13b as gated)
+ran on snapshot w24ft: the card's screen plus P3's fold (bc04e37) and P2 v0 (ff0215d), applied as patches. The 12 IFEval
+prompts (P 37-101), CAP 256, one process per arm, in the order below.
+
+| arm (order) | TTFT median | mean | range | prefill SSD per prompt | tokens / logits hash vs control | lifetime peak |
+|---|---|---|---|---|---|---|
+| control: the card as gated (1st) | 3.08 s | 3.12 | 2.53-3.64 | 20.4 GB | - | 23.80 GB |
+| + PF-D v4 + read-ahead, exact (2nd) | 3.32 s | 3.34 | 2.71-3.81 | 19.4 GB | 12/12, 634/634 | 29.50 GB |
+| + PF-D + fold (P3), exact (3rd) | 3.11 s | 3.20 | 2.76-3.73 | 19.4 GB | 12/12, 634/634 | 29.30 GB |
+| + P2 v0, 16 rows, LOSSY (4th) | 1.66 s | 1.83 | 1.10-3.17 | 12.7 GB | 2/12, 0/584 | 22.90 GB |
+| control again (5th) | 3.09 s | 3.09 | 2.58-3.51 | 20.4 GB | 12/12, 634/634 | 23.70 GB |
+| + P2 v0, 13 rows, verify, LOSSY (6th) | 1.18 s | 1.30 | 0.87-1.93 | 12.9 GB | 2/12, 0/582 | 23.00 GB |
+| + P2 v0, 13 rows, plain, LOSSY (7th) | **1.12 s** | 1.25 | 0.82-1.89 | 12.8 GB | 2/12, 0/583 | 23.00 GB |
+
+Strata at 24 GB on the same 12 prompts (StrataEval results_low24 REPORT): median 1.65 s (arm B) and 1.46 s (arm D).
+
+**Readings.**
+- **P2 at the card's own row cap is the 24 GB first-token lever.**
+  - At 13 rows a chunk is 130 ids, within the 141 base slots, so it stays on the sync-free gate.
+  - The median falls from 3.08 to 1.12 s (-64 %), 23 % under Strata's better arm.
+  - It stays under the 24 GB line (23.00 GB), and the decode is unchanged (whole decode 31.8-31.9 vs 31.0 tok/s).
+  - At 16 rows a chunk is 160 ids, which leaves the sync-free gate: 1.66 s.
+- **P2 is LOSSY:** tokens match the exact prefill on 2/12. It needs EvalSuite's same-scores gate before any chat config
+  uses it.
+- **P2 is now read-bound:** about 2.2 GB per 13-row chunk (8.5-18.8 GB per prompt) at about 11 GB/s. The next lever is
+  bytes: keep a prompt's experts across its chunks, and MSB-only reads for the low ranks.
+- **PF-D is not for 24 GB.** It is slower than the card's own prefill (3.32 vs 3.08 s) and adds 5.7 GB of peak (29.5 GB).
+- **P3's fold is exact** (12/12 and 634/634 vs both the control and PF-D). It takes PF-D from 3.32 to 3.11 s (-6 %) in
+  one order; tonight's 45 GB ABBA settles it.
+
+**Next.** Tonight's 45 GB A/B (P3 ABBA, FAST without / with the fold, P2). Then the plan for EvalSuite's P2 gate at 24 GB.

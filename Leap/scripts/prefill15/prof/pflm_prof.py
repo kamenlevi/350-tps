@@ -38,6 +38,12 @@ import json as _json, time as _time
 # per stage; timing only, the tokens are not the point); 0: timestamps only (the real overlapped run: host build vs waits).
 _PROF = os.environ.get("R57_PFLM_PROF") or None
 _PSYNC = os.environ.get("R57_PFLM_PROF_SYNC") == "1"
+# Leap 11-11 14:xx, prefill 1.5K step 1 (exact host work): R57_PFLM_PIPE=1 (with R57_PFLM=3) pipelines PF-B across layers:
+# two full-E scratches; the main thread reads layer L+1's experts into the idle one while the GPU runs layer L; the MoE call
+# builds lazily (no np.array(indices) sync, no eval: all E experts are already in the active scratch); the only waits are
+# for the layer's own read and, before reading L+1 into the buffer layer L-1 used, for layer L-1's outputs. Same ops on
+# the same inputs in the same stream order -> bitwise equal by construction (to be checked against R57_PFLM_PIPE=0).
+_PIPE = os.environ.get("R57_PFLM_PIPE") == "1"
 
 
 class _T:
@@ -136,6 +142,15 @@ def install(tier, mode=1):
             return orig(cls, self, x, indices, bm, *a, **kw)
         t = bm["tier"]
         tier.STATS["prefill_calls"] += 1
+        if LMC.get("pipe"):                              # PIPE: all E experts already in the active scratch, original ids
+            saved = [getattr(getattr(self, proj), field) for proj, field in PIECES]
+            for (proj, field), arr in zip(PIECES, LMC["sc"]):
+                setattr(getattr(self, proj), field, arr)
+            try:
+                return switch_glu_padded(self, x, indices)   # lazy: no sync here
+            finally:
+                for (proj, field), arr in zip(PIECES, saved):
+                    setattr(getattr(self, proj), field, arr)
         ids = np.array(indices)
         uniq = np.unique(ids)
         _scratch(t)
@@ -170,6 +185,117 @@ def install(tier, mode=1):
     tier._pflm_installed = True
 
 
+def _split_layers_pipe(tm, xs, hs, cache, states, stage, on_layer):
+    """R57_PFLM=3 + R57_PFLM_PIPE=1: PF-B pipelined across layers (see _PIPE). Returns False (and does nothing) when a
+    layer's piece shapes differ from layer 0's, so the caller runs the plain loop."""
+    import mtplx.models.qwen4_exp as Q
+    tok = int(os.environ.get("R57_PFLM_TOK", "4096") or 4096)
+    seg = os.environ.get("R57_PFLM_SEG", "1") != "0"
+    layers = list(tm.layers)
+    ts = [l_.mlp.switch_mlp._bm["tier"] for l_ in layers]
+    E = int(ts[0]["E"])
+    shp = [((E,) + tuple(sh), dt) for sh, dt in ts[0]["shapes4"]]
+    if any(int(t_["E"]) != E or [((E,) + tuple(sh), dt) for sh, dt in t_["shapes4"]] != shp for t_ in ts):
+        return False
+    for l_ in layers:
+        bm_ = l_.mlp.switch_mlp._bm
+        assert "tier" in bm_ and not bm_["full"], "R57_PFLM=3: every layer must take the tier path (none fully resident)"
+    groups, cur, n = [], [], 0
+    for k, x in enumerate(xs):
+        if cur and n + x.shape[1] > tok:
+            groups.append(cur)
+            cur, n = [], 0
+        cur.append(k)
+        n += x.shape[1]
+    groups.append(cur)
+    LMC["sc"] = None
+    mx.clear_cache()
+    bufs = []
+    for _ in range(2):
+        b_ = [mx.zeros(sh, dt) for sh, dt in shp]
+        mx.eval(*b_)
+        bufs.append(b_)
+    allE = list(range(E))
+
+    def read(L):
+        LMC["tier"]._read_rebuilt(ts[L], allE, allE, bufs[L % 2])
+        LMC["reads"] += E
+        return L
+
+    read(0)                                              # layer 0: before its attention (nothing queued yet)
+    prev_out = None
+    LMC["pipe"] = True
+    try:
+        for L, (layer, c) in enumerate(zip(layers, cache)):
+            pend = []
+            T_ = _T() if _PROF else None
+            for k, x in enumerate(xs):
+                if L == 0:
+                    assert Q.create_ssm_mask(hs[k], cache[tm.ssm_idx]) is None, "PFLM: an ssm mask (padding?)"
+                sync = stage and L == tm._ple_stage_idx
+                if T_: w0, c0 = _clk()
+                if sync:
+                    ple = tm.layers[tm._ple_stage_idx].ple
+                    ple.ple_embedding.stage(x, cache[tm._ple_stage_idx], ple.NGRAM_IDX)
+                    if T_: w1, c1 = _clk(); T_.add("ple_stage", w1 - w0, c1 - c0)
+                h = hs[k]
+                if T_: w0, c0 = _clk()
+                if "ple" in layer:
+                    h = h + layer.ple(h, x, c)
+                mixed, hyper, inject = layer.attn_hyper_connection(h)
+                bo = layer.linear_attn(mixed, None, c) if layer.is_linear else layer.self_attn(mixed, c)
+                mixed, hyper, inject = layer.mlp_hyper_connection(hyper, pending=(bo, inject))
+                pend.append((mixed, hyper, inject))
+                outs = [a for a in (mixed, hyper, inject) if isinstance(a, mx.array)] + list(states([c]))
+                (mx.eval if sync else mx.async_eval)(*outs)
+                if T_: w1, c1 = _clk(); T_.add("attn_submit", w1 - w0, c1 - c0)
+            if T_: w0, c0 = _clk()
+            LMC["sc"], LMC["t"], LMC["have"] = bufs[L % 2], ts[L], set(allE)
+            outs_L = []
+            for g in groups:
+                M = pend[g[0]][0] if len(g) == 1 else mx.concatenate([pend[k][0] for k in g], axis=1)
+                fix = len(g) > 1 and seg
+                if fix:
+                    mlp_ = layer.mlp
+                    seg0 = mlp_.shared_expert_gate
+                    mlp_.shared_expert_gate = _SegPerChunk(seg0, [pend[k][0].shape[1] for k in g])
+                try:
+                    Y = layer.mlp(M)
+                finally:
+                    if fix:
+                        mlp_.shared_expert_gate = seg0
+                off = 0
+                for k in g:
+                    n_ = pend[k][0].shape[1]
+                    hs[k] = Q._hyper_residual_write(pend[k][1], Y if len(g) == 1 else Y[:, off:off + n_], pend[k][2])
+                    off += n_
+                    if on_layer is not None:
+                        on_layer(layer, hs[k])
+                    outs_L.append(hs[k])
+                del M, Y
+            mx.async_eval(*outs_L)
+            if T_: w1, c1 = _clk(); T_.add("moe_submit", w1 - w0, c1 - c0); w0, c0 = w1, c1
+            if L + 1 < len(layers):
+                if prev_out is not None:
+                    mx.eval(*prev_out)                   # layer L-1 done: its buffer, (L+1) % 2, is free; L stays queued
+                if T_: w1, c1 = _clk(); T_.add("prev_wait", w1 - w0, c1 - c0); w0, c0 = w1, c1
+                read(L + 1)                              # main thread (the ext holds the GIL); the GPU runs layer L meanwhile
+                if T_: w1, c1 = _clk(); T_.add("read", w1 - w0, c1 - c0)
+            if T_:
+                with open(_PROF, "a") as f_:
+                    f_.write(_json.dumps({"L": L, "linear": bool(layer.is_linear), "chunks": len(xs), "groups": len(groups),
+                                          "sync": _PSYNC, "pipe": True,
+                                          "t": {k: [round(v[0], 6), round(v[1], 6)] for k, v in T_.d.items()}}) + "\n")
+            prev_out = outs_L
+            del pend
+        mx.eval(*prev_out)
+    finally:
+        LMC["pipe"] = False
+        LMC["sc"] = None
+        del bufs
+    return True
+
+
 def _split_layers(tm, xs, hs, cache, states, stage, on_layer):
     """R57_PFLM=3 (PF-B): each layer split at its MoE (qwen4_exp DecoderLayer.__call__'s steps verbatim; REF2's patched
     hyper read / attention / write are looked up at call time as there; its _dec_call only acts on 5-16-row passes)."""
@@ -198,9 +324,11 @@ def _split_layers(tm, xs, hs, cache, states, stage, on_layer):
             if L == 0:                                   # as _forward: the ssm mask of a B=1 unpadded chunk is None
                 assert Q.create_ssm_mask(hs[k], cache[tm.ssm_idx]) is None, "PFLM: an ssm mask (padding?)"
             sync = stage and L == tm._ple_stage_idx      # the PLE stage feeds chunk k's PLE read: consume it before k+1's
+            if T_: w0, c0 = _clk()
             if sync:
                 ple = tm.layers[tm._ple_stage_idx].ple
                 ple.ple_embedding.stage(x, cache[tm._ple_stage_idx], ple.NGRAM_IDX)
+                if T_: w1, c1 = _clk(); T_.add("ple_stage", w1 - w0, c1 - c0)
             h = hs[k]
             if T_: w0, c0 = _clk()
             if "ple" in layer:
@@ -275,7 +403,8 @@ def prefill_layer_major(model, ids, chunk, states, on_chunk=None, on_layer=None)
         LMC.update(on=True, t=None, have=set())
         try:
             if LMC["mode"] == 3:
-                _split_layers(tm, xs, hs, cache, states, stage, on_layer)
+                if not (_PIPE and _split_layers_pipe(tm, xs, hs, cache, states, stage, on_layer)):
+                    _split_layers(tm, xs, hs, cache, states, stage, on_layer)
             for L, (layer, c) in enumerate(zip(tm.layers, cache) if LMC["mode"] != 3 else ()):
                 for k, x in enumerate(xs):
                     if L == 0:                           # as _forward: the ssm mask of a B=1 unpadded chunk is None

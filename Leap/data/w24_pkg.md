@@ -363,3 +363,13 @@ the 64K / 128K line under it.
 - **Scan of all 243 files:** private patterns 0, account names 0, secrets 0, /Users/ in docs and configs 0, "laptop" 0.
 
 **For the go:** PKG_DIR=release/out/pkg_110l, for both the pkg and the docs push.
+
+**Push dry run (Wed 14:3x, DRY=1, PKG_DIR=release/out/pkg_110l).**
+- **pkg:** fetched the public repo's main (0130ead, v1.0.1). It would push 67ec60c, the same tree on top of it (17 files
+  changed, among them chat.py, serve.py, configs/chat-24.env and lossy-24.env, r57_screen_w24.py and run.py), and nothing
+  was pushed. As designed, the package repo's local HEAD now sits on top of the remote main.
+- **docs:** stops with "local HEAD 67ec60c is not the remote main 0130ead: push pkg first", the intended order. It can only
+  be checked fully after the pkg push.
+- **At Kamen's go:** `PKG_DIR=release/out/pkg_110l PUBLIC_OK=1 release/push_pkg.sh pkg`, then the same with `docs` once
+  Breakthrough's v1.1.0 site with small-ram.pdf is in ~/Papers/public/site. The repo is public, so PUBLIC_OK=1 is only for
+  this owner-requested change.

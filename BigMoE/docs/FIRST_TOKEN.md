@@ -61,3 +61,14 @@ The reads already run near the SSD's speed (9.4 GB in 0.80 s on ifeval/1220): th
 Strata's bytes per prompt and hit rates are not logged on Metal (its stream report prints only on a normal exit; serve ends
 with std::_Exit(0)); its per-request file_mb / experts_streamed fields count CUDA-side reads and are 0 on Metal. Its model
 files were deleted in the 11-09 cleanup, so no new Strata timing can run without a 75.8 GB download (the orchestrator's OK).
+
+## Results (Wed 11 Nov; data/w24/w24ft_report.txt, w24ft2_report.txt; docs/WED_TESTS.md W24FT)
+- **24 GB, the 12 IFEval prompts:** the card as gated has a median first token of 3.08 s.
+  - **P2 v0 at the card's 13-row cap: 1.12 s median** (plain forwards) or 1.18 s (verify scope). Strata's medians there
+    are 1.46 s (arm D) and 1.65 s (arm B).
+  - P2 is LOSSY (tokens 2/12 vs the exact prefill), peak 23.0 GB, with the decode unchanged.
+  - At 16 rows (160 ids > 141 base slots) a chunk leaves the sync-free gate: 1.66 s.
+- **P2 is read-bound:** about 2.2 GB per chunk. The next levers are bytes: keep a prompt's experts across its chunks,
+  and MSB-only reads for the low ranks.
+- **P3 (exact):** the fold keeps tokens and logits hashes (12/12, 634/634). On PF-D at 24 GB it gives 3.32 -> 3.11 s.
+  PF-D itself is slower than the card's own prefill at 24 GB and adds 5.7 GB of peak. The 45 GB ABBA runs tonight.

@@ -147,3 +147,52 @@ orchestrator's estimate (1.3-1.5K near the exact ceiling).
   of it lands.
 - **Memory.** PF-B at 32 GB peaks at 35.6 GB at 10K and 40.7 GB at 30K, so the 32 GB setting runs over its line here. Any
   32 GB speed is quoted with these peaks.
+
+## Step 1, exact host work: PF-B pipelined across layers (written 11-11 14:2x; the A/B runs tonight at 32 GB)
+
+**A correction to my 12:3x note.** It said overlapping the expert read "saves up to ~5 s" at 10K. That was too simple.
+PF-B already runs each layer's read while the GPU executes that layer's queued attention, and at 10K the two take about
+the same time (~112 vs ~122 ms per layer). The ~6.6 s lost at 10K goes elsewhere:
+- **The attention build:** the GPU idles while the CPU builds the next layer's attention graph (~65 ms per layer at 10K).
+- **The MoE path's two syncs:** pflm's prefill_call turns the router's indices into numpy (np.array(indices) waits for
+  the GPU up to the router) and evals its output, and each MoE group is evaluated. Those syncs are there because the
+  single full-E scratch is overwritten by the next layer's read.
+
+The extension's read_rebuilt also holds the GIL for its whole ~110 ms per layer: its nanobind binding has no
+gil_scoped_release, and its dispatch_apply workers do the work while the calling thread waits.
+
+**The change, R57_PFLM_PIPE=1** (scripts/prefill15/prof/pflm_prof.py, `_split_layers_pipe`; with R57_PFLM=3):
+- **Two full-E scratches** (+1.43 GB).
+- **The MoE builds lazily.** In pipe mode prefill_call has no numpy and no eval, since all 512 experts of the layer are
+  already in the active scratch, and it keeps the original ids as mode 3 does. Each layer's MoE outputs are submitted with
+  async_eval.
+- **Then, on the main thread:** wait for layer L-1's outputs, which frees the other buffer while layer L stays queued, then
+  read layer L+1's experts into it while the GPU runs layer L. Layer 0 is read first.
+- **Exactness:** same ops on the same inputs in the same stream order, so bitwise equal by construction. It falls back to
+  the plain loop if a layer's piece shapes differ.
+- **Expected, if GPU-bound:** ~690 tok/s at 10K (now 489) and ~610 at 30K (now 519).
+- **Next on top:** a GIL-free read binding (a copy of the ext with gil_scoped_release and pre-evaluated destinations), so
+  the main thread can also build during the read.
+
+**Tonight's runner: prof_pipe.sh.** Armed 14:2x for 00:30-06:00, behind the gates (Kamen idle, no other lock or engine,
+NO-SWAP >= 46 GB).
+- PF-B at 32 GB, PIPE=0 vs 1, at 10K and 30K, with the order alternated.
+- --max-tokens 32 with R57_LOGHASH=1 for the bitwise check: the tokens and every decode check's verify-logit hashes must
+  be equal.
+- The PLE-stage timer is now in both loops (the untimed ~7 s at 30K).
+
+Why not today: two full-E scratches put even the 24 GB setting past the ~25 GB cap while Kamen's apps are open.
+
+**QSA, 11-11 14:3x (code reading).**
+- **The engine runs MTPLX's stock QSA prefill lane.** No MTPLX_* option is set anywhere in the configs, the screen or
+  run.py, so the stock lane is the dense bool mask plus MLX's unfused SDPA fallback. My bench's "stock" column (16.3 /
+  34.0 / 53.2 ms per 1K chunk at 10K / 20K / 30K) is what the engine pays, not the band column.
+- **MTPLX's exact dense band (MTPLX_QSA_DENSE_BAND_SDPA=1)** was measured bit-identical to the stock fallback by
+  PrefillKernels (0 differing) and is ~19 % faster at 30K (43.3 ms). It is a free exact lever, if tonight's bitwise check
+  agrees.
+- **The 9.2 s of QSA main-thread CPU at 30K is not the tiled indexer.** MTPLX_QSA_SCORE_TILE_ROWS, with an mx.eval per
+  tile, is opt-in and off. It is also not spin-waiting, since GDN's barrier evals show little CPU. Reading did not find the
+  source.
+- **Tonight, a second runner** (scripts/prefill15/prof2/prof_qsa.sh, armed 14:3x, after prof_pipe.sh) runs 30K, PIPE=1,
+  with the dense band. It wraps cProfile around every QSA self_attn call (R57_PFLM_QSA_PROFILE, in a separate copy so
+  tonight's A/B module is untouched) and checks bitwise against prof_pipe.sh's 30K PIPE=1 run (tokens + LOGHASH).
