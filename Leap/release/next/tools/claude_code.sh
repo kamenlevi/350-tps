@@ -47,4 +47,7 @@ stop_server() {
   kill -KILL "$STARTED" 2>/dev/null
 }
 trap stop_server EXIT
-EXACTSTREAM_PORT=$PORT "$ROOT/tools/claude_local.sh" "$@"
+# The status line (tools/statusline.sh: thinking time + mark, live tok/s, the last answer), for this session only,
+# re-run every second so it also ticks while the prompt is being read.
+SL="{\"statusLine\":{\"type\":\"command\",\"command\":\"'$ROOT/tools/statusline.sh' $PORT\",\"padding\":0,\"refreshInterval\":1}}"
+EXACTSTREAM_PORT=$PORT "$ROOT/tools/claude_local.sh" --settings "$SL" "$@"

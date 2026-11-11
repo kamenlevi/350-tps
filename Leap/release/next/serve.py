@@ -38,6 +38,7 @@ class Job:
         self.q = queue.Queue()                             # ("text", piece) ... then ("end", stats) or ("error", message)
         self.stop = False                                  # the client went away: end at the next check
         self.out, self.shown, self.t0, self.t1 = [], "", time.perf_counter(), None
+        self.n1 = 0                                        # tokens in the first commit (the live tok/s counts after it)
         self.why = "client left"                           # why stop was set: the client left, or a stop sequence
 
 
@@ -122,6 +123,7 @@ def main():
     say("Powered by MTPLX https://github.com/youssofal/mtplx")
     tok = R.tokenizer(store)
     jobs, cur, state = queue.PriorityQueue(), [None], {"ready": False, "i": 0, "agent_t": 0.0}
+    lastby = {}                                            # lane -> the last finished request there (GET /stats, /statusline)
     jseq, RANK = itertools.count(), {"main": 0, "sub": 1, "side": 2}   # one engine queue: the main conversation first
     loglock = threading.Lock()
     LOG_HEADERS = ("user-agent", "x-app", "anthropic-beta", "anthropic-version", "originator")
@@ -151,6 +153,9 @@ def main():
                      peak=(r["mem"][6] if r.get("mem") and len(r["mem"]) > 6 else None),
                      reason="stop" if eos else "length", cut=j.stop)
         j.q.put(("end", stats))
+        lane = j.meta.get("lane", "main")
+        lastby[lane] = dict(n=n, prompt=len(j.ids), tps=stats["tps"], think=(j.t1 - j.t0) if j.t1 is not None else None,
+                            cached=cc.get("c", 0) if cc.get("hit") else 0, lane=lane, t=time.time())
         say(f"done: {len(j.ids)} prompt tokens -> {n} tokens, whole decode {stats['tps'] or 0:.1f} tok/s, first token "
             f"{stats['pfs'] if stats['pfs'] is None else round(stats['pfs'], 2)} s, peak {stats['peak']} GB"
             + (f" ({j.why})" if j.stop else "")
@@ -197,12 +202,53 @@ def main():
         return [dict(key=keys[state["i"] - 1], set=s, prompt=j.user, user=j.user, prompt_ids=j.ids,
                      sys_end=j.meta.get("sys_end", 0), side=j.meta.get("side", False), agent=j.meta)]
 
+    def live():
+        """GET /stats (Leap 11-11, Kamen's status line): what the engine is doing now, from the job's own timestamps (stats
+        only: nothing here touches the engine or the tokens). thinking = the prompt pass, before the first token."""
+        j, now = cur[0], time.perf_counter()
+        done = [r for k, r in list(lastby.items()) if k != "side"]   # the last answer of the conversation or a subagent;
+        L = max(done, key=lambda r: r["t"]) if done else lastby.get("side", {})   # Claude Code's small background calls
+        d = {"state": "idle" if state["ready"] else "loading", "queued": jobs.qsize(), "last": dict(L)}   # only before one
+        if j is not None:
+            cc = CCm[0].last() if CCm[0] else {}           # the cache's lookup for THIS prompt (its n = the prompt length)
+            d.update(lane=j.meta.get("lane", "main"), prompt=len(j.ids),
+                     cached=cc.get("c", 0) if cc.get("hit") and cc.get("n") == len(j.ids) else 0)
+            if j.t1 is None:
+                d.update(state="thinking", think_s=round(now - j.t0, 1))
+            else:
+                n_, dt = len(j.out), now - j.t1
+                d.update(state="writing", think_s=round(j.t1 - j.t0, 1), out=n_,
+                         tps=round((n_ - j.n1) / dt, 1) if n_ > j.n1 and dt > 0.3 else None)
+        return d
+
+    def status_line():
+        """GET /statusline: one short line for Claude Code's status line (tools/statusline.sh prints it)"""
+        d = live()
+        mark = "◐◓◑◒"[int(time.time()) % 4]
+        TAG = {"side": " · background", "sub": " · subagent"}   # Claude Code's small calls / a subagent's conversation
+        tag = TAG.get(d.get("lane"), "")
+        qn = f" · {d['queued']} queued" if d.get("queued") else ""
+        if d["state"] == "loading":
+            return f"⏳ loading the engine {mark}"
+        if d["state"] == "thinking":
+            c = d.get("cached") or 0
+            return f"⏳ thinking {d['think_s']:.0f}s {mark} · prompt {d['prompt']:,} tok" + (f" ({c:,} cached)" if c else "") + tag + qn
+        if d["state"] == "writing":
+            head = f"⚡ {d['tps']:.1f} tok/s" if d.get("tps") else "⚡ writing"
+            return f"{head} · {d['out']:,} tok · thought {d['think_s']:.1f}s" + tag + qn
+        L = d["last"]
+        if not L:
+            return "✓ ready" + qn
+        parts = [f"{L['n']:,} tok"] + ([f"{L['tps']:.1f} tok/s"] if L.get("tps") else []) + \
+                ([f"thought {L['think']:.1f}s"] if L.get("think") is not None else [])
+        return "✓ last: " + " · ".join(parts) + TAG.get(L.get("lane"), "") + qn
+
     def on_commit(new):
         j = cur[0]
         if j is None:
             return
         if j.t1 is None:
-            j.t1 = time.perf_counter()
+            j.t1, j.n1 = time.perf_counter(), len(new)
         j.out.extend(int(x) for x in new)
         text = tok.decode(j.out, skip_special_tokens=True).rstrip("�")
         if text.startswith(j.shown) and len(text) > len(j.shown):
@@ -315,6 +361,16 @@ def main():
                                                                     "owned_by": "exactstream"}]})
             if self.path.rstrip("/") in ("", "/health"):
                 return self._json(200, {"status": "ready" if state["ready"] else "loading"})
+            if self.path.rstrip("/") == "/stats":
+                return self._json(200, live())
+            if self.path.rstrip("/") == "/statusline":
+                b = status_line().encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                self.send_header("Content-Length", str(len(b)))
+                self.end_headers()
+                self.wfile.write(b)
+                return
             self._json(404, {"error": {"type": "not_found", "message": self.path}})
 
         def _log(self, rec):
