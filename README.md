@@ -2,17 +2,57 @@
 
 - Model: Qwen3.8-Flash-Next 125B (MoE, all 512 experts)
 - Hardware: MacBook Pro, M5 Pro, 64 GB
-- Now: 63.6 tok/s, exact
-- Best case (estimate): ~350 tok/s
+- Now: 164 tok/s lossy and 101 tok/s exact on HumanEval at 45 GB (measured; [ExactStream 1.2.0](https://github.com/kamenlevi/exactstream))
+- Best case (estimate): ~200-235 tok/s lossy on code with every measured fix combined; never run end to end
+- Status: research paused on 19 November 2026. [Latest results](https://kamenlevi.github.io/exactstream/latest-results.html) (23 November) and [the 30-token exact drafter](https://kamenlevi.github.io/exactstream/exact-drafter.html)
 
 ## Dated findings (newest first)
-- 2026-11-05 17:15: [Expert groups per kept token follow a per-domain union law; on chat the wall is check length, not experts](FableGod/findings/2026-11-05_1715_union-law-chat-check-length.md). CPU replay on measured routing.
-- 2026-11-05 17:00: [Eight thinkers on 350 tok/s lossy: code tok/s is two speeds, chat is an acceptance wall, the fixed cost per check decides 350](FableGod/findings/2026-11-05_1700_lossy350-thinking-hour.md). CPU replays; leads untested.
-- 2026-11-05 07:20: [Cloud Fable 3's strict expert table, re-priced; a split form keeps its compute cut at today's bytes](FableGod/findings/2026-11-05_0720_cloud3-repriced-split-form.md). Audit of the overnight cloud run: x2.5-3.3 the bytes, +4-13 % on code; map test pending.
-- 2026-11-04 22:40: [Near + far draft forecasting for MoE expert caching](FableGod/findings/2026-11-04_2240_near-far-expert-forecasting.md). Four new measurements, including the SSD wait law; CPU replays, GPU test pending.
-- 2026-11-04 22:28: [Trellis-coded experts miss on chat by more than their MSE predicts; the family is closed for this model](FableGod/findings/2026-11-04_2228_trellis_mse_miss.md).
-- 2026-11-04 22:16: [A chat route that keeps quality at the 24 GB split](FableGod/findings/2026-11-04_2216_chat_route_24gb.md).
-- 2026-11-04 22:10: [Far-ahead expert foresight, lab log](FableGod/findings/2026-11-04_2210_far-ahead-foresight.md).
-- 2026-11-04 14:39: [The 125B MoE at 40.8 tok/s in an 11.35 GB footprint, bit-exact](FableGod/findings/2026-11-04_1439_12gb-exact-40tps.md).
-- 2026-11-04 14:35: [HC8: one-pass HC read](FableGod/findings/2026-11-04_1435_hc8-one-pass-hc-read.md).
-- 2026-11-04 14:34: [DRAFT17: a 17th draft gates the last row](FableGod/findings/2026-11-04_1434_draft17.md).
+- 2026-11-16 13:20: [1c-tiers alone gives back QOM's miss protection; a resident-only rule for its 3-bit tier is cheap (Fit12, Mon 16 Nov 2026 13:2x)](FableGod/findings/2026-11-16_1320_1c-tiers-loses-qom-miss-protection.md)
+- 2026-11-16 08:30: [The lossy 32-row check costs ~50-55 ms on the measured engine, not 21-25 ms (Fit12, Mon 16 Nov 2026 08:3x)](FableGod/findings/2026-11-16_0830_lossy-32-row-check-realistic-price.md)
+- 2026-11-15 06:02: [DFlash2 teacher-forced at block 32 is not a 98 % corrector](FableGod/findings/2026-11-15_0602_dflash2-teacher-forced-ceiling.md)
+- 2026-11-15 02:47: [BigMoE, Sun 15 Nov 02:47: G32 ALL BITWISE, the exact 32-row check on the full streamed 125B](FableGod/findings/2026-11-15_0247_bigmoe_g32_all_bitwise.md)
+- 2026-11-10 10:01: [12 GB chat mode (P2') passes the IFBench gate on its loose metric; strict is 7 points below](FableGod/findings/2026-11-10_1001_12gb-chat-ifbench-gate.md)
+- 2026-11-09 22:54: [12 GB code: one 16-row call per check runs 41 tok/s; the call's non-read time, not its bytes, is what misses](FableGod/findings/2026-11-09_2254_12gb-one-call-check.md)
+- 2026-11-09 16:32: [12 GB chat loop: Strata's one-draft width (C2c) is MARGINAL on chat and loses on code](FableGod/findings/2026-11-09_1632_12gb-c2c-chat-width.md)
+- 2026-11-08 19:00: [Strata head-to-head (2026-11-08 17:04)](FableGod/findings/2026-11-08_1900_strata_report_low24.md)
+- 2026-11-08 19:00: [Strata head-to-head (2026-11-08 18:57)](FableGod/findings/2026-11-08_1900_strata_report_low12.md)
+- 2026-11-08 19:00: [Strata head-to-head (2026-11-08 19:01)](FableGod/findings/2026-11-08_1900_strata_report_fit12.md)
+- 2026-11-08 19:00: [Strata 0.1.58 at low memory, same prompts (64 GB M5 Pro): at 24 GB our exact code decode leads 1.4-1.6x; Strata did not fit the 12 GB line in any run (smallest cache 3.37 GB, peak 14.19 GB); at that size its chat decode beats ours (14.4 vs 12.8) with 3.2 GB more memory, and at 14.82 GB its code decode trails ours (15.5 vs 18.3)](FableGod/findings/2026-11-08_1900_strata-low-memory.md)
+- 2026-11-08 16:30: [Strata head-to-head (2026-11-08 16:25)](FableGod/findings/2026-11-08_1630_strata_report_full33.md)
+- 2026-11-08 16:30: [Strata head-to-head (2026-11-08 16:11)](FableGod/findings/2026-11-08_1630_strata_report_default.md)
+- 2026-11-08 16:30: [Strata 0.1.58 head-to-head on the same 48 prompts (64 GB M5 Pro): our decode is ahead at about the same memory (code x2.4-3.7 certified lossy, chat +6 %), but Strata wins or ties every whole-request number up to 256 tokens, because its first token takes 0.5-1.0 s and ours ~3 s on chat](FableGod/findings/2026-11-08_1630_strata-head-to-head.md)
+- 2026-11-08 10:30: [12 GB chat +9.6 % from a confidence-adaptive verify width: the first exact call reads 2 rows instead of 4 when the first draft looks weak (rounding-level, EvalSuite gate pending)](FableGod/findings/2026-11-08_1030_12gb-chat-verify-width.md)
+- 2026-11-08 08:00: [45 GB exact prefill 1.9-3.4x faster with bitwise-identical logits: layer-major prefill reads each expert once (430 -> 68 GB of SSD per 7.9K prompt), 441 tok/s at 7.9K; the 45.10 GB peak needs a 0.1 GB trim](FableGod/findings/2026-11-08_0800_45gb-exact-prefill-layer-major.md)
+- 2026-11-08 07:50: [45 GB chat: lossy 44.2 -> 53.1 tok/s whole decode (+20 %; quality gates pending), and exact chat is now token-identical to one-token decoding (12 / 12) at 38.3 tok/s after the coherent-read fix](FableGod/findings/2026-11-08_0750_45gb-chat-chs4.md)
+- 2026-11-08 05:15: [VALID (GPU proof 09:54: the MLX sorted-gather bug does not reach this engine; re-measured 192 / 373 / 459 tok/s; was UNDER CHECK 08:3x): At 12 GB the prefill already reads each expert once per prompt: 191 / 378 / 461 tok/s at 1.6K / 4.7K / 7.9K tokens (2-3.7x the 45 GB path), in under 11 GB; 12 GB chat decodes 12.9 tok/s at 556 MB of SSD per kept token](FableGod/findings/2026-11-08_0515_12gb-prefill-expert-once-chat.md)
+- 2026-11-08 04:55: [CERTIFIED: the shipped 45 GB FAST config (181 tok/s on code) scores the same as its exact base on HumanEval+ (164), math, MBPP and IFEval in both prompt orders; pooled -0.96 pt over 728 pairs (p 0.27); chat is lossy, not exact](FableGod/findings/2026-11-08_0455_45gb-fast-cert-pass.md)
+- 2026-11-07 23:55: [Chat speed on the 45 GB engine is bound by the low-row check's fixed cost, not by verify width or the SSD](FableGod/findings/2026-11-07_2355_chat-bound-by-low-row-check.md)
+- 2026-11-07 23:30: [45 GB chat, math and prefill speeds: chat decodes 40-45 tok/s, math 79-88, prefill ~100-124 tok/s; the lossy config is NOT exact on chat / math, and peaks at 45.1 GB on agent prompts](FableGod/findings/2026-11-07_2330_45gb-chat-math-prefill.md)
+- 2026-11-07 21:05: [~32 GB FAST: the 125B decodes 153.5 tok/s (12 HumanEval) and 114.8 (MBPP12) on whole decode in a 31.8 GB lifetime footprint, and passes its code quality gate against NAX6-N](FableGod/findings/2026-11-07_2105_32gb-fast-153tps-gate-pass.md)
+- 2026-11-07 17:47: [The 12 GB table cells on S5's prompts: verified greedy 18.6 / 18.2 tok/s whole decode (12 HumanEval / MBPP12), theta 0.95 FAST 40.6 / 18.7, both in ~11.2 GB](FableGod/findings/2026-11-07_1747_12gb-table-cells.md)
+- 2026-11-07 17:35: [45 GB EXACT: the 125B decodes 99.4 tok/s (12 HumanEval) and 71.3 tok/s (MBPP12) on whole decode, token-identical to its one-token decoding on 96 / 96 runs, lifetime peak 42.2 GB](FableGod/findings/2026-11-07_1735_45gb-exact-99tps.md)
+- 2026-11-07 17:30: [Prior art on our exact model: Strata (open source, MIT) runs Qwen3.8-Flash-Next with MTP speculative decoding; a user report gives ~110-120 tok/s on an M5 Max and ~27 tok/s on an M1 Max, both at Q2_0](FableGod/findings/2026-11-07_1730_prior-art-strata.md)
+- 2026-11-07 15:55: [The wired-limit fix (FIRSTCHK) does nothing on the 12 GB loop: x1.004 whole decode; its slow first checks are cold expert pools after prefill, not un-wiring](FableGod/findings/2026-11-07_1555_12gb-wired-limit-null.md)
+- 2026-11-07 14:30: [45 GB FAST, final measurement (S5): 175.9 tok/s whole decode on 12 HumanEval and 118.3 on MBPP12, lifetime peak 42.9 GB; +90 % / +80 % over the FAST baseline in the same run](FableGod/findings/2026-11-07_1430_45gb-fast-final-s5-176tps.md)
+- 2026-11-07 09:45: [45 GB FAST: the 125B decodes 181.2 tok/s on whole decode (12 HumanEval, C 256) in a 42.9 GB lifetime footprint, after one wired-limit call (+27.4 %)](FableGod/findings/2026-11-07_0945_45gb-fast-v1-wired-181tps.md)
+- 2026-11-07 09:00: [Each prompt's first check re-wired the 32 GB expert pools (~250 ms); one mx.set_wired_limit call removes it, bitwise in the exact mode (+18.8 % [P] whole decode on the 45 GB FAST v1')](FableGod/findings/2026-11-07_0900_firstcheck-wired-limit.md)
+- 2026-11-07 08:55: [FAILED ITS CODE GATE: the 12 GB FAST setting t80ck1u decodes 46.3 tok/s (whole decode) in 11.25 GB, but loses 11.7 pt on HumanEval+ vs its exact base (p 0.016); the θ 0.9 fallback fails too](FableGod/findings/2026-11-07_0855_12gb-fast-t80ck1u-46tps.md)
+- 2026-11-07 08:23: [12 GB FAST candidate t80ck1u, measured: 46.3 tok/s whole decode on the 125B MoE in an 11.25 GB footprint, x2.5 the 12 GB verified-greedy loop](FableGod/findings/2026-11-07_0823_12gb-fast-t80ck1u-46tps.md)
+- 2026-11-07 05:50: [45 GB FAST v1 (stackb + S2 + KEEP + NW v3, C 256) passes its quality gate S4 against NAX6-N, its own exact base; against REF2-T it is -6.67 pt on HumanEval+ (information)](FableGod/findings/2026-11-07_0550_45gb-fast-v1-s4-gate.md)
+- 2026-11-07 05:00: [CORRECTION: tonight's 45 GB FAST numbers used the registered "steady" metric, which leaves out host work and each prompt's first check; on whole decode the v1 config runs 142.1 tok/s, not 180.3](FableGod/findings/2026-11-07_0500_steady-metric-overstates-whole-decode.md)
+- 2026-11-07 04:00: [45 GB FAST quality gate (runner 49, stackb at C 224): fails its pre-registered line vs REF2-T by the smallest margin on HumanEval+, passes vs NAX6-N, its own exact base](FableGod/findings/2026-11-07_0400_45gb-stack-gate-ref2t-fail-nax6-pass.md)
+- 2026-11-07 02:05: [CORRECTED: the 45 GB FAST v1 candidate runs 142.1 tok/s whole decode on 12 HumanEval at C 256 (180.3 was the registered steady metric); NW v3 is BETWEEN, not PASS](FableGod/findings/2026-11-07_0205_45gb-fast-v1-180tps.md)
+- 2026-11-07 01:44: [A per-cycle cache clear cost ~9 ms per check: keeping the caches is +10 % at 45 GB, with the same outputs](FableGod/findings/2026-11-07_0144_ref2-keep-caches-10pct.md)
+- 2026-11-07 00:25: [CORRECTED: the stacked engine (stackb) runs 123.5 tok/s whole decode on 12 HumanEval at C 256 in a 42.8 GB lifetime footprint (144.9 was the registered steady metric)](FableGod/findings/2026-11-07_0025_45gb-fast-stackb-145tps.md)
+- 2026-11-06 15:50: [WITHDRAWN: the 45 GB FAST stack's 157.9 tok/s on 12 HumanEval included CD16, which failed quality on MBPP](FableGod/findings/2026-11-06_1550_45gb-fast-stack-158tps.md)
+- 2026-11-06 01:40: [The fixed cost of one check is 54 ms, and by itself it caps code near 220 tok/s at 12 kept per check](FableGod/findings/2026-11-06_0140_flat2-fixed-cost-per-check.md)
+- 2026-11-05 17:15: [Per stream, expert groups per kept token follow the 125B's own union law; on chat the wall is check length, not experts](FableGod/findings/2026-11-05_1715_union-law-chat-check-length.md)
+- 2026-11-05 17:00: [What eight parallel thinkers found on the road to 350 tok/s lossy: today's code number is two speeds, chat's wall is acceptance, and the fixed cost per check decides 350](FableGod/findings/2026-11-05_1700_lossy350-thinking-hour.md)
+- 2026-11-05 07:20: [Cloud Fable 3's strict expert table, re-priced: x2.5-3.3 the SSD bytes and +4-13 % on code, not +20-40 %; a split form keeps its compute cut at today's bytes](FableGod/findings/2026-11-05_0720_cloud3-repriced-split-form.md)
+- 2026-11-04 22:40: [Near + far draft forecasting for MoE expert caching on an SSD-streamed 125B: dated claim note](FableGod/findings/2026-11-04_2240_near-far-expert-forecasting.md)
+- 2026-11-04 22:28: [A data-aware 2.4-bit trellis expert store did 1.6-2.5x the damage its error ratio predicted (map screen 7: KILL)](FableGod/findings/2026-11-04_2228_trellis_mse_miss.md)
+- 2026-11-04 22:16: [A FAST rule passes chat at the 24 GB line on the decision map (QOM cf 0.5 + bonus gate, 4-bit sure rows)](FableGod/findings/2026-11-04_2216_chat_route_24gb.md)
+- 2026-11-04 22:10: [Far-ahead expert foresight for an SSD-streamed MoE: what a far draft can and cannot predict (CPU replay measurements)](FableGod/findings/2026-11-04_2210_far-ahead-foresight.md)
+- 2026-11-04 14:39: [CORRECTED: the 12 GB verified-greedy loop runs ~18.4-18.9 tok/s in ~11.4 GB (not bit-exact); the original 40.8 tok/s headline was a FAST mode](FableGod/findings/2026-11-04_1439_12gb-exact-40tps.md)
+- 2026-11-04 14:35: [An 8-bit one-pass hyper-connection read runs the 125B's 16-row HC reads in 0.54x the exact read's time, as accurate as plain 8-bit](FableGod/findings/2026-11-04_1435_hc8-one-pass-hc-read.md)
+- 2026-11-04 14:34: [One extra draft position cuts code's SSD bytes per kept token by about a third at 24 GB (FAST)](FableGod/findings/2026-11-04_1434_draft17.md)
